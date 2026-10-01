@@ -186,31 +186,33 @@ and `daybook.yourcompany.com` with your address.
    AutoSSL.
 2. **Database** — MySQL Databases → create a database and a user, add the user to the database
    with ALL PRIVILEGES.
-3. **Code** — Git Version Control → Create → clone your repository into `/home/cpuser/daybook` (not
-   inside `public_html`). A private repo needs a deploy key (cPanel → SSH Access → add the public
-   key to your Git host).
+3. **Code** — GitHub builds Daybook for you: `.github/workflows/build-for-cpanel.yml` runs on every
+   push to `main` (Linux, Node 20) and publishes the finished app to the **`deploy`** branch
+   (shared hosting can't run `next build`: it runs out of memory). Check GitHub → Actions shows a
+   green "Build for cPanel" run. Then Git Version Control → Create → clone your repository into
+   `/home/cpuser/daybook` (not inside `public_html`) and switch it to `deploy` in Terminal:
+   `cd ~/daybook && rm -rf .next && git fetch origin && git checkout -B deploy origin/deploy`.
+   A private repo needs a deploy key (cPanel → SSH Access → add the public key to your Git host).
 4. **Settings file** — in File Manager create `/home/cpuser/daybook/.env.local` (never commit it)
    from `.env.example` with your live values: `APP_URL=https://daybook.yourcompany.com`,
    `DB_HOST=localhost`, `DB_NAME`/`DB_USER`/`DB_PASSWORD` from step 2, a new `SESSION_SECRET`,
    `SEED_ADMIN_EMAIL` = the CEO's Slack email, the production Slack values, new VAPID keys,
    `DEV_LOGIN_ENABLED=false`, `TRUST_PROXY=false` (checked in step 9).
-5. **Node.js app** — Setup Node.js App → Create Application: Node.js version 24, Application mode
+5. **Node.js app** — Setup Node.js App → Create Application: Node.js version 20 or newer, Application mode
    **Production**, Application root `daybook`, Application URL `daybook.yourcompany.com` (the main address, not a path like `/api`),
    Application startup file **`server.cjs`** → Create. Copy the "Enter to the virtual environment"
    command shown at the top of the page.
-6. **Install, database, build** — in Terminal:
+6. **Install and database** — in Terminal (use your Node version folder, e.g. `20`):
 
    ```bash
-   source /home/cpuser/nodevenv/daybook/24/bin/activate && cd /home/cpuser/daybook
-   npm ci
+   source /home/cpuser/nodevenv/daybook/20/bin/activate && cd /home/cpuser/daybook
+   npm ci --omit=dev
    NODE_ENV=production npm run migrate
    NODE_ENV=production npm run seed
-   npm run build
    ```
 
-   If the build is stopped for using too much memory (common on shared plans), run `npm run build`
-   on your computer from the same commit, zip the `.next` folder, upload it to
-   `/home/cpuser/daybook` and extract it. Never run `npm run seed:demo` on the live database.
+   Don't run `npm run build` on the server; the `deploy` branch already contains the build. Never
+   run `npm run seed:demo` on the live database.
 
 7. **Start** — back in Setup Node.js App press **Restart**, then open
    `https://daybook.yourcompany.com`: the sign-in page appears; `/api/health` answers
@@ -218,7 +220,7 @@ and `daybook.yourcompany.com` with your address.
 8. **Worker** — Cron Jobs → add a job running **every minute** (`* * * * *`):
 
    ```bash
-   /bin/bash -lc 'source /home/cpuser/nodevenv/daybook/24/bin/activate && cd /home/cpuser/daybook && NODE_ENV=production npm run worker:cron --silent' >/dev/null 2>&1
+   /bin/bash -lc 'source /home/cpuser/nodevenv/daybook/20/bin/activate && cd /home/cpuser/daybook && NODE_ENV=production npm run worker:cron --silent' >/dev/null 2>&1
    ```
 
    It sends Slack messages and desktop notifications and runs the reminders and midnight jobs
@@ -234,9 +236,9 @@ and `daybook.yourcompany.com` with your address.
 11. **People** — the CEO signs in with Slack; HR adds everyone else in People with their Slack
     emails.
 
-**Updating** (after 7 PM): Git Version Control → Manage → Pull or Deploy → Update from Remote;
-then in Terminal (after the `source` command): `npm ci`,
-`NODE_ENV=production npm run migrate`, `npm run build`, and press Restart in Setup Node.js App.
+**Updating** (after 7 PM): push to `main` and wait for the green "Build for cPanel" run on GitHub;
+then in Terminal (after the `source` command): `cd ~/daybook && git pull`, `npm ci --omit=dev`,
+`NODE_ENV=production npm run migrate`, and press Restart in Setup Node.js App.
 
 **Backups**: enable cPanel backups, or add a nightly cron with `mysqldump`, and test a restore once
 a month.

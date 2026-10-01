@@ -1,0 +1,73 @@
+# Shared cPanel hosting doesn't have the memory for `next build`, so GitHub builds Daybook on Linux
+# with Node 20 and publishes the result (source + .next, without the build cache) to the `deploy`
+# branch. The server checks out `deploy` and never builds: pull, `npm ci --omit=dev`, migrate,
+# restart (README: "Deploying on cPanel").
+name: Build for cPanel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-for-cpanel
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          # The build never connects to the database or Slack; these only satisfy the settings
+          # check in src/lib/env.js. The server reads its real values from .env.local at runtime.
+          DB_HOST: 127.0.0.1
+          DB_USER: build
+          DB_PASSWORD: build
+          DB_NAME: build
+          SESSION_SECRET: build-only-placeholder-never-used-at-runtime-0000
+          APP_URL: https://daybook.teqdeftdev.com
+
+      - name: Publish to the deploy branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          REMOTE="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          rm -rf ../deploy
+          if git ls-remote --exit-code --heads "$REMOTE" deploy > /dev/null; then
+            git clone --depth 1 --branch deploy "$REMOTE" ../deploy
+          else
+            mkdir ../deploy
+            git -C ../deploy init -b deploy
+            git -C ../deploy remote add origin "$REMOTE"
+          fi
+          # Replace everything with this build, keeping the branch history linear so the server
+          # can always fast-forward with a plain `git pull`.
+          find ../deploy -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          rsync -a --exclude .git --exclude node_modules --exclude .next/cache --exclude .next/dev ./ ../deploy/
+          cd ../deploy
+          git add -A
+          git add -f .next
+          if git diff --cached --quiet; then
+            echo "Nothing changed since the last build."
+            exit 0
+          fi
+          git commit -m "Build ${GITHUB_SHA::7} for cPanel"
+          git push origin deploy
