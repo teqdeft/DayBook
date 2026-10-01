@@ -1,0 +1,77 @@
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* 40 px box: a 32 px dot with room for the ring (2 px gap, 2 px ring) */
+.swatch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+}
+
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--swatch);
+  pointer-events: none;
+}
+
+.input:checked + .dot {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--swatch);
+}
+
+.input:focus-visible + .dot {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--primary);
+}
+
+.input:checked:focus-visible + .dot {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--swatch),
+    0 0 0 6px var(--primary-soft);
+}
+
+.blue {
+  --swatch: var(--label-blue);
+}
+
+.green {
+  --swatch: var(--label-green);
+}
+
+.violet {
+  --swatch: var(--label-violet);
+}
+
+.orange {
+  --swatch: var(--label-orange);
+}
+
+.teal {
+  --swatch: var(--label-teal);
+}
+
+.pink {
+  --swatch: var(--label-pink);
+}

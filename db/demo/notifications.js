@@ -1,0 +1,118 @@
+// The bell. 01, 05, 08 and 11 show an unread dot, so today's notifications are unread and older
+// ones are read. `at` is [working-day offset, local clock]; a title can be a function of `day`,
+// which formats the working day n days back ("Fri, 25 Sep").
+import { URGENT_NOTES } from './projects.js';
+
+const HR = ['neha', 'anjali'];
+
+export const NOTIFICATIONS = [
+  {
+    to: ['vishal', 'simran'],
+    type: 'project.urgent',
+    title: 'iwilltillimwell is urgent',
+    body: URGENT_NOTES.iwill,
+    link: '/today',
+    at: [0, '11:05'],
+  },
+  {
+    to: ['simran', 'vishal'],
+    type: 'project.urgent',
+    title: 'acme-store is urgent',
+    body: URGENT_NOTES.store,
+    link: '/today',
+    at: [0, '14:40'],
+    eveningOnly: true, // marked at 2:40 PM, after the midday canvas moment
+  },
+  {
+    to: ['vishal'],
+    type: 'report_edit.sent',
+    title: (day) => `Edit request sent for ${day(3)}`,
+    body: 'Hours for acme-store were 3, not 2.',
+    link: '/log',
+    at: [0, '09:48'],
+    read: true,
+  },
+  {
+    to: ['pm'],
+    type: 'report_edit.requested',
+    title: (day) => `Vishal Saini wants to edit the report for ${day(3)}`,
+    body: 'Hours for acme-store were 3, not 2.',
+    link: '/requests',
+    at: [0, '09:48'],
+  },
+  {
+    to: ['pm'],
+    type: 'report_edit.requested',
+    title: (day) => `Ankit Rana wants to edit the report for ${day(3)}`,
+    body: 'Forgot to add 1 hour on acme-seo keyword research.',
+    link: '/requests',
+    at: [0, '10:12'],
+  },
+  {
+    to: ['pm', 'ceo', 'meera'],
+    type: 'project_request.created',
+    title: 'Priya Sharma asked for a project: acme-blog',
+    body: 'Client wants monthly blog posts, starting this week.',
+    link: '/requests',
+    at: [1, '17:20'],
+  },
+  {
+    to: ['pm'],
+    type: 'report_edit.requested',
+    title: (day) => `Simran Kaur wants to edit the report for ${day(6)}`,
+    body: 'Forgot to add the order emails task on acme-store.',
+    link: '/requests',
+    at: [5, '14:10'],
+    read: true,
+  },
+  {
+    to: ['pm2'],
+    type: 'project.created',
+    title: 'You are the PM of acme-app',
+    body: "Created from Rohit Verma's project request.",
+    link: '/projects',
+    at: [6, '16:15'],
+    read: true,
+  },
+  {
+    to: ['rohit'],
+    type: 'project_request.approved',
+    title: 'Your project request was approved',
+    body: 'acme-app is ready. You can log hours to it.',
+    link: '/projects',
+    at: [6, '16:15'],
+    read: true,
+  },
+  {
+    to: HR,
+    type: 'attendance.missing_checkout',
+    title: (day) => `Deepak Joshi didn't check out on ${day(1)}`,
+    body: 'Marked as a missing check-out at midnight.',
+    link: '/attendance',
+    at: [0, '00:05'],
+  },
+  {
+    to: HR,
+    type: 'attendance_correction.requested',
+    title: 'Deepak Joshi asked for a correction',
+    body: 'Forgot to check out yesterday',
+    link: '/attendance',
+    at: [0, '09:15'],
+  },
+  {
+    to: HR,
+    type: 'attendance.unverified_office',
+    title: 'Ankit Rana checked in at the office, unverified',
+    body: 'Office Wi-Fi was down',
+    link: '/attendance',
+    at: [0, '09:58'],
+  },
+  {
+    to: HR,
+    type: 'attendance_correction.requested',
+    title: 'Rohit Verma asked for a correction',
+    body: 'Wrong check-in time',
+    link: '/attendance',
+    at: [0, '10:15'],
+  },
+];

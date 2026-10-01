@@ -1,0 +1,105 @@
+.status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius-cell);
+  font-family: var(--font-body-stack);
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chevron {
+  flex-shrink: 0;
+}
+
+button.status {
+  cursor: pointer;
+}
+
+button.status:hover {
+  filter: brightness(0.94);
+}
+
+/* sizes */
+/* no side padding: long words ("Not checked in") use the whole cell, as on the canvas */
+.cell {
+  display: flex;
+  width: 100%;
+  height: var(--status-cell-height);
+  padding: 0;
+}
+
+.cellCompact {
+  display: flex;
+  width: 100%;
+  height: 30px;
+  padding: 0;
+}
+
+/* the label may run into the glyphs' empty side bearings before it ellipsizes, so "Not checked
+   in" fits an 89 px column as on the canvas */
+.cell .text,
+.cellCompact .text {
+  margin: 0 -2px;
+}
+
+.cellLarge {
+  display: flex;
+  width: 100%;
+  height: 38px;
+  padding: 2px 12px 0;
+  font-size: 14px;
+}
+
+.pill {
+  height: 29px;
+  padding: 0 10px;
+}
+
+.block {
+  height: 30px;
+  padding: 0 21.5px;
+}
+
+/* fills */
+.green {
+  background: var(--green);
+  color: var(--on-fill);
+}
+
+.primary {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.red {
+  background: var(--red);
+  color: var(--on-fill);
+}
+
+.marigold {
+  background: var(--marigold);
+  color: var(--marigold-ink);
+}
+
+.violet {
+  background: var(--violet);
+  color: var(--on-fill);
+}
+
+.neutral {
+  background: var(--line);
+  color: var(--ink-2);
+}

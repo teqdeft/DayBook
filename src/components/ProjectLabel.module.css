@@ -1,0 +1,87 @@
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius-label);
+  font-family: var(--font-body-stack);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  vertical-align: middle;
+  background: var(--label-bg);
+  color: var(--label-text);
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chevron {
+  flex-shrink: 0;
+}
+
+button.label {
+  cursor: pointer;
+}
+
+button.label:hover {
+  filter: brightness(0.97);
+}
+
+.sm {
+  height: 24px;
+  padding: 0 9px;
+  font-size: var(--text-tag);
+}
+
+.md {
+  height: var(--label-height);
+  padding: 0 10px;
+  font-size: var(--text-small);
+}
+
+/* the Daily report's project picker: Schibsted Grotesk 16 px */
+.lg {
+  height: 40px;
+  padding: 0 1px 0 13px;
+  gap: 10px;
+  border-radius: var(--radius-control);
+  font-family: var(--font-heading-stack);
+  font-size: 16px;
+}
+
+.blue {
+  --label-bg: var(--label-blue-bg);
+  --label-text: var(--label-blue-text);
+}
+
+.green {
+  --label-bg: var(--label-green-bg);
+  --label-text: var(--label-green-text);
+}
+
+.violet {
+  --label-bg: var(--label-violet-bg);
+  --label-text: var(--label-violet-text);
+}
+
+.orange {
+  --label-bg: var(--label-orange-bg);
+  --label-text: var(--label-orange-text);
+}
+
+.teal {
+  --label-bg: var(--label-teal-bg);
+  --label-text: var(--label-teal-text);
+}
+
+.pink {
+  --label-bg: var(--label-pink-bg);
+  --label-text: var(--label-pink-text);
+}

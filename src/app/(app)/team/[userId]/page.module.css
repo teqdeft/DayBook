@@ -1,0 +1,257 @@
+/* Employee detailed view (artboard 06). Sizes follow the 1440 px artboard. */
+.range {
+  flex: none;
+}
+
+/* profile card: identity on the left, five numbers split by thin lines on the right */
+.profile {
+  --card-pad: 0 27px 0 26px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 113px;
+  margin-top: 1px;
+}
+
+.identity {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.identityText {
+  min-width: 0;
+}
+
+.email {
+  overflow: hidden;
+  font-size: var(--text-body);
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  font-size: var(--text-small);
+  line-height: 19px;
+  color: var(--muted);
+}
+
+.stats {
+  display: grid;
+  flex: 0 1 712.5px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 69px;
+  padding: 1px 0 0 20px;
+  border-left: 1px solid var(--track);
+}
+
+.statValue {
+  font-family: var(--font-heading-stack);
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 30px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.statLabel {
+  margin-top: 5px;
+  font-size: var(--text-small);
+  line-height: 17px;
+  color: var(--muted);
+}
+
+/* Someone who doesn't check in: one note fills the place of the attendance numbers. */
+.statNote {
+  grid-column: 2 / -1;
+}
+
+.statNote .statValue {
+  white-space: normal;
+}
+
+/* calendar on the left, hours and tasks on the right */
+.grid {
+  display: grid;
+  grid-template-columns: 584px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-top: 1px;
+}
+
+/* the calendar, with the Screen time card under it */
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.calendarCard,
+.screenTimeCard {
+  --card-pad: 20px 24px 20px;
+}
+
+.calendar {
+  margin-top: 15px;
+}
+
+.calendarEmpty {
+  margin-top: 15px;
+}
+
+/* One column per working day (the shared calendar lays out five). */
+.calendar [role='row'] {
+  grid-template-columns: repeat(var(--cal-cols, 5), minmax(0, 1fr));
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.hoursCard {
+  --card-pad: 20px 24px 18px;
+}
+
+.bars {
+  margin-top: 14px;
+}
+
+.emptyLine {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.tasksCard {
+  --card-pad: 20px 24px 22px;
+}
+
+.tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: var(--surface-muted);
+}
+
+/* On the canvas the project label fills the width of the task's text column. */
+.taskText {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  min-width: 0;
+}
+
+.taskTitle {
+  font-size: var(--text-body);
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.taskTag {
+  flex: none;
+}
+
+.historyCard {
+  overflow: hidden;
+}
+
+@media (max-width: 1279px) {
+  .profile {
+    flex-wrap: wrap;
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+
+  .stats {
+    flex: 1 1 100%;
+  }
+
+  .stat:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1023px) {
+  .range {
+    order: 2;
+  }
+}
+
+@media (max-width: 639px) {
+  .profile {
+    --card-pad: 16px;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 12px;
+  }
+
+  .stat,
+  .stat:first-child {
+    min-height: 0;
+    padding-left: 12px;
+    border-left: 1px solid var(--track);
+  }
+
+  .statValue {
+    font-size: 22px;
+    line-height: 26px;
+  }
+
+  .statNote {
+    grid-column: 1 / -1;
+  }
+
+  .calendarCard,
+  .screenTimeCard,
+  .hoursCard,
+  .tasksCard {
+    --card-pad: 16px;
+  }
+
+  .task {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

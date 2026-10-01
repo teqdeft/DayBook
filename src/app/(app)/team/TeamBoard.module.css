@@ -1,0 +1,159 @@
+.board {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.title {
+  flex: none;
+  margin: 0;
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.download {
+  flex: none;
+  margin-left: auto;
+}
+
+/* The canvas button is the 40 px compact size with 14 px text. */
+.head .download {
+  --btn-pad-x: 15px;
+  font-size: 14px;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.personText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.personName {
+  overflow: hidden;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personName:hover {
+  color: var(--primary-text);
+}
+
+.personSub {
+  overflow: hidden;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checkIn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.time {
+  font-family: var(--font-heading-stack);
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.dash {
+  color: var(--ink);
+}
+
+.dayBar {
+  width: 100%;
+}
+
+.logged {
+  font-family: var(--font-heading-stack);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The Report cells on this board are 36 px high on the canvas (the shared cell is 34 px). */
+.board .report {
+  height: 36px;
+}
+
+.labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.muted {
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.more {
+  cursor: pointer;
+}
+
+.more:hover {
+  text-decoration: underline;
+}
+
+.empty {
+  padding: 40px 20px;
+}
+
+@media (max-width: 1023px) {
+  .head {
+    flex-wrap: wrap;
+    padding: 14px 16px;
+  }
+
+  .title {
+    flex: 1 1 auto;
+  }
+
+  .download {
+    order: 2;
+  }
+
+  .head > [role='group'] {
+    order: 3;
+    flex: 1 1 100%;
+  }
+
+  /* A stacked card leaves out a labelled line with nothing in it (no projects today). */
+  .board td:has(> div:empty) {
+    display: none;
+  }
+}
+
+/* The Team board's rows are 55 px on the canvas (the shared table default is 54 px). */
+@media (min-width: 1024px) {
+  .board tr:not([class]) > td {
+    height: 55px;
+  }
+}

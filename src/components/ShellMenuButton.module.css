@@ -1,0 +1,23 @@
+.button {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .button {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .button:hover {
+    background: var(--surface-muted);
+  }
+}

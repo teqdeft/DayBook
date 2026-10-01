@@ -1,0 +1,23 @@
+// Installable app (PWA): "Install Daybook" in Chrome or Edge.
+export default function manifest() {
+  return {
+    name: 'Daybook',
+    short_name: 'Daybook',
+    description: 'Check in, log your day and submit your daily report.',
+    start_url: '/',
+    scope: '/',
+    display: 'standalone',
+    background_color: '#F5F6FA',
+    theme_color: '#151833',
+    icons: [
+      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+      {
+        src: '/icons/icon-512-maskable.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+    ],
+  };
+}

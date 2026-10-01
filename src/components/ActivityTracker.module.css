@@ -1,0 +1,69 @@
+/* The first-run screen-time notice: the three states it records, then one line about the
+   browser's own permission prompt. */
+.states {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.state {
+  display: grid;
+  grid-template-columns: 10px auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  transform: translateY(1px);
+}
+
+.active {
+  background: var(--green);
+}
+
+.idle {
+  background: var(--marigold);
+}
+
+/* the same grey as locked time on the Screen time bars (DayTimeline.module.css) */
+.locked {
+  background: color-mix(in srgb, var(--muted) 40%, var(--track));
+}
+
+.stateLabel {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.stateHelp {
+  min-width: 0;
+  color: var(--muted);
+}
+
+.note {
+  margin-top: 14px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+@media (max-width: 480px) {
+  .state {
+    grid-template-columns: 10px minmax(0, 1fr);
+  }
+
+  .stateHelp {
+    grid-column: 2;
+  }
+}

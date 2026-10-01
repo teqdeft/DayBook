@@ -1,0 +1,121 @@
+/* The Screen time table's day bar: 12 px, rounded like the Team board's compact bar. */
+.timeline {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.track {
+  position: relative;
+  display: block;
+  height: 12px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--track);
+}
+
+/* the light hour grid under the blocks */
+.hour {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+
+.block {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 1px;
+}
+
+.active {
+  background: var(--primary);
+}
+
+.idle {
+  background: var(--marigold);
+}
+
+.locked {
+  background: color-mix(in srgb, var(--muted) 40%, var(--track));
+}
+
+/* hour labels (column header; under each bar in the stacked cards) */
+.scale {
+  position: relative;
+  display: block;
+  container-type: inline-size;
+  width: 100%;
+  height: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.tick {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.center {
+  transform: translateX(-50%);
+}
+
+.start {
+  transform: none;
+}
+
+.end {
+  right: 0;
+  left: auto;
+}
+
+/* colour key */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.phoneScale {
+  display: none;
+  margin-top: 6px;
+}
+
+/* The cards that replace the table below 1280 px show the hours under each bar. */
+@media (max-width: 1279px) {
+  .phoneScale {
+    display: block;
+  }
+}
+
+/* on a short bar every other label is left out so they don't run together */
+@container (max-width: 399px) {
+  .odd {
+    display: none;
+  }
+}

@@ -1,0 +1,88 @@
+/* The panel is placed against the team row (its closest positioned parent), full width. */
+.root {
+  display: inline-flex;
+}
+
+/* "+ Add people" sits 1 px lower and further right than a centred text button, as on the canvas. */
+.trigger {
+  height: 34px;
+  padding: 2px 2px 0 3px;
+}
+
+/* The plus is centred on the letters' cap height on the canvas. */
+.plus {
+  position: relative;
+  top: -2px;
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--navy) 14%, transparent);
+}
+
+.list {
+  max-height: 248px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: var(--radius-cell);
+  cursor: pointer;
+}
+
+.option:hover,
+.active {
+  background: var(--surface-muted);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.name,
+.designation {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--ink);
+}
+
+.designation {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.empty {
+  padding: 10px 8px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}

@@ -1,0 +1,46 @@
+.action {
+  justify-content: flex-start;
+}
+
+.fix {
+  flex: none;
+  min-width: 57px;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.note {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.noteLabel {
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.formError {
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}

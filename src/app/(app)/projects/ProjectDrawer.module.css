@@ -1,0 +1,114 @@
+/* Spacing measured on artboard 07: 16 px between fields; labels sit 2 px low in a 20 px box,
+   4 px above their control. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: -2px;
+}
+
+.form > div > label:first-child,
+.groupLabel {
+  margin-bottom: 4px;
+  padding-top: 2px;
+}
+
+/* The canvas has the Client and Project manager inputs 1 px further below their labels, and
+   Team members 1 px closer after them. */
+.form > .clientField > label:first-child {
+  margin-bottom: 5px;
+}
+
+.pmField {
+  margin-bottom: -1px;
+}
+
+.fromRequest {
+  padding: 12px 14px;
+  background: var(--surface-muted);
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.groupLabel {
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
+.members {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  align-self: stretch;
+  margin-top: 4px;
+  margin-bottom: -1px;
+}
+
+.chip {
+  max-width: 100%;
+}
+
+.segmented {
+  margin-top: 2px;
+}
+
+.swatches {
+  margin-top: 1px;
+}
+
+.error {
+  margin-top: 5px;
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}
+
+.urgent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: -2px;
+  padding: 14px 15px 14px 16px;
+  background: var(--urgent-bg);
+  border-radius: var(--radius-tile);
+}
+
+/* The toggle row is a label too; it keeps no field-label spacing. */
+.form > .urgent > .urgentToggle {
+  margin-bottom: 0;
+  padding-top: 0;
+}
+
+/* The canvas sets the two help lines 16 px apart. */
+.urgentToggle :global(#project-urgent-help) {
+  margin-top: 1px;
+  line-height: 16px;
+}
+
+.urgentNote label {
+  color: var(--marigold-text);
+}
+
+.formError {
+  padding: 10px 12px;
+  background: var(--red-soft);
+  border-radius: var(--radius-control);
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}

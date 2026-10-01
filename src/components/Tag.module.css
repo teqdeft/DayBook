@@ -1,0 +1,149 @@
+.tag {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+  max-width: 100%;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-body-stack);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+  background: var(--tag-bg);
+  color: var(--tag-text);
+}
+
+/* sizes (--tag-pad-x comes from the padX prop) */
+.sm {
+  height: 22px;
+  padding: 0 var(--tag-pad-x, 10px);
+  font-size: var(--text-tag);
+}
+
+.md {
+  height: 26px;
+  padding: 0 var(--tag-pad-x, 10px);
+  font-size: var(--text-tag);
+}
+
+.lg {
+  height: 28px;
+  padding: 0 var(--tag-pad-x, 10px);
+  font-size: var(--text-small);
+}
+
+.xl {
+  height: 30px;
+  padding: 2px var(--tag-pad-x, 12px) 0;
+  font-size: var(--text-small);
+}
+
+.xxl {
+  height: 40px;
+  padding: 0 var(--tag-pad-x, 14px);
+  gap: 8px;
+  font-size: 14px;
+}
+
+.dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tag-strong);
+}
+
+/* tones: --tag-bg / --tag-text for the soft look, --tag-strong / --tag-on for solid */
+.primary {
+  --tag-bg: var(--primary-soft);
+  --tag-text: var(--primary-text);
+  --tag-strong: var(--primary);
+  --tag-on: var(--on-primary);
+}
+
+.blue {
+  --tag-bg: var(--primary-soft);
+  --tag-text: var(--primary);
+  --tag-strong: var(--primary);
+  --tag-on: var(--on-primary);
+}
+
+.marigold {
+  --tag-bg: var(--marigold-soft);
+  --tag-text: var(--marigold-text);
+  --tag-strong: var(--marigold);
+  --tag-on: var(--marigold-ink);
+}
+
+.green {
+  --tag-bg: var(--green-soft);
+  --tag-text: var(--green-text);
+  --tag-strong: var(--green);
+  --tag-on: var(--on-fill);
+}
+
+.red {
+  --tag-bg: var(--red-soft);
+  --tag-text: var(--red-text);
+  --tag-strong: var(--red);
+  --tag-on: var(--on-fill);
+}
+
+.violet {
+  --tag-bg: var(--violet-soft);
+  --tag-text: var(--violet-text);
+  --tag-strong: var(--violet);
+  --tag-on: var(--on-fill);
+}
+
+.teal {
+  --tag-bg: var(--label-teal-bg);
+  --tag-text: var(--label-teal-text);
+  --tag-strong: var(--label-teal);
+  --tag-on: var(--on-fill);
+}
+
+.orange {
+  --tag-bg: var(--label-orange-bg);
+  --tag-text: var(--label-orange-text);
+  --tag-strong: var(--label-orange);
+  --tag-on: var(--on-fill);
+}
+
+.pink {
+  --tag-bg: var(--label-pink-bg);
+  --tag-text: var(--label-pink-text);
+  --tag-strong: var(--label-pink);
+  --tag-on: var(--on-fill);
+}
+
+.neutral {
+  --tag-bg: var(--line);
+  --tag-text: var(--ink-2);
+  --tag-strong: var(--ink-2);
+  --tag-on: var(--surface);
+}
+
+.grey {
+  --tag-bg: var(--track);
+  --tag-text: var(--ink-2);
+  --tag-strong: var(--ink-2);
+  --tag-on: var(--surface);
+}
+
+.ink {
+  --tag-bg: var(--navy);
+  --tag-text: var(--on-fill);
+  --tag-strong: var(--on-fill);
+  --tag-on: var(--on-fill);
+}
+
+.solid {
+  background: var(--tag-strong);
+  color: var(--tag-on);
+}
+
+.solid .dot {
+  background: var(--tag-on);
+}

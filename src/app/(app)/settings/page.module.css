@@ -1,0 +1,73 @@
+/* Artboard 12: a 230 px sub-navigation card, then the sections column. */
+.layout {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.nav {
+  position: sticky;
+  top: var(--main-padding-y);
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.navList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 1px 12px 0;
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.navItem:hover {
+  background: var(--surface-muted);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.navActive,
+.navActive:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+@media (max-width: 1023px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .nav {
+    position: static;
+    padding: 6px;
+    overflow-x: auto;
+  }
+
+  .navList {
+    flex-direction: row;
+    gap: 4px;
+  }
+
+  .navItem {
+    min-height: 36px;
+    white-space: nowrap;
+  }
+}

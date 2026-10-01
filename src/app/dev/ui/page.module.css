@@ -1,0 +1,140 @@
+.page {
+  min-height: 100vh;
+  padding: 28px 32px 64px;
+  background: var(--paper);
+}
+
+.header {
+  margin-bottom: 22px;
+}
+
+.pageTitle {
+  font-size: var(--text-page-title);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 38px;
+}
+
+.pageSubtitle {
+  font-size: var(--text-body);
+  color: var(--muted);
+}
+
+.section {
+  margin-top: 28px;
+}
+
+.sectionTitle {
+  margin-bottom: 12px;
+  font-size: var(--text-card-title);
+  font-weight: 600;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+}
+
+.caption {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted);
+}
+
+.spec {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 10px;
+}
+
+/* specimens keep their artboard width, but shrink on a phone */
+.specInner {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.paper {
+  background: var(--paper);
+}
+
+.surface {
+  background: var(--surface);
+}
+
+.urgent {
+  background: var(--urgent-bg);
+}
+
+.muted {
+  background: var(--surface-muted);
+}
+
+.navy {
+  background: var(--navy);
+}
+
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.grid5 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+}
+
+.grid6 {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 20px 16px 48px;
+  }
+}
+
+.cardBody {
+  padding: 20px;
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.cardText {
+  margin-top: 14px;
+  font-family: var(--font-heading-stack);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+  color: var(--ink);
+}
+
+.centerText {
+  font-size: var(--text-body);
+  font-weight: 500;
+  text-align: center;
+  color: var(--ink-2);
+}

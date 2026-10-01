@@ -1,0 +1,360 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--block-gap);
+  min-width: 0;
+}
+
+/* Your day (or Check in) wide + This week narrow */
+.rowDay {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 373px;
+  gap: 18px;
+  align-items: stretch;
+}
+
+/* Urgent narrow + My tasks wide */
+.rowTasks {
+  display: grid;
+  grid-template-columns: 372px minmax(0, 1fr);
+  gap: 19px;
+  align-items: stretch;
+}
+
+.rowTasksSolo {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Your day */
+.yourDay {
+  --card-pad: 22px 26px 33px;
+  container-type: inline-size;
+}
+
+/* "Screen time today: ..." sits quietly beside the title, so the card keeps the artboard's
+   height; when the card is too narrow for it there, it moves under the tiles. */
+.screenTime {
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.screenTimeHead {
+  white-space: nowrap;
+}
+
+.screenTimeFoot {
+  display: none;
+  margin-top: 14px;
+}
+
+@container (max-width: 619px) {
+  .screenTimeHead {
+    display: none;
+  }
+
+  .screenTimeFoot {
+    display: block;
+  }
+}
+
+.dayBar {
+  margin-top: 15px;
+}
+
+/* The phone day bar has fewer labels (they would overlap on a short bar). */
+.phoneOnly {
+  display: none;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+
+/* This week */
+.week {
+  --card-pad: 22px 25px 20px;
+}
+
+.weekBars {
+  margin: 15px -6px 0;
+}
+
+/* Urgent */
+.urgent {
+  --card-pad: 22px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.urgentHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.urgentFrom {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--marigold-text);
+}
+
+.urgentLabel {
+  display: flex;
+  margin-top: 12px;
+}
+
+.urgentNote {
+  margin-top: 10px;
+  font-family: var(--font-heading-stack);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.urgentHint {
+  margin-top: 13px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--marigold-text);
+}
+
+.urgentMore {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 16px;
+  font-size: var(--text-small);
+  color: var(--marigold-text);
+}
+
+/* My tasks this week */
+/* the artboard's header is 1 px taller than the shared divider header */
+.tasks .tasksHead,
+.priority .tasksHead {
+  min-height: 55px;
+  padding-bottom: 16px;
+}
+
+.tasks {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.taskTitle {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* Priority tasks (not on the canvas): the My tasks card's table, full width */
+.priority {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.priorityCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.phoneTitle {
+  display: none;
+}
+
+.forYou {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* "Show 2 more priority tasks": a quiet text button under the table, like a table footer. */
+.priorityMore {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 20px 14px;
+  border: 0;
+  border-top: 1px solid var(--track);
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  background: none;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.priorityMore:hover {
+  text-decoration: underline;
+}
+
+.priorityMore:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.moreChevron {
+  flex: none;
+  transition: transform 0.15s ease;
+}
+
+.moreChevronOpen {
+  transform: rotate(180deg);
+}
+
+/* Report strip */
+.strip {
+  --card-pad: 18px 25px 19px 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+}
+
+.stripText {
+  min-width: 0;
+  margin-top: 2px; /* the artboard sets the text 1 px below the button's centre */
+}
+
+.stripTitle {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--on-fill);
+}
+
+.stripBody {
+  margin-top: 2px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--navy-text);
+}
+
+.stripButton {
+  flex: none;
+  min-width: 199px;
+}
+
+/* Correction links under the strip */
+.help {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: -6px;
+}
+
+.helpText {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  font-size: var(--text-small);
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.helpDot {
+  margin: 0 4px;
+}
+
+@media (max-width: 1180px) {
+  .rowDay,
+  .rowTasks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* the table's rows become cards with 16 px sides; the header lines up with them */
+@media (max-width: 1023px) {
+  .tasks .tasksHead,
+  .priority .tasksHead {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .priorityMore {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .phoneTitle {
+    display: inline;
+  }
+}
+
+@media (max-width: 640px) {
+  .wideOnly {
+    display: none;
+  }
+
+  .phoneOnly {
+    display: block;
+  }
+
+  .yourDay {
+    --card-pad: 18px 16px 20px;
+  }
+
+  .tiles {
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  /* smaller tiles so the three numbers stay side by side */
+  .tiles > * {
+    padding: 10px 10px 9px;
+  }
+
+  .tiles > * > p:first-child {
+    font-size: 18px;
+    line-height: 24px;
+    white-space: nowrap;
+  }
+
+  .tiles > * > p:last-child {
+    font-size: 12px;
+    line-height: 16px;
+  }
+
+  .week,
+  .urgent {
+    --card-pad: 18px 16px;
+  }
+
+  .strip {
+    --card-pad: 18px 16px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stripText {
+    margin-top: 0;
+  }
+
+  .stripButton {
+    width: 100%;
+    min-width: 0;
+  }
+}

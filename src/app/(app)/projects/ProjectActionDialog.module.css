@@ -1,0 +1,34 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.body > [role='group'] {
+  align-self: flex-start;
+}
+
+.note {
+  padding: 12px 14px;
+  background: var(--urgent-bg);
+  border: 1px solid var(--urgent-line);
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--marigold-text);
+  overflow-wrap: anywhere;
+}
+
+.help {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.formError {
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}

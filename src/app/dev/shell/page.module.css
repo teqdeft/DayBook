@@ -1,0 +1,196 @@
+.rowToday {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 371px;
+  gap: 20px;
+  align-items: start;
+}
+
+.rowTasks {
+  display: grid;
+  grid-template-columns: 372px minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.urgentDemo {
+  min-height: 298px;
+}
+
+.mutedText {
+  color: var(--muted);
+}
+
+.rowTeam {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 273px 273px;
+  gap: 20px;
+  align-items: start;
+}
+
+.rowDetail {
+  display: grid;
+  grid-template-columns: 584px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.rowThree {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.rowFour {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.devSignIn {
+  max-width: 420px;
+}
+
+.sidebarPreview {
+  width: 240px;
+  height: 460px;
+  margin-top: 16px;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.dayBar {
+  margin-top: 16px;
+}
+
+.weekBars {
+  margin: 18px -6px 0;
+}
+
+.bars {
+  margin-top: 18px;
+}
+
+.donut {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0 24px;
+}
+
+.legend {
+  margin-top: 18px;
+}
+
+.calendar {
+  margin-top: 18px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.overlayRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Team board */
+.board {
+  display: flex;
+  flex-direction: column;
+}
+
+.boardHead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 73px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.boardTitle {
+  font-size: var(--text-card-title);
+  font-weight: 600;
+}
+
+.boardAction {
+  margin-left: auto;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.personText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.personName {
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.personSub {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.checkIn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.strong {
+  font-weight: 500;
+}
+
+.muted {
+  padding: 24px 20px;
+  color: var(--muted);
+}
+
+/* The rows copy the 1440 px artboards' fixed column widths; narrower windows stack them. */
+@media (max-width: 1279px) {
+  .rowToday,
+  .rowTasks,
+  .rowTeam,
+  .rowDetail,
+  .rowThree,
+  .rowFour {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1023px) {
+  .boardHead {
+    flex-wrap: wrap;
+  }
+}

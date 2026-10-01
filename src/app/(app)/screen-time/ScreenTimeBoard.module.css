@@ -1,0 +1,158 @@
+/* The Screen time table card: the same head as Attendance's "Everyone today" (title, pills on the
+   right), a 40 px search beside the pills, the shared table and a footer explaining the bar. */
+.board {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  min-height: 69px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.pills {
+  justify-content: flex-end;
+}
+
+.search {
+  flex: 0 0 220px;
+}
+
+.search input {
+  height: var(--control-height-compact);
+}
+
+/* fixed column widths; long names and titles are cut with an ellipsis */
+.table table {
+  table-layout: fixed;
+}
+
+.now {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+/* A 30 px cell with a 12 px note under it borrows a little of the row's padding, so the row
+   keeps the table's 54 px height. */
+.now:has(.nowNote) {
+  margin: -2px 0 -1px;
+}
+
+.nowNote {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 12px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.number {
+  font-family: var(--font-heading-stack);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.time {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.dash {
+  color: var(--muted);
+}
+
+/* footer: what is measured, and the bar's colours */
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 24px;
+  padding: 14px 20px 15px;
+  border-top: 1px solid var(--track);
+}
+
+.measured {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  max-width: 760px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.infoIcon {
+  flex: none;
+  margin-top: 1px;
+}
+
+@media (max-width: 1279px) {
+  .pills {
+    justify-content: flex-start;
+    order: 3;
+    flex: 1 1 100%;
+  }
+}
+
+/* Below 1280 px the table's day bar would be too short to read, so the table gives way to
+   stacked person cards (one per line, the bar at full width). */
+.cards {
+  display: none;
+}
+
+.empty {
+  padding: 32px 20px;
+}
+
+@media (max-width: 1279px) {
+  .table {
+    display: none;
+  }
+
+  .cards {
+    display: block;
+  }
+}
+
+@media (max-width: 1023px) {
+  .head {
+    padding: 14px 16px;
+  }
+
+  .search {
+    flex: 1 1 100%;
+  }
+
+  .foot {
+    padding: 14px 16px;
+  }
+}

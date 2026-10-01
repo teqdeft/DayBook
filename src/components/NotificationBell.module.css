@@ -1,0 +1,269 @@
+.root {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.bell:hover,
+.bell[aria-expanded='true'] {
+  background: var(--surface-muted);
+}
+
+.icon {
+  flex: none;
+}
+
+.dot {
+  position: absolute;
+  top: 8.5px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  max-height: min(520px, calc(100vh - 120px));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--navy) 14%, transparent);
+  animation: panel-in 0.14s ease-out;
+}
+
+.head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--track);
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.markAll {
+  padding: 4px 6px;
+  margin-right: -6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--primary);
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.markAll:hover:not([aria-disabled='true']) {
+  background: var(--primary-soft);
+}
+
+.markAll[aria-disabled='true'] {
+  color: var(--muted);
+  opacity: 0.7;
+  cursor: default;
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+  overscroll-behavior: contain;
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+a.item:hover {
+  background: var(--surface-muted);
+  text-decoration: none;
+}
+
+.unreadDot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.read {
+  background: transparent;
+}
+
+.itemText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.itemTitle {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.itemBody {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.itemTime {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 32px 24px 36px;
+  text-align: center;
+}
+
+.messageTitle {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.messageBody {
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.retry {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.skeletonRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 12px 30px;
+}
+
+.skeletonLine {
+  display: block;
+  width: 80%;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--track);
+}
+
+.short {
+  width: 45%;
+}
+
+/* "Show on this computer": the switch for desktop notifications, under the list */
+.desktop {
+  flex: none;
+  padding: 14px 18px 16px;
+  border-top: 1px solid var(--track);
+}
+
+.desktopToggle {
+  align-items: flex-start;
+}
+
+.desktopToggle > span:first-child {
+  gap: 2px;
+}
+
+/* Busy and Blocked look like Toggle's disabled state, but the switch keeps keyboard focus */
+.desktopBusy > span:first-child,
+.desktopBlocked > span:first-child,
+.desktopBusy [role='switch'] + span,
+.desktopBlocked [role='switch'] + span {
+  opacity: 0.5;
+}
+
+.desktopToggle.desktopBusy,
+.desktopBusy [role='switch'] {
+  cursor: progress;
+}
+
+.desktopToggle.desktopBlocked,
+.desktopBlocked [role='switch'] {
+  cursor: not-allowed;
+}
+
+.desktopNote {
+  margin-top: 2px;
+  font-size: var(--text-small);
+  line-height: 17px;
+  color: var(--muted);
+}
+
+@keyframes panel-in {
+  from {
+    transform: translateY(-4px);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .panel {
+    position: fixed;
+    top: 72px;
+    right: 16px;
+    left: 16px;
+    width: auto;
+    max-width: none;
+  }
+}

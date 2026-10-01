@@ -1,0 +1,54 @@
+/* The canvas sets the header text 1-2 px lower than the shared card header. */
+.card .header {
+  padding-top: 16px;
+  padding-bottom: 14px;
+}
+
+.card .header p {
+  margin-top: 2px;
+}
+
+.body {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 17px 20px 17px;
+}
+
+.avatar {
+  margin-top: 1px;
+}
+
+.message {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.meta {
+  margin-top: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  line-height: 22px;
+}
+
+.name {
+  font-size: var(--text-body);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.time {
+  font-size: var(--text-tag);
+  color: var(--muted);
+}
+
+.text {
+  margin-top: 0;
+  font-size: 14px;
+  line-height: 21.85px;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

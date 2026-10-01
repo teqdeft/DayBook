@@ -1,0 +1,56 @@
+.box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.icon {
+  position: absolute;
+  top: 50%;
+  left: 13px;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  height: var(--control-height);
+  margin: 0;
+  padding: 0 13px 0 38px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  font-family: var(--font-body-stack);
+  font-size: var(--text-body);
+  line-height: 20px;
+  color: var(--ink);
+  appearance: none;
+}
+
+.input::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}
+
+.input::-webkit-search-decoration,
+.input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.input:hover {
+  border-color: var(--muted);
+}
+
+.input:focus-visible {
+  border-color: var(--primary);
+}
+
+/* phones: 16 px text stops iOS Safari zooming into the field on focus */
+@media (max-width: 640px) {
+  .input {
+    font-size: 16px;
+  }
+}

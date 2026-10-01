@@ -1,0 +1,40 @@
+.donut {
+  position: relative;
+  flex: none;
+  margin: 0;
+}
+
+.donut svg {
+  display: block;
+}
+
+.track {
+  stroke: var(--track);
+}
+
+.center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.value {
+  position: relative;
+  top: 1px;
+  font-family: var(--font-heading-stack);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 32px;
+  color: var(--ink);
+}
+
+.label {
+  margin-top: -3px;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--muted);
+}

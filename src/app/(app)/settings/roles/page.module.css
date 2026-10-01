@@ -1,0 +1,228 @@
+/* Artboard 13: four role cards (19 px apart), then two cards of equal width. */
+.roleCards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 19px;
+  align-items: start;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.roleCard {
+  --card-pad: 21px 20px 19px;
+}
+
+.roleTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.count {
+  font-family: var(--font-heading-stack);
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 28px;
+  color: var(--ink);
+}
+
+.roleText {
+  margin-top: 16px;
+  font-size: 14px;
+  line-height: 17px;
+  color: var(--muted);
+}
+
+.bottom {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 19px;
+  align-items: start;
+}
+
+/* ---------- People and roles ---------- */
+.peopleCard,
+.permissionsCard {
+  overflow: hidden;
+}
+
+.peopleHeader {
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+.search {
+  width: 200px;
+}
+
+.rolesTable table td {
+  height: 57px;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.personText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.personName {
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.personSub {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.designation {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.picker {
+  width: 137px;
+  max-width: 100%;
+}
+
+/* 14 px text; the canvas cuts a long role ("Project manage") instead of adding an ellipsis */
+.picker select {
+  font-size: 14px;
+  text-overflow: clip;
+}
+
+.pickerNote,
+.pickerError {
+  margin-top: 4px;
+  font-size: var(--text-tag);
+  line-height: 16px;
+  white-space: normal;
+}
+
+.pickerNote {
+  color: var(--marigold-text);
+}
+
+.pickerError {
+  font-weight: 500;
+  color: var(--red-text);
+}
+
+/* ---------- What each role can do ---------- */
+.permissionsTable table td {
+  height: 50px;
+}
+
+.permissionLabel {
+  display: block;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.lastRole {
+  padding-right: 20px;
+}
+
+.check {
+  display: block;
+  margin: 0 auto;
+  color: var(--primary);
+}
+
+.dash {
+  display: inline-block;
+  width: 16px;
+  height: 1px;
+  vertical-align: middle;
+  background: color-mix(in srgb, var(--muted) 55%, var(--surface));
+}
+
+.optional {
+  font-size: var(--text-tag);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* the top bar's unsaved-changes note */
+.unsaved {
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--marigold-text);
+}
+
+.unsaved:empty {
+  display: none;
+}
+
+/* phones and tablets: save bar at the bottom while there are unsaved changes */
+.mobileSave,
+.mobileSaveSpace {
+  display: none;
+}
+
+@media (max-width: 1279px) {
+  .roleCards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1023px) {
+  .mobileSaveSpace {
+    display: block;
+    height: 40px;
+  }
+
+  .mobileSave {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .picker {
+    width: 100%;
+  }
+
+  /* stacked cards: marks line up with the dashes on the left */
+  .check {
+    margin: 0;
+  }
+
+  .search {
+    width: 100%;
+  }
+
+  .peopleHeader > div:last-child {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .roleCards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

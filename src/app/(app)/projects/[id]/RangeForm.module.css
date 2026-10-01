@@ -1,0 +1,39 @@
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 16px;
+}
+
+.title {
+  align-self: center;
+  margin-right: auto;
+  font-family: var(--font-heading-stack);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.field {
+  width: 180px;
+}
+
+.submit {
+  margin-top: 24px;
+}
+
+@media (max-width: 639px) {
+  .title {
+    flex: 1 1 100%;
+  }
+
+  .field {
+    flex: 1 1 140px;
+    width: auto;
+  }
+
+  .submit {
+    flex: 1 1 100%;
+    margin-top: 0;
+  }
+}

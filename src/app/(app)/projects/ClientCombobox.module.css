@@ -1,0 +1,50 @@
+.root {
+  position: relative;
+}
+
+.list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 5;
+  max-height: 264px;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--navy) 14%, transparent);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: var(--radius-cell);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.option:hover,
+.active {
+  background: var(--surface-muted);
+}
+
+.plus {
+  flex: none;
+  color: var(--primary);
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

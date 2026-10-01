@@ -1,0 +1,86 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  min-width: 0;
+}
+
+.lead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The canvas sets the title and subtitle 2 px lower in their lines than the browser does. */
+.title,
+.subtitle {
+  position: relative;
+  top: 2px;
+}
+
+.title {
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-page-title);
+  font-weight: 700;
+  line-height: 36px;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.subtitle {
+  margin-top: 1px;
+  font-size: var(--text-body);
+  line-height: 22px;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Breadcrumb (Employee detailed view) */
+.crumbs {
+  margin-bottom: 1px;
+}
+
+@media (max-width: 1023px) {
+  .topbar {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .lead {
+    flex: 1 1 100%;
+    align-items: flex-start;
+  }
+
+  .title {
+    font-size: 24px;
+    line-height: 30px;
+  }
+
+  .subtitle {
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+}

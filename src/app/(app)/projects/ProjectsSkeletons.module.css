@@ -1,0 +1,112 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--block-gap);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 59px;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+}
+
+.pills {
+  display: flex;
+  gap: 8px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 18px;
+}
+
+.card {
+  --card-pad: 20px 22px 21px;
+  display: flex;
+  flex-direction: column;
+  min-height: 225px;
+}
+
+.cardHead {
+  display: flex;
+  gap: 12px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--track);
+}
+
+.cardTitle {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.cardStats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 0 14px;
+  border-bottom: 1px solid var(--track);
+}
+
+.cardFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+}
+
+.tableHead {
+  height: 40px;
+  border-bottom: 1px solid var(--track);
+  background: var(--surface-muted);
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 54px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--track);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.push {
+  margin-left: auto;
+}
+
+@media (max-width: 1023px) {
+  .actions {
+    display: none;
+  }
+
+  .hideSmall {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

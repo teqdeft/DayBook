@@ -1,0 +1,97 @@
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.bare {
+  display: inline-flex;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.help {
+  margin-top: 0;
+  font-size: var(--text-small);
+  line-height: 17px;
+  color: var(--muted);
+}
+
+.control {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 44px;
+  height: 26px;
+}
+
+/* the real checkbox covers the switch so clicks and focus land on it */
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.input:disabled {
+  cursor: not-allowed;
+}
+
+.track {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  background: var(--switch-off);
+  transition: background-color 150ms ease;
+  pointer-events: none;
+}
+
+.knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--on-fill);
+  transition: transform 150ms ease;
+}
+
+.input:checked + .track {
+  background: var(--primary);
+}
+
+.input:checked + .track .knob {
+  transform: translateX(18px);
+}
+
+.input:focus-visible + .track {
+  box-shadow: var(--focus-ring);
+}
+
+.input:disabled + .track,
+.disabled .text {
+  opacity: 0.5;
+}
+
+.disabled {
+  cursor: not-allowed;
+}

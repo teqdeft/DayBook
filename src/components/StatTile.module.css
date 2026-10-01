@@ -1,0 +1,22 @@
+.tile {
+  min-width: 0;
+  padding: 14px 16px 13px;
+  background: var(--paper);
+  border-radius: var(--radius-tile);
+}
+
+.value {
+  font-family: var(--font-heading-stack);
+  font-variant-numeric: tabular-nums;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 32px;
+  color: var(--ink);
+}
+
+.label {
+  margin-top: 3px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}

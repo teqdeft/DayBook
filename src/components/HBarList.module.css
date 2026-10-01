@@ -1,0 +1,74 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 11.33px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: var(--label-w, 144px) minmax(0, 1fr) 62px;
+  align-items: center;
+  min-height: 20px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* Figtree sits 1 px higher than the value's font; the canvas shares one baseline. */
+.label {
+  position: relative;
+  top: 1px;
+  min-width: 0;
+  padding-right: 12px;
+  overflow: hidden;
+  color: var(--ink);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.link {
+  color: inherit;
+}
+
+/* The label clips overflow, so an outer focus ring would be cut off: draw it inside. */
+.link:focus-visible {
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.track {
+  position: relative;
+  display: block;
+  height: var(--bar-h, 12px);
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--track);
+}
+
+.fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: block;
+  min-width: var(--bar-h, 12px);
+  border-radius: 999px;
+}
+
+.value {
+  font-family: var(--font-heading-stack);
+  /* Proportional figures: tabular ones give the decimal point a full digit width ("88 . 5h"). The
+     column is right-aligned, so whole-hour values still line up as on the canvas. */
+  font-variant-numeric: proportional-nums;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Phones: the label column gives up room to the bars (at most 36% of the row). */
+@media (max-width: 1023px) {
+  .row {
+    grid-template-columns: min(var(--label-w, 144px), 36%) minmax(0, 1fr) 62px;
+  }
+}

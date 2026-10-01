@@ -1,0 +1,159 @@
+.search {
+  width: 240px;
+}
+
+.tableCard {
+  overflow: hidden;
+}
+
+.project {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* The canvas centres the square on the name's letters, 2 px above the cell's middle. */
+.square {
+  position: relative;
+  top: -2px;
+}
+
+/* Grows to the cell's width, so the urgent note can use all of it. */
+.projectText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.projectName {
+  overflow: hidden;
+  font-size: var(--text-body);
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* contain: inline-size keeps the note out of the column's smallest width: it never widens the
+   table, and on a narrow table it ellipsizes at the width the name leaves (full text on hover). */
+.urgentNote {
+  position: relative;
+  top: -1px;
+  overflow: hidden;
+  font-size: var(--text-small);
+  line-height: 17px;
+  color: var(--marigold-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  contain: inline-size;
+}
+
+/* Client and project manager are set a size smaller than the project name on the canvas, and
+   sit 1 px lower. On a narrow table a long name wraps to a second line (the row still fits two)
+   rather than widening the table. */
+.text {
+  position: relative;
+  top: 1px;
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 14px;
+  overflow-wrap: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* The canvas sets the team avatars 2 px in from the column and 2 px above the row's middle. */
+.team {
+  position: relative;
+  top: -2px;
+  left: 2px;
+}
+
+/* Two classes outrank the stack's own display. */
+.team.teamShort {
+  display: none;
+}
+
+.muted {
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+/* Numbers use the heading face; proportional figures keep "88.5h" from spreading its dot. */
+.hours {
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-body);
+}
+
+/* The status block fills its column but never gets narrower than "Completed" needs. */
+.status {
+  min-width: 80px;
+}
+
+/* The menu button sits flush right; td outranks the table's own 8 px cell padding. */
+.tableCard td.menuCell {
+  padding-left: 0;
+}
+
+.headShort {
+  display: none;
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pagerText {
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.pagerButtons {
+  display: flex;
+  gap: 8px;
+}
+
+/* 1024-1279 px: the table fits a 718-973 px card. Team gives up width (2 avatars and "+N"), and
+   "Project manager" and "Hours this week" shorten (the full header stays for screen readers). */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .team.teamFull {
+    display: none;
+  }
+
+  .team.teamShort {
+    display: inline-flex;
+  }
+
+  .headFull {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .headShort {
+    display: inline;
+  }
+}
+
+@media (max-width: 1023px) {
+  .square,
+  .team {
+    top: 0;
+    left: 0;
+  }
+
+  .search {
+    flex: 1 1 220px;
+    width: auto;
+  }
+}
