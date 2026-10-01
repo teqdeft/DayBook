@@ -1,0 +1,4 @@
+/* the always-present help line is hidden while it has no text */
+.field > p:empty {
+  display: none;
+}

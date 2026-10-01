@@ -1,0 +1,32 @@
+.list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The first row's top line is the divider under the card title. */
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--track);
+}
+
+.status {
+  flex: none;
+}
+
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 17px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.review {
+  flex: none;
+}

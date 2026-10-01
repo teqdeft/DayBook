@@ -1,0 +1,92 @@
+/* Large: Today's "Your day" bar */
+.large {
+  position: relative;
+}
+
+.bar {
+  position: relative;
+  padding: 5.5px 0;
+}
+
+.track {
+  position: relative;
+  height: 18px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--track);
+}
+
+.fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: block;
+  min-width: 2px;
+  border-radius: 999px;
+}
+
+.nowMark,
+.reportMark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: block;
+}
+
+.nowMark {
+  width: 2px;
+  border-radius: 1px;
+  background: var(--ink);
+}
+
+.reportMark {
+  width: 6px;
+  border-radius: 3px;
+  background: var(--marigold);
+}
+
+.labels {
+  position: relative;
+  height: 20px;
+  margin-top: 3.5px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.label {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+
+.center {
+  transform: translateX(-50%);
+}
+
+.start {
+  transform: none;
+}
+
+.end {
+  right: 0;
+  left: auto;
+}
+
+.strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Compact: the Team board bar */
+.compact {
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--track);
+}
+
+.compact .fill {
+  min-width: 10px;
+}

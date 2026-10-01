@@ -1,0 +1,3 @@
+{
+  "/api/attendance/export/route": "app/api/attendance/export/route.js"
+}

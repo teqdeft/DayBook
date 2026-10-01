@@ -1,0 +1,70 @@
+.search {
+  width: 240px;
+}
+
+.tableCard {
+  overflow: hidden;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.personText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.personName {
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.personEmail {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--muted);
+  overflow-wrap: break-word;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+}
+
+.pagerText {
+  margin-right: auto;
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+@media (max-width: 1023px) {
+  /* stacked cards: the row menu sits in the card's top-right corner */
+  .row {
+    position: relative;
+  }
+
+  .row .actionsCell {
+    position: absolute;
+    top: 12px;
+    right: 8px;
+    width: auto;
+    padding: 0;
+  }
+
+  .search {
+    flex: 1 1 100%;
+    width: auto;
+  }
+}

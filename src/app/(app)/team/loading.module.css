@@ -1,0 +1,106 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--block-gap);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 115px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 273px 273px;
+  gap: 20px;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+  min-height: 320px;
+}
+
+.center {
+  align-self: center;
+  margin-top: 10px;
+}
+
+.boardHead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 72px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tableRow {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 55px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--track);
+}
+
+.cell {
+  margin-left: auto;
+}
+
+@media (max-width: 1279px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1023px) {
+  .topbar .search {
+    display: none;
+  }
+
+  .boardHead {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 72px;
+    padding: 14px 16px;
+  }
+
+  /* Placeholders don't shrink by themselves; on a phone the row's blocks share the width. */
+  .tableRow {
+    gap: 12px;
+    padding: 0 16px;
+  }
+
+  .tableRow > span:not(:first-child) {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+}

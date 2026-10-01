@@ -1,0 +1,276 @@
+/* position: relative keeps absolutely placed content (visually hidden header text) inside the
+   scroller, so a wide table scrolls in its card instead of widening the page. */
+.wrap {
+  position: relative;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.table th,
+.table td {
+  padding: 0 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th:first-child,
+.table td:first-child {
+  padding-left: 20px;
+}
+
+.table th:last-child,
+.table td:last-child {
+  padding-right: 20px;
+}
+
+/* Header */
+.table thead th {
+  height: var(--table-head-height);
+  padding-top: 1px;
+  border-bottom: 1px solid var(--track);
+  background: var(--surface-muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.table.compactHead thead th {
+  height: 16px;
+  padding-top: 1px;
+  border-bottom-color: var(--line);
+  line-height: 15px;
+}
+
+/* Rows */
+/* 1 px more above than below centres the text's cap height in the row, as on the canvas. */
+.table td {
+  height: var(--table-row-height);
+  padding-top: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--track);
+}
+
+/* Dense (Today's "My tasks this week"): 37 px header, 51 px rows. */
+.table.dense thead th {
+  height: 37px;
+}
+
+.dense td {
+  height: 51px;
+}
+
+.table tbody:last-child tr:last-child td {
+  border-bottom: 0;
+}
+
+.cell {
+  min-width: 0;
+}
+
+.table .right {
+  text-align: right;
+}
+
+.table .center {
+  text-align: center;
+}
+
+.table .emptyRow td {
+  height: auto;
+  padding: 0;
+  border-bottom: 0;
+}
+
+/* Groups (Team board). The canvas sets the group title low in its row. */
+.table .groupRow th {
+  height: 42px;
+  padding: 9.5px 20px 0;
+  border-bottom: 1px solid var(--track);
+  background: var(--surface);
+  text-align: left;
+}
+
+.table .group + .group .groupRow th {
+  height: 43px;
+  border-top: 1px solid var(--line);
+}
+
+.groupToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--group-color, var(--primary));
+  font: inherit;
+  text-align: left;
+}
+
+button.groupToggle {
+  border-radius: 6px;
+}
+
+.groupChevron {
+  flex: none;
+  transition: transform 0.15s ease;
+}
+
+.collapsed {
+  transform: rotate(-90deg);
+}
+
+.groupTitle {
+  font-family: var(--font-heading-stack);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.groupCount {
+  font-size: var(--text-small);
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.table .groupFooter td {
+  height: 49px;
+  padding: 0 20px 0 48px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--group-color, var(--primary));
+}
+
+.groupFooter a,
+.groupFooter button {
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+
+.group:not(:last-child) tr:last-child td {
+  border-bottom-color: var(--line);
+}
+
+/* Below 1024 px: stacked cards */
+@media (max-width: 1023px) {
+  .wrap {
+    overflow-x: visible;
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table thead,
+  .table colgroup {
+    display: none;
+  }
+
+  .table tbody tr {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--track);
+  }
+
+  .table tbody:last-child tr:last-child {
+    border-bottom: 0;
+  }
+
+  .table td,
+  .table td:first-child,
+  .table td:last-child,
+  .table .right,
+  .table .center {
+    display: grid;
+    grid-template-columns: minmax(88px, 36%) minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    height: auto;
+    padding: 5px 0;
+    border-bottom: 0;
+    text-align: left;
+  }
+
+  .table td::before {
+    content: attr(data-label);
+    font-size: var(--text-small);
+    line-height: 18px;
+    color: var(--muted);
+  }
+
+  .table td:not([data-label]),
+  .table td:first-child {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .table td:not([data-label])::before,
+  .table td:first-child::before {
+    content: none;
+  }
+
+  /* A cell that renders nothing (no actions for this row, no projects that day) shows no label. */
+  .table td:has(> .cell:empty) {
+    display: none;
+  }
+
+  .table td:first-child {
+    padding-bottom: 8px;
+  }
+
+  /* td.hideOnMobile also beats the td:last-child grid rule above. */
+  .table .hideOnMobile,
+  .table td.hideOnMobile,
+  .table td.hideOnMobile:last-child {
+    display: none;
+  }
+
+  .table tbody .groupRow {
+    padding: 0;
+  }
+
+  .table .groupRow th {
+    display: block;
+    height: auto;
+    padding: 12px 16px;
+  }
+
+  .table tbody .groupFooter {
+    padding: 0;
+  }
+
+  .table .groupFooter td,
+  .table .groupFooter td:first-child {
+    display: block;
+    height: auto;
+    padding: 12px 16px 12px 44px;
+  }
+
+  .table tbody .emptyRow {
+    padding: 0;
+  }
+
+  .table .emptyRow td,
+  .table .emptyRow td:first-child {
+    display: block;
+    padding: 0;
+  }
+}

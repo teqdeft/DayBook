@@ -1,0 +1,45 @@
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1;
+}
+
+.mark {
+  flex: none;
+}
+
+/* The mark keeps the brand blue in both themes (dark --primary is a light violet that would wash
+   out the white glyph); --label-blue is that blue and has no dark override. */
+.markBg {
+  fill: var(--label-blue);
+}
+
+.markLine {
+  fill: var(--on-fill);
+  fill-opacity: 0.55;
+}
+
+.markGlyph {
+  fill: var(--on-fill);
+}
+
+.markDot {
+  fill: var(--marigold);
+}
+
+.wordmark {
+  font-family: var(--font-heading-stack);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.light .wordmark {
+  color: var(--on-fill);
+}
+
+.dark .wordmark {
+  color: var(--ink);
+}

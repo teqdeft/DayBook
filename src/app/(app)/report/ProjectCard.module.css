@@ -1,0 +1,212 @@
+/* --project-strong and --project-text come from the project's colour (set inline). */
+.card {
+  position: relative;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  min-height: 68px;
+  padding: 0 20px 0 15px;
+}
+
+.collapse {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--project-strong);
+}
+
+.collapse:hover {
+  background: var(--surface-muted);
+}
+
+.chevron,
+.chevronClosed {
+  transition: transform 0.15s ease;
+}
+
+.chevronClosed {
+  transform: rotate(-90deg);
+}
+
+.pickerWrap {
+  position: relative;
+  min-width: 0;
+  margin-right: 10px;
+}
+
+.label {
+  max-width: 100%;
+}
+
+.label:disabled {
+  cursor: default;
+}
+
+/* The picker chevron on artboard 02 is drawn heavier than the other icons (about 3 at 14 px). */
+.label > svg {
+  stroke-width: 3;
+}
+
+.hours {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  padding-left: 16px;
+}
+
+.hoursLabel {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.hoursInput {
+  width: 72px;
+  height: 40px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-family: var(--font-body-stack);
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+  color: var(--ink);
+  text-align: center;
+}
+
+.hoursInput::placeholder {
+  color: var(--placeholder);
+  font-weight: 600;
+}
+
+.hoursInput:hover:not(:read-only) {
+  border-color: var(--muted);
+}
+
+.hoursInput:focus-visible {
+  border-color: var(--primary);
+}
+
+.hoursInput[aria-invalid='true'] {
+  border-color: var(--red);
+}
+
+.headErrors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 0 20px 12px;
+}
+
+.error {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--red-text);
+}
+
+.hoursError {
+  margin-left: auto;
+  text-align: right;
+}
+
+.tasks {
+  border-top: 1px solid var(--line);
+}
+
+.thead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  align-items: center;
+  height: 36px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--track);
+  background: var(--surface-muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.statusHead {
+  text-align: center;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tasksError {
+  padding: 10px 20px 0;
+}
+
+.addRow {
+  display: flex;
+  align-items: center;
+  height: 52px;
+  padding: 0 20px 2px;
+}
+
+.addTask {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--project-text);
+}
+
+.addTask:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  .head {
+    flex-wrap: wrap;
+    gap: 10px 0;
+    padding: 12px 16px 12px 11px;
+  }
+
+  .hours {
+    padding-left: 0;
+  }
+
+  .thead {
+    grid-template-columns: minmax(0, 1fr) 136px;
+    padding: 0 16px;
+  }
+
+  .addRow,
+  .headErrors {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .hoursInput {
+    font-size: 16px;
+  }
+}

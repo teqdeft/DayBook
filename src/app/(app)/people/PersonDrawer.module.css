@@ -1,0 +1,40 @@
+/* Field rhythm measured on artboard 10: one field every ~84.3 px. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18.33px;
+}
+
+.info {
+  margin: 0 0 0.67px;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--ink-2);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18.33px 15px;
+  align-items: start;
+}
+
+/* the help line under Shift already adds space above Role */
+.afterHelp {
+  margin-top: -2px;
+}
+
+/* The shift reads like a read-only field while it holds the company default. */
+.form .defaultShift:not(:focus) {
+  background: var(--paper);
+  color: var(--muted);
+}
+
+@media (max-width: 420px) {
+  .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

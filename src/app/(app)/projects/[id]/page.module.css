@@ -1,0 +1,142 @@
+/* Project report. Not on the canvas: built from the Team dashboard and Employee detail parts at
+   the same sizes (1440 px wide, 28 x 32 px page padding). */
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The square sits on the name's letters, not on the line box. */
+.square {
+  position: relative;
+  top: -1px;
+  flex: none;
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.urgent {
+  color: var(--marigold-text);
+}
+
+.range {
+  flex: none;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* The cards share the row's height, so the value row takes the free space and every footer or
+   bar sits on the same line at the bottom of its card. */
+.kpi > :nth-child(2) {
+  margin-bottom: auto;
+}
+
+.charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
+.chartCard {
+  --card-pad: 20px 24px 22px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cardEmpty {
+  flex: 1;
+}
+
+/* Hours by person: the value column holds the hours and the share. */
+.personBars {
+  margin-top: 16px;
+}
+
+.personBars > li {
+  grid-template-columns: var(--label-w, 150px) minmax(0, 1fr) 114px;
+}
+
+/* The bar label clips its overflow (long names end in an ellipsis), which would cut off the usual
+   focus ring of the name's link, so the ring is drawn inside the name. */
+.personBars a:focus-visible {
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.share {
+  display: inline-block;
+  min-width: 40px;
+  margin-left: 6px;
+  font-weight: 500;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* Hours over time: long ranges scroll inside the card rather than squeezing their labels. */
+.overTime {
+  margin: 18px -4px 0;
+  padding-bottom: 2px;
+  overflow-x: auto;
+}
+
+.overTimeBars {
+  min-width: calc(var(--bars, 7) * 52px);
+}
+
+@media (max-width: 1279px) {
+  .kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* Side by side, "Hours by person" would leave its bars 40-80 px between the names and the
+     hours; one card per row keeps them readable. */
+  .charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1023px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .kpis > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .charts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .range {
+    order: 2;
+  }
+
+  .personBars > li {
+    grid-template-columns: min(var(--label-w, 150px), 32%) minmax(0, 1fr) 108px;
+  }
+}
+
+@media (max-width: 639px) {
+  .chartCard {
+    --card-pad: 16px;
+  }
+
+  .overTimeBars {
+    min-width: calc(var(--bars, 7) * 46px);
+  }
+}

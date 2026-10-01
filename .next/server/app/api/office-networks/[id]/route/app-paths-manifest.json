@@ -1,0 +1,3 @@
+{
+  "/api/office-networks/[id]/route": "app/api/office-networks/[id]/route.js"
+}

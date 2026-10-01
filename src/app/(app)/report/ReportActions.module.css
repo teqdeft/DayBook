@@ -1,0 +1,67 @@
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+.save {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.saveProblem {
+  color: var(--red-text);
+}
+
+.totals {
+  display: flex;
+  padding-top: 2px;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+  text-align: right;
+}
+
+.logged {
+  font-family: var(--font-heading-stack);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 28px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.present {
+  margin-top: 2px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 1023px) {
+  .actions {
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    width: 100%;
+  }
+
+  .totals {
+    align-items: flex-start;
+    text-align: left;
+    margin-right: auto;
+  }
+
+  .logged {
+    font-size: 20px;
+    line-height: 24px;
+  }
+
+  .save {
+    order: 3;
+    flex-basis: 100%;
+  }
+}

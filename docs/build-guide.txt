@@ -1,0 +1,2071 @@
+
+
+===== PAGE 1 (size 612x792) =====
+Daybook Phase 1: Build Guide
+Sep 30, 2026 · ​@Teqdeft
+1. Overview
+Phase 1 replaces the "post in Slack, PM copies to a sheet" routine with one web app,
+Daybook. Everyone checks in, logs their day and submits a daily report there. PMs, HR and
+the CEO see it live, and reports still post to Slack in the same format.
+The approved screens are on the Daybook Phase 1 design canvas. This guide is the build
+spec for those screens: build the UI to match the canvas exactly.
+Goals
+1. Every employee checks in, checks out and submits a daily report in Daybook.
+2. PMs see who worked on what, and for how long, without reading Slack.
+3. HR sees daily attendance and fixes mistakes with a saved reason.
+4. The code is simple enough for any developer on the team to pick up, and later phases
+plug in without rework.
+Scope
+In Phase 1
+Later phases
+Sign in with Slack, four roles
+Leave, holidays, short leave (Phase 2)
+Check-in and check-out, Office or WFH, late
+marks recorded
+Late rules, grace time, WFH approval (Phase
+2)
+Daily report with projects, hours, tasks,
+statuses
+Screen activity tracking (Phase 3)
+Carry-over of unfinished tasks, stuck-task
+flags
+Task boards and assignments (Phase 4)
+Projects, members, urgent flag, project
+requests
+Billing, rates, invoices (Phase 5, PM and
+Admin only)
+Report locking, edit requests, edit history
+Slack slash commands
+Attendance corrections by HR
+Payroll, HR documents
+Daybook Phase 1: Build Guide
+Page 1 of 42
+
+
+===== PAGE 2 (size 612x792) =====
+Done when
+For 2 straight weeks, every daily report comes through Daybook.
+PMs stop collecting updates from Slack by hand.
+HR can answer "who was in, when, and where" for any day from the Attendance
+screen.
+Assumptions: 25 to 30 people, one office, India time (IST), Monday to Friday, 9:30 AM to
+6:30 PM. All of these are settings, not hard-coded values.
+2. Roles and permissions
+There are four roles: employee , pm , hr and admin . Each user has exactly one role. PMs
+and HR also check in and submit reports like everyone else. The CEO has the admin role,
+and check-in is optional for them ( tracks_attendance = false ).
+Permissions are checked on the server for every request. The UI only hides what a role
+can't use; it never decides access.
+In Phase 1
+Later phases
+Team dashboard, employee detail, company
+overview
+Slack posting, reminders, urgent and request
+messages
+Excel export of hours
+Settings, roles, installable web app (PWA)
+Permission key
+What it allows
+Employee
+PM
+HR
+Admin
+attendance.self
+Check in, check out, request a
+correction
+Yes
+Yes
+Yes
+Optional
+report.self
+Write, submit and view own
+reports, request edits
+Yes
+Yes
+Yes
+Optional
+project.request
+Ask for a missing project
+Yes
+Yes
+Yes
+Yes
+project.manage
+Create and edit projects,
+members, urgent flag
+No
+Own projects
+No
+All
+team.view
+Team dashboard and employee
+detail
+No
+Yes
+No
+Yes
+Daybook Phase 1: Build Guide
+Page 2 of 42
+
+
+===== PAGE 3 (size 612x792) =====
+Who handles what
+A report edit request goes to the employee's reports_to user if that user is a PM,
+otherwise to Admin.
+A project request goes to the requester's reports_to PM. Any PM or Admin can also
+handle it.
+"Own projects" means projects where pm_id is that PM.
+The permission keys live in one file, src/lib/permissions.js , as a map of role to allowed
+keys. Later phases add new keys there; nothing else about roles changes.
+3. Tech stack and principles
+Daybook is one Next.js codebase in plain JavaScript, backed by MySQL through Knex,
+running as two processes: web for pages and the API, and worker for scheduled jobs and
+Slack sending.
+Permission key
+What it allows
+Employee
+PM
+HR
+Admin
+report.approve_edit
+Approve or decline report edit
+requests
+No
+Yes (their
+reports)
+No
+Yes
+project_request.handle
+Approve or decline project
+requests
+No
+Yes
+No
+Yes
+attendance.view_all
+Attendance screen for
+everyone
+No
+Yes
+Yes
+Yes
+attendance.correct
+Edit attendance, handle
+correction requests
+No
+No
+Yes
+Yes
+people.manage
+Add, edit and deactivate
+employees
+No
+No
+Yes
+Yes
+export.hours
+Download hours as Excel
+No
+Yes
+No
+Yes
+overview.view
+Company overview
+No
+No
+No
+Yes
+roles.manage
+Change anyone's role
+No
+No
+No
+Yes
+settings.manage
+Company settings, office
+networks, Slack
+No
+No
+No
+Yes
+Layer
+Choice
+Why
+Language
+JavaScript (ES modules), JSDoc
+comments on service functions
+No build-time types to learn;
+JSDoc still gives editor hints
+Daybook Phase 1: Build Guide
+Page 3 of 42
+
+
+===== PAGE 4 (size 612x792) =====
+Principles
+1. Simple over clever. No ORM models, no Redux, no GraphQL, no microservices. React
+state and fetch are enough at this size.
+2. Features live in modules. Each feature (attendance, reports, projects and so on) has
+its own folder with the same three files. Section 4 shows the pattern.
+3. Thin routes, logic in services. API routes only read input, check permission, call a
+service and return JSON. Pages never contain SQL.
+Layer
+Choice
+Why
+Runtime
+Node.js 24 LTS
+Long-term support release
+Web framework
+Next.js, current stable, App Router
+Pages and API in one app
+Database
+MySQL 8.4 LTS, InnoDB, utf8mb4
+Team already knows SQL; reliable
+Query builder
+Knex with the mysql2 driver
+Plain SQL-shaped queries,
+migrations and seeds built in
+Validation
+zod
+One schema validates API input
+and gives clear error messages
+Dates and time
+zones
+dayjs with utc and timezone
+plugins
+Small, simple API
+Slack
+@slack/web-api
+Official client
+Scheduled jobs
+node-cron inside the worker
+process
+Runs reminders and midnight jobs
+Excel export
+exceljs
+Writes .xlsx files
+Logging
+pino
+Fast JSON logs
+Styling
+CSS Modules plus global CSS
+variables, fonts through
+next/font
+No extra UI framework; tokens
+match the design exactly
+Tests
+Vitest for services, Playwright for
+main flows
+Fast and simple
+Code quality
+ESLint and Prettier
+Same style everywhere
+Daybook Phase 1: Build Guide
+Page 4 of 42
+
+
+===== PAGE 5 (size 612x792) =====
+4. The server owns time. Check-in and check-out times come from the server clock,
+never the browser. All timestamps are stored in UTC; each record also stores its
+work_date in the company time zone.
+5. Settings, not constants. Office hours, lock time, working days and Slack options are
+rows in the settings table, editable by Admin.
+6. Every change is traceable. Report edits keep revisions; attendance corrections, role
+changes and project changes write to audit_logs .
+7. Slack never blocks the user. The web app writes Slack messages to an outbox table;
+the worker sends them and retries on failure.
+How a request flows
+Pages are React Server Components. They read the session, then call module services
+directly (no HTTP hop).
+Buttons and forms are small Client Components. They call /api/... routes with
+fetch , then call router.refresh() to redraw the page with fresh data.
+The worker imports the same module services, so business rules exist in one place.
+4. Project structure
+One repository, organised by feature. Pages and API routes sit in src/app , business logic
+sits in src/modules , and shared helpers sit in src/lib .
+daybook/
+  .env.example
+  knexfile.js
+  next.config.mjs
+  package.json
+  db/
+    migrations/          one file per table group, never edited after release
+    seeds/               departments, default settings, first admin
+  public/
+    icons/               app icons 192px and 512px, favicon
+    sw.js                minimal service worker for install
+  src/
+    app/
+      layout.js          fonts, global CSS, theme
+      globals.css        design tokens (section 13)
+      manifest.js        installable app (PWA)
+      (auth)/login/page.js
+Daybook Phase 1: Build Guide
+Page 5 of 42
+
+
+===== PAGE 6 (size 612x792) =====
+      (app)/layout.js    sidebar + top bar shell, session check
+      (app)/today/page.js
+      (app)/report/page.js
+      (app)/log/page.js
+      (app)/projects/page.js
+      (app)/team/page.js
+      (app)/team/[userId]/page.js
+      (app)/attendance/page.js
+      (app)/requests/page.js
+      (app)/people/page.js
+      (app)/overview/page.js
+      (app)/settings/page.js
+      (app)/settings/roles/page.js
+      api/               route.js files, one folder per resource (section 9)
+    components/          shared UI: Button, Card, Kpi, StatusCell, 
+ProjectLabel, DayBar, DataTable, Drawer, Tabs, Toggle, Avatar, Sidebar, 
+TopBar
+    config/
+      navigation.js      sidebar items per role
+    modules/
+      auth/
+      users/
+      attendance/
+      reports/
+      projects/
+      dashboard/
+      settings/
+      notifications/
+      slack/
+      audit/
+    lib/
+      env.js             reads and validates environment variables
+      db.js              one shared Knex instance
+      session.js         cookie session helpers
+      permissions.js     role to permission map, can()
+      route.js           withRoute() wrapper for API handlers
+      errors.js          AppError and error codes
+      time.js            company time zone helpers
+      logger.js          pino logger
+      events.js          small in-process event bus
+Daybook Phase 1: Build Guide
+Page 6 of 42
+
+
+===== PAGE 7 (size 612x792) =====
+    worker/
+      index.js           starts cron jobs
+      jobs/              one file per job (section 12)
+  tests/
+The module pattern. Every module has the same files, so a new developer knows where
+to look.
+A route stays this small:
+// src/app/api/attendance/check-in/route.js
+import { withRoute } from '@/lib/route';
+import { attendance } from '@/modules/attendance';
+import { checkInSchema } from '@/modules/attendance/schemas';
+export const POST = withRoute({ permission: 'attendance.self', body: 
+checkInSchema },
+  async ({ user, body, ip }) => attendance.checkIn({ user, ip, ...body })
+);
+withRoute does the same five things for every endpoint: loads the session, checks the
+permission, validates input with zod, runs the handler, and turns errors into the standard
+JSON error shape. It also logs each request with its duration.
+Naming. Database tables and columns use snake_case ; JavaScript uses camelCase . The
+Knex config converts between them once, with wrapIdentifier and
+postProcessResponse , so no code does it by hand.
+Adding a feature later always means the same steps: a new folder in src/modules , a new
+migration, new permission keys, a nav entry in config/navigation.js , and new routes.
+Existing modules don't change.
+File
+Holds
+Rule
+repo.js
+Knex queries for this module's
+tables
+Only file that touches the database
+service.js
+Business rules, transactions,
+events
+Calls its own repo and other modules'
+services, never their repos
+schemas.js
+zod schemas for API input
+One schema per endpoint body or query
+index.js
+Public exports of the module
+Other code imports from here only
+Daybook Phase 1: Build Guide
+Page 7 of 42
+
+
+===== PAGE 8 (size 612x792) =====
+5. Environment variables
+All secrets and machine-specific values come from environment variables.
+src/lib/env.js reads them once with a zod schema; if anything is missing or wrong, the
+app refuses to start and prints which variable failed.
+# .env.example  (copy to .env.local for development; never commit real 
+values)
+# App
+NODE_ENV=development
+APP_URL=http://localhost:3000          # public URL, used for Slack redirects 
+and links
+PORT=3000
+LOG_LEVEL=info                          # debug | info | warn | error
+TRUST_PROXY=false                       # true behind Nginx or a load 
+balancer, so client IPs are read from X-Forwarded-For
+DEFAULT_TIMEZONE=Asia/Kolkata           # used until Admin saves a time zone 
+in Settings
+# Database
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=daybook
+DB_PASSWORD=change-me
+DB_NAME=daybook
+DB_POOL_MIN=2
+DB_POOL_MAX=10
+# Sessions
+SESSION_SECRET=generate-64-random-characters   # signs and hashes session 
+tokens
+SESSION_TTL_DAYS=30
+SESSION_COOKIE_NAME=daybook_session
+# Slack: Sign in with Slack (OpenID Connect)
+SLACK_CLIENT_ID=
+SLACK_CLIENT_SECRET=
+SLACK_TEAM_ID=                          # only this workspace may sign in
+# Slack: bot for posting reports and messages
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_SIGNING_SECRET=                   # not used in Phase 1; reserved for 
+Daybook Phase 1: Build Guide
+Page 8 of 42
+
+
+===== PAGE 9 (size 612x792) =====
+slash commands
+# First admin, created by the seed
+SEED_ADMIN_EMAIL=ceo@company.com
+SEED_ADMIN_NAME=CEO Name
+# Worker
+WORKER_CRON_ENABLED=true                # set false on extra web servers so 
+jobs run once
+Rules
+Only src/lib/env.js reads process.env . Everything else imports the parsed env
+object.
+Nothing secret starts with NEXT_PUBLIC_ , so no secret can reach the browser.
+Values the business changes (office hours, report channel, working days) are in the
+settings table, not here.
+Development, staging and production each have their own values and their own Slack
+app redirect URL.
+6. Database schema
+Phase 1 uses 19 tables in five groups, all InnoDB with utf8mb4_unicode_ci . Every table
+has id BIGINT UNSIGNED AUTO_INCREMENT as primary key (except join and settings
+tables) and created_at / updated_at as DATETIME in UTC, unless noted.
+Conventions
+Times are DATETIME in UTC. Dates that mean "which working day" are DATE in the
+company time zone and always named work_date .
+Durations are whole minutes ( minutes , late_minutes , total_minutes ). The UI
+shows hours; 1.5h is stored as 90 .
+Status values are ENUM s so bad values can't get in.
+Foreign keys are real constraints. Users are never deleted, only deactivated.
+6.1 People and access
+departments : name VARCHAR(80) UNIQUE . Seeded with Development, SEO, Delivery, HR,
+Sales, Leadership.
+Daybook Phase 1: Build Guide
+Page 9 of 42
+
+
+===== PAGE 10 (size 612x792) =====
+users
+Indexes: role , status , department_id , reports_to_id .
+sessions : user_id FK (cascade), token_hash CHAR(64) UNIQUE , expires_at , ip
+VARCHAR(45) , user_agent VARCHAR(255) , last_seen_at . Index on expires_at for
+cleanup.
+Column
+Type
+Notes
+name
+VARCHAR(120)
+Required
+email
+VARCHAR(190) UNIQUE
+Lowercase; must
+match their Slack
+email
+slack_user_id
+VARCHAR(32) UNIQUE NULL
+Filled at first sign-in,
+or by lookup when HR
+adds them
+avatar_url
+VARCHAR(500) NULL
+From Slack
+designation
+VARCHAR(120)
+For example
+"Frontend developer"
+department_id
+FK departments
+role
+ENUM('employee','pm','hr','admin')
+Default employee ;
+only Admin changes it
+reports_to_id
+FK users NULL
+Their PM or manager
+joined_on
+DATE NULL
+shift_start ,
+shift_end
+TIME NULL
+Null means the
+company default
+tracks_attendance
+TINYINT(1) default 1
+0 for the CEO;
+excluded from "not
+checked in"
+status
+ENUM('active','deactivated')
+Deactivating deletes
+their sessions
+deactivated_at ,
+last_login_at
+DATETIME NULL
+Daybook Phase 1: Build Guide
+Page 10 of 42
+
+
+===== PAGE 11 (size 612x792) =====
+6.2 Projects
+clients : name VARCHAR(160) UNIQUE , is_internal TINYINT(1) . Seeded with one
+internal client called "Internal". Billing in Phase 5 hangs off this table.
+projects
+Indexes: status , pm_id , is_urgent .
+Column
+Type
+Notes
+name
+VARCHAR(120) UNIQUE
+Stops
+duplicates like
+"iwilltillimwell"
+and "I will till
+im well"
+client_id
+FK clients
+Internal
+projects point
+to the
+"Internal"
+client
+pm_id
+FK users
+Owner PM
+status
+ENUM('active','on_hold','completed')
+Only active
+projects can
+be picked in a
+report
+color
+ENUM('blue','green','violet','orange','teal
+','pink')
+Label colour
+from the
+design
+is_urgent
+TINYINT(1) default 0
+urgent_note
+VARCHAR(200) NULL
+Shown to
+members
+urgent_marked_at ,
+urgent_marked_by
+DATETIME NULL , FK users NULL
+completed_at
+DATETIME NULL
+created_by
+FK users
+Daybook Phase 1: Build Guide
+Page 11 of 42
+
+
+===== PAGE 12 (size 612x792) =====
+project_members : project_id and user_id (composite primary key, both cascade),
+added_by , added_at . Index on user_id .
+project_requests : requested_by FK, name VARCHAR(120) , note VARCHAR(500) ,
+status ENUM('pending','approved','declined') , handled_by , handled_at ,
+decline_reason VARCHAR(300) NULL , project_id FK NULL (the project it became).
+Index on status .
+6.3 Attendance
+office_networks : name VARCHAR(80) , ip_address VARCHAR(45) UNIQUE (the office's
+public IP), created_by .
+attendance (one row per person per working day)
+Column
+Type
+Notes
+user_id
+FK users
+work_date
+DATE
+Company-
+time-zone date
+of check-in
+check_in_at
+DATETIME
+Server time,
+UTC
+check_out_at
+DATETIME NULL
+location
+ENUM('office','wfh')
+office_verified
+TINYINT(1) default 1
+0 when
+checked in as
+"Office,
+unverified"
+check_in_ip ,
+check_out_ip
+VARCHAR(45)
+note
+VARCHAR(255) NULL
+Optional note
+for the PM
+late_minutes
+SMALLINT UNSIGNED default 0
+Recorded only
+in Phase 1
+Daybook Phase 1: Build Guide
+Page 12 of 42
+
+
+===== PAGE 13 (size 612x792) =====
+Keys: UNIQUE (user_id, work_date) , index on work_date .
+attendance_corrections : user_id , attendance_id FK NULL , work_date , type
+ENUM('check_in','check_out','missing_day') , requested_time DATETIME , reason
+VARCHAR(500) , status ENUM('pending','approved','rejected') , handled_by ,
+handled_at , handler_note VARCHAR(300) NULL . Index on status .
+6.4 Daily reports
+daily_reports (one per person per day)
+Column
+Type
+Notes
+is_working_day
+TINYINT(1)
+0 for weekend
+work, used for
+comp-off later
+checkout_status
+ENUM('open','checked_out','missing','correc
+ted')
+missing is set
+by the
+midnight job
+source
+ENUM('self','hr')
+hr when HR
+created the
+row
+Column
+Type
+Notes
+user_id , work_date
+FK, DATE
+UNIQUE (user_id,
+work_date)
+status
+ENUM('draft','submitted')
+Drafts autosave
+total_minutes
+SMALLINT UNSIGNED
+Sum of entries, kept in sync
+by the service
+first_submitted_at ,
+submitted_at
+DATETIME NULL
+Latest submit in
+submitted_at
+locks_at
+DATETIME
+Set on create from the lock
+rule (section 7)
+unlocked_until
+DATETIME NULL
+Set when a PM approves an
+edit
+Daybook Phase 1: Build Guide
+Page 13 of 42
+
+
+===== PAGE 14 (size 612x792) =====
+Index: (work_date, status) .
+report_entries (one per project in a report): report_id FK (cascade), project_id FK
+NULL , project_request_id FK NULL , minutes SMALLINT UNSIGNED , sort_order . A
+CHECK makes sure exactly one of the two project columns is set. Index on project_id .
+report_tasks : entry_id FK (cascade), title VARCHAR(500) , status
+ENUM('done','in_progress','blocked') , first_reported_on DATE (carried from the
+original task, used for stuck-task flags), carried_from_task_id FK NULL (on delete set
+null), sort_order . Index on (status, first_reported_on) .
+report_edit_requests : report_id , requested_by , reason VARCHAR(500) , status
+ENUM('pending','approved','declined') , handled_by , handled_at . Index on status .
+report_revisions : report_id (cascade), revision INT , snapshot JSON (entries,
+tasks, total), edited_by , reason VARCHAR(500) NULL , created_at . UNIQUE
+(report_id, revision) .
+6.5 System
+settings : key VARCHAR(80) primary key, value JSON , updated_by , updated_at .
+Seeded defaults:
+Column
+Type
+Notes
+revision
+INT default 0
+Goes up on every submit
+slack_channel_id ,
+slack_ts
+VARCHAR(32) NULL
+Lets later edits update the
+same Slack message
+Key
+Default
+company_name
+"[Company name]"
+timezone
+"Asia/Kolkata"
+working_days
+[1,2,3,4,5] (Monday = 1)
+office_start , office_end
+"09:30", "18:30"
+late_after
+"09:30"
+report_reminder_at
+"18:30"
+Daybook Phase 1: Build Guide
+Page 14 of 42
+
+
+===== PAGE 15 (size 612x792) =====
+notifications (the bell): user_id , type VARCHAR(50) , title VARCHAR(200) , body
+VARCHAR(500) NULL , link VARCHAR(300) NULL , read_at NULL . Index on (user_id,
+read_at) .
+audit_logs : actor_id NULL , action VARCHAR(80) (for example attendance.correct ),
+entity_type , entity_id , before JSON , after JSON , reason VARCHAR(500) NULL , ip .
+Index on (entity_type, entity_id) .
+slack_outbox : kind VARCHAR(40) , channel VARCHAR(40) , payload JSON , status
+ENUM('pending','sent','failed') , attempts TINYINT , next_attempt_at , last_error
+VARCHAR(500) , related_type , related_id , result_ts VARCHAR(32) NULL , sent_at .
+Index on (status, next_attempt_at) .
+job_runs : job VARCHAR(60) , run_key VARCHAR(120) UNIQUE (for example
+report_reminder:2026-10-01 ), status ENUM('running','done','failed') ,
+started_at , finished_at , error . The unique key stops a job running twice.
+6.6 Migrations and seeds
+Key
+Default
+report_lock
+"next_day_12:00"
+gap_warning_minutes
+90
+stuck_task_days
+5
+allow_unverified_office
+true
+auto_mark_missing_checkout
+true
+slack_report_channel_id
+null until Admin picks a channel
+slack_post_reports , slack_remind ,
+slack_urgent_notify , slack_requests_notify
+true
+File
+Creates
+001_people.js
+departments , users , sessions
+002_projects.js
+clients , projects , project_members ,
+project_requests
+Daybook Phase 1: Build Guide
+Page 15 of 42
+
+
+===== PAGE 16 (size 612x792) =====
+Seeds, in order: departments, the "Internal" client, default settings, and the first admin
+from SEED_ADMIN_EMAIL . Seeds are safe to run twice (they check before inserting).
+A released migration is never edited. Any change is a new migration file.
+7. Business rules
+These rules live in the module services and nowhere else. Every value in bold italics below,
+like 9:30, comes from settings , not code.
+7.1 Time and working days
+The company time zone is Asia/Kolkata. work_date is the local date at the moment of
+check-in.
+A working day is a weekday listed in working_days (Monday to Friday). Holidays arrive
+in Phase 2.
+All "now" values come from the server clock through src/lib/time.js .
+7.2 Check-in
+1. One check-in per person per work_date . A second try returns ALREADY_CHECKED_IN .
+2. The server compares the client IP with office_networks . On a match, the only option
+is Office and office_verified = 1 .
+3. On any other network, the default is WFH. If allow_unverified_office is on, the person
+can pick "I'm in the office, but the Wi-Fi is down". That saves location = office ,
+office_verified = 0 , and notifies HR.
+4. On a working day, if the local check-in time is after late_after (or the person's own
+shift_start ), late_minutes is the difference in whole minutes. Otherwise it is 0.
+Phase 1 only records it.
+File
+Creates
+003_attendance.js
+office_networks , attendance ,
+attendance_corrections
+004_reports.js
+daily_reports , report_entries , report_tasks ,
+report_edit_requests , report_revisions
+005_system.js
+settings , notifications , audit_logs ,
+slack_outbox , job_runs
+Daybook Phase 1: Build Guide
+Page 16 of 42
+
+
+===== PAGE 17 (size 612x792) =====
+5. Check-in on a non-working day is allowed and saved with is_working_day = 0 .
+6. An optional note (up to 255 characters) goes to the PM, for example "plumber visit,
+online by 11".
+7. Forgot to check in earlier? The person checks in now, then taps "I came earlier" to send
+a correction request with the real time.
+7.3 Check-out
+1. Check-out needs an open check-in for today. It saves the server time and sets
+checkout_status = checked_out .
+2. If today's report is not submitted, the API still checks out but returns reportPending:
+true . The UI then shows "Write your report" with "Check out anyway" as the second
+button.
+3. The gap warning appears when present time and logged hours differ by more than 90
+minutes. It warns, never blocks.
+4. At 00:05 the worker marks any check-in still open from the day before as missing . HR
+fixes it from Attendance.
+7.4 Daily report
+1. Opening the report page creates today's report as a draft if none exists.
+2. The draft starts with carry-over: every in_progress or blocked task from the
+person's latest submitted report, grouped under its project (only if the project is still
+active), with 0 hours. Each carried task keeps its first_reported_on .
+3. The project picker lists urgent projects first (with the Urgent label), then the person's
+projects, then all other active projects by search. A pending project request can also
+be picked; it shows "Waiting for approval".
+4. Drafts autosave one second after the last change.
+5. Submitting needs: at least one project; each project with hours above 0 in 0.25-hour
+steps and at least one task; tasks 2 to 500 characters; no project twice; a daily total of
+16 hours or less.
+6. On submit: revision goes up by one, a snapshot goes to report_revisions , and a
+Slack message is queued. The first submit posts a new message; later submits update
+the same message using slack_ts .
+7. Lock. locks_at is set to 12:00 the next day in company time. Until then the person
+can change the report; every save after the first submit is a new revision.
+Daybook Phase 1: Build Guide
+Page 17 of 42
+
+
+===== PAGE 18 (size 612x792) =====
+8. After the lock, the report is read-only. The person sends an edit request with a reason.
+The approver (section 2) approves or declines. Approval sets unlocked_until to 24
+hours later and notifies the person. The next submit clears it.
+9. A forgotten day can be added until its lock time. After that, the person sends an edit
+request for that date and the report is created on approval.
+7.5 Carry-over and stuck tasks
+A carried task copies the title, status and first_reported_on , and links back with
+carried_from_task_id .
+A task is stuck when it is still in_progress and at least 5 working days have passed
+since first_reported_on . Stuck tasks show under "Tasks to watch" on the employee
+detail page.
+7.6 Urgent projects
+Only the project's PM or Admin marks a project urgent, and a note (up to 200
+characters) is required.
+Marking urgent notifies every member in the app, and by Slack DM if
+slack_urgent_notify is on. The project then shows on each member's Today screen, at
+the top of the report picker, and on the PM dashboard.
+Unmarking clears the note. Both actions go to audit_logs .
+7.7 Project requests
+1. The person enters a name and a short note. Before saving, the server compares the
+name with existing projects and pending requests, ignoring case, spaces and dashes,
+and suggests a match if one exists.
+2. Approve opens the New project form filled from the request. Saving it creates the
+project, marks the request approved, adds the requester as a member, and moves any
+report entries from the request to the new project.
+3. Decline needs a reason. If hours were already logged to the request, the handler also
+picks an existing project to move them to.
+7.8 Attendance corrections
+People request a correction (wrong check-in time, forgotten check-out, or a whole
+missing day) with a reason.
+Daybook Phase 1: Build Guide
+Page 18 of 42
+
+
+===== PAGE 19 (size 612x792) =====
+HR approves or rejects. Approval updates or creates the attendance row, sets
+checkout_status = corrected where relevant, and writes an audit log with the
+reason. The person is notified either way.
+HR can also edit a row directly, and a reason is always required. "Confirm" on an
+unverified office check-in sets office_verified = 1 .
+7.9 People
+HR adds a person with their Slack email. The worker looks up their Slack account by
+email and saves slack_user_id .
+Only active people whose email exists in users can sign in.
+Deactivating keeps all history, removes the person from dashboards and pickers, and
+ends their sessions.
+7.10 How dashboard numbers are counted
+8. Screens and functionality
+There are 13 screens. Each one matches an artboard on the design canvas, which is the
+source of truth for layout, spacing and copy.
+Number
+Rule
+Checked in
+Attendance rows for today, among active users
+with tracks_attendance = 1
+Working from home
+Of those, location = wfh
+Late today
+Of those, late_minutes > 0 ; the average uses
+only late rows
+Reports submitted
+Submitted reports for today among people who
+checked in
+Hours by project
+Sum of report_entries.minutes on submitted
+reports in the date range
+Average check-in
+Mean local check-in time on working days in the
+range
+Present time
+check_out_at (or now) minus check_in_at
+Daybook Phase 1: Build Guide
+Page 19 of 42
+
+
+===== PAGE 20 (size 612x792) =====
+/ sends Admin to /overview and everyone else to /today . A route a role can't use
+returns the "no access" page, and the API returns 403 .
+Shared layout
+Sidebar: logo, workspace name, nav items from config/navigation.js filtered by
+permission, and the signed-in person at the bottom. Badges show counts: pending
+requests for PMs, correction requests for HR.
+Top bar: page title and subtitle on the left; page actions, search, the notification bell
+and avatar on the right.
+Route
+Canvas artboard (page)
+Who sees it
+/login
+Not on canvas; uses the brand
+sheet
+Everyone signed out
+/today
+Today (Employee) and Phone
+check-in (Brand)
+Employee, PM, HR
+/report
+Daily report (Employee)
+Employee, PM, HR
+/log
+My log (Employee)
+Employee, PM, HR
+/projects
+My projects (Employee); Projects
+with New project form (Project
+manager)
+Employee sees the first; PM and
+Admin see the second
+/team
+Team dashboard (Project
+manager)
+PM, Admin
+/team/[userId]
+Employee detailed view (Project
+manager)
+PM, Admin
+/requests
+Requests (Project manager)
+PM, Admin
+/attendance
+Attendance (HR)
+HR, PM, Admin
+/people
+People with Add employee form
+(HR)
+HR, Admin
+/overview
+Company overview (Admin)
+Admin
+/settings
+Settings (Admin)
+Admin
+/settings/roles
+Roles and permissions (Admin)
+Admin
+Daybook Phase 1: Build Guide
+Page 20 of 42
+
+
+===== PAGE 21 (size 612x792) =====
+Bell: opens a list of the latest 20 notifications with "Mark all as read". Each item links to
+its screen.
+Login
+Centered card on the Paper background: logo, "Sign in with Slack" button, one line of
+help text.
+Clear errors: "Your email isn't in Daybook yet. Ask HR to add you.", "Your account is
+deactivated.", "Use the [Company name] Slack workspace."
+Today
+Not checked in: the check-in card from the phone artboard, shown on desktop too. It
+has the Office and WFH choice (Office only enabled on the office network), the "Wi-Fi
+is down" link when allowed, an optional note, and the Check in button.
+Checked in: status pill ("In office since 9:32"), Check out button, the "Your day" card
+with the day bar and three numbers, the "This week" hours chart, the Urgent card (only
+when a member project is urgent), "My tasks this week" with status cells, and the
+"Your report is due at 6:30" strip.
+Check out opens the report-pending dialog when needed (section 7.3).
+Daily report
+One card per project: project picker, hours field, Urgent or Carried over label, task rows
+with a status cell (Done, In progress, Blocked), and Add task.
+Add another project, a live total ("8h logged of 8h 58m checked in"), the gap warning,
+and Submit report in the top bar.
+The Slack preview on the right renders the exact message that will post.
+/report?date=YYYY-MM-DD opens another day; it is read-only once locked, with a
+"Request an edit" button.
+My log
+Month switcher and Download Excel in the top bar.
+Four numbers: hours logged, days present, late days, reports submitted.
+The daily reports list: one row per working day with times, present and logged hours,
+project labels, and report status (Submitted, Locked, Edit requested). A row expands
+to its tasks.
+Daybook Phase 1: Build Guide
+Page 21 of 42
+
+
+===== PAGE 22 (size 612x792) =====
+Right side: hours by project for the month, my edit requests, and attendance counts.
+My projects (employee view of /projects )
+Tabs for Active and Completed. One card per project the person is a member of: label,
+client, status cell, my hours this month, my last update, PM, members.
+Request a project opens a small dialog with name and note, and shows a match if a
+similar project exists.
+Projects (PM and Admin view of /projects )
+Search, tabs for Active, On hold and Completed, and a table: project with urgent note,
+client, PM, team, hours this week, status, and a row menu (Edit, Mark urgent, Change
+status).
+New project and Edit open the side drawer: name, client (type to find or create), PM,
+members, status, colour label, and the urgent switch with its note.
+Team dashboard
+Four numbers, hours by project (week or month), the attendance donut, and "Urgent
+now".
+The team board grouped into In office, Working from home and Not checked in, with
+filters for Report missing and Late, and Download Excel.
+A person's name opens their detailed view.
+Employee detailed view
+Range switch (This week, This month, Custom) and Download Excel.
+Profile card with five numbers, the month attendance calendar, hours by project, Tasks
+to watch (stuck tasks), and report history. A history row opens that day's tasks and its
+edit history.
+Requests
+Tabs for All, Report edits and New projects. Each card shows the person, what they
+want, their reason, and Approve or Decline. "Create project" opens the New project
+drawer filled from the request.
+"Recently handled" lists the last 10 decisions.
+Daybook Phase 1: Build Guide
+Page 22 of 42
+
+
+===== PAGE 23 (size 612x792) =====
+Attendance
+Day switcher, Download Excel, and five numbers.
+"Everyone today" table with filters (All, Late, WFH, Not checked in, Unverified). Row
+actions: Edit, Confirm (unverified office), Add (create a row for someone who forgot).
+Every change asks for a reason.
+Right side: correction requests with Approve and Reject, and missing check-outs with
+Fix.
+People
+Search, department tabs, and the people table with role labels and status.
+Add employee and Edit open the side drawer. The role field is read-only for HR.
+Deactivate and Reactivate are in the row menu.
+Company overview
+Five numbers, hours by project, attendance this week, Needs attention (each item
+links to its screen), team by department, and urgent projects.
+Settings and Roles
+Settings sections: Company, Office hours and reports, Check-in (office networks and
+switches), Slack (connection, report channel, switches). One Save changes button
+saves all sections.
+Roles: counts per role, a role picker per person, and the permissions table (read-only; it
+mirrors permissions.js ).
+Phone and install
+Every screen works from 390 px wide. Below 1024 px the sidebar becomes a menu
+button; tables become stacked cards.
+The app is installable from Chrome or Edge ("Install Daybook") and can start when the
+computer signs in. HR's setup checklist for new joiners: install the app, turn on start at
+sign-in, allow notifications.
+Daybook Phase 1: Build Guide
+Page 23 of 42
+
+
+===== PAGE 24 (size 612x792) =====
+9. API endpoints
+The API is JSON over HTTPS under /api , one route.js per path, and every route goes
+through withRoute (section 4). Pages read data through services directly; the API is used
+by buttons and forms, and later by Slack commands or a mobile app.
+Response shape
+// success
+{ "data": { ... } }                       // lists: { "data": [...], "page": 
+{ "limit": 50, "offset": 0, "total": 132 } }
+// error
+{ "error": { "code": "VALIDATION_FAILED", "message": "Hours must be above 
+0.", "fields": { "entries.0.hours": "Must be above 0" } } }
+Status codes: 200 ok, 201 created, 400 validation, 401 not signed in, 403 no
+permission, 404 not found, 409 conflict (for example ALREADY_CHECKED_IN ,
+REPORT_LOCKED ), 500 unexpected. Lists take limit (max 100) and offset . Dates in
+query strings are YYYY-MM-DD .
+Auth and me
+Method
+Path
+Permission
+Purpose
+GET
+/api/auth/slack/start
+Public
+Redirect to Slack sign-in
+GET
+/api/auth/slack/callback
+Public
+Finish sign-in, set session cookie
+POST
+/api/auth/logout
+Signed in
+End the session
+GET
+/api/me
+Signed in
+Current user, role, permissions,
+today's check-in state
+GET
+/api/notifications
+Signed in
+Latest notifications
+POST
+/api/notifications/read-
+all
+Signed in
+Mark all as read
+Daybook Phase 1: Build Guide
+Page 24 of 42
+
+
+===== PAGE 25 (size 612x792) =====
+Attendance
+Reports
+Method
+Path
+Permission
+Purpose
+GET
+/api/attendance/me/today
+attendance.self
+Today's row plus onOfficeNetwork
+POST
+/api/attendance/check-in
+attendance.self
+Body: location , unverifiedOffice , note
+POST
+/api/attendance/check-out
+attendance.self
+Returns reportPending , gapMinutes
+GET
+/api/attendance
+attendance.view_all
+?
+date=&filter=late|wfh|not_checked_in|unverifi
+ed
+GET
+/api/attendance/summary
+attendance.view_all
+Numbers for a date
+POST
+/api/attendance
+attendance.correct
+Create a row for someone; reason required
+PATCH
+/api/attendance/:id
+attendance.correct
+Change times or location; reason required
+POST
+/api/attendance/:id/confirm-office
+attendance.correct
+Verify an unverified office check-in
+POST
+/api/attendance-corrections
+attendance.self
+Request a correction
+GET
+/api/attendance-corrections
+attendance.correct
+?status=pending
+POST
+/api/attendance-
+corrections/:id/approve
+attendance.correct
+Optional note
+POST
+/api/attendance-
+corrections/:id/reject
+attendance.correct
+note required
+Method
+Path
+Permission
+Purpose
+GET
+/api/reports/me
+report.self
+?date= (default
+today); creates the
+draft with carry-over
+if missing
+PUT
+/api/reports/:id
+Owner
+Save entries and
+tasks (autosave)
+POST
+/api/reports/:id/submit
+Owner
+Validate, new
+revision, queue Slack
+GET
+/api/reports
+report.self or
+team.view
+?
+userId=&from=&to= ;
+others' reports need
+team.view
+Daybook Phase 1: Build Guide
+Page 25 of 42
+
+
+===== PAGE 26 (size 612x792) =====
+Method
+Path
+Permission
+Purpose
+GET
+/api/reports/:id
+Owner or team.view
+One report with
+tasks
+GET
+/api/reports/:id/revisions
+Owner or team.view
+Edit history
+POST
+/api/report-edit-requests
+report.self
+Body: workDate ,
+reason
+GET
+/api/report-edit-requests
+report.approve_edit
+?status=pending
+POST
+/api/report-edit-
+requests/:id/approve
+report.approve_edit
+Unlocks for 24 hours
+POST
+/api/report-edit-
+requests/:id/decline
+report.approve_edit
+reason required
+Daybook Phase 1: Build Guide
+Page 26 of 42
+
+
+===== PAGE 27 (size 612x792) =====
+Projects
+Team, dashboards and export
+Method
+Path
+Permission
+Purpose
+GET
+/api/projects
+Signed in
+?status=&mine=1&q=
+GET
+/api/projects/picker
+report.self
+Urgent, mine, then others, for
+the report form
+POST
+/api/projects
+project.manage
+Create
+PATCH
+/api/projects/:id
+project.manage
+Edit, change status
+PUT
+/api/projects/:id/members
+project.manage
+Body: userIds
+POST
+/api/projects/:id/urgent
+project.manage
+Body: note
+DELETE
+/api/projects/:id/urgent
+project.manage
+Clear urgent
+GET
+/api/clients
+project.manage
+?q= for the client field
+POST
+/api/project-requests
+project.request
+Body: name , note ; may return
+similarProject
+GET
+/api/project-requests
+project_request.handle
+?status=pending
+POST
+/api/project-
+requests/:id/approve
+project_request.handle
+Body: the new project fields
+POST
+/api/project-
+requests/:id/decline
+project_request.handle
+Body: reason ,
+moveEntriesToProjectId
+Method
+Path
+Permission
+Purpose
+GET
+/api/team/today
+team.view
+Numbers, groups and rows for
+the team board
+GET
+/api/team/:userId
+team.view
+Detail: profile, stats, calendar,
+hours, stuck tasks
+GET
+/api/stats/hours-by-
+project
+team.view
+?from=&to=
+GET
+/api/overview
+overview.view
+Company overview numbers
+Daybook Phase 1: Build Guide
+Page 27 of 42
+
+
+===== PAGE 28 (size 612x792) =====
+People, roles and settings
+10. Sign-in, sessions and access
+People sign in with Slack (OpenID Connect), and Daybook keeps its own session in
+MySQL. No passwords are stored, and only people HR has added can get in.
+Method
+Path
+Permission
+Purpose
+GET
+/api/exports/hours
+export.hours
+?from=&to=&userId= ; returns
+an .xlsx file
+GET
+/api/me/log
+report.self
+?month=YYYY-MM for My log
+Method
+Path
+Permission
+Purpose
+GET
+/api/users
+people.manage or
+team.view
+?
+department=&status=&q=
+POST
+/api/users
+people.manage
+Add employee
+PATCH
+/api/users/:id
+people.manage
+Edit profile fields (not
+role)
+POST
+/api/users/:id/deactivate
+people.manage
+Also ends sessions
+POST
+/api/users/:id/reactivate
+people.manage
+PATCH
+/api/users/:id/role
+roles.manage
+Body: role
+GET
+/api/departments
+Signed in
+For pickers
+GET
+/api/settings
+settings.manage
+All settings
+PUT
+/api/settings
+settings.manage
+Save changed keys
+GET,
+POST
+/api/office-networks
+settings.manage
+List or add
+DELETE
+/api/office-networks/:id
+settings.manage
+Remove
+GET
+/api/slack/channels
+settings.manage
+Channels the bot can
+post in
+Daybook Phase 1: Build Guide
+Page 28 of 42
+
+
+===== PAGE 29 (size 612x792) =====
+Sign-in steps
+1. The Sign in with Slack button goes to /api/auth/slack/start . It creates random
+state and nonce values, keeps them in a 10-minute httpOnly cookie, and redirects to
+Slack's authorize page with the scopes openid email profile , the redirect URL
+APP_URL/api/auth/slack/callback , and team=SLACK_TEAM_ID .
+2. Slack sends the person back to /api/auth/slack/callback with a code . The server
+checks state , exchanges the code for tokens, and reads the user info (email, name,
+picture, Slack user ID, workspace ID).
+3. The server rejects the sign-in if the workspace isn't SLACK_TEAM_ID , the email isn't in
+users , or the user is deactivated. The person lands back on /login with a clear
+message.
+4. On success, it saves slack_user_id , avatar_url and last_login_at , creates a
+session, and redirects to / (which picks the start page by role).
+Sessions
+The cookie holds a random 32-byte token. The database stores only an HMAC-SHA256
+hash of it ( token_hash ), keyed with SESSION_SECRET , so a leaked database can't be
+used to sign in.
+Cookie settings: httpOnly , secure in production, sameSite=lax , path=/ .
+Sessions last SESSION_TTL_DAYS (30). When fewer than 7 days are left, the next
+request extends it. last_seen_at updates at most every 5 minutes.
+Logout deletes the session row and the cookie. Deactivating a user deletes all of their
+sessions. A daily job removes expired sessions.
+Access checks
+middleware.js only checks that the cookie exists and redirects to /login if it
+doesn't. It can't reach MySQL, so it never decides access.
+The (app)/layout.js loads the user from the session. Each page calls
+requirePage('permission.key') at the top.
+Every API route declares its permission in withRoute . Services also check ownership:
+a report belongs to its owner, and a PM's project.manage applies only to projects
+where they are pm_id .
+can(user, key) in src/lib/permissions.js is the single place that answers "is this
+allowed".
+Daybook Phase 1: Build Guide
+Page 29 of 42
+
+
+===== PAGE 30 (size 612x792) =====
+Mutations and CSRF. All changes use POST, PUT, PATCH or DELETE with a JSON body.
+withRoute rejects them if the Origin header isn't APP_URL . With sameSite=lax
+cookies, that is enough protection for this app.
+11. Slack integration
+One Slack app does both jobs: Sign in with Slack, and a bot that posts reports and sends
+direct messages. Every message goes through the slack_outbox table, so a Slack outage
+never breaks check-in or report submission.
+Slack app setup (one app per environment)
+chat:write.customize lets the bot post each report under the person's name and Slack
+photo, so the channel looks the same as today.
+Messages Daybook sends
+Setting
+Value
+Redirect URL
+APP_URL/api/auth/slack/callback
+User scopes (sign-in)
+openid , email , profile
+Bot scopes
+chat:write , chat:write.customize , im:write ,
+users:read , users:read.email , channels:read
+After install
+Invite the bot to the report channel, for example
+/invite @Daybook in #daily-reports
+When
+To
+Message
+Setting
+Report submitted
+Report channel
+The report in the
+team's format
+slack_post_reports
+Report
+resubmitted
+Same message
+Updated in place
+with chat.update
+slack_post_reports
+Reminder time
+(6:30 PM) on
+working days
+Each person
+checked in
+without a
+submitted report
+"Your report for Wed,
+30 Sep isn't in yet."
+plus a link to
+/report
+slack_remind
+Daybook Phase 1: Build Guide
+Page 30 of 42
+
+
+===== PAGE 31 (size 612x792) =====
+In-app notifications are always created for these events, whatever the Slack settings are.
+Report format. One pure function, formatReport(report) in
+src/modules/slack/format.js , builds the text. The Slack preview on the report page
+imports the same function, so the preview always matches what posts.
+Name: Vishal Saini
+Date: 30-09-2026
+Project: iwilltillimwell
+Hours: 2
+Tasks
+• Content changes (Done)
+Project: internal-tool
+Hours: 6
+Tasks
+• Working on backend (In Progress)
+Hours print without trailing zeros ( 2 , 1.5 , 0.25 ). Status labels are Done , In Progress
+and Blocked .
+How the outbox works
+1. A service adds a row to slack_outbox inside the same database transaction as the
+change it belongs to.
+When
+To
+Message
+Setting
+Project marked
+urgent
+Each member
+Project name, the
+PM's note, link to
+Today
+slack_urgent_notify
+Report edit or
+project request
+sent
+The approver
+Who, what, reason,
+link to /requests
+slack_requests_notify
+Correction
+request sent
+HR users
+Who, what, reason,
+link to /attendance
+slack_requests_notify
+Any request
+decided
+The requester
+Approved or
+declined, with the
+reason
+slack_requests_notify
+Daybook Phase 1: Build Guide
+Page 31 of 42
+
+
+===== PAGE 32 (size 612x792) =====
+2. The worker checks every 10 seconds. It claims up to 20 due rows with SELECT ... FOR
+UPDATE SKIP LOCKED , so two workers never send the same message.
+3. On success it saves status = sent and result_ts . For a report post, it also saves
+slack_channel_id and slack_ts on the report.
+4. On failure it retries after 1, 5, 15 and 60 minutes, then marks the row failed and logs
+the error. A Slack rate-limit reply waits the retry_after time Slack asks for.
+5. A DM to someone without a slack_user_id is skipped and logged; the in-app
+notification still arrives.
+12. Scheduled jobs
+The worker process ( npm run worker ) runs six jobs. It uses the same module services as
+the web app, so no business rule is written twice.
+Rules for every job
+Job
+When (company time)
+What it does
+slack-outbox
+Every 10 seconds
+Sends due Slack messages
+(section 11)
+report-
+reminder
+Checks every minute; runs at
+report_reminder_at on working
+days
+Notifies and DMs everyone
+checked in today without a
+submitted report
+mark-missing-
+checkouts
+00:05 daily
+Sets yesterday's open check-ins
+to missing and notifies HR
+slack-user-
+sync
+Every hour
+Looks up slack_user_id by
+email for users who don't have
+one
+cleanup
+03:00 daily
+Deletes expired sessions, sent
+outbox rows older than 90 days,
+and read notifications older than
+180 days
+health-log
+Every 5 minutes
+Logs queue length and the
+oldest pending Slack message,
+for monitoring
+Daybook Phase 1: Build Guide
+Page 32 of 42
+
+
+===== PAGE 33 (size 612x792) =====
+Each run is wrapped in runOnce(job, runKey, fn) . It inserts a row in job_runs first;
+the unique run_key (for example report_reminder:2026-10-01 ) means a job never
+runs twice, even with two workers or a restart.
+Jobs read times from settings on every tick, so an Admin change takes effect within
+a minute without a restart.
+Cron ticks run in UTC; src/lib/time.js converts to company time to decide if it's
+time to run.
+A failed run is logged with its error and marked failed ; the next tick of a daily job
+doesn't retry it automatically. The logs are the alert.
+Report locking needs no job: a report is editable while now < locks_at or now <
+unlocked_until , checked when someone saves.
+13. UI implementation
+The UI must match the design canvas exactly: same colours, fonts, sizes, spacing and
+copy. All values below are CSS variables in src/app/globals.css ; components never use
+a raw hex value.
+13.1 Colour tokens
+:root {
+  /* surfaces */
+  --paper: #F5F6FA;          /* page background */
+  --surface: #FFFFFF;        /* cards, drawers */
+  --surface-muted: #F8F9FC;  /* table headers, inner boxes */
+  --track: #EEF0F6;          /* bar tracks, row dividers */
+  --line: #E6E8F0;           /* card borders */
+  --line-strong: #DCDFEA;    /* inputs, secondary buttons */
+  /* text */
+  --ink: #1B1E33;
+  --ink-2: #3E4460;          /* form labels */
+  --muted: #5B6178;          /* secondary text */
+  /* sidebar */
+  --navy: #151833;
+  --navy-raised: #20244A;    /* workspace switcher */
+  --navy-active: #2D3272;    /* active nav item */
+  --navy-text: #C9CCE0;
+Daybook Phase 1: Build Guide
+Page 33 of 42
+
+
+===== PAGE 34 (size 612x792) =====
+  --navy-muted: #9EA2C4;
+  --navy-line: #262A52;
+  /* brand and status */
+  --primary: #3848D6;  --primary-hover: #2733A8;  --primary-soft: #E7E9FB;  -
+-primary-text: #26329A;
+  --marigold: #FFB020; --marigold-ink: #3B2600;   --marigold-soft: #FFF1D6; -
+-marigold-text: #6B4500;
+  --green: #0C8A5B;    --green-soft: #E1F3EB;     --green-text: #09633F;
+  --red: #D12F3A;      --red-soft: #FBE3E4;       --red-text: #9A1F28;
+  --violet: #7B45D6;   --violet-soft: #EEE7FA;    --violet-text: #55289F;
+}
+Status cells (the filled blocks in tables): one StatusCell component, 34 px high, 8 px
+radius, 13 px semibold text.
+Project label colours: each project stores one color . The label is a soft background with
+dark text; bars and the project's square use the strong colour.
+Fill
+Text
+Used for
+--green
+white
+Done, Submitted, Approved, Created, Active,
+Connected
+--primary
+white
+In progress, Office
+--red
+white
+Blocked, Missing
+--marigold
+--marigold-ink
+Urgent, Pending, Edit requested, Unverified
+--violet
+white
+WFH, Edited
+--line
+--ink-2
+Locked, On hold, Declined, Not checked in,
+Deactivated
+color
+Label background
+Label text
+Bar and square
+blue
+#E7E9FB
+#26329A
+#3848D6
+green
+#E1F3EB
+#09633F
+#0C8A5B
+violet
+#EEE7FA
+#55289F
+#7B45D6
+orange
+#FDEBDD
+#8A3F05
+#F07A1A
+Daybook Phase 1: Build Guide
+Page 34 of 42
+
+
+===== PAGE 35 (size 612x792) =====
+Dark theme tokens (from the phone artboard): background #0F1226, surface #1A1E3A,
+border #2C3156, text #ECEEF7, muted #A0A5C3, primary #8C97FF. They sit under
+@media (prefers-color-scheme: dark) , so the app follows the device setting.
+13.2 Type
+Schibsted Grotesk (500, 600, 700) for headings and all numbers, with font-variant-
+numeric: tabular-nums . Figtree (400, 500, 600) for everything else. Both load
+through next/font/google as --font-heading and --font-body .
+Sizes: page title 30 px bold with -0.02em letter spacing; card title 18 px semibold; big
+numbers 32 to 34 px bold; body 15 px; labels and secondary text 13 px; small tags 12 px.
+Copy is sentence case everywhere. Dates read "Wednesday, 30 September" in titles
+and "Wed, 30 Sep" in rows. Times read "9:32" in tables and "6:30 PM" in sentences.
+Durations read "8h 15m" for present time and "8h" or "8.5h" for logged hours.
+13.3 Layout and sizes
+color
+Label background
+Label text
+Bar and square
+teal
+#DDF1F5
+#0D5F72
+#1A9BB8
+pink
+#FBE5EE
+#8E2350
+#D6457A
+Element
+Spec
+Sidebar
+240 px wide, --navy , padding 22 px 14 px; nav
+items 42 px high, 10 px radius
+Main area
+Padding 28 px 32 px; 22 px gap between blocks
+Card
+White, 1 px --line border, 16 px radius, padding 18
+to 24 px, no shadow
+Table header
+40 px high, --surface-muted , 13 px semibold --
+muted
+Table row
+At least 54 px high, 1 px --track divider
+Buttons
+44 px high (40 compact), 10 px radius, 15 px
+semibold
+Daybook Phase 1: Build Guide
+Page 35 of 42
+
+
+===== PAGE 36 (size 612x792) =====
+13.4 Components
+Build these once in src/components and use them everywhere:
+Element
+Spec
+Filter pills
+36 px high, fully rounded; selected pill is --ink
+with white text
+Inputs and selects
+44 px high, 10 px radius, 1 px --line-strong
+border
+Project label
+26 px high, 6 px radius
+Avatar
+34 px circle in tables, 38 px in the sidebar
+Drawer
+460 px wide from the right, over a rgba(21, 24,
+51, 0.36) overlay
+Progress bars
+8 px high on number cards, 12 px in hour lists, 18 px
+for the Today day bar
+Component
+Props (main ones)
+Button
+variant (primary, secondary, dark, text,
+danger, marigold), size , icon
+Card , CardHeader
+title , subtitle , actions
+Kpi
+label , value , sub , percent , color
+StatusCell , Tag
+status or tone
+ProjectLabel , ProjectSquare
+project
+Avatar , AvatarStack
+user , size
+DayBar
+checkInAt , checkOutAt , now , start , end
+HBarList , WeekBars , Donut ,
+MonthCalendar
+rows or segments
+DataTable
+columns , rows , optional groups with a title
+and colour
+FilterPills , Segmented , Tabs
+items , value , onChange
+Daybook Phase 1: Build Guide
+Page 36 of 42
+
+
+===== PAGE 37 (size 612x792) =====
+Icons come from lucide-react at stroke width 1.8, which matches the canvas. Charts are
+plain CSS bars and one small SVG donut, as drawn on the canvas; no chart library.
+13.5 States and accessibility
+Every list has a loading skeleton the same size as the real content and an empty state
+with one action, for example "No reports yet this month."
+Errors show under the field that caused them, using the API's fields map.
+Real <button> , <a> , <label> and <input> elements only. Icon buttons have aria-
+label . Focus shows a 2 px --primary ring.
+Drawers and dialogs trap focus, close on Escape, and return focus to the button that
+opened them.
+Text meets 4.5:1 contrast; colour is never the only signal (status cells always have
+words).
+14. Coding standards
+The goal is code a new developer can read in one sitting. When in doubt, write the plain
+version.
+Style
+ESLint (Next.js core web vitals config) and Prettier (100 characters, single quotes,
+semicolons). CI fails on lint errors.
+Components are PascalCase.jsx with a matching PascalCase.module.css .
+Everything else is camelCase.js .
+Keep functions under about 50 lines and files under about 300. Split by meaning, not
+by size alone.
+Write JSDoc on every service function: what it does, its inputs, what it returns, and the
+error codes it can throw. Comments explain why, not what.
+Repos and services
+Component
+Props (main ones)
+Drawer , Dialog , Toast
+open , onClose , title , footer
+Toggle , Field , Select , Textarea
+label , help , error
+EmptyState , Skeleton
+title , action
+Daybook Phase 1: Build Guide
+Page 37 of 42
+
+
+===== PAGE 38 (size 612x792) =====
+// src/modules/attendance/repo.js
+import { db } from '@/lib/db';
+export function findByUserAndDate(userId, workDate, trx = db) {
+  return trx('attendance').where({ userId, workDate }).first();
+}
+// src/modules/attendance/service.js
+/**
+ * Checks the user in for today.
+ * @throws ALREADY_CHECKED_IN, OFFICE_NETWORK_REQUIRED
+ */
+export async function checkIn({ user, ip, location, unverifiedOffice, note }) 
+{
+  const today = time.workDate();
+  if (await repo.findByUserAndDate(user.id, today)) throw new 
+AppError('ALREADY_CHECKED_IN');
+  // ...decide location, compute lateMinutes, insert, emit 
+'attendance.checked_in'
+}
+Repos take an optional trx so services can wrap several writes in
+db.transaction(async (trx) => { ... }) . Any write that touches more than one
+table uses a transaction.
+Services convert units at the edge: the API accepts hours, the service stores minutes.
+Components receive ready-to-show data and never compute business rules.
+Errors
+Throw new AppError(code, { message, status, fields }) for expected problems.
+Each code has a default status and message in src/lib/errors.js , for example
+ALREADY_CHECKED_IN (409), REPORT_LOCKED (409), NOT_FOUND (404), FORBIDDEN
+(403), VALIDATION_FAILED (400).
+Anything else becomes a 500 with a generic message. The real error is logged with a
+request ID, and the response includes that ID so it can be found.
+Validation: every body and query goes through its zod schema in schemas.js . Query
+numbers are coerced ( z.coerce.number() ). Error messages are written for people:
+"Hours must be above 0", not "Expected number > 0".
+Daybook Phase 1: Build Guide
+Page 38 of 42
+
+
+===== PAGE 39 (size 612x792) =====
+Time: all date and time work goes through src/lib/time.js ( now() , workDate() ,
+toLocal() , isWorkingDay() , locksAtFor() , formatDay() ). No new Date() in modules
+or components.
+Logging: pino JSON logs with requestId , userId , route, status and duration. Never log
+tokens, cookies or report text. Levels: error for failures, warn for retries and rejected
+sign-ins, info for requests and job runs.
+Dependencies: only those listed in section 3 plus lucide-react . Adding another needs a
+line in the pull request explaining why.
+Git: main is protected. Work happens on short feature branches; each pull request needs
+one review and a green CI run (lint, tests, build).
+15. Security, performance, testing and deployment
+15.1 Security checklist
+15.2 Performance
+At 30 people the load is tiny; the goal is to stay fast at 500 without changes.
+HTTPS everywhere; HTTP redirects to HTTPS.
+Sign-in limited to one Slack workspace and to active users HR has added.
+Session tokens hashed in the database; cookies httpOnly , secure , sameSite=lax .
+Every API route declares a permission; services check ownership.
+Mutations check the Origin header.
+All input validated with zod; all SQL through Knex bindings (no string-built SQL).
+Sign-in routes rate-limited to 10 attempts per minute per IP.
+Client IP read from X-Forwarded-For only when TRUST_PROXY=true .
+Secrets only in environment variables; nothing secret uses NEXT_PUBLIC_ .
+Security headers set in next.config.mjs : X-Frame-Options: DENY , Referrer-
+Policy: strict-origin-when-cross-origin , X-Content-Type-Options: nosniff .
+Attendance corrections, role changes, settings changes and project changes write to
+audit_logs .
+The database user has only the rights the app needs; migrations use a separate admin
+user.
+Daybook Phase 1: Build Guide
+Page 39 of 42
+
+
+===== PAGE 40 (size 612x792) =====
+Every list query uses the indexes in section 6 and a limit .
+Dashboards use one aggregate query per widget ( SUM , COUNT , GROUP BY ), never a
+query per row.
+daily_reports.total_minutes is stored, so lists don't sum tasks on every read.
+Target: pages render in under 300 ms on the server; API calls answer in under 200 ms at
+the 95th percentile.
+Knex pool: 2 to 10 connections per process. No cache layer is needed in Phase 1.
+15.3 Testing
+The test database runs in Docker; each test file migrates it fresh and seeds only what it
+needs.
+For Playwright, a test-only sign-in route exists when NODE_ENV=test and is never built
+into production.
+Every business rule in section 7 has at least one service test.
+15.4 Deployment
+Environments: local, staging, production. Each has its own database, Slack app and
+.env .
+Hosting: one Linux server (2 vCPU, 4 GB RAM is plenty) running Docker Compose with
+three containers: web (Next.js with output: 'standalone' ), worker , and mysql (or
+a managed MySQL). Caddy or Nginx in front handles HTTPS.
+Level
+Tool
+Covers
+Unit
+Vitest
+lib/time.js (late minutes, lock time,
+working days), formatReport ,
+permissions.js
+Service
+Vitest with a test MySQL
+database
+Check-in and check-out rules, report
+validation, carry-over, stuck tasks, locking
+and edit requests, project requests,
+corrections
+End to
+end
+Playwright
+Check in, write and submit a report, PM sees
+it; edit request approve; HR correction
+Daybook Phase 1: Build Guide
+Page 40 of 42
+
+
+===== PAGE 41 (size 612x792) =====
+Release steps: CI runs lint, tests and build, then builds the image. On the server: pull,
+run npm run migrate , restart web and worker . Deploy after 7 PM, when nobody is
+checking in.
+Backups: nightly mysqldump , kept 14 days, stored off the server. Test a restore once a
+month.
+Monitoring: /api/health checks the database; an uptime monitor calls it every
+minute. Alert when the oldest pending Slack message is older than 15 minutes.
+Office network: the office needs a static public IP, added in Settings, for Office check-
+in to work.
+npm scripts
+16. Build order and acceptance
+Build in eight milestones, in this order, each one working end to end on staging before the
+next starts. Later milestones depend on the earlier ones.
+1. Foundation. Repo, lint, env.js , Knex config, all five migrations and seeds, lib
+helpers, design tokens, fonts, and the sidebar and top bar shell with empty pages per
+role. Build the shared components from section 13.4.
+Done when: npm run migrate && npm run seed works on an empty database, and
+each role sees the right sidebar.
+2. Sign-in and people. Sign in with Slack, sessions, /login , People (add, edit, deactivate),
+Roles.
+Done when: HR adds someone, they sign in with Slack, and a deactivated person is
+refused.
+Script
+Does
+dev
+Next.js in development mode
+build , start
+Production build and server
+worker
+Starts the worker process
+migrate , migrate:make , seed
+Knex migrations and seeds
+lint , test , test:e2e
+ESLint, Vitest, Playwright
+Daybook Phase 1: Build Guide
+Page 41 of 42
+
+
+===== PAGE 42 (size 612x792) =====
+3. Projects. PM and Admin projects table and drawer, members, urgent flag, My projects,
+project requests.
+Done when: a PM creates a project, adds members, marks it urgent, and members
+see it.
+4. Attendance. Office networks in Settings, check-in and check-out, both Today states,
+phone layout, the missing check-out job, the Attendance screen and corrections.
+Done when: check-in picks Office only on the office IP, late minutes are right, and
+HR can approve a correction with a saved reason.
+5. Daily report. Report page, autosave, carry-over, submit, lock, edit requests, revisions,
+My log, Requests.
+Done when: a report submits, locks at noon the next day, and an approved edit
+reopens it with history kept.
+6. Slack. Bot setup, outbox, report post and update, reminders, DMs, user sync, and the
+Slack section of Settings.
+Done when: a submitted report appears in the channel in the team's format under
+the person's name, and an edit updates the same message.
+7. Dashboards and export. Team dashboard, employee detail, company overview,
+notifications bell, Excel export.
+Done when: every number matches the rules in section 7.10 on a seeded test day.
+8. Hardening and launch. Installable app, security headers, the test coverage in section
+15.3, backups, monitoring. Pilot with 3 to 5 people for one week, then the whole team.
+Done when: the launch checklist below is complete.
+Launch checklist
+Every screen matches its canvas artboard at 1440 px and works at 390 px.
+Every rule in section 7 has a passing service test.
+The office's static IP is saved in Settings and Office check-in works in the office.
+The Slack bot is in the report channel and a test report posted correctly.
+All current employees are added with the right department, PM and role.
+All active projects are created with members and colours.
+Backups run nightly and one restore has been tested.
+HR has installed the app on every computer with "start at sign-in" on.
+The team has been told the date Slack-only reports stop.
+Daybook Phase 1: Build Guide
+Page 42 of 42

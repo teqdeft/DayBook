@@ -1,0 +1,40 @@
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.similar {
+  padding: 12px 14px;
+  background: var(--urgent-bg);
+  border: 1px solid var(--urgent-line);
+  border-radius: var(--radius-control);
+}
+
+.similarTitle {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.similarBody {
+  margin-top: 2px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.similarBody strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.formError {
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}

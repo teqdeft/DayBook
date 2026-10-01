@@ -1,0 +1,53 @@
+.kpi {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 18px 20px 17px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.valueRow {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 8.25px;
+  margin-top: 6px;
+}
+
+.value {
+  font-family: var(--font-heading-stack);
+  font-variant-numeric: tabular-nums;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 36px;
+  color: var(--ink);
+}
+
+.sub {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.footer {
+  margin-top: 5px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.bar {
+  margin-top: 8px;
+}

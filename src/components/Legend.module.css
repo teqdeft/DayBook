@@ -1,0 +1,64 @@
+.legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.swatch {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.label {
+  min-width: 0;
+}
+
+.value {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* one row per item */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.list .item {
+  gap: 10px;
+}
+
+/* items side by side */
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 14px;
+  row-gap: 6px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.inline .item {
+  gap: 6px;
+}
+
+.inline .value {
+  margin-left: 0;
+  padding-left: 0;
+}

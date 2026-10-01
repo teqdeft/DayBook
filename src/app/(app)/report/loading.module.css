@@ -1,0 +1,140 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--block-gap);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 59px;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.totals {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  align-items: start;
+  gap: 20px;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.card,
+.side {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 68px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.thead {
+  height: 36px;
+  border-bottom: 1px solid var(--track);
+  background: var(--surface-muted);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 55px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--track);
+}
+
+.add {
+  display: flex;
+  align-items: center;
+  height: 52px;
+  padding: 0 20px;
+}
+
+.dashed {
+  height: 54px;
+  border: 1px dashed var(--line-dashed);
+  border-radius: var(--radius-card);
+}
+
+.sideHead {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sideBody {
+  display: flex;
+  gap: 10px;
+  padding: 18px 20px 20px;
+}
+
+.lines {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 1199px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1023px) {
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .totals {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .head > :nth-child(3),
+  .head > :nth-child(5) {
+    display: none;
+  }
+}

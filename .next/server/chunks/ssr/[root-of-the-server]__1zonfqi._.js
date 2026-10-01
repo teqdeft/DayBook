@@ -1,0 +1,15 @@
+module.exports=[58152,a=>{a.v({className:"figtree_d9197d0f-module__6SbLOW__className",variable:"figtree_d9197d0f-module__6SbLOW__variable"})},47044,a=>{a.v({className:"schibsted_grotesk_8c873669-module__dppxzq__className",variable:"schibsted_grotesk_8c873669-module__dppxzq__variable"})},29735,a=>{"use strict";var b=a.i(7997),c=a.i(47044);let d={className:c.default.className,style:{fontFamily:"'Schibsted Grotesk', 'Schibsted Grotesk Fallback'",fontStyle:"normal"}};null!=c.default.variable&&(d.variable=c.default.variable);var e=a.i(58152);let f={className:e.default.className,style:{fontFamily:"'Figtree', 'Figtree Fallback'",fontStyle:"normal"}};null!=e.default.variable&&(f.variable=e.default.variable);var g=a.i(19114),h=a.i(85680);let i="daybook:launched",j=`(function () {
+  var root = document.documentElement;
+  try {
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (navigator.webdriver || reduce || sessionStorage.getItem('${i}')) {
+      root.setAttribute('data-launch', 'skip');
+    } else {
+      sessionStorage.setItem('${i}', '1');
+    }
+  } catch (error) {
+    root.setAttribute('data-launch', 'skip');
+  }
+})();`;a.s(["default",0,function({children:a}){return(0,b.jsx)("html",{lang:"en",className:`${d.variable} ${f.variable}`,suppressHydrationWarning:!0,children:(0,b.jsxs)("body",{children:[(0,b.jsx)("script",{dangerouslySetInnerHTML:{__html:j}}),(0,b.jsx)(g.default,{}),a,(0,b.jsx)(h.default,{})]})})},"metadata",0,{title:{default:"Daybook",template:"%s · Daybook"},description:"Check in, log your day and submit your daily report.",applicationName:"Daybook",icons:{icon:[{url:"/icons/icon.svg",type:"image/svg+xml"},{url:"/favicon.ico"}],apple:"/icons/icon-192.png"}},"viewport",0,{width:"device-width",initialScale:1,themeColor:"#151833"}],29735)},81967,function(a){a.n(a.i(29735))},83605,a=>{"use strict";a.s(["default",()=>b]);let b=(0,a.i(11857).registerClientReference)(function(){throw Error("Attempted to call the default export of [project]/src/components/LaunchSplash.jsx from the server, but it's on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.")},"[project]/src/components/LaunchSplash.jsx","default")},19114,a=>{"use strict";var b=a.i(83605);a.n(b)},71313,a=>{"use strict";a.s(["default",()=>b]);let b=(0,a.i(11857).registerClientReference)(function(){throw Error("Attempted to call the default export of [project]/src/components/ServiceWorker.jsx from the server, but it's on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.")},"[project]/src/components/ServiceWorker.jsx","default")},85680,a=>{"use strict";var b=a.i(71313);a.n(b)}];
+
+//# sourceMappingURL=%5Broot-of-the-server%5D__1zonfqi._.js.map

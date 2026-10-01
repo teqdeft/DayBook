@@ -1,0 +1,3 @@
+{
+  "/api/attendance/[id]/confirm-office/route": "app/api/attendance/[id]/confirm-office/route.js"
+}

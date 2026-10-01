@@ -1,0 +1,160 @@
+/* My log (artboard 03). Sizes follow the 1440 px artboard: four 270 px numbers, the day table
+   and a 372 px right column, 18.67 px apart. */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18.67px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 372.33px;
+  align-items: start;
+  gap: 18.67px;
+}
+
+.reports {
+  overflow: hidden;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 18.67px;
+  min-width: 0;
+}
+
+.hours {
+  --card-pad: 19px 24px 18.67px;
+}
+
+.bars {
+  margin-top: 15.33px;
+}
+
+.muted {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+/* Edit requests */
+.requests {
+  --card-pad: 19px 24px 19px;
+}
+
+.requestList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 17px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.request {
+  padding: 13px 14px 14px;
+  border-radius: 12px;
+  background: var(--surface-muted);
+}
+
+.requestTitle {
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.requestReason {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.requestMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10.5px;
+  margin-top: 10px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.requestStatus {
+  height: 28px;
+}
+
+.requestEmpty {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.requestButton {
+  margin-top: 16.33px;
+}
+
+/* Attendance */
+.attendance {
+  --card-pad: 19px 24px 18px;
+}
+
+.legend {
+  gap: 7.33px;
+  margin-top: 15.5px;
+}
+
+/* Screen time (under Attendance) */
+.screenTime {
+  --card-pad: 19px 24px 19px;
+}
+
+/* Below 1400 px the day table can't fit its columns next to the 372 px side column (its Projects
+   column would shrink to nothing), so the side cards move under it. */
+@media (max-width: 1399px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .side {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .side > :first-child,
+  .side > .screenTime {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1023px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .layout,
+  .side {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 639px) {
+  .side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hours,
+  .requests,
+  .attendance,
+  .screenTime {
+    --card-pad: 16px 16px 18px;
+  }
+}

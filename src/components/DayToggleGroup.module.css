@@ -1,0 +1,67 @@
+/* One row of 52 px days that narrow together when the card is too small (seven need 412 px). */
+.group {
+  display: grid;
+  grid-auto-columns: minmax(0, 52px);
+  grid-auto-flow: column;
+  gap: 8px;
+}
+
+.day {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.input:disabled {
+  cursor: not-allowed;
+}
+
+.face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 40px;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
+  pointer-events: none;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.day:hover .face {
+  background: var(--surface-muted);
+}
+
+.input:checked + .face,
+.day:hover .input:checked + .face {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+
+.input:focus-visible + .face {
+  box-shadow: var(--focus-ring);
+}
+
+.input:disabled + .face {
+  opacity: 0.5;
+}

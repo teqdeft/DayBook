@@ -1,0 +1,91 @@
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  font-family: var(--font-body-stack);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+  user-select: none;
+  background-color: var(--avatar-bg);
+  background-position: center;
+  background-size: cover;
+  color: var(--avatar-text);
+}
+
+.square {
+  border-radius: 8px;
+}
+
+.blue {
+  --avatar-bg: var(--primary-soft);
+  --avatar-text: var(--primary-text);
+}
+
+.violet {
+  --avatar-bg: var(--violet-soft);
+  --avatar-text: var(--violet-text);
+}
+
+.green {
+  --avatar-bg: var(--green-soft);
+  --avatar-text: var(--green-text);
+}
+
+.teal {
+  --avatar-bg: var(--label-teal-bg);
+  --avatar-text: var(--label-teal-text);
+}
+
+.orange {
+  --avatar-bg: var(--label-orange-bg);
+  --avatar-text: var(--label-orange-text);
+}
+
+.red {
+  --avatar-bg: var(--red-soft);
+  --avatar-text: var(--red-text);
+}
+
+.pink {
+  --avatar-bg: var(--label-pink-bg);
+  --avatar-text: var(--label-pink-text);
+}
+
+.navy {
+  --avatar-bg: var(--navy-active);
+  --avatar-text: var(--on-fill);
+}
+
+.ink {
+  --avatar-bg: var(--navy);
+  --avatar-text: var(--on-fill);
+}
+
+.grey {
+  --avatar-bg: var(--line);
+  --avatar-text: var(--ink-2);
+}
+
+/* overlapping stack */
+.stack {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.stacked {
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.stacked + .stacked {
+  margin-left: -4px;
+}
+
+.more {
+  font-weight: 600;
+}

@@ -1,0 +1,9 @@
+var R=require("../../../../../chunks/[turbopack]_runtime.js")("server/app/api/users/[id]/reactivate/route.js")
+R.c("server/chunks/_1d7ozf-._.js")
+R.c("server/chunks/[root-of-the-server]__0fh8nh3._.js")
+R.c("server/chunks/_0433w0v._.js")
+R.c("server/chunks/[root-of-the-server]__00_hq9v._.js")
+R.c("server/chunks/_1tzu8-w._.js")
+R.c("server/chunks/_next-internal_server_app_api_users_[id]_reactivate_route_actions_1_njfu2.js")
+R.m(10971)
+module.exports=R.m(10971).exports

@@ -1,0 +1,141 @@
+.card {
+  --card-pad: 20px 22px 23px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--track);
+}
+
+.titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  font-family: var(--font-heading-stack);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client {
+  margin-top: 1px;
+  overflow: hidden;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  flex-shrink: 0;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 13px 0 12px;
+  border-bottom: 1px solid var(--track);
+}
+
+.stat {
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+/* Proportional figures, as on the canvas: a tabular "1" and "." would widen "18h" and "7.5h". */
+.hours {
+  margin: 3px 0 0;
+  font-family: var(--font-heading-stack);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 28px;
+  color: var(--ink);
+}
+
+.update {
+  margin: 1px 0 0;
+  font-family: var(--font-heading-stack);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 28px;
+  color: var(--ink);
+}
+
+/* margin-top: auto keeps the foot at the bottom when a card in the same row is taller (it has
+   the priority line); with equal cards it is the canvas' 17 px. */
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 47px;
+  margin-top: auto;
+  padding-top: 17px;
+}
+
+/* Open priority tasks (not on the canvas): one line under the numbers, like a stats row. */
+.priority {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  padding: 11px 0 12px;
+  border-bottom: 1px solid var(--track);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+
+.flag,
+.flagP1 {
+  flex: none;
+  color: var(--muted);
+}
+
+.flagP1 {
+  color: var(--red-on-surface);
+}
+
+.p1 {
+  font-weight: 600;
+  color: var(--red-text);
+}
+
+.pm {
+  position: relative;
+  top: 1px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* the canvas stack sits 2 px in from the card padding */
+.team {
+  margin-right: 2px;
+}

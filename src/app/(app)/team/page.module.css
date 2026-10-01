@@ -1,0 +1,99 @@
+/* Team dashboard (artboard 05). Column widths follow the 1440 px artboard. */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+}
+
+/* The Team dashboard's numbers are 34 px (the shared Kpi is 32 px, as on Attendance and
+   Overview), and the card is 1 px shorter at the top. */
+.kpis > .kpi {
+  padding-top: 17px;
+}
+
+.kpis > .kpi > p:nth-child(2) {
+  margin-top: 7px;
+  column-gap: 7.5px;
+}
+
+.kpis > .kpi > :last-child {
+  margin-top: 9px;
+}
+
+.kpis > .kpi > p:nth-child(2) > span:first-child {
+  font-size: 34px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 275px 275px;
+  gap: 18px;
+  align-items: stretch;
+  margin-top: 1px;
+}
+
+.hours {
+  --card-pad: 19px 24px 24px;
+  min-width: 0;
+}
+
+.hours ul {
+  margin-top: 16px;
+}
+
+.attendance,
+.urgent {
+  --card-pad: 19px 22px 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.donut {
+  display: flex;
+  justify-content: center;
+  margin: 24px 0 22px;
+}
+
+.attendance .legend {
+  gap: 5.5px;
+}
+
+.urgentList {
+  margin-top: 15px;
+}
+
+.urgentEmpty {
+  flex: 1;
+}
+
+.boardCard {
+  overflow: hidden;
+  margin-top: 1px;
+}
+
+@media (max-width: 1279px) {
+  .row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hours {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1023px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .row {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 639px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

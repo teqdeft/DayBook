@@ -1,0 +1,75 @@
+/* Shared by Input, Select and Textarea. */
+.control {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: var(--control-height);
+  margin: 0;
+  padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  font-family: var(--font-body-stack);
+  font-size: var(--text-body);
+  line-height: 20px;
+  color: var(--ink);
+  transition: border-color 120ms ease;
+}
+
+.control::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}
+
+.control:hover:not(:disabled):not(:read-only) {
+  border-color: var(--muted);
+}
+
+select.control:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+.control:focus-visible {
+  border-color: var(--primary);
+}
+
+/* input text sits a little low on the canvas; selects do not need it */
+input.control {
+  padding-top: 1px;
+}
+
+.compact {
+  height: var(--control-height-compact);
+  padding: 0 10px;
+}
+
+.control:read-only:not(select) {
+  background: var(--paper);
+  color: var(--muted);
+}
+
+.control:disabled {
+  background: var(--surface-muted);
+  color: color-mix(in srgb, var(--muted) 75%, var(--surface-muted));
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.invalid,
+.control[aria-invalid='true'] {
+  border-color: var(--red);
+}
+
+.invalid:focus-visible,
+.control[aria-invalid='true']:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--red);
+}
+
+/* phones: 16 px text stops iOS Safari zooming into the field on focus */
+@media (max-width: 640px) {
+  .control {
+    font-size: 16px;
+  }
+}

@@ -1,0 +1,97 @@
+.card {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+/* a page class can set --card-pad (e.g. 23px 25px) to match its artboard card */
+.padDefault {
+  padding: var(--card-pad, 20px 24px);
+}
+
+.padCompact {
+  padding: var(--card-pad, 16px 20px);
+}
+
+.padNone {
+  padding: 0;
+}
+
+/* tones */
+.urgent {
+  background: var(--urgent-bg);
+  border-color: var(--urgent-line);
+  color: var(--marigold-text);
+}
+
+.dark {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: var(--on-fill);
+}
+
+.dashed {
+  background: transparent;
+  border: 1px dashed var(--line-dashed);
+}
+
+.muted {
+  background: var(--surface-muted);
+  border-color: transparent;
+}
+
+/* header */
+/* actions drop under the title when both do not fit (phones) */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  min-width: 0;
+}
+
+.headerDivider {
+  align-items: center;
+  min-height: 54px;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.heading {
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.subtitle {
+  margin-top: 1px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.dark .title {
+  color: var(--on-fill);
+}
+
+.dark .subtitle {
+  color: var(--navy-text);
+}

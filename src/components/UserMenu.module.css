@@ -1,0 +1,95 @@
+/* Sidebar: avatar + name + designation */
+.sidebarMenu {
+  display: flex;
+  width: 100%;
+}
+
+.personButton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.personButton:hover .name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.personButton:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--navy),
+    0 0 0 4px var(--primary);
+}
+
+.personText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-top: 3px;
+}
+
+.name,
+.designation {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--on-fill);
+}
+
+.designation {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--navy-muted);
+}
+
+/* Top bar avatar circle (Team dashboard, Company overview) */
+.avatarButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.avatarButton:hover {
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+/* Menu header */
+.header {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.headerName {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.headerEmail {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+}

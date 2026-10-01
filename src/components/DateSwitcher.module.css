@@ -1,0 +1,40 @@
+.switcher {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 11.5px;
+  height: var(--control-height);
+  padding: 0 6px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-cell);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+a.step:hover {
+  background: var(--track);
+  text-decoration: none;
+}
+
+.disabled {
+  color: var(--line-strong);
+  cursor: not-allowed;
+}
+
+.label {
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+  color: var(--ink);
+}

@@ -1,0 +1,53 @@
+.iconButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--control-height);
+  height: var(--control-height);
+  margin: 0;
+  padding: 2px 0 0; /* the canvas bell sits 1 px below centre */
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.iconButton svg {
+  flex-shrink: 0;
+}
+
+.secondary {
+  background: var(--surface);
+  border-color: var(--line-strong);
+}
+
+.secondary:hover {
+  background: var(--surface-muted);
+}
+
+.ghost {
+  background: transparent;
+}
+
+.ghost:hover {
+  background: var(--track);
+}
+
+.iconButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* the unread dot, over the bell's top-right corner */
+.dot {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+}

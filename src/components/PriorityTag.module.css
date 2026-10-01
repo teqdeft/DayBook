@@ -1,0 +1,54 @@
+/* P1 / P2 / P3: a small label, not a pill, so it reads as a rank next to status pills. */
+.tag {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-label);
+  font-family: var(--font-heading-stack);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  vertical-align: middle;
+  background: var(--priority-bg);
+  color: var(--priority-text);
+}
+
+.sm {
+  min-width: 30px;
+  height: 22px;
+  padding: 0 7px;
+  font-size: var(--text-tag);
+}
+
+.md {
+  min-width: 34px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: var(--text-tag);
+}
+
+.lg {
+  min-width: 36px;
+  height: 28px;
+  padding: 0 9px;
+  font-size: var(--text-small);
+}
+
+.p1 {
+  --priority-bg: var(--red-soft);
+  --priority-text: var(--red-text);
+}
+
+.p2 {
+  --priority-bg: var(--marigold-soft);
+  --priority-text: var(--marigold-text);
+}
+
+.p3 {
+  --priority-bg: var(--line);
+  --priority-text: var(--ink-2);
+}

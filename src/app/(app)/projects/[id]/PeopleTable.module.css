@@ -1,0 +1,111 @@
+.card {
+  overflow: hidden;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* contain: inline-size keeps a long name or designation out of the column's smallest width, so
+   the table always fits its card (from 1024 px); they end in an ellipsis instead. */
+.personText {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  contain: inline-size;
+}
+
+/* Name and designation as on the Team board. */
+.name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--text-body);
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name:hover {
+  color: var(--primary-text);
+}
+
+.sub {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.num,
+.strong {
+  font-family: var(--font-heading-stack);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-body);
+  color: var(--ink);
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.zero {
+  color: var(--muted);
+}
+
+.green {
+  color: var(--green-text);
+  font-weight: 600;
+}
+
+.primary {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.red {
+  color: var(--red-on-surface);
+  font-weight: 600;
+}
+
+/* A member without hours in the range: the row is there, its numbers step back. */
+.quiet .text,
+.quiet .strong,
+.quiet .num {
+  color: var(--muted);
+}
+
+.phoneOnly {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .desktopOnly {
+    display: none;
+  }
+
+  .phoneOnly {
+    display: inline;
+  }
+}
+
+/* DataTable's phone rule for the last cell outranks hideOnMobile; hide that cell here. */
+@media (max-width: 1023px) {
+  .card tr td.lastHidden {
+    display: none;
+  }
+}

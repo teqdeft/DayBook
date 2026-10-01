@@ -1,0 +1,107 @@
+/* Offline: an outlined grey cell, so it reads apart from the filled Locked cell. */
+.state.offline {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--muted);
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.personText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.personName {
+  overflow: hidden;
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personName:hover {
+  color: var(--primary-text);
+}
+
+.personSub {
+  overflow: hidden;
+  font-size: var(--text-small);
+  line-height: 17px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Stacked cards (below 1280 px); sides line up with the card head (20 px, 16 px on phones) */
+.cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid var(--track);
+}
+
+.card:last-child {
+  border-bottom: 0;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.top > :first-child {
+  flex: 1 1 auto;
+}
+
+.cardState {
+  flex: 0 0 84px;
+}
+
+.numbers {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.numbers strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.meta {
+  margin-top: 2px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline {
+  margin-top: 10px;
+}
+
+@media (max-width: 1023px) {
+  .card {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+}

@@ -1,0 +1,136 @@
+/* Company overview (artboard 11). Column widths follow the 1440 px artboard. */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.rowCharts {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.hours {
+  --card-pad: 20px 24px 19px;
+}
+
+.hours ul {
+  margin-top: 14px;
+}
+
+.hours [role='group'] {
+  margin-top: -1px;
+}
+
+.week {
+  --card-pad: 20px 24px 18px;
+}
+
+.weekBars {
+  margin: 16px -7px 0;
+}
+
+.weekLegend {
+  gap: 5.5px;
+  margin-top: 13px;
+}
+
+.rowLists {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+  margin-top: 1px;
+}
+
+.attention {
+  --card-pad: 19px 24px 20px;
+}
+
+.departments {
+  --card-pad: 18px 24px 19px;
+  --department-navy: var(--navy);
+}
+
+@media (prefers-color-scheme: dark) {
+  .departments {
+    --department-navy: var(--ink-2);
+  }
+}
+
+.departmentBars {
+  margin-top: 16px;
+}
+
+.urgent {
+  --card-pad: 19px 24px 20px;
+}
+
+.urgentList {
+  gap: 14px;
+  margin-top: 14px;
+}
+
+/* The Overview's urgent boxes are 1 px shorter than the Team dashboard's, with the lines closer. */
+.urgentList > li {
+  padding: 15px 14px 12px;
+}
+
+.urgentList > li > p:nth-child(2) {
+  margin-top: 3px;
+}
+
+.urgentList > li > p:nth-child(3) {
+  margin-top: 5px;
+}
+
+.cardEmpty {
+  padding-bottom: 8px;
+}
+
+@media (max-width: 1279px) {
+  .kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .rowLists {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rowLists > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1023px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .kpis > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .rowCharts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .rowLists {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 639px) {
+  .rowLists {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .weekBars {
+    margin-inline: 0;
+  }
+}

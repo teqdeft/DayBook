@@ -1,0 +1,22 @@
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.day {
+  font-size: var(--text-body);
+  line-height: 22px;
+  color: var(--ink-2);
+}
+
+.day strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.formError {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--red-text);
+}

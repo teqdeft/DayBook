@@ -1,0 +1,41 @@
+.square {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: var(--font-heading-stack);
+  font-weight: 700;
+  line-height: 1;
+  background: var(--square-bg);
+  color: var(--square-text);
+}
+
+.blue {
+  --square-bg: var(--label-blue-bg);
+  --square-text: var(--label-blue-text);
+}
+
+.green {
+  --square-bg: var(--label-green-bg);
+  --square-text: var(--label-green-text);
+}
+
+.violet {
+  --square-bg: var(--label-violet-bg);
+  --square-text: var(--label-violet-text);
+}
+
+.orange {
+  --square-bg: var(--label-orange-bg);
+  --square-text: var(--label-orange-text);
+}
+
+.teal {
+  --square-bg: var(--label-teal-bg);
+  --square-text: var(--label-teal-text);
+}
+
+.pink {
+  --square-bg: var(--label-pink-bg);
+  --square-text: var(--label-pink-text);
+}

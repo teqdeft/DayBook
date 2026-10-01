@@ -1,0 +1,277 @@
+/* Design tokens (build guide section 13). Components use these variables, never raw hex values. */
+:root {
+  /* surfaces */
+  --paper: #f5f6fa; /* page background */
+  --surface: #ffffff; /* cards, drawers */
+  --surface-muted: #f8f9fc; /* table headers, inner boxes */
+  --track: #eef0f6; /* bar tracks, row dividers */
+  --line: #e6e8f0; /* card borders */
+  --line-strong: #dcdfea; /* inputs, secondary buttons */
+
+  /* text */
+  --ink: #1b1e33;
+  --ink-2: #3e4460; /* form labels */
+  --muted: #5b6178; /* secondary text */
+
+  /* sidebar */
+  --navy: #151833;
+  --navy-raised: #20244a; /* workspace switcher */
+  --navy-active: #2d3272; /* active nav item */
+  --navy-text: #c9cce0;
+  --navy-muted: #9ea2c4;
+  --navy-line: #262a52;
+
+  /* brand and status */
+  --primary: #3848d6;
+  --primary-hover: #2733a8;
+  --primary-soft: #e7e9fb;
+  --primary-text: #26329a;
+  --marigold: #ffb020;
+  --marigold-ink: #3b2600;
+  --marigold-soft: #fff1d6;
+  --marigold-text: #6b4500;
+  --green: #0c8a5b;
+  --green-soft: #e1f3eb;
+  --green-text: #09633f;
+  --red: #d12f3a;
+  --red-soft: #fbe3e4;
+  --red-text: #9a1f28;
+  --violet: #7b45d6;
+  --violet-soft: #eee7fa;
+  --violet-text: #55289f;
+  /* a status colour used as text on a card (Team board group titles, "Show 18 more") */
+  --red-on-surface: #d12f3a;
+  --violet-on-surface: #7b45d6;
+
+  /* project label colours (label background, label text, bar and square) */
+  --label-blue-bg: #e7e9fb;
+  --label-blue-text: #26329a;
+  --label-blue: #3848d6;
+  --label-green-bg: #e1f3eb;
+  --label-green-text: #09633f;
+  --label-green: #0c8a5b;
+  --label-violet-bg: #eee7fa;
+  --label-violet-text: #55289f;
+  --label-violet: #7b45d6;
+  --label-orange-bg: #fdebdd;
+  --label-orange-text: #8a3f05;
+  --label-orange: #f07a1a;
+  --label-teal-bg: #ddf1f5;
+  --label-teal-text: #0d5f72;
+  --label-teal: #1a9bb8;
+  --label-pink-bg: #fbe5ee;
+  --label-pink-text: #8e2350;
+  --label-pink: #d6457a;
+
+  /* urgent card */
+  --urgent-bg: #fff7e4;
+  --urgent-line: #f8e2b0;
+
+  /* measured from the design canvas (not in the guide's token list) */
+  --on-primary: #ffffff; /* text on --primary fills */
+  --on-fill: #ffffff; /* text on green, red, violet, navy and ink fills */
+  --line-dashed: #c5c8d4; /* dashed "add" boxes */
+  --switch-off: #c9ccdb; /* toggle track when off */
+  --placeholder: #757575; /* input placeholders */
+  --radius-tile: 12px; /* stat tiles, project squares */
+  --radius-pill: 999px;
+
+  /* overlay behind drawers and dialogs */
+  --overlay: rgba(21, 24, 51, 0.36);
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--primary);
+
+  /* type */
+  --font-heading-stack: var(--font-heading), 'Schibsted Grotesk', system-ui, sans-serif;
+  --font-body-stack: var(--font-body), 'Figtree', system-ui, sans-serif;
+  --text-page-title: 30px;
+  --text-card-title: 18px;
+  --text-big-number: 34px;
+  --text-body: 15px;
+  --text-small: 13px;
+  --text-tag: 12px;
+
+  /* layout and sizes */
+  --sidebar-width: 240px;
+  --main-padding-y: 28px;
+  --main-padding-x: 32px;
+  --block-gap: 22px;
+  --radius-card: 16px;
+  --radius-control: 10px;
+  --radius-cell: 8px;
+  --radius-label: 6px;
+  --control-height: 44px;
+  --control-height-compact: 40px;
+  --status-cell-height: 34px;
+  --pill-height: 36px;
+  --label-height: 26px;
+  --table-head-height: 40px;
+  --table-row-height: 54px;
+  --drawer-width: 460px;
+
+  color-scheme: light;
+}
+
+/* Dark theme (from the phone artboard), following the device setting. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0f1226;
+    --surface: #1a1e3a;
+    --surface-muted: #151935;
+    --track: #252a4d;
+    --line: #2c3156;
+    --line-strong: #363c66;
+    --ink: #eceef7;
+    --ink-2: #cdd1e6;
+    --muted: #a0a5c3;
+    --navy: #0b0d1f;
+    --navy-raised: #171a38;
+    --navy-active: #262b66;
+    --navy-line: #1d2146;
+    --primary: #8c97ff;
+    --primary-hover: #a6aeff;
+    --primary-soft: #262b5c;
+    --primary-text: #c3c9ff;
+    --marigold-soft: #3a2c10;
+    --marigold-text: #ffd48a;
+    --green-soft: #12352a;
+    --green-text: #7fd8b3;
+    --red-soft: #3d1a22;
+    --red-text: #ff9aa3;
+    --violet-soft: #2c2350;
+    --violet-text: #cdb5ff;
+    --red-on-surface: #ff6b76;
+    --violet-on-surface: #a985ff;
+    --label-blue-bg: #262b5c;
+    --label-blue-text: #c3c9ff;
+    --label-green-bg: #12352a;
+    --label-green-text: #7fd8b3;
+    --label-violet-bg: #2c2350;
+    --label-violet-text: #cdb5ff;
+    --label-orange-bg: #3d2614;
+    --label-orange-text: #ffbd85;
+    --label-teal-bg: #0f3440;
+    --label-teal-text: #8adcee;
+    --label-pink-bg: #3d1a2b;
+    --label-pink-text: #ffa3c4;
+    --urgent-bg: #2e2412;
+    --urgent-line: #4d3a17;
+    --on-primary: #0f1226;
+    --line-dashed: #454b7a;
+    --switch-off: #3d4370;
+    --placeholder: #7d82a3;
+    --overlay: rgba(5, 6, 16, 0.6);
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body-stack);
+  font-size: var(--text-body);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-family: var(--font-heading-stack);
+  color: var(--ink);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Headings and all numbers use Schibsted Grotesk with tabular figures. */
+.num {
+  font-family: var(--font-heading-stack);
+  font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

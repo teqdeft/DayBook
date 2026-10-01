@@ -1,0 +1,337 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--block-gap);
+  min-width: 0;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+  align-items: start;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+/* Everyone today */
+.everyone {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The column widths come from the artboard; long names and titles are cut with an ellipsis. */
+.table table {
+  table-layout: fixed;
+}
+
+.everyoneHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  min-height: 69px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cardTitle {
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.pills {
+  justify-content: flex-end;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.personText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.personName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personName {
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--ink);
+}
+
+.personRole {
+  overflow: hidden;
+  font-size: var(--text-small);
+  line-height: 17px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checkIn {
+  position: relative;
+  top: -1px; /* the artboard sets the time 1 px above the row's centre */
+  display: flex;
+  flex-direction: column;
+}
+
+.where {
+  position: relative;
+  top: -1px;
+}
+
+.checkInTime {
+  font-family: var(--font-heading-stack);
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.late {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 15px;
+  color: var(--marigold-text);
+  white-space: nowrap;
+}
+
+.time {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.missing {
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--red-text);
+}
+
+.dash {
+  color: var(--ink);
+}
+
+.note {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 19px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  max-width: 122px;
+}
+
+.noteDash {
+  color: var(--muted);
+}
+
+.emptyLink {
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+/* Correction requests */
+.corrections {
+  --card-pad: 20px 24px 19px;
+}
+
+.correctionList {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.correction {
+  display: flex;
+  flex-direction: column;
+  padding: 15px 14px 14px;
+  border-radius: var(--radius-tile);
+  background: var(--surface-muted);
+}
+
+.correctionPerson {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.correctionName {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.correctionTitle {
+  display: -webkit-box;
+  margin-top: 8px;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.correctionText {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.correctionOwn {
+  margin-top: 8px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.correctionButtons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.sideEmpty {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.sideMore {
+  margin-top: 12px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.sideFoot {
+  margin-top: 16px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+/* Missing check-outs */
+.missingCard {
+  --card-pad: 20px 24px 18px;
+}
+
+.missingList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.missingItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.missingText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.missingTitle {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.missingSub {
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted);
+}
+
+/* One column: the things HR acts on come before the long table. The table's artboard columns
+   plus HR's action ("Confirm") need 764 px, which only fit beside the 340 px column from the
+   artboard's 1440 px; narrower, the action (or, for PMs, the note) would be squeezed out. */
+@media (max-width: 1439px) {
+  .main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .side {
+    order: -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: start;
+  }
+}
+
+@media (max-width: 1279px) {
+  .kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1023px) {
+  .table table {
+    table-layout: auto;
+  }
+
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .everyoneHead {
+    padding: 14px 16px;
+  }
+
+  .pills {
+    justify-content: flex-start;
+  }
+}
