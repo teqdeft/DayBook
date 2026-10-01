@@ -16,7 +16,7 @@ Slack sending).
 
 ## Getting started
 
-Requirements: Node.js 24 LTS and MySQL 8.4 (MariaDB 10.4+ also works for local development).
+Requirements: Node.js 20.9 or newer (24 LTS recommended) and MySQL 8.4 (MariaDB 10.4+ also works for local development).
 
 ```bash
 npm install
@@ -178,7 +178,7 @@ push services (`fcm.googleapis.com` for Chrome, `*.notify.windows.com` for Edge)
 
 ## Deploying on cPanel (Setup Node.js App)
 
-Needs: cPanel with **Setup Node.js App**, Node.js **24** (at least 22.15), MySQL 8 or MariaDB
+Needs: cPanel with **Setup Node.js App**, Node.js **20.9 or newer** (24 recommended), MySQL 8 or MariaDB
 10.4+, **Terminal** (or SSH), **Cron Jobs** and AutoSSL. Replace `cpuser` with your cPanel username
 and `daybook.yourcompany.com` with your address.
 
@@ -195,7 +195,7 @@ and `daybook.yourcompany.com` with your address.
    `SEED_ADMIN_EMAIL` = the CEO's Slack email, the production Slack values, new VAPID keys,
    `DEV_LOGIN_ENABLED=false`, `TRUST_PROXY=false` (checked in step 9).
 5. **Node.js app** — Setup Node.js App → Create Application: Node.js version 24, Application mode
-   **Production**, Application root `daybook`, Application URL `daybook.yourcompany.com`,
+   **Production**, Application root `daybook`, Application URL `daybook.yourcompany.com` (the main address, not a path like `/api`),
    Application startup file **`server.cjs`** → Create. Copy the "Enter to the virtual environment"
    command shown at the top of the page.
 6. **Install, database, build** — in Terminal:
