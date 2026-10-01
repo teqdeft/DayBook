@@ -6,7 +6,9 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
+  // Docker images use the standalone server (build guide 15.4): DAYBOOK_STANDALONE=true npm run build.
+  // cPanel/Passenger (server.cjs) and `npm run start` serve the normal build.
+  output: process.env.DAYBOOK_STANDALONE === 'true' ? 'standalone' : undefined,
   poweredByHeader: false,
   // The dev-only "N" badge would sit on top of the sidebar avatar in screenshots.
   devIndicators: false,

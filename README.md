@@ -175,3 +175,68 @@ push services (`fcm.googleapis.com` for Chrome, `*.notify.windows.com` for Edge)
 - Set `WORKER_CRON_ENABLED=false` on any extra web servers so jobs run once.
 - Deploy after 7 PM: `npm run migrate`, then restart `web` and `worker`. `/api/health` checks the
   database for uptime monitoring.
+
+## Deploying on cPanel (Setup Node.js App)
+
+Needs: cPanel with **Setup Node.js App**, Node.js **24** (at least 22.15), MySQL 8 or MariaDB
+10.4+, **Terminal** (or SSH), **Cron Jobs** and AutoSSL. Replace `cpuser` with your cPanel username
+and `daybook.yourcompany.com` with your address.
+
+1. **Domain and HTTPS** — Domains → create `daybook.yourcompany.com`, then SSL/TLS Status → Run
+   AutoSSL.
+2. **Database** — MySQL Databases → create a database and a user, add the user to the database
+   with ALL PRIVILEGES.
+3. **Code** — Git Version Control → Create → clone your repository into `/home/cpuser/daybook` (not
+   inside `public_html`). A private repo needs a deploy key (cPanel → SSH Access → add the public
+   key to your Git host).
+4. **Settings file** — in File Manager create `/home/cpuser/daybook/.env.local` (never commit it)
+   from `.env.example` with your live values: `APP_URL=https://daybook.yourcompany.com`,
+   `DB_HOST=localhost`, `DB_NAME`/`DB_USER`/`DB_PASSWORD` from step 2, a new `SESSION_SECRET`,
+   `SEED_ADMIN_EMAIL` = the CEO's Slack email, the production Slack values, new VAPID keys,
+   `DEV_LOGIN_ENABLED=false`, `TRUST_PROXY=false` (checked in step 9).
+5. **Node.js app** — Setup Node.js App → Create Application: Node.js version 24, Application mode
+   **Production**, Application root `daybook`, Application URL `daybook.yourcompany.com`,
+   Application startup file **`server.cjs`** → Create. Copy the "Enter to the virtual environment"
+   command shown at the top of the page.
+6. **Install, database, build** — in Terminal:
+
+   ```bash
+   source /home/cpuser/nodevenv/daybook/24/bin/activate && cd /home/cpuser/daybook
+   npm ci
+   NODE_ENV=production npm run migrate
+   NODE_ENV=production npm run seed
+   npm run build
+   ```
+
+   If the build is stopped for using too much memory (common on shared plans), run `npm run build`
+   on your computer from the same commit, zip the `.next` folder, upload it to
+   `/home/cpuser/daybook` and extract it. Never run `npm run seed:demo` on the live database.
+
+7. **Start** — back in Setup Node.js App press **Restart**, then open
+   `https://daybook.yourcompany.com`: the sign-in page appears; `/api/health` answers
+   `{"ok":true}`.
+8. **Worker** — Cron Jobs → add a job running **every minute** (`* * * * *`):
+
+   ```bash
+   /bin/bash -lc 'source /home/cpuser/nodevenv/daybook/24/bin/activate && cd /home/cpuser/daybook && NODE_ENV=production npm run worker:cron --silent' >/dev/null 2>&1
+   ```
+
+   It sends Slack messages and desktop notifications and runs the reminders and midnight jobs
+   (`src/worker/cron.js`). On a VPS you can instead keep `npm run worker` running (PM2/systemd).
+
+9. **Office network** — sign in as Admin → Settings → Check-in → Add network. The IP filled in is
+   the address Daybook sees for you. From the office it must be the office's public IP. If it
+   shows `127.0.0.1` or the server's own address, set `TRUST_PROXY=true` in `.env.local`, press
+   Restart and check again.
+10. **Slack** — set the Slack app's redirect URL to
+    `https://daybook.yourcompany.com/api/auth/slack/callback`, invite the bot to the report
+    channel and pick it in Settings → Slack.
+11. **People** — the CEO signs in with Slack; HR adds everyone else in People with their Slack
+    emails.
+
+**Updating** (after 7 PM): Git Version Control → Manage → Pull or Deploy → Update from Remote;
+then in Terminal (after the `source` command): `npm ci`,
+`NODE_ENV=production npm run migrate`, `npm run build`, and press Restart in Setup Node.js App.
+
+**Backups**: enable cPanel backups, or add a nightly cron with `mysqldump`, and test a restore once
+a month.
