@@ -220,11 +220,14 @@ and `daybook.yourcompany.com` with your address.
 8. **Worker** — Cron Jobs → add a job running **every minute** (`* * * * *`):
 
    ```bash
-   /bin/bash -lc 'source /home/cpuser/nodevenv/daybook/20/bin/activate && cd /home/cpuser/daybook && NODE_ENV=production npm run worker:cron --silent' >/dev/null 2>&1
+   /bin/bash -c 'source /home/cpuser/nodevenv/daybook/20/bin/activate && cd /home/cpuser/daybook && export NODE_ENV=production UV_THREADPOOL_SIZE=2 && exec node --disable-wasm-trap-handler --v8-pool-size=2 --import ./src/worker/alias.js src/worker/cron.js' > /home/cpuser/worker-cron.log 2>&1
    ```
 
    It sends Slack messages and desktop notifications and runs the reminders and midnight jobs
    (`src/worker/cron.js`). On a VPS you can instead keep `npm run worker` running (PM2/systemd).
+   The command is deliberately lean, because shared hosting limits processes and threads: it runs
+   one Node process (no npm, no login shell) with small thread pools, and Node's WebAssembly
+   memory reservation off (the host refuses it). `~/worker-cron.log` holds the last run's output.
 
 9. **Office network** — sign in as Admin → Settings → Check-in → Add network. The IP filled in is
    the address Daybook sees for you. From the office it must be the office's public IP. If it
