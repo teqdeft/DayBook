@@ -4,13 +4,13 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20.9"
+    "node": ">=20.15"
   },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "worker": "node --import ./src/worker/alias.js src/worker/index.js",
+    "worker": "node --disable-wasm-trap-handler --import ./src/worker/alias.js src/worker/index.js",
     "migrate": "knex migrate:latest",
     "migrate:make": "knex migrate:make",
     "seed": "knex seed:run",
@@ -19,7 +19,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "worker:cron": "node --import ./src/worker/alias.js src/worker/cron.js",
+    "worker:cron": "node --disable-wasm-trap-handler --import ./src/worker/alias.js src/worker/cron.js",
     "start:passenger": "node server.cjs"
   },
   "dependencies": {
