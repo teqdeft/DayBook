@@ -89,6 +89,9 @@ npm run test:e2e
   appear in attendance or report counts. Their sidebar is Projects, Team, Attendance, Requests and
   they start on the Team dashboard. They still approve report edits, manage their projects and
   handle project requests.
+- **Check out always asks first** (company request). Checking out ends the day, so with the report
+  submitted a "Check out now?" dialog opens (Cancel is focused); with the report pending it is the
+  guide's "Your report isn't in yet" dialog, as before.
 
 ## Slack setup (one Slack app per environment)
 
@@ -247,6 +250,11 @@ then in Terminal (after the `source` command): `cd ~/daybook && git pull`, `npm 
 shows whether the worker cron is running, whether Slack works and who gets desktop notifications;
 it prints no secrets. Adding `-- --notify=person@company.com` also sends that person a test
 notification.
+
+**Fresh start** — `NODE_ENV=production npm run reset` shows what's in the database;
+`NODE_ENV=production npm run reset -- --confirm=<DB_NAME>` empties every table (people, data,
+settings, sign-ins) and runs the base seeds again, leaving only the Admin from `SEED_ADMIN_EMAIL`.
+It can't be undone: export a backup in phpMyAdmin first.
 
 **Backups**: enable cPanel backups, or add a nightly cron with `mysqldump`, and test a restore once
 a month.
