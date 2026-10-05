@@ -21,6 +21,7 @@
     "test:e2e": "playwright test",
     "worker:cron": "node --disable-wasm-trap-handler --v8-pool-size=2 --import ./src/worker/alias.js src/worker/cron.js",
     "doctor": "node --disable-wasm-trap-handler --v8-pool-size=2 --import ./src/worker/alias.js scripts/doctor.js",
+    "reset": "node --disable-wasm-trap-handler --v8-pool-size=2 --import ./src/worker/alias.js scripts/reset.js",
     "start:passenger": "node server.cjs"
   },
   "dependencies": {

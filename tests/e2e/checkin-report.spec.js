@@ -1,6 +1,6 @@
-// Guide 15.3: check in, write and submit a report, the PM sees it. Karan Mehta has not checked in
-// today in the demo data. The demo saves this computer's addresses (127.0.0.1 and ::1) as office
-// networks, so the check-in is an Office one.
+// Guide 15.3: check in, write and submit a report, the PM sees it, then check out (which asks
+// first, a company request). Karan Mehta has not checked in today in the demo data. The demo saves
+// this computer's addresses (127.0.0.1 and ::1) as office networks, so the check-in is an Office one.
 import { PEOPLE, cellUnder, expect, open, test, toasts } from './support/fixtures.js';
 
 const PROJECT = 'acme-app';
@@ -30,7 +30,8 @@ test('an employee checks in, submits the daily report and the PM sees it', async
   });
 
   await test.step('write and submit the daily report', async () => {
-    await karan.getByRole('link', { name: "Write today's report" }).click();
+    // On a day with no tasks yet this week (a Monday), the empty task list offers the same link.
+    await karan.getByRole('link', { name: "Write today's report" }).first().click();
     await expect(karan).toHaveURL(/\/report$/);
     await expect(karan.getByRole('heading', { level: 1 })).toHaveText('Daily report');
 
@@ -94,5 +95,22 @@ test('an employee checks in, submits the daily report and the PM sees it', async
       headers: { Origin: new URL(baseURL).origin },
     });
     expect(checkIn.status()).toBe(403);
+  });
+
+  await test.step('checking out asks first, and Cancel keeps the day open', async () => {
+    await open(karan, '/today');
+    await karan.getByRole('button', { name: 'Check out' }).click();
+    const confirm = karan.getByRole('dialog', { name: 'Check out now?' });
+    await expect(confirm).toContainText(/This ends your day at \d{1,2}:\d{2} [AP]M\./);
+    await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(karan.getByText(/^In office since \d{1,2}:\d{2}$/)).toBeVisible();
+
+    await karan.getByRole('button', { name: 'Check out' }).click();
+    await confirm.getByRole('button', { name: 'Check out' }).click();
+    await expect(toasts(karan)).toContainText(/Checked out at \d{1,2}:\d{2} [AP]M/);
+    await expect(confirm).toHaveCount(0);
+    await expect(karan.getByRole('button', { name: 'Check out' })).toHaveCount(0);
   });
 });
