@@ -16,6 +16,10 @@ import { slackOutboxJob } from './jobs/slackOutbox';
 import { slackUserSyncJob } from './jobs/slackUserSync';
 
 const LOCK_NAME = 'daybook_worker_cron';
+// A run must never outlive its slot: on shared hosting every leftover process counts against the
+// account's process limit, and a stuck run would keep the lock, so nothing else would be sent.
+const OVERRUN_SECONDS = 30;
+const EXIT_GRACE_MS = 2_000;
 const MINUTE_JOBS = [
   reportReminderJob,
   markMissingCheckoutsJob,
@@ -44,6 +48,11 @@ async function runJob(job) {
 }
 
 async function main() {
+  const limitSeconds = runSeconds() + OVERRUN_SECONDS;
+  setTimeout(() => {
+    logger.error({ limitSeconds }, 'worker cron run took too long and was stopped');
+    process.exit(1);
+  }, limitSeconds * 1000).unref();
   if (!env.WORKER_CRON_ENABLED) {
     logger.info('worker cron: WORKER_CRON_ENABLED=false, nothing to do');
     return;
@@ -77,4 +86,8 @@ main()
     logger.fatal({ err: error }, 'worker cron run failed');
     process.exitCode = 1;
   })
-  .finally(() => db.destroy());
+  .finally(async () => {
+    await db.destroy();
+    // Normally the process ends here by itself; if a library left something open, end it anyway.
+    setTimeout(() => process.exit(), EXIT_GRACE_MS).unref();
+  });
