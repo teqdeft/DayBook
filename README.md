@@ -240,5 +240,10 @@ and `daybook.yourcompany.com` with your address.
 then in Terminal (after the `source` command): `cd ~/daybook && git pull`, `npm ci --omit=dev`,
 `NODE_ENV=production npm run migrate`, and press Restart in Setup Node.js App.
 
+**Checking** — `NODE_ENV=production npm run doctor` (after the `source` command, in `~/daybook`)
+shows whether the worker cron is running, whether Slack works and who gets desktop notifications;
+it prints no secrets. Adding `-- --notify=person@company.com` also sends that person a test
+notification.
+
 **Backups**: enable cPanel backups, or add a nightly cron with `mysqldump`, and test a restore once
 a month.
