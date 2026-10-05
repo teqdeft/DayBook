@@ -42,6 +42,24 @@ jobs:
           SESSION_SECRET: build-only-placeholder-never-used-at-runtime-0000
           APP_URL: https://daybook.teqdeftdev.com
 
+      # Turbopack loads serverExternalPackages through aliases such as
+      # .next/node_modules/knex-65717652aa42346a, which are symlinks to absolute paths on this
+      # machine. Point them at ../../node_modules/<package> instead so they work on the server too.
+      - name: Make the external package links relative
+        run: |
+          set -e
+          [ -d .next/node_modules ] || exit 0
+          find .next/node_modules -type l | while read -r link; do
+            target=$(readlink -f "$link")
+            case "$target" in
+              "$GITHUB_WORKSPACE"/node_modules/*) ;;
+              *) echo "::error::$link points outside node_modules: $target"; exit 1 ;;
+            esac
+            ln -sfn "$(realpath --relative-to="$(dirname "$link")" "$target")" "$link"
+            [ -e "$link" ] || { echo "::error::$link does not resolve"; exit 1; }
+            echo "$link -> $(readlink "$link")"
+          done
+
       - name: Publish to the deploy branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -61,8 +79,13 @@ jobs:
           # Replace everything with this build, keeping the branch history linear so the server
           # can always fast-forward with a plain `git pull`.
           find ../deploy -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          rsync -a --exclude .git --exclude node_modules --exclude .next/cache --exclude .next/dev ./ ../deploy/
+          # Leading slashes anchor the excludes to the top level, so .next/node_modules (the links
+          # above) is published while the project's own node_modules is not.
+          rsync -a --exclude /.git --exclude /node_modules --exclude /.next/cache --exclude /.next/dev ./ ../deploy/
           cd ../deploy
+          if [ -d "$GITHUB_WORKSPACE/.next/node_modules" ] && [ ! -d .next/node_modules ]; then
+            echo "::error::.next/node_modules was not copied"; exit 1
+          fi
           git add -A
           git add -f .next
           if git diff --cached --quiet; then
