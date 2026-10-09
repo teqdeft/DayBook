@@ -26,6 +26,8 @@ import { projects } from '@/modules/projects';
 import { projectTasks } from '@/modules/projectTasks';
 import { reports } from '@/modules/reports';
 import { settings } from '@/modules/settings';
+import { shortDuration } from './timerData';
+import { loadTimerParts, timerCard } from './todayTimers';
 
 const OPEN_TASK = new Set(['in_progress', 'blocked']);
 // The artboard's card holds four rows, level with the urgent card beside it; the full list is in
@@ -35,14 +37,20 @@ const STATUS_ORDER = { in_progress: 0, blocked: 1, done: 2 };
 // The "Priority tasks" card shows this many; "Show more" opens the rest.
 const MAX_PRIORITY_TASKS = 6;
 
-/** The status pill next to "Check out": "In office since 9:32", WFH, unverified or checked out. */
-function statusPill(row, tz) {
+/**
+ * The status pill next to "Check out": "In office since 9:32", WFH, unverified, on a break
+ * ("On break since 1:10", CONTRACT 15) or checked out.
+ */
+function statusPill(row, tz, openBreak) {
   if (!row) return null;
   const since = formatTime(row.checkInAt, tz);
   if (row.checkOutAt) {
     return { tone: 'neutral', text: `Checked out at ${formatTime(row.checkOutAt, tz)}` };
   }
   if (row.checkoutStatus !== 'open') return { tone: 'neutral', text: 'Checked out' };
+  if (openBreak) {
+    return { tone: 'marigold', text: `On break since ${formatTime(openBreak.startedAt, tz)}` };
+  }
   if (row.location === 'wfh') return { tone: 'violet', text: `Working from home since ${since}` };
   if (!row.officeVerified) {
     return { tone: 'marigold', text: `In office since ${since}, unverified` };
@@ -168,6 +176,7 @@ function priorityRows(tasks, userId) {
     id: task.id,
     priority: task.priority,
     title: task.title,
+    projectId: Number(task.projectId ?? task.project?.id) || null,
     project: { name: task.project?.name ?? '', color: task.project?.color ?? null },
     forYou: Number(task.assigneeId ?? task.assignee?.id) === Number(userId),
   }));
@@ -185,6 +194,21 @@ function screenTimeLine(day) {
   const locked = Number(day.lockedMinutes) || 0;
   if (active + idle + locked === 0) return 'Screen time today: nothing recorded yet';
   return `Screen time today: active ${formatDuration(active)} · idle ${formatDuration(idle)}`;
+}
+
+/**
+ * The second "Your day" tile (CONTRACT 15): worked time (present minus breaks). With breaks the
+ * label says so ("Worked so far · 45m break"); without, it stays "Present so far".
+ */
+function workedTile(row, mine) {
+  const done = Boolean(row?.checkOutAt);
+  const hasBreaks = (mine.breaks?.length ?? 0) > 0;
+  const label = hasBreaks
+    ? `${done ? 'Worked today' : 'Worked so far'} · ${shortDuration(mine.breakMinutes)} break`
+    : done
+      ? 'Present today'
+      : 'Present so far';
+  return { value: formatDuration(mine.workedMinutes ?? mine.presentMinutes), label };
 }
 
 async function safe(promise, fallback) {
@@ -210,7 +234,7 @@ export async function loadToday({ user, ip }) {
     current.activityTrackingEnabled !== false &&
     can(user, 'activity.self') &&
     Boolean(user.tracksAttendance);
-  const [dayStatus, submitted, tasks, urgent, pending, todayReports, screen, priority] =
+  const [dayStatus, submitted, tasks, urgent, pending, todayReports, screen, priority, timerParts] =
     await Promise.all([
       safe(reports.getDayStatus(user.id, today), { status: 'none', totalMinutes: 0 }),
       safe(reports.getSubmittedMinutesByDay(user.id, week.from, today), {}),
@@ -220,10 +244,13 @@ export async function loadToday({ user, ip }) {
       safe(reports.listReports({ user, from: today, to: today, limit: 1 }), { rows: [] }),
       screenTracked ? safe(activity.getDay(user.id, today), null) : null,
       safe(projectTasks.listOpenForUser(user.id), []),
+      loadTimerParts(user, current),
     ]);
   const row = mine.row;
   const presentToday = mine.presentMinutes;
-  const days = weekDays({ today, current, submitted, dayStatus, presentToday });
+  // Today's bar shows worked time (present minus breaks, CONTRACT 15) until the report is in.
+  const workedToday = mine.workedMinutes ?? presentToday;
+  const days = weekDays({ today, current, submitted, dayStatus, presentToday: workedToday });
   const loggedSoFar = days.reduce((sum, day) => sum + (Number(day.value) || 0), 0);
   const dueAt = localToUtc(today, current.reportReminderAt, tz);
   const locksAt = locksAtFor(today, current.reportLock, tz);
@@ -238,7 +265,9 @@ export async function loadToday({ user, ip }) {
     row,
     onOfficeNetwork: mine.onOfficeNetwork,
     presentToday,
-    pill: statusPill(row, tz),
+    worked: workedTile(row, mine),
+    onBreak: Boolean(row && mine.openBreak),
+    pill: statusPill(row, tz, mine.openBreak),
     phoneLabels: phoneLabels({ row, current, tz }),
     reportStatus: dayStatus.status,
     locksText: `${formatTimeAmPm(locksAt, tz)} ${lockDay}`,
@@ -252,6 +281,7 @@ export async function loadToday({ user, ip }) {
     screenTime: screenTracked ? screenTimeLine(screen) : null,
     tasks: taskRows(tasks, { from: week.from, today }),
     priority: priorityRows(priority, user.id),
+    timer: timerCard({ row, parts: timerParts, breaks: mine.breaks, tz }),
     urgent,
     pending: pending.items.map((item) => ({
       id: item.id,

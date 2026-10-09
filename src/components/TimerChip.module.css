@@ -1,0 +1,125 @@
+/* The sidebar's timer chip (CONTRACT 15): the workspace box's navy-raised fill and radius, a live
+   dot (green while a timer runs, marigold on a break), the project name, the running time and a
+   small stop square. The name and the stop square take 44 px taps (in the phone drawer the chip
+   is how a timer stops from any page) while they look as small as before. */
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 7px 7px 7px 11px;
+  border-radius: 12px;
+  background: var(--navy-raised);
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 50%, transparent);
+  animation: live 2s ease-out infinite;
+}
+
+.onBreak .dot {
+  background: var(--marigold);
+  animation: none;
+}
+
+@keyframes live {
+  70% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--green) 0%, transparent);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 0%, transparent);
+  }
+}
+
+/* The link runs the chip's full height (44 px), the focus ring stays around the text. */
+.name {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  align-self: stretch;
+  min-width: 0;
+  margin-block: -6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--on-fill);
+  text-decoration: none;
+}
+
+.nameText {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name:hover .nameText {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.name:focus-visible {
+  outline: none;
+}
+
+.name:focus-visible .nameText,
+.stop:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--navy-raised),
+    0 0 0 4px var(--primary);
+}
+
+.time {
+  flex: none;
+  font-family: var(--font-heading-stack);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--navy-text);
+}
+
+.onBreak .time {
+  margin-right: 6px;
+}
+
+.stop {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--navy-active);
+  color: var(--on-fill);
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+/* a 44 px tap target around the 30 px square, inside the chip */
+.stop::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+.stop:hover:not([aria-disabled='true']) {
+  background: color-mix(in srgb, var(--navy-active) 78%, var(--on-fill));
+}
+
+.stop[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: default;
+}

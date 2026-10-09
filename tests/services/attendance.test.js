@@ -227,6 +227,8 @@ describe('check-out', () => {
       reportPending: true,
       reportStatus: 'none',
       presentMinutes: 542,
+      breakMinutes: 0,
+      workedMinutes: 542,
       loggedMinutes: 0,
       gapMinutes: 542,
       gapWarning: true,

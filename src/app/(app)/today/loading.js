@@ -1,4 +1,5 @@
-// Today while it loads: the same blocks as the page (Your day, This week, tasks, report strip).
+// Today while it loads: the same blocks as the page (Your day, This week, the Working on card of
+// project timers, tasks, report strip).
 import Card from '@/components/Card';
 import Skeleton from '@/components/Skeleton';
 import page from './page.module.css';
@@ -42,6 +43,20 @@ export default function TodayLoading() {
           </div>
         </Card>
       </section>
+      <Card className={styles.timer}>
+        <div className={styles.cardHead}>
+          <Skeleton width={110} height={20} />
+          <Skeleton width={120} height={14} />
+        </div>
+        <Skeleton height={72} radius={12} className={styles.timerBox} />
+        {[0, 1].map((i) => (
+          <div key={i} className={styles.timerRow}>
+            <Skeleton width={84} height={14} />
+            <Skeleton width={90} height={26} radius={6} />
+            <Skeleton width="30%" height={14} />
+          </div>
+        ))}
+      </Card>
       <section className={page.rowTasks}>
         <Card className={styles.urgent}>
           <Skeleton width={180} height={28} radius={999} />

@@ -4,7 +4,7 @@ import { addDays, isWorkingDay, now, toLocal } from '@/lib/time';
 import { settings } from '@/modules/settings';
 import { users } from '@/modules/users';
 import * as repo from './repo';
-import { presentMinutes, todayFor, whereOf } from './rules';
+import { breakMinutesWithin, presentMinutes, todayFor, whereOf } from './rules';
 import { dateString } from './schemas';
 
 const MATCHES = {
@@ -21,35 +21,59 @@ function publicPerson(person) {
   return { id, name, initials, avatarUrl, role, status, designation, departmentName, email };
 }
 
+/** Break and worked minutes of one row (CONTRACT 15); present is null when it isn't known. */
+function timeOf(row, breaks, present, { at, tz, allowance }) {
+  const breakMinutes = row ? breakMinutesWithin(breaks, row, at, tz) : 0;
+  return {
+    presentMinutes: present,
+    breakMinutes,
+    workedMinutes: present === null ? null : Math.max(0, present - breakMinutes),
+    overAllowanceMinutes: allowance > 0 ? Math.max(0, breakMinutes - allowance) : 0,
+  };
+}
+
 /**
  * Everyone who tracks attendance (active, joined by that day), each with their row for the date,
- * in the order they were added to Daybook.
+ * in the order they were added to Daybook. Breaks are read with one query for the date.
  * @param {string} workDate
  * @returns {Promise<Array<{ user: object, attendance: AttendanceRow | null,
- *   where: 'office' | 'wfh' | 'unverified' | 'not_checked_in', presentMinutes: number | null }>>}
+ *   where: 'office' | 'wfh' | 'unverified' | 'not_checked_in', presentMinutes: number | null,
+ *   breakMinutes: number, workedMinutes: number | null, overAllowanceMinutes: number }>>}
+ *   presentMinutes and workedMinutes are null without a row or for a missing check-out;
+ *   overAllowanceMinutes is how far breaks go past breakAllowanceMinutes (0 when it is 0)
  */
 export async function listDay(workDate) {
-  const [people, rows, current] = await Promise.all([
+  const [people, rows, breakRows, current] = await Promise.all([
     users.listActive({ tracksAttendance: true }),
     repo.listByDate(workDate),
+    repo.listBreaksByDate(workDate),
     settings.getAll(),
   ]);
   const byUser = new Map(rows.map((row) => [row.userId, row]));
-  const at = now();
+  const breaksByUser = new Map();
+  for (const item of breakRows) {
+    breaksByUser.set(item.userId, [...(breaksByUser.get(item.userId) ?? []), item]);
+  }
+  const context = {
+    at: now(),
+    tz: current.timezone,
+    allowance: current.breakAllowanceMinutes,
+  };
   return people
     .filter((person) => person.tracksAttendance !== false)
     .filter((person) => !person.joinedOn || person.joinedOn <= workDate || byUser.has(person.id))
     .sort((a, b) => a.id - b.id)
     .map((person) => {
       const row = byUser.get(person.id) ?? null;
+      const present =
+        row && row.checkoutStatus !== 'missing'
+          ? presentMinutes(row, context.at, context.tz)
+          : null;
       return {
         user: publicPerson(person),
         attendance: row,
         where: whereOf(row),
-        presentMinutes:
-          row && row.checkoutStatus !== 'missing'
-            ? presentMinutes(row, at, current.timezone)
-            : null,
+        ...timeOf(row, breaksByUser.get(person.id) ?? [], present, context),
       };
     });
 }
@@ -185,19 +209,25 @@ export async function exportDay(workDate) {
   const tz = current.timezone;
   // 24-hour clocks: "6:34" alone can't be told from 6:34 AM in a spreadsheet.
   const clock = (at) => (at ? toLocal(at, tz).format('HH:mm') : '');
-  const rows = items.map(({ user, attendance, where, presentMinutes: present }) => ({
-    name: user.name,
-    email: user.email ?? '',
-    designation: user.designation ?? '',
-    department: user.departmentName ?? '',
-    where: WHERE_WORDS[where],
-    checkIn: clock(attendance?.checkInAt),
-    checkOut: clock(attendance?.checkOutAt),
-    presentHours: present === null ? null : Math.round((present / 60) * 100) / 100,
-    lateMinutes: attendance ? attendance.lateMinutes : null,
-    checkout: attendance ? CHECKOUT_WORDS[attendance.checkoutStatus] : '',
-    note: attendance?.note ?? '',
-  }));
+  const hours = (minutes) => (minutes === null ? null : Math.round((minutes / 60) * 100) / 100);
+  const rows = items.map((item) => {
+    const { user, attendance, where, presentMinutes: present } = item;
+    return {
+      name: user.name,
+      email: user.email ?? '',
+      designation: user.designation ?? '',
+      department: user.departmentName ?? '',
+      where: WHERE_WORDS[where],
+      checkIn: clock(attendance?.checkInAt),
+      checkOut: clock(attendance?.checkOutAt),
+      presentHours: hours(present),
+      breakMinutes: present === null ? null : item.breakMinutes,
+      workedHours: hours(item.workedMinutes),
+      lateMinutes: attendance ? attendance.lateMinutes : null,
+      checkout: attendance ? CHECKOUT_WORDS[attendance.checkoutStatus] : '',
+      note: attendance?.note ?? '',
+    };
+  });
   return {
     filename: `attendance-${workDate}.xlsx`,
     sheets: [
@@ -212,6 +242,8 @@ export async function exportDay(workDate) {
           { header: 'Check-in', key: 'checkIn', width: 10 },
           { header: 'Check-out', key: 'checkOut', width: 10 },
           { header: 'Present (hours)', key: 'presentHours', width: 15, numFmt: '0.00' },
+          { header: 'Breaks (minutes)', key: 'breakMinutes', width: 16 },
+          { header: 'Worked (hours)', key: 'workedHours', width: 15, numFmt: '0.00' },
           { header: 'Late (minutes)', key: 'lateMinutes', width: 14 },
           { header: 'Check-out status', key: 'checkout', width: 16 },
           { header: 'Note', key: 'note', width: 40 },

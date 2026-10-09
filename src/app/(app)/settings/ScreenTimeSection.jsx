@@ -1,41 +1,11 @@
 'use client';
 // Screen time settings (CONTRACT section 11): when someone counts as idle, how long the data is
 // kept, and the switch for the whole feature. Saved with "Save changes".
-import Input from '@/components/Input';
 import Toggle from '@/components/Toggle';
-import FormField from './FormField';
+import NumberField from './NumberField';
 import Section from './Section';
 import { useSettingsForm } from './SettingsProvider';
 import styles from './SettingsForm.module.css';
-
-/** A whole-number field ("5"); the unit is in its label. */
-function NumberField({ name, label, help, maxLength }) {
-  const { form, errors, setField } = useSettingsForm();
-  const id = `settings-${name}`;
-  return (
-    <FormField
-      label={label}
-      htmlFor={id}
-      help={errors[name] ? undefined : help}
-      error={errors[name]}
-    >
-      <Input
-        id={id}
-        name={name}
-        value={form[name]}
-        error={Boolean(errors[name])}
-        inputMode="numeric"
-        autoComplete="off"
-        maxLength={maxLength}
-        onChange={(event) => setField(name, event.target.value)}
-        onBlur={() => {
-          const trimmed = String(form[name] ?? '').trim();
-          if (trimmed !== form[name]) setField(name, trimmed);
-        }}
-      />
-    </FormField>
-  );
-}
 
 export default function ScreenTimeSection() {
   const { form, setField } = useSettingsForm();

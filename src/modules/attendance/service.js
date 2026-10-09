@@ -1,21 +1,28 @@
-// Attendance rules for the person: reading rows, check-in (guide 7.2), check-out (7.3) and the
-// nightly missing check-out job. HR's side lives in hr.js and corrections.js; the day view in
-// day.js.
+// Attendance rules for the person: reading rows, today's state, check-in (guide 7.2) and the
+// nightly missing check-out job. Check-out (7.3) lives in checkout.js, breaks in breaks.js, HR's
+// side in hr.js and corrections.js, the day view in day.js.
 import { db } from '@/lib/db';
 import { AppError } from '@/lib/errors';
 import { emit } from '@/lib/events';
 import { logger } from '@/lib/logger';
-import { formatDayShort, nowDate } from '@/lib/time';
+import { formatDayShort, now, nowDate } from '@/lib/time';
 import { audit } from '@/modules/audit';
 import { notifications } from '@/modules/notifications';
-import { reports } from '@/modules/reports';
 import { settings } from '@/modules/settings';
 import { users } from '@/modules/users';
 import { hrRecipients, loadRecipientPools, pickRecipients } from './recipients';
 import * as repo from './repo';
-import { computeLateMinutes, presentMinutes, todayFor, workingDayFlag } from './rules';
+import {
+  breakMinutesWithin,
+  computeLateMinutes,
+  presentMinutes,
+  todayFor,
+  workedMinutes,
+  workingDayFlag,
+} from './rules';
 
-export { presentMinutes };
+export { checkOut } from './checkout';
+export { breakMinutesWithin, presentMinutes, workedMinutes };
 
 /**
  * One person's attendance row for a work date.
@@ -49,21 +56,31 @@ export function listForDate(workDate) {
  * Today's state for the signed-in person (GET /api/attendance/me/today and the Today page).
  * @param {{ user: { id: number }, ip?: string | null }} input
  * @returns {Promise<{ workDate: string, row: AttendanceRow | null, onOfficeNetwork: boolean,
- *   allowUnverifiedOffice: boolean, presentMinutes: number }>}
+ *   allowUnverifiedOffice: boolean, presentMinutes: number, breaks: BreakRow[],
+ *   openBreak: BreakRow | null, breakMinutes: number, workedMinutes: number }>} breaks are
+ *   today's, oldest first; breakMinutes counts only break time inside the present window and
+ *   workedMinutes = presentMinutes - breakMinutes (CONTRACT 15)
  */
 export async function getMyToday({ user, ip }) {
   const current = await settings.getAll();
   const workDate = todayFor(current);
-  const [row, onOfficeNetwork] = await Promise.all([
+  const [row, onOfficeNetwork, breaks] = await Promise.all([
     getForUserOnDate(user.id, workDate),
     settings.isOfficeIp(ip),
+    repo.listBreaksByUserDate(user.id, workDate),
   ]);
+  const at = now();
+  const tz = current.timezone;
   return {
     workDate,
     row,
     onOfficeNetwork,
     allowUnverifiedOffice: current.allowUnverifiedOffice,
-    presentMinutes: presentMinutes(row, undefined, current.timezone),
+    presentMinutes: presentMinutes(row, at, tz),
+    breaks,
+    openBreak: breaks.find((item) => !item.endedAt) ?? null,
+    breakMinutes: breakMinutesWithin(breaks, row, at, tz),
+    workedMinutes: workedMinutes(row, breaks, at, tz),
   };
 }
 
@@ -160,49 +177,6 @@ async function reportUnverifiedOffice({ user, id, row, ip }, trx) {
     },
     trx,
   );
-}
-
-/**
- * Checks the person out of today's open check-in at the server's time. Always checks out; the
- * result says whether today's report is still to write and how far present time and logged hours
- * are apart (a warning only, guide 7.3).
- * @param {{ user: { id: number }, ip?: string | null }} input
- * @returns {Promise<{ row: AttendanceRow, reportPending: boolean, reportStatus: string,
- *   presentMinutes: number, loggedMinutes: number, gapMinutes: number, gapWarning: boolean }>}
- *   gapMinutes = |present - logged| (logged = today's report, draft or submitted); gapWarning
- *   when it is above gap_warning_minutes (guide 7.3.3: it warns, never blocks)
- * @throws NOT_CHECKED_IN, ALREADY_CHECKED_OUT
- */
-export async function checkOut({ user, ip }) {
-  const current = await settings.getAll();
-  const workDate = todayFor(current);
-  const row = await repo.findByUserAndDate(user.id, workDate);
-  if (!row) throw new AppError('NOT_CHECKED_IN');
-  if (row.checkOutAt || row.checkoutStatus !== 'open') throw new AppError('ALREADY_CHECKED_OUT');
-  const at = nowDate();
-  const changed = await repo.closeOpenRow(row.id, {
-    checkOutAt: at,
-    checkOutIp: ip ? String(ip).slice(0, 45) : null,
-    checkoutStatus: 'checked_out',
-    updatedAt: at,
-  });
-  if (changed === 0) throw new AppError('ALREADY_CHECKED_OUT');
-  const saved = await repo.findById(row.id);
-  const day = await reports.getDayStatus(user.id, workDate);
-  const present = presentMinutes(saved, at, current.timezone);
-  const logged = Number(day?.totalMinutes) || 0;
-  const reportStatus = day?.status ?? 'none';
-  const gapMinutes = Math.abs(present - logged);
-  await emit('attendance.checked_out', { row: saved, userId: user.id });
-  return {
-    row: saved,
-    reportPending: reportStatus !== 'submitted',
-    reportStatus,
-    presentMinutes: present,
-    loggedMinutes: logged,
-    gapMinutes,
-    gapWarning: gapMinutes > current.gapWarningMinutes,
-  };
 }
 
 /**

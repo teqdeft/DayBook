@@ -1,0 +1,74 @@
+.hours {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  padding-left: 16px;
+}
+
+.hoursLabel {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+/* required timer mode: "From timers" before the label */
+.hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--primary-text);
+}
+
+.hoursInput {
+  width: 72px;
+  height: 40px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-family: var(--font-body-stack);
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+  color: var(--ink);
+  text-align: center;
+}
+
+.hoursInput::placeholder {
+  color: var(--placeholder);
+  font-weight: 600;
+}
+
+.hoursInput:hover:not(:read-only) {
+  border-color: var(--muted);
+}
+
+.hoursInput:focus-visible {
+  border-color: var(--primary);
+}
+
+.hoursInput[aria-invalid='true'] {
+  border-color: var(--red);
+}
+
+/* hours that come from timers can't be typed: a quiet filled box */
+.fromTimers {
+  border-color: var(--line);
+  background: var(--surface-muted);
+}
+
+@media (max-width: 640px) {
+  .hours {
+    padding-left: 0;
+  }
+
+  .hoursInput {
+    font-size: 16px;
+  }
+}

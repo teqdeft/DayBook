@@ -9,9 +9,13 @@ import * as repo from './repo';
 import {
   ACTIVITY_IDLE_MINUTES,
   ACTIVITY_RETENTION_DAYS,
+  BREAK_ALLOWANCE_MINUTES,
   normalizeIp,
   officeNetworkSchema,
   settingsUpdateSchema,
+  TIMER_AWAY_MINUTES,
+  TIMER_MODES,
+  TIMER_REMINDER_MINUTES,
 } from './schemas';
 
 const toCamel = (key) => key.replace(/_([a-z0-9])/g, (_, letter) => letter.toUpperCase());
@@ -32,6 +36,9 @@ const CLOCK_KEYS = new Set(['officeStart', 'officeEnd', 'lateAfter', 'reportRemi
 const BOUNDED_KEYS = {
   activityIdleMinutes: ACTIVITY_IDLE_MINUTES,
   activityRetentionDays: ACTIVITY_RETENTION_DAYS,
+  timerAwayMinutes: TIMER_AWAY_MINUTES,
+  timerReminderMinutes: TIMER_REMINDER_MINUTES,
+  breakAllowanceMinutes: BREAK_ALLOWANCE_MINUTES,
 };
 
 // ---------- cache ----------
@@ -81,6 +88,7 @@ function normalizeValue(key, value) {
   if (key === 'timezone') return typeof value === 'string' && isTimeZone(value) ? value : fallback;
   if (key === 'slackReportChannelId' || key === 'slackReportChannelName')
     return value ? String(value) : null;
+  if (key === 'timersMode') return TIMER_MODES.includes(value) ? value : fallback;
   return typeof value === 'string' ? value : fallback;
 }
 
@@ -149,9 +157,13 @@ export function setCacheTtlForTests(ms) {
  *   slackReportChannelId: string | null, slackReportChannelName: string | null,
  *   slackPostReports: boolean, slackRemind: boolean, slackUrgentNotify: boolean,
  *   slackRequestsNotify: boolean, activityTrackingEnabled: boolean,
- *   activityIdleMinutes: number, activityRetentionDays: number, pushEnabled: boolean }>} a fresh
- *   copy, safe to change; activityIdleMinutes is 1-120 and activityRetentionDays 7-3650 (screen
- *   time, CONTRACT 11); pushEnabled switches desktop notifications for everyone (CONTRACT 14)
+ *   activityIdleMinutes: number, activityRetentionDays: number, pushEnabled: boolean,
+ *   timersMode: 'off' | 'optional' | 'required', timerAwayMinutes: number,
+ *   timerReminderMinutes: number, breakAllowanceMinutes: number }>} a fresh copy, safe to
+ *   change; activityIdleMinutes is 1-120 and activityRetentionDays 7-3650 (screen time,
+ *   CONTRACT 11); pushEnabled switches desktop notifications for everyone (CONTRACT 14);
+ *   timers and breaks (CONTRACT 15): timerAwayMinutes 5-240, timerReminderMinutes 0-240
+ *   (0 = never), breakAllowanceMinutes 0-480 (0 = no allowance)
  */
 export async function getAll() {
   if (cacheTtlMs > 0 && cache.value && performance.now() - cache.loadedAt < cacheTtlMs) {
@@ -175,7 +187,8 @@ function parseInput(schema, input) {
 /**
  * Saves the settings that changed (only keys that differ from the stored value are written),
  * records who changed them, and writes one 'settings.update' audit row with before/after, all in
- * one transaction. Clears the cache.
+ * one transaction. Clears the cache. Turning timers off (optional or required -> off) then stops
+ * every running timer (CONTRACT 15); a failure there is logged and never fails the save.
  * @param {{ user: { id: number } | null, values: object, ip?: string | null }} input
  *   values: any subset of the keys getAll() returns
  * @returns {Promise<ReturnType<typeof getAll>>} the settings after the save
@@ -183,7 +196,7 @@ function parseInput(schema, input) {
  */
 export async function update({ user, values, ip }) {
   const parsed = parseInput(settingsUpdateSchema, values ?? {});
-  const changed = await db.transaction(async (trx) => {
+  const changes = await db.transaction(async (trx) => {
     const current = fromRows(await repo.listSettings(trx));
     const before = {};
     const after = {};
@@ -194,7 +207,7 @@ export async function update({ user, values, ip }) {
       after[key] = value;
     }
     const keys = Object.keys(after);
-    if (keys.length === 0) return keys;
+    if (keys.length === 0) return after;
     const updatedAt = nowDate();
     for (const key of keys) {
       await repo.saveSetting(
@@ -213,13 +226,31 @@ export async function update({ user, values, ip }) {
       },
       trx,
     );
-    return keys;
+    return after;
   });
+  const changed = Object.keys(changes);
   if (changed.length > 0) {
     clearCache();
     logger.info({ userId: user?.id ?? null, keys: changed }, 'settings saved');
   }
+  // Only a change: the stored mode was optional or required.
+  if (changes.timersMode === 'off') await stopRunningTimers(user?.id ?? null);
   return getAll();
+}
+
+/**
+ * Timers were just turned off: stops every running timer (timers.stopAllRunning, stop reason
+ * stopped). timers imports settings, so it is imported here, inside the function (import cycle).
+ * A failure is only logged: the save stands, and anyone can still stop their own timer.
+ */
+async function stopRunningTimers(userId) {
+  try {
+    const { timers } = await import('@/modules/timers');
+    const { stopped } = await timers.stopAllRunning({ at: nowDate(), reason: 'stopped' });
+    if (stopped > 0) logger.info({ userId, stopped }, 'timers turned off; running timers stopped');
+  } catch (error) {
+    logger.warn({ err: error, userId }, 'timers turned off; running timers could not be stopped');
+  }
 }
 
 // ---------- office networks ----------

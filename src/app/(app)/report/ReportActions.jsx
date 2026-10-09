@@ -1,12 +1,14 @@
 'use client';
-// Right side of the Daily report top bar: the live total ("8h logged", "of 8h 58m checked in"),
-// a quiet save status, and Submit report / Update report (or Request an edit once locked).
+// Right side of the Daily report top bar: the live total ("8h logged", "of 8h 58m checked in", or
+// "of 7h 45m worked" after breaks), a quiet save status, and Submit report / Update report (or
+// Request an edit once locked).
 import { useState } from 'react';
 import Button from '@/components/Button';
-import { formatDuration, formatHours } from '@/lib/time';
+import { formatHours } from '@/lib/time';
 import RequestEditDialog from './RequestEditDialog';
 import { useReport } from './ReportProvider';
 import { totalMinutes } from './reportState';
+import { presentLine } from './reportTotals';
 import styles from './ReportActions.module.css';
 
 const SAVE_TEXT = {
@@ -17,12 +19,6 @@ const SAVE_TEXT = {
   offline: 'Offline, retrying…',
   unsaved: 'Unsaved changes',
 };
-
-function presentLine(data) {
-  if (!data.tracksAttendance && data.presentMinutes === null) return null;
-  if (data.presentMinutes === null) return data.isToday ? 'not checked in yet' : 'not checked in';
-  return `of ${formatDuration(data.presentMinutes)} checked in`;
-}
 
 export default function ReportActions() {
   const { data, entries, report, saveState, submitting, readOnly, stale, submit } = useReport();

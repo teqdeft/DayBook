@@ -52,6 +52,10 @@ describe('settings.getAll', () => {
       activityIdleMinutes: 5,
       activityRetentionDays: 365,
       pushEnabled: true,
+      timersMode: 'optional',
+      timerAwayMinutes: 25,
+      timerReminderMinutes: 20,
+      breakAllowanceMinutes: 60,
     });
   });
 

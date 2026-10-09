@@ -1,5 +1,33 @@
 // Attendance queries. The only file in this module that talks to the database.
 import { db } from '@/lib/db';
+import { AppError } from '@/lib/errors';
+
+const DEADLOCK = 1213;
+const ATTEMPTS = 3;
+
+/**
+ * Runs `run(trx)` in a READ COMMITTED transaction, again (up to 3 times) after a deadlock. Break,
+ * check-out and timer writes of one person wait for each other on that person's attendance row;
+ * READ COMMITTED takes no gap locks, so a lookup that finds nothing (no open break, no running
+ * timer) never makes different people wait for, or deadlock with, each other.
+ * @template T
+ * @param {(trx: import('knex').Knex.Transaction) => Promise<T>} run
+ * @returns {Promise<T>}
+ * @throws CONFLICT when it still deadlocks on the last try
+ */
+export async function transaction(run) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await db.transaction(run, { isolationLevel: 'read committed' });
+    } catch (error) {
+      if (error?.errno !== DEADLOCK) throw error;
+      if (attempt >= ATTEMPTS) {
+        const message = 'Something else changed at the same moment. Try again.';
+        throw new AppError('CONFLICT', { message, cause: error });
+      }
+    }
+  }
+}
 
 const ROW_COLUMNS = [
   'id',
@@ -16,6 +44,17 @@ const ROW_COLUMNS = [
   'isWorkingDay',
   'checkoutStatus',
   'source',
+];
+
+const BREAK_COLUMNS = [
+  'id',
+  'userId',
+  'attendanceId',
+  'workDate',
+  'startedAt',
+  'endedAt',
+  'endReason',
+  'pausedEntryId',
 ];
 
 const CORRECTION_COLUMNS = [
@@ -142,6 +181,64 @@ export async function countMissingByDay(from, to, trx = db) {
     .count({ n: '*' })
     .orderBy('a.workDate', 'asc');
   return rows.map((row) => ({ workDate: row.workDate, count: Number(row.n) }));
+}
+
+// ---------- breaks (never write the generated open_user_id) ----------
+
+/** @returns {Promise<number>} the new break id */
+export async function insertBreak(row, trx = db) {
+  const [id] = await trx('attendanceBreaks').insert(row);
+  return id;
+}
+
+export function findBreakById(id, trx = db) {
+  return trx('attendanceBreaks').select(BREAK_COLUMNS).where({ id }).first();
+}
+
+/**
+ * The person's open break (at most one: open_user_id is unique), any day. Lock it only inside
+ * `transaction` (READ COMMITTED): under REPEATABLE READ, locking a break that doesn't exist takes a
+ * gap lock that other people's break inserts deadlock on.
+ */
+export function findOpenBreak(userId, trx = db, { forUpdate = false } = {}) {
+  const query = trx('attendanceBreaks').select(BREAK_COLUMNS).where({ openUserId: userId }).first();
+  return forUpdate ? query.forUpdate() : query;
+}
+
+/** Ends an open break; 0 when it was already ended. */
+export function endBreakRow(id, { endedAt, endReason, updatedAt }, trx = db) {
+  return trx('attendanceBreaks')
+    .where({ id })
+    .whereNull('endedAt')
+    .update({ endedAt, endReason, updatedAt });
+}
+
+export function listBreaksByUserDate(userId, workDate, trx = db) {
+  return trx('attendanceBreaks')
+    .select(BREAK_COLUMNS)
+    .where({ userId, workDate })
+    .orderBy('startedAt', 'asc')
+    .orderBy('id', 'asc');
+}
+
+export function listBreaksByDate(workDate, trx = db) {
+  return trx('attendanceBreaks')
+    .select(BREAK_COLUMNS)
+    .where({ workDate })
+    .orderBy('userId', 'asc')
+    .orderBy('startedAt', 'asc')
+    .orderBy('id', 'asc');
+}
+
+/** Breaks still open from days before `date`, locked for the update that follows. */
+export function listOpenBreaksBefore(date, trx = db) {
+  return trx('attendanceBreaks')
+    .select(BREAK_COLUMNS)
+    .whereNull('endedAt')
+    .where('workDate', '<', date)
+    .orderBy('workDate', 'asc')
+    .orderBy('userId', 'asc')
+    .forUpdate();
 }
 
 // ---------- corrections ----------

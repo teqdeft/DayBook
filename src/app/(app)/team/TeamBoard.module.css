@@ -75,6 +75,14 @@
   gap: 7px;
 }
 
+/* On a break: the "On break" tag sits under the check-in time. */
+.checkInStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
 .time {
   font-family: var(--font-heading-stack);
   font-size: 16px;
@@ -106,7 +114,16 @@
 .labels {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
+}
+
+/* "Now" and the project a timer is running on, kept together when the labels wrap. */
+.now {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .muted {

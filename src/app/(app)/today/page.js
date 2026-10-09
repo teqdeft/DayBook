@@ -1,6 +1,7 @@
 // Today (artboard 01): check in, the day so far, this week, the urgent project, this week's tasks,
 // the person's priority tasks (when there are any) and the report strip. Before check-in the
-// "Your day" card is the check-in card.
+// "Your day" card is the check-in card. CONTRACT 15 adds Start break / End break beside Check out
+// and the Working on card (project timers) under Your day while timers aren't off.
 import { headers } from 'next/headers';
 import Tag from '@/components/Tag';
 import TopBar from '@/components/TopBar';
@@ -15,10 +16,12 @@ import {
   greeting,
 } from '@/lib/time';
 import AutoRefresh from './AutoRefresh';
+import BreakButton from './BreakButton';
 import CheckInCard from './CheckInCard';
 import CheckOutButton from './CheckOutButton';
 import CorrectionLinks from './CorrectionLinks';
 import PriorityCard from './PriorityCard';
+import TimerCard from './TimerCard';
 import { loadToday } from './todayData';
 import { ReportStrip, TasksCard, UrgentCard, WeekCard, YourDayCard } from './TodayCards';
 import styles from './page.module.css';
@@ -34,6 +37,7 @@ function firstName(name) {
 
 function TopActions({ data }) {
   const { row, pill } = data;
+  const open = Boolean(row) && !row.checkOutAt && row.checkoutStatus === 'open';
   return (
     <>
       {pill ? (
@@ -41,7 +45,8 @@ function TopActions({ data }) {
           {pill.text}
         </Tag>
       ) : null}
-      {row && !row.checkOutAt && row.checkoutStatus === 'open' ? (
+      {open ? <BreakButton onBreak={data.onBreak} /> : null}
+      {open ? (
         <CheckOutButton
           reportSubmitted={data.reportStatus === 'submitted'}
           dueText={formatClock(data.settings.reportReminderAt)}
@@ -83,6 +88,8 @@ export default async function TodayPage() {
         )}
         <WeekCard week={data.week} />
       </section>
+
+      {data.timer ? <TimerCard {...data.timer} /> : null}
 
       <section
         className={`${styles.rowTasks} ${hasUrgent ? '' : styles.rowTasksSolo}`}

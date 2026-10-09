@@ -69,3 +69,13 @@ export function markAllRead(userId) {
 export function deleteOldRead(before) {
   return repo.deleteReadBefore(before);
 }
+
+/**
+ * Whether a person got a notification of this type at or after `since` (reminder jobs use it so
+ * nobody is reminded twice too soon).
+ * @param {{ userId: number, type: string, since: Date }} input
+ * @returns {Promise<boolean>}
+ */
+export function hasRecent({ userId, type, since }) {
+  return repo.existsSince({ userId, type, since });
+}

@@ -31,6 +31,12 @@ const wholeNumber = ({ min, max, typeMessage, rangeMessage }) =>
 export const ACTIVITY_IDLE_MINUTES = Object.freeze({ min: 1, max: 120 });
 export const ACTIVITY_RETENTION_DAYS = Object.freeze({ min: 7, max: 3650 });
 
+/** Project timers and breaks (CONTRACT 15). */
+export const TIMER_MODES = Object.freeze(['off', 'optional', 'required']);
+export const TIMER_AWAY_MINUTES = Object.freeze({ min: 5, max: 240 });
+export const TIMER_REMINDER_MINUTES = Object.freeze({ min: 0, max: 240 });
+export const BREAK_ALLOWANCE_MINUTES = Object.freeze({ min: 0, max: 480 });
+
 /** Empty strings become null, so a cleared picker saves "no channel". */
 const nullableText = (max, message) =>
   z
@@ -120,6 +126,26 @@ export const settingsUpdateSchema = z
     }),
     // Desktop notifications (CONTRACT section 14)
     pushEnabled: z.boolean({ error: 'Choose on or off.' }),
+    // Project timers and breaks (CONTRACT section 15)
+    timersMode: z.enum(TIMER_MODES, { error: 'Choose off, optional or required.' }),
+    timerAwayMinutes: wholeNumber({
+      min: TIMER_AWAY_MINUTES.min,
+      max: TIMER_AWAY_MINUTES.max,
+      typeMessage: 'Away time must be whole minutes.',
+      rangeMessage: `Away time must be between ${TIMER_AWAY_MINUTES.min} and ${TIMER_AWAY_MINUTES.max} minutes.`,
+    }),
+    timerReminderMinutes: wholeNumber({
+      min: TIMER_REMINDER_MINUTES.min,
+      max: TIMER_REMINDER_MINUTES.max,
+      typeMessage: 'The reminder must be whole minutes.',
+      rangeMessage: `The reminder must be between ${TIMER_REMINDER_MINUTES.min} and ${TIMER_REMINDER_MINUTES.max} minutes (0 turns it off).`,
+    }),
+    breakAllowanceMinutes: wholeNumber({
+      min: BREAK_ALLOWANCE_MINUTES.min,
+      max: BREAK_ALLOWANCE_MINUTES.max,
+      typeMessage: 'The break allowance must be whole minutes.',
+      rangeMessage: `The break allowance must be between ${BREAK_ALLOWANCE_MINUTES.min} and ${BREAK_ALLOWANCE_MINUTES.max} minutes (0 means no allowance).`,
+    }),
   })
   .partial();
 

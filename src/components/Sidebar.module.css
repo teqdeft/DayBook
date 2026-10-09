@@ -151,3 +151,23 @@
   padding-top: 13px;
   border-top: 1px solid var(--navy-line);
 }
+
+/* Above the person: the timer chip (CONTRACT 15). It renders nothing while no timer runs, and
+   the person keeps the bottom of the column. */
+.footer {
+  flex: none;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.footer:empty {
+  display: none;
+}
+
+.footer + .person {
+  margin-top: 12px;
+}
+
+.footer:empty + .person {
+  margin-top: auto;
+}

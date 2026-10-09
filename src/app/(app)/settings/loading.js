@@ -3,7 +3,7 @@ import Card from '@/components/Card';
 import Skeleton from '@/components/Skeleton';
 import styles from './loading.module.css';
 
-const NAV = [72, 150, 64, 44, 88, 96, 140];
+const NAV = [72, 150, 64, 44, 88, 124, 96, 140];
 
 function SectionSkeleton({ fields }) {
   return (

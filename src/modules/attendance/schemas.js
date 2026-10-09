@@ -74,6 +74,9 @@ export const checkInSchema = z
 /** POST /api/attendance/check-out */
 export const checkOutSchema = z.object({}).default({});
 
+/** POST /api/attendance/break/start and /api/attendance/break/end (no fields) */
+export const breakSchema = z.object({}).default({});
+
 /** GET /api/attendance */
 export const listQuerySchema = z.object({
   date: dateString('Pick a date like 2026-09-30.').optional(),

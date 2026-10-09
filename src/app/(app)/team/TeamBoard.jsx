@@ -2,6 +2,8 @@
 // The team board (artboard 05): people grouped into In office, Working from home and Not checked
 // in. Groups collapse from their title and show a few people first ("Show 17 more"). Filters are
 // links (?filter=missing|late), so the Overview's "Needs attention" can link straight to them.
+// Live status (CONTRACT 15): "On break" under the check-in time, "Now" and the timed project
+// first in "Projects today".
 import Link from 'next/link';
 import { useState } from 'react';
 import Avatar from '@/components/Avatar';
@@ -10,9 +12,8 @@ import DataTable from '@/components/DataTable';
 import DayBar from '@/components/DayBar';
 import EmptyState from '@/components/EmptyState';
 import FilterPills from '@/components/FilterPills';
-import ProjectLabel from '@/components/ProjectLabel';
 import StatusCell from '@/components/StatusCell';
-import Tag from '@/components/Tag';
+import { CheckInCell, ProjectsCell } from './TeamBoardCells';
 import styles from './TeamBoard.module.css';
 
 // People shown before "Show N more", per group, as on the canvas. A filtered board shows everyone.
@@ -42,19 +43,7 @@ function columns({ day }) {
       key: 'checkIn',
       header: 'Check-in',
       width: 141,
-      render: (row) =>
-        row.checkIn ? (
-          <span className={styles.checkIn}>
-            <span className={styles.time}>{row.checkIn}</span>
-            {row.late ? (
-              <Tag tone="marigold" padX={8}>
-                {row.late}
-              </Tag>
-            ) : null}
-          </span>
-        ) : (
-          <span className={styles.dash}>—</span>
-        ),
+      render: (row) => <CheckInCell row={row} tz={day.tz} />,
     },
     {
       key: 'day',
@@ -92,16 +81,7 @@ function columns({ day }) {
     {
       key: 'projects',
       header: 'Projects today',
-      render: (row) =>
-        row.projects.length ? (
-          <span className={styles.labels}>
-            {row.projects.map((project) => (
-              <ProjectLabel key={project.name} project={project} />
-            ))}
-          </span>
-        ) : row.report === 'missing' ? (
-          <span className={styles.muted}>No report yet</span>
-        ) : null,
+      render: (row) => <ProjectsCell row={row} />,
     },
   ];
 }

@@ -1,6 +1,6 @@
-// Shared set-up for the reports service tests. The reports module calls the users, projects and
-// attendance services; these fakes answer from the test database exactly as CONTRACT section 6
-// describes, so the reports rules are tested on their own.
+// Shared set-up for the reports service tests. The reports module calls the users, projects,
+// attendance and timers services; these fakes answer from the test database exactly as CONTRACT
+// sections 6 and 15 describe, so the reports rules are tested on their own.
 import { db, parseJson } from '@/lib/db';
 import { initials } from '@/lib/text';
 import { locksAtFor, minutesBetween, now } from '@/lib/time';
@@ -54,6 +54,42 @@ export const fakeAttendance = {
   },
   presentMinutes(row, at) {
     return minutesBetween(row.checkInAt, row.checkOutAt ?? at ?? now());
+  },
+};
+
+// The timers service as the report module uses it (CONTRACT 15): canUse and getDaySummary. Tests
+// set a day's summary with setTimerSummary(); a day without one has no time entries.
+const timerSummaries = new Map();
+
+/** Sets what timers.getDaySummary(userId, workDate) returns; projects biggest first. */
+export function setTimerSummary(userId, workDate, projects) {
+  timerSummaries.set(`${userId}|${workDate}`, {
+    totalMinutes: projects.reduce((sum, project) => sum + (project.minutes ?? 0), 0),
+    projects: projects.map((project) => ({
+      projectColor: 'blue',
+      isUrgent: false,
+      minutes: project.roundedMinutes,
+      tasks: [],
+      ...project,
+    })),
+  });
+}
+
+export function clearTimerSummaries() {
+  timerSummaries.clear();
+}
+
+export const fakeTimers = {
+  canUse(user) {
+    return (
+      Boolean(user) &&
+      user.status === 'active' &&
+      Boolean(user.tracksAttendance) &&
+      user.role !== 'pm'
+    );
+  },
+  async getDaySummary(userId, workDate) {
+    return timerSummaries.get(`${userId}|${workDate}`) ?? { totalMinutes: 0, projects: [] };
   },
 };
 

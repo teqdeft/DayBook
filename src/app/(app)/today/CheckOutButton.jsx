@@ -3,14 +3,17 @@
 // always asks first. When today's report isn't submitted the question is "Write your report"
 // (primary, goes to /report) or "Check out anyway" (guide 7.3); otherwise it's a plain "Check out
 // now?" with Cancel focused. The server still checks out either way and warns when present time
-// and logged hours are far apart.
+// and logged hours are far apart. With breaks (CONTRACT 15) the toast says how long the person
+// worked; checking out also ends a break and stops a running timer, so the sidebar chip reloads.
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/Button';
 import Dialog from '@/components/Dialog';
+import { announceTimersChanged } from '@/components/TimerChip.clock';
 import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/apiClient';
-import { formatDuration, formatTimeAmPm } from '@/lib/time';
+import { formatTimeAmPm, nowDate } from '@/lib/time';
+import { checkOutBody } from './timerData';
 
 /**
  * @param {{ reportSubmitted: boolean, dueText: string, tz: string }} props
@@ -26,7 +29,7 @@ export default function CheckOutButton({ reportSubmitted, dueText, tz }) {
   const [busy, setBusy] = useState(false);
 
   function ask() {
-    setEndsAt(formatTimeAmPm(new Date(), tz));
+    setEndsAt(formatTimeAmPm(nowDate(), tz));
     setAsking(reportSubmitted ? 'confirm' : 'report');
   }
 
@@ -41,17 +44,9 @@ export default function CheckOutButton({ reportSubmitted, dueText, tz }) {
       setAsking(null);
       const at = formatTimeAmPm(data.row.checkOutAt, tz);
       // Nothing logged yet: the report reminder says it all. Otherwise warn about a big gap
-      // between present time and logged hours (guide 7.3.3; a warning, never a block).
-      let body;
-      if (data.gapWarning && data.loggedMinutes > 0) {
-        const next = data.reportPending
-          ? 'Add any missing hours, then submit your report.'
-          : 'Add any missing hours to your report.';
-        body = `You were here ${formatDuration(data.presentMinutes)} and logged ${formatDuration(data.loggedMinutes)}. ${next}`;
-      } else if (data.reportPending) {
-        body = "Don't forget today's report.";
-      }
-      toast({ title: `Checked out at ${at}`, body });
+      // between worked time and logged hours (guide 7.3.3; a warning, never a block).
+      toast({ title: `Checked out at ${at}`, body: checkOutBody(data) });
+      announceTimersChanged('checkout');
       router.refresh();
     } catch (error) {
       toast({ title: "Couldn't check you out", body: error.message, tone: 'error' });

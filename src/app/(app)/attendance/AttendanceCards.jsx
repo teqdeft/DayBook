@@ -1,5 +1,6 @@
-// Attendance page blocks (artboard 09): the "Everyone today" table, the correction requests and
-// the missing check-outs. Server Components; row actions are small client components.
+// Attendance page blocks (artboard 09): the "Everyone today" table (Present shows worked time once
+// someone took breaks, CONTRACT 15), the correction requests and the missing check-outs. Server
+// Components; row actions are small client components.
 import Link from 'next/link';
 import Avatar from '@/components/Avatar';
 import Badge from '@/components/Badge';
@@ -8,11 +9,32 @@ import DataTable from '@/components/DataTable';
 import EmptyState from '@/components/EmptyState';
 import FilterPills from '@/components/FilterPills';
 import StatusCell from '@/components/StatusCell';
+import Tag from '@/components/Tag';
 import CorrectionActions from './CorrectionActions';
 import RowAction from './RowAction';
 import styles from './page.module.css';
 
 const DASH = <span className={styles.dash}>—</span>;
+
+/**
+ * Present time; with breaks, worked time over a muted "Breaks 45m" line (like "Late 38m" under
+ * the check-in time) and a red "Over 15m" tag past the daily allowance (CONTRACT 15).
+ */
+function PresentCell({ row }) {
+  if (!row.present) return DASH;
+  if (!row.breaks) return <span className={styles.time}>{row.present}</span>;
+  return (
+    <span className={styles.worked} title={row.presentTitle}>
+      <span className={styles.time}>{row.present}</span>
+      <span className={styles.breaks}>{row.breaks}</span>
+      {row.over ? (
+        <Tag tone="red" padX={6} className={styles.over}>
+          {row.over}
+        </Tag>
+      ) : null}
+    </span>
+  );
+}
 
 function columns(canCorrect) {
   const list = [
@@ -73,7 +95,7 @@ function columns(canCorrect) {
       key: 'present',
       header: 'Present',
       width: 81,
-      render: (row) => (row.present ? <span className={styles.time}>{row.present}</span> : DASH),
+      render: (row) => <PresentCell row={row} />,
     },
     {
       // The note takes what is left (142 px on the artboard), so a narrower table never squeezes

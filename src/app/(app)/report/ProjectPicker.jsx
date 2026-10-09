@@ -2,6 +2,8 @@
 // The report's project picker: a searchable list with urgent projects first (Urgent label), then
 // the person's projects, then every other active project by search, then their pending project
 // requests ("Waiting for approval"). "Request a project" and "Remove from report" sit below.
+// Today's timer card uses it too (CONTRACT 15) with allowRequests={false}: real projects only, no
+// requests and no "Request a project".
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Plus, Search, Trash2 } from 'lucide-react';
 import Tag from '@/components/Tag';
@@ -19,7 +21,7 @@ function optionKey(item) {
 }
 
 /** Sections to show for a search text. */
-function buildSections(picker, query) {
+function buildSections(picker, query, allowRequests) {
   const q = query.trim();
   const sections = [
     { title: 'Urgent', items: picker.urgent ?? [] },
@@ -29,7 +31,7 @@ function buildSections(picker, query) {
       title: 'Other projects',
       items: q || !(picker.urgent?.length || picker.mine?.length) ? (picker.others ?? []) : [],
     },
-    { title: 'Waiting for approval', items: picker.requests ?? [] },
+    { title: 'Waiting for approval', items: allowRequests ? (picker.requests ?? []) : [] },
   ];
   return sections
     .map((section) => ({
@@ -39,15 +41,20 @@ function buildSections(picker, query) {
     .filter((section) => section.items.length > 0);
 }
 
+const NOTHING_USED = new Set();
+
 /**
  * @param {{ picker: { urgent: object[], mine: object[], others: object[], requests: object[] },
- *   used: Set<string>, current?: string | null, onPick: (pick: object) => void,
- *   onClose: (options?: { focusAnchor?: boolean }) => void, onRequestProject: () => void,
- *   onRemove?: () => void, anchorRef: { current: HTMLElement | null }, className?: string }} props
+ *   used?: Set<string>, current?: string | null, onPick: (pick: object) => void,
+ *   onClose: (options?: { focusAnchor?: boolean }) => void, onRequestProject?: () => void,
+ *   onRemove?: () => void, anchorRef: { current: HTMLElement | null }, className?: string,
+ *   allowRequests?: boolean, usedLabel?: string, ariaLabel?: string }} props
+ *   allowRequests: false hides pending requests and "Request a project"; usedLabel: the note on
+ *   a project that can't be picked again; ariaLabel: the popup's name
  */
 export default function ProjectPicker({
   picker,
-  used,
+  used = NOTHING_USED,
   current = null,
   onPick,
   onClose,
@@ -55,12 +62,19 @@ export default function ProjectPicker({
   onRemove,
   anchorRef,
   className = '',
+  allowRequests = true,
+  usedLabel = 'In this report',
+  ariaLabel = 'Pick a project',
 }) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const rootRef = useRef(null);
   const listId = useId();
-  const sections = useMemo(() => buildSections(picker, query), [picker, query]);
+  const sections = useMemo(
+    () => buildSections(picker, query, allowRequests),
+    [picker, query, allowRequests],
+  );
+  const canRequest = allowRequests && Boolean(onRequestProject);
   const options = sections.flatMap((section) => section.items);
   const selectable = options.filter((item) => !used.has(optionKey(item)));
   const activeIndex = Math.min(active, Math.max(selectable.length - 1, 0));
@@ -120,7 +134,7 @@ export default function ProjectPicker({
       ref={rootRef}
       className={`${styles.picker} ${className}`}
       role="dialog"
-      aria-label="Pick a project"
+      aria-label={ariaLabel}
       onKeyDown={onRootKeyDown}
       onBlur={onRootBlur}
     >
@@ -177,7 +191,7 @@ export default function ProjectPicker({
                       aria-hidden="true"
                     />
                     <span className={styles.name}>{item.name}</span>
-                    {taken ? <span className={styles.note}>In this report</span> : null}
+                    {taken ? <span className={styles.note}>{usedLabel}</span> : null}
                     {!taken && item.isUrgent ? (
                       <Tag tone="marigold" solid>
                         Urgent
@@ -194,22 +208,26 @@ export default function ProjectPicker({
         )}
         {hiddenOthers ? <p className={styles.hint}>Type to find other projects.</p> : null}
       </div>
-      <div className={styles.footer}>
-        <button type="button" className={styles.footerButton} onClick={onRequestProject}>
-          <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
-          Request a project
-        </button>
-        {onRemove ? (
-          <button
-            type="button"
-            className={`${styles.footerButton} ${styles.remove}`}
-            onClick={onRemove}
-          >
-            <Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
-            Remove from report
-          </button>
-        ) : null}
-      </div>
+      {canRequest || onRemove ? (
+        <div className={styles.footer}>
+          {canRequest ? (
+            <button type="button" className={styles.footerButton} onClick={onRequestProject}>
+              <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
+              Request a project
+            </button>
+          ) : null}
+          {onRemove ? (
+            <button
+              type="button"
+              className={`${styles.footerButton} ${styles.remove}`}
+              onClick={onRemove}
+            >
+              <Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
+              Remove from report
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

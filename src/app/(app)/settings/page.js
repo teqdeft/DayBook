@@ -1,5 +1,5 @@
 // Settings (artboard 12): company, office hours and reports, check-in networks and switches,
-// Slack, screen time and desktop notifications. One "Save changes" saves every section. Admin
+// Slack, screen time, timers and breaks and desktop notifications. One "Save changes" saves every section. Admin
 // only.
 import { headers } from 'next/headers';
 import TopBar from '@/components/TopBar';

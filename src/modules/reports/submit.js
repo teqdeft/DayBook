@@ -10,6 +10,7 @@ import { MAX_TASK_LENGTH } from './schemas';
 import { assertEditable, getOwnReport } from './drafts';
 import { checkPriorityLinks } from './links';
 import { checkProjects, confirmRequests, lockStoredRows, saveDraft, writeEntries } from './save';
+import { checkTimerHours, withTimerProblems } from './timerCheck';
 import { loadEntriesFor, loadReportView, snapshotOf } from './view';
 
 export const MAX_DAY_MINUTES = 16 * 60;
@@ -135,7 +136,8 @@ async function recordSubmit({ user, locked, stored }, trx) {
  * @param {{ user: object, reportId: number, entries?: object[], baseVersion?: string }} input
  *   baseVersion is the report version the page last saw; a newer stored report is refused.
  *   Task lines may carry `projectTaskId` (checked with checkPriorityLinks); the revision snapshot
- *   keeps it, the Slack text doesn't show it.
+ *   keeps it, the Slack text doesn't show it. In required timer mode the hours must match the
+ *   day's timers (timerCheck.js, CONTRACT 15), checked before the transaction like the rules.
  * @returns {Promise<object>} the submitted report view
  * @throws NOT_FOUND, FORBIDDEN, REPORT_LOCKED, PROJECT_NOT_ACTIVE, CONFLICT, VALIDATION_FAILED
  */
@@ -143,17 +145,26 @@ export async function submitReport({ user, reportId, entries, baseVersion }) {
   const report = await getOwnReport(user, reportId);
   assertEditable(report);
   if (entries) {
-    await checkProjects({ user, reportId, entries });
+    await checkProjects({ user, reportId, workDate: report.workDate, entries });
     await checkPriorityLinks({ reportId, entries });
-    const problem = submitProblems(inputForCheck(entries));
-    if (problem) {
-      if (report.status === 'draft' && baseVersion === undefined) {
-        await saveDraft({ user, reportId, entries }).catch((error) =>
-          logger.warn({ err: error, reportId }, 'saving a draft after a refused submit failed'),
-        );
-      }
-      throw problem;
+  }
+  const checked = entries ? inputForCheck(entries) : null;
+  const problem = withTimerProblems(
+    checked ? submitProblems(checked) : null,
+    await checkTimerHours({
+      user,
+      workDate: report.workDate,
+      // Without entries in the request, the stored ones are submitted.
+      loadEntries: async () => checked ?? (await loadEntriesFor([reportId])).get(reportId) ?? [],
+    }),
+  );
+  if (problem) {
+    if (entries && report.status === 'draft' && baseVersion === undefined) {
+      await saveDraft({ user, reportId, entries }).catch((error) =>
+        logger.warn({ err: error, reportId }, 'saving a draft after a refused submit failed'),
+      );
     }
+    throw problem;
   }
   let revision;
   await db.transaction(async (trx) => {

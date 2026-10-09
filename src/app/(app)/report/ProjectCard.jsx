@@ -5,10 +5,12 @@ import { useCallback, useId, useRef, useState } from 'react';
 import { ChevronDown, Plus } from 'lucide-react';
 import ProjectLabel from '@/components/ProjectLabel';
 import Tag from '@/components/Tag';
+import HoursField from './HoursField';
 import ProjectPicker from './ProjectPicker';
 import TaskLine from './TaskLine';
 import { useReport } from './ReportProvider';
 import { newTask, parseHours, projectKey, unlinkTasks } from './reportState';
+import { timerHoursFor } from './reportTimers';
 import styles from './ProjectCard.module.css';
 
 const NO_SUGGESTIONS = [];
@@ -51,8 +53,10 @@ function CardTag({ entry }) {
 /**
  * @param {{ entry: object, used: Set<string>, onRequestProject: (entryKey: string) => void,
  *   focusRequestRef: { current: string | null }, taskInputsRef?: { current: Map<string,
- *   HTMLInputElement> }, disabled?: boolean }} props focusRequestRef holds the key of a task row
- *   to focus once it renders (a row just added); taskInputsRef collects the task inputs by key
+ *   HTMLInputElement> }, disabled?: boolean, hoursFromTimers?: boolean }} props focusRequestRef
+ *   holds the key of a task row to focus once it renders (a row just added); taskInputsRef
+ *   collects the task inputs by key; hoursFromTimers (required timer mode, real projects) makes
+ *   the hours read-only with a "From timers" hint
  */
 export default function ProjectCard({
   entry,
@@ -61,8 +65,9 @@ export default function ProjectCard({
   focusRequestRef,
   taskInputsRef = null,
   disabled = false,
+  hoursFromTimers = false,
 }) {
-  const { data, errors, readOnly, change, updateEntry } = useReport();
+  const { data, errors, readOnly, change, updateEntry, timers } = useReport();
   const [picking, setPicking] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const labelRef = useRef(null);
@@ -114,6 +119,8 @@ export default function ProjectCard({
         waitingForApproval: Boolean(pick.projectRequestId),
         // Priority tasks belong to a project: lines moved to another one lose their links.
         tasks: moved ? unlinkTasks(card.tasks) : card.tasks,
+        // Required timer mode: the hours are the new project's timer hours.
+        ...(moved ? timerHoursFor(timers, pick) : null),
       }),
       { entryKey: entry.key, field: 'project' },
     );
@@ -200,27 +207,17 @@ export default function ProjectCard({
           ) : null}
         </div>
         <CardTag entry={entry} />
-        <label className={styles.hours}>
-          <span className={styles.hoursLabel}>Hours</span>
-          <input
-            className={styles.hoursInput}
-            inputMode="decimal"
-            autoComplete="off"
-            value={entry.hours}
-            placeholder="0"
-            aria-label={`Hours for ${name}`}
-            readOnly={readOnly || disabled}
-            aria-invalid={hoursError ? true : undefined}
-            aria-describedby={hoursError ? `${id}-hours-error` : undefined}
-            onChange={(event) =>
-              updateEntry(
-                entry.key,
-                { hours: event.target.value },
-                { entryKey: entry.key, field: 'hours' },
-              )
-            }
-          />
-        </label>
+        <HoursField
+          name={name}
+          value={entry.hours}
+          readOnly={readOnly || disabled}
+          fromTimers={hoursFromTimers}
+          errorId={hoursError ? `${id}-hours-error` : null}
+          hintId={`${id}-hours-hint`}
+          onChange={(hours) =>
+            updateEntry(entry.key, { hours }, { entryKey: entry.key, field: 'hours' })
+          }
+        />
       </div>
       {entryErrors.project || hoursError ? (
         <div className={styles.headErrors}>

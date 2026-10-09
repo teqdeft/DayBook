@@ -19,6 +19,7 @@ import {
   serialize,
 } from './reportState';
 import { clearBackup, writeBackup } from './reportBackup';
+import { useTimerFill } from './useTimerFill';
 
 const ReportContext = createContext(null);
 
@@ -55,7 +56,8 @@ function blockReason(error) {
 
 /**
  * @param {{ data: object, children: import('react').ReactNode }} props `data` comes from the page:
- *   { report, picker, user, presentMinutes, gapWarningMinutes, slackLines, previewTime, ... }
+ *   { report, picker, user, presentMinutes, workedMinutes, timers, gapWarningMinutes, slackLines,
+ *   previewTime, ... }. The context's `timers` is the newest copy of data.timers (useTimerFill).
  */
 export default function ReportProvider({ data, children }) {
   const router = useRouter();
@@ -67,6 +69,8 @@ export default function ReportProvider({ data, children }) {
   const [saveState, setSaveState] = useState('idle');
   const [blocked, setBlocked] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // Required timer mode: takes the timers' hours as they are now, before a submit (useTimerFill).
+  const timerSync = useRef(null);
   const live = useRef({
     entries,
     reportId: data.report.id,
@@ -184,10 +188,13 @@ export default function ReportProvider({ data, children }) {
     if (!autosave) return;
     state.submitting = true;
     setSubmitting(true);
-    autosave.pause();
-    // A save still running finishes first: it returns the version this submit builds on.
-    await autosave.idle();
     try {
+      // Required timer mode: a running timer moved on since the page loaded, and the server
+      // checks the hours against the timers as they are now.
+      await timerSync.current?.();
+      autosave.pause();
+      // A save still running finishes first: it returns the version this submit builds on.
+      await autosave.idle();
       if (state.blocked) return;
       const { body, keys } = serialize(state.entries);
       try {
@@ -321,6 +328,19 @@ export default function ReportProvider({ data, children }) {
     };
   }, [block, saveDraftRows]);
 
+  // The day's timers and Fill report from timers; in required mode a draft's hours follow the
+  // timers (after the autosave loop above exists, so that change saves like typing).
+  const { timers, applyTimers } = useTimerFill({
+    timers: data.timers ?? null,
+    reportId: report.id,
+    status: report.status,
+    editable: Boolean(report.editable) && report.status !== 'none',
+    isToday: Boolean(data.isToday),
+    change,
+    setErrors,
+    syncRef: timerSync,
+  });
+
   useEffect(() => {
     showLatest();
     function onVisible() {
@@ -353,6 +373,8 @@ export default function ReportProvider({ data, children }) {
     submit,
     restore,
     setErrors,
+    timers,
+    applyTimers,
   };
   return <ReportContext.Provider value={value}>{children}</ReportContext.Provider>;
 }

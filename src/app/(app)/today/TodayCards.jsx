@@ -11,13 +11,7 @@ import StatTile from '@/components/StatTile';
 import StatusCell from '@/components/StatusCell';
 import Tag from '@/components/Tag';
 import WeekBars from '@/components/WeekBars';
-import {
-  formatClockShort,
-  formatDayShort,
-  formatDuration,
-  formatTime,
-  workDate as localDate,
-} from '@/lib/time';
+import { formatClockShort, formatDayShort, formatTime, workDate as localDate } from '@/lib/time';
 import styles from './page.module.css';
 
 export function YourDayCard({ data }) {
@@ -55,10 +49,7 @@ export function YourDayCard({ data }) {
       ))}
       <div className={styles.tiles}>
         <StatTile value={formatTime(row.checkInAt, tz)} label="Checked in" />
-        <StatTile
-          value={formatDuration(data.presentToday)}
-          label={row.checkOutAt ? 'Present today' : 'Present so far'}
-        />
+        <StatTile value={data.worked.value} label={data.worked.label} />
         <StatTile value={String(data.projectsToday)} label="Projects today" />
       </div>
       {/* A narrow card has no room beside the title: the line moves under the tiles. */}

@@ -1,17 +1,20 @@
 'use client';
-// The Daily report body: notices, one card per project, "Add another project", "Back to today",
-// and the Slack preview on the right.
+// The Daily report body: notices, "From your timers", one card per project, "Add another
+// project", "Back to today", and the Slack preview on the right.
 import { useEffect, useRef, useState } from 'react';
 import { CircleAlert, Info, TriangleAlert } from 'lucide-react';
 import Button from '@/components/Button';
 import EmptyState from '@/components/EmptyState';
-import { formatDayShort, formatDuration, formatHours } from '@/lib/time';
+import { formatDayShort } from '@/lib/time';
 import ProjectCard from './ProjectCard';
 import ProjectPicker from './ProjectPicker';
 import RequestProjectDialog from './RequestProjectDialog';
 import SlackPreview from './SlackPreview';
+import TimersCard from './TimersCard';
 import { useReport } from './ReportProvider';
 import { newEntry, newKey, projectKey, serialize, totalMinutes, unlinkTasks } from './reportState';
+import { hoursComeFromTimers, timerHoursFor, timersChangedSince } from './reportTimers';
+import { gapText } from './reportTotals';
 import { clearBackup, useBackup } from './reportBackup';
 import styles from './ReportEditor.module.css';
 
@@ -31,18 +34,6 @@ function Notice({ tone = 'info', children, action }) {
   );
 }
 
-function gapNotice(data, logged, status) {
-  const present = data.presentMinutes;
-  if (present === null || present === undefined || logged <= 0) return null;
-  if (Math.abs(present - logged) <= data.gapWarningMinutes) return null;
-  const more = logged > present;
-  const step = status === 'submitted' ? 'update the report' : 'submit';
-  return (
-    `You logged ${formatHours(logged)} but were checked in for ${more ? 'only ' : ''}` +
-    `${formatDuration(present)}. Check your hours before you ${step}.`
-  );
-}
-
 function sameRows(a, b) {
   return JSON.stringify(serialize(a).body) === JSON.stringify(serialize(b).body);
 }
@@ -57,9 +48,13 @@ function useRestorable(report, entries) {
 }
 
 function Notices({ onRestore }) {
-  const { data, entries, report, errors, readOnly, lockedOut, stale } = useReport();
+  const { data, entries, report, errors, readOnly, lockedOut, stale, timers, applyTimers } =
+    useReport();
   const restorable = useRestorable(report, entries);
-  const gap = readOnly ? null : gapNotice(data, totalMinutes(entries), report.status);
+  // Required timer mode: a submitted report keeps its hours until the person updates it.
+  const timersMoved =
+    report.status === 'submitted' && !readOnly && timersChangedSince(entries, timers);
+  const gap = readOnly ? null : gapText(data, totalMinutes(entries), report.status);
   const notices = [];
   if (stale) {
     notices.push(
@@ -105,6 +100,22 @@ function Notices({ onRestore }) {
       </Notice>,
     );
   }
+  if (timersMoved) {
+    notices.push(
+      <Notice
+        key="timers"
+        tone="warning"
+        action={
+          <Button variant="text" size="compact" onClick={applyTimers}>
+            Fill report from timers
+          </Button>
+        }
+      >
+        Your timers changed after you submitted this report. Fill it from your timers, then update
+        it.
+      </Notice>,
+    );
+  }
   if (gap)
     notices.push(
       <Notice key="gap" tone="warning">
@@ -142,7 +153,8 @@ function MissingDay() {
 }
 
 export default function ReportEditor() {
-  const { data, entries, report, readOnly, submitting, change, updateEntry, restore } = useReport();
+  const { data, entries, report, readOnly, submitting, change, updateEntry, restore, timers } =
+    useReport();
   const [adding, setAdding] = useState(false);
   const [requesting, setRequesting] = useState(null);
   const addRef = useRef(null);
@@ -153,6 +165,8 @@ export default function ReportEditor() {
   const focusAfterDialogRef = useRef(null);
   const taskInputsRef = useRef(new Map());
   const used = new Set(entries.map(projectKey).filter(Boolean));
+  // Required timer mode: real projects' hours come from the timers (project requests are exempt).
+  const fromTimers = hoursComeFromTimers(timers);
 
   useEffect(() => {
     const taskKey = focusAfterDialogRef.current;
@@ -162,7 +176,8 @@ export default function ReportEditor() {
   }, [requesting]);
 
   function addProject(pick, { fromDialog = false } = {}) {
-    const entry = newEntry(pick);
+    // Required timer mode: a new card starts with the project's timer hours.
+    const entry = { ...newEntry(pick), ...timerHoursFor(timers, pick) };
     if (fromDialog) focusAfterDialogRef.current = entry.tasks[0].key;
     else focusRequestRef.current = entry.tasks[0].key;
     change((list) => [...list, entry]);
@@ -201,6 +216,7 @@ export default function ReportEditor() {
       <div className={styles.main}>
         <Notices onRestore={restoreRows} />
         {report.status === 'none' ? <MissingDay /> : null}
+        <TimersCard />
         {entries.length > 0 ? (
           <div className={styles.cards} inert={submitting || undefined}>
             {entries.map((entry) => (
@@ -211,6 +227,7 @@ export default function ReportEditor() {
                 focusRequestRef={focusRequestRef}
                 taskInputsRef={taskInputsRef}
                 disabled={submitting}
+                hoursFromTimers={fromTimers && Boolean(entry.projectId)}
                 onRequestProject={(entryKey) => setRequesting({ entryKey })}
               />
             ))}
