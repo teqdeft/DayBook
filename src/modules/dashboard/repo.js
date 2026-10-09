@@ -108,6 +108,33 @@ export function listSubmittedReportProjects(date) {
     .orderBy([{ column: 'e.reportId' }, { column: 'e.sortOrder' }, { column: 'e.id' }]);
 }
 
+/**
+ * Breaks still open on one day (at most one per person), for the board's "On break" tag
+ * (CONTRACT 15).
+ * @param {string} date
+ * @returns {Promise<{ userId: number, startedAt: Date }[]>}
+ */
+export function listOpenBreaks(date) {
+  return db('attendanceBreaks')
+    .where({ workDate: date })
+    .whereNull('endedAt')
+    .select('userId', 'startedAt');
+}
+
+/**
+ * Timers running on one day (at most one per person) with their project, for the board's "Now"
+ * tag (CONTRACT 15).
+ * @param {string} date
+ * @returns {Promise<{ userId: number, name: string, color: string|null, note: string|null }[]>}
+ */
+export function listRunningTimers(date) {
+  return db('timeEntries as t')
+    .join('projects as p', 'p.id', 't.projectId')
+    .where({ 't.workDate': date })
+    .whereNull('t.endedAt')
+    .select('t.userId', 'p.name', 'p.color', 't.note');
+}
+
 // ---------- hours ----------
 
 /**

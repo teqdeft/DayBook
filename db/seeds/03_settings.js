@@ -25,6 +25,11 @@ export const DEFAULT_SETTINGS = {
   activity_retention_days: 365, // older screen-time segments are deleted by the cleanup job
   // Desktop notifications (company request after the build guide)
   push_enabled: true,
+  // Project timers and breaks (company request after the build guide)
+  timers_mode: 'optional', // off | optional | required
+  timer_away_minutes: 25, // idle or locked this long while a timer runs: ask "keep or remove?"
+  timer_reminder_minutes: 20, // required mode: remind after this long with no timer (0 = never)
+  break_allowance_minutes: 60, // breaks above this in a day are flagged (0 = no allowance)
 };
 
 export async function seed(knex) {

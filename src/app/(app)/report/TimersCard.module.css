@@ -1,0 +1,105 @@
+/* "From your timers": a card like the Slack preview (54 px divided header), with rows like the
+   project cards' task rows. */
+.card .header {
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+
+.card .header p {
+  margin-top: 2px;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--track);
+}
+
+.label {
+  flex: none;
+  max-width: 45%;
+}
+
+.notes {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hours {
+  flex: none;
+  margin-left: auto;
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.zero {
+  color: var(--muted);
+}
+
+.total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  margin: 0;
+  padding: 0 20px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+
+.totalHours {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .card .header {
+    padding: 14px 16px;
+  }
+
+  .row {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    padding: 10px 16px;
+  }
+
+  .label {
+    max-width: calc(100% - 72px);
+  }
+
+  .notes {
+    order: 3;
+    flex-basis: 100%;
+    white-space: normal;
+  }
+
+  .notes:empty {
+    display: none;
+  }
+
+  .total {
+    padding: 0 16px;
+  }
+}

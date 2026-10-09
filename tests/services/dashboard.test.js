@@ -2,14 +2,15 @@
 // hours by project, urgent projects and the sidebar badges.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import { setNowForTests } from '@/lib/time';
+import { localToUtc, setNowForTests } from '@/lib/time';
 import { attendance } from '@/modules/attendance';
 import { dashboard } from '@/modules/dashboard';
 import { hoursBars } from '@/modules/dashboard/shared';
-import { createUser, resetDatabase } from '../helpers/db.js';
+import { createUser, resetDatabase, setSettings } from '../helpers/db.js';
 import {
   NOW,
   TODAY,
+  TZ,
   addMembers,
   checkIn,
   createCorrection,
@@ -218,6 +219,106 @@ describe('getTeamToday (section 7.10)', () => {
     expect(names(await dashboard.getTeamToday({ filter: 'missing' }))).toEqual(['Ben', 'Dev']);
     expect(names(await dashboard.getTeamToday({ filter: 'late' }))).toEqual(['Ben', 'Eli', 'Cara']);
     expect((await dashboard.getTeamToday({ filter: 'nonsense' })).filter).toBe('everyone');
+  });
+
+  it('shows who is on a break and the project a running timer is on (CONTRACT 15)', async () => {
+    const { e1, e2, e4, e5 } = people;
+    const rowOf = async (user) =>
+      (await db('attendance').where({ userId: user.id, workDate: TODAY }).first()).id;
+    const local = (clock, date = TODAY) => localToUtc(date, clock, TZ).toDate();
+    const timer = (user, project, from, extra = {}) => ({
+      userId: user.id,
+      workDate: TODAY,
+      projectId: project.id,
+      startedAt: local(from),
+      source: 'timer',
+      ...extra,
+    });
+    await db('attendanceBreaks').insert([
+      { userId: e2.id, attendanceId: await rowOf(e2), workDate: TODAY, startedAt: local('18:40') },
+      {
+        userId: e1.id,
+        attendanceId: await rowOf(e1),
+        workDate: TODAY,
+        startedAt: local('12:00'),
+        endedAt: local('12:30'),
+        endReason: 'self',
+      },
+    ]);
+    await db('timeEntries').insert([
+      timer(e4, projects.a, '14:00', { note: 'Homepage fixes' }),
+      timer(e5, projects.b, '15:00'),
+      timer(e1, projects.a, '10:00', { endedAt: local('12:00'), stopReason: 'break' }),
+      // Still running from yesterday: not what anyone is on today.
+      timer(e2, projects.b, '17:00', {
+        workDate: '2026-09-29',
+        startedAt: local('17:00', '2026-09-29'),
+      }),
+    ]);
+    try {
+      const { groups } = await dashboard.getTeamToday();
+      const rows = Object.fromEntries(groups.flatMap((g) => g.rows).map((row) => [row.name, row]));
+      const live = ({ onBreak, breakSince, workingOn }) => ({ onBreak, breakSince, workingOn });
+      expect(live(rows.Ben)).toEqual({
+        onBreak: true,
+        breakSince: '2026-09-30T13:10:00.000Z',
+        workingOn: null,
+      });
+      expect(live(rows.Dev)).toEqual({
+        onBreak: false,
+        breakSince: null,
+        workingOn: { name: 'alpha', color: 'blue', note: 'Homepage fixes' },
+      });
+      expect(rows.Eli.workingOn).toEqual({ name: 'beta', color: 'green', note: null });
+      expect(live(rows.Ava)).toEqual({ onBreak: false, breakSince: null, workingOn: null });
+      expect(live(rows.Finn)).toEqual({ onBreak: false, breakSince: null, workingOn: null });
+    } finally {
+      const ids = [e1.id, e2.id, e4.id, e5.id];
+      await db('attendanceBreaks').whereIn('userId', ids).delete();
+      await db('timeEntries').whereIn('userId', ids).delete();
+    }
+  });
+
+  it('shows breaks but no running timers while timers are off, without reading them', async () => {
+    const { e2, e4 } = people;
+    const local = (clock) => localToUtc(TODAY, clock, TZ).toDate();
+    const row = await db('attendance').where({ userId: e2.id, workDate: TODAY }).first();
+    await db('attendanceBreaks').insert({
+      userId: e2.id,
+      attendanceId: row.id,
+      workDate: TODAY,
+      startedAt: local('18:40'),
+    });
+    // Left running from before Admin turned timers off.
+    await db('timeEntries').insert({
+      userId: e4.id,
+      workDate: TODAY,
+      projectId: projects.a.id,
+      startedAt: local('14:00'),
+      source: 'timer',
+    });
+    await setSettings({ timers_mode: 'off' });
+    const queries = [];
+    const listen = (query) => queries.push(query.sql);
+    db.on('query', listen);
+    try {
+      const { groups } = await dashboard.getTeamToday();
+      const rows = Object.fromEntries(groups.flatMap((g) => g.rows).map((r) => [r.name, r]));
+      expect(rows.Ben).toMatchObject({
+        onBreak: true,
+        breakSince: '2026-09-30T13:10:00.000Z',
+        workingOn: null,
+      });
+      expect(Object.values(rows).map((r) => r.workingOn)).toEqual(
+        Object.values(rows).map(() => null),
+      );
+      expect(queries.some((sql) => sql.includes('`time_entries`'))).toBe(false);
+    } finally {
+      db.removeListener('query', listen);
+      await setSettings({ timers_mode: 'optional' });
+      await db('attendanceBreaks').where({ userId: e2.id }).delete();
+      await db('timeEntries').where({ userId: e4.id }).delete();
+    }
   });
 
   it('leaves out people who have not joined yet, like the Attendance screen', async () => {

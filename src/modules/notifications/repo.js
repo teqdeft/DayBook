@@ -38,3 +38,12 @@ export function markAllRead(userId, readAt, trx = db) {
 export function deleteReadBefore(before, trx = db) {
   return trx('notifications').whereNotNull('readAt').where('readAt', '<', before).delete();
 }
+
+/** True when the person has a notification of this type created at or after `since`. */
+export async function existsSince({ userId, type, since }, trx = db) {
+  const row = await trx('notifications')
+    .where({ userId, type })
+    .where('createdAt', '>=', since)
+    .first('id');
+  return Boolean(row);
+}

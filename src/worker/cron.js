@@ -1,19 +1,22 @@
 // The worker for hosts that can't keep a process running (shared cPanel hosting): run it from a
 // cron job every minute with `npm run worker:cron`. Each run does one pass of the minute jobs
-// (reminders, missing check-outs, cleanup, Slack user sync, health log — their run keys make them
-// run once per day, hour or 5 minutes), then sends Slack messages and desktop pushes every 10
+// (reminders, missing check-outs, forgotten timers, timer reminders, cleanup, Slack user sync,
+// health log — their run keys, or for timer reminders the notifications themselves, make them run
+// once per day, hour or 5 minutes), then sends Slack messages and desktop pushes every 10
 // seconds for about 50 seconds, and exits. A MySQL named lock keeps two runs from overlapping.
 // On a server that can keep a process running, use `npm run worker` (src/worker/index.js) instead.
 import { env } from '@/lib/env';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { cleanupJob } from './jobs/cleanup';
+import { closeOpenTimersJob } from './jobs/closeOpenTimers';
 import { healthLogJob } from './jobs/healthLog';
 import { markMissingCheckoutsJob } from './jobs/markMissingCheckouts';
 import { pushNotificationsJob } from './jobs/pushNotifications';
 import { reportReminderJob } from './jobs/reportReminder';
 import { slackOutboxJob } from './jobs/slackOutbox';
 import { slackUserSyncJob } from './jobs/slackUserSync';
+import { timerRemindersJob } from './jobs/timerReminders';
 
 const LOCK_NAME = 'daybook_worker_cron';
 // A run must never outlive its slot: on shared hosting every leftover process counts against the
@@ -23,6 +26,8 @@ const EXIT_GRACE_MS = 2_000;
 const MINUTE_JOBS = [
   reportReminderJob,
   markMissingCheckoutsJob,
+  closeOpenTimersJob,
+  timerRemindersJob,
   cleanupJob,
   slackUserSyncJob,
   healthLogJob,

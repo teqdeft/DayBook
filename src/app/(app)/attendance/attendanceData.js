@@ -42,6 +42,25 @@ function actionFor(item, { date, today, dayLabel, tz }) {
   return { kind: item.where === 'unverified' ? 'confirm' : 'edit', row: attendanceRow };
 }
 
+/**
+ * The Present cell (CONTRACT 15): present time, or worked time (present less breaks) with a
+ * "Breaks 45m" line and an "Over 15m" tag past the daily allowance once the person took breaks.
+ */
+function presentOf(item) {
+  const present = item.presentMinutes;
+  const breaks = item.breakMinutes ?? 0;
+  if (present === null || present === undefined) return { present: null };
+  if (breaks <= 0) return { present: formatDuration(present) };
+  const worked = item.workedMinutes ?? Math.max(0, present - breaks);
+  const over = item.overAllowanceMinutes ?? 0;
+  return {
+    present: formatDuration(worked),
+    breaks: `Breaks ${breaks}m`,
+    over: over > 0 ? `Over ${over}m` : null,
+    presentTitle: `Present ${formatDuration(present)}, breaks ${formatDuration(breaks)}, worked ${formatDuration(worked)}`,
+  };
+}
+
 function tableRow(item, ctx) {
   const row = item.attendance;
   return {
@@ -52,7 +71,7 @@ function tableRow(item, ctx) {
     lateMinutes: row?.lateMinutes ?? 0,
     checkOut: row?.checkOutAt ? formatTime(row.checkOutAt, ctx.tz) : null,
     missing: row?.checkoutStatus === 'missing',
-    present: item.presentMinutes === null ? null : formatDuration(item.presentMinutes),
+    ...presentOf(item),
     note: row?.note ?? null,
     // HR changes other people's rows; their own go through another HR person or an Admin.
     action: ctx.canCorrect && item.user.id !== ctx.viewerId ? actionFor(item, ctx) : null,

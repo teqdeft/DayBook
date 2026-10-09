@@ -35,9 +35,9 @@ function groupOf(row) {
  * One team board row. Report: Submitted when today's report is submitted; Missing when the person
  * checked in without a submitted report (a draft counts as missing, like the "Report missing"
  * filter and the "Reports submitted" number); Not checked in otherwise. Logged is the submitted
- * report's total.
+ * report's total. onBreak, breakSince and workingOn are the live status (CONTRACT 15).
  */
-function boardRow(row, labels, ctx) {
+function boardRow(row, labels, ctx, live) {
   const checkedIn = Boolean(row.attendanceId);
   const submitted = row.reportStatus === 'submitted';
   const lateMinutes = Number(row.lateMinutes ?? 0);
@@ -63,6 +63,18 @@ function boardRow(row, labels, ctx) {
     logged: submitted ? formatDuration(row.totalMinutes) : checkedIn ? formatDuration(0) : '—',
     report,
     projects: submitted ? (labels.get(row.reportId) ?? []) : [],
+    ...liveStatus(row.id, live),
+  };
+}
+
+/** On break since when, and the running timer's project (CONTRACT 15). */
+function liveStatus(userId, live) {
+  const breakSince = live.breaks.get(userId) ?? null;
+  const timer = live.timers.get(userId);
+  return {
+    onBreak: Boolean(breakSince),
+    breakSince: isoOrNull(breakSince),
+    workingOn: timer ? { name: timer.name, color: timer.color, note: timer.note ?? null } : null,
   };
 }
 
@@ -115,18 +127,27 @@ function labelsByReport(rows) {
  * Project managers and anyone else who doesn't track attendance never appear.
  * @param {{ filter?: 'everyone'|'missing'|'late' }} [options] filters the board rows
  * @returns {Promise<object>} { date, now, timezone, subtitle, dayStart, dayEnd, dayLabel, summary,
- *   kpis, attendance, urgent, filter, counts, groups }
+ *   kpis, attendance, urgent, filter, counts, groups }; each board row also has onBreak,
+ *   breakSince (ISO | null) and workingOn ({ name, color, note } | null, the running timer;
+ *   always null while timers are off, when running timers aren't read)
  */
 export async function getTeamToday({ filter = 'everyone' } = {}) {
   const ctx = await loadContext();
-  const [rows, labelRows, urgent] = await Promise.all([
+  const timersOff = ctx.settings.timersMode === 'off';
+  const [rows, labelRows, urgent, openBreaks, runningTimers] = await Promise.all([
     repo.listTrackedPeopleDay(ctx.today),
     repo.listSubmittedReportProjects(ctx.today),
     repo.listUrgentProjects(),
+    repo.listOpenBreaks(ctx.today),
+    timersOff ? [] : repo.listRunningTimers(ctx.today),
   ]);
   const summary = summarizeDay(rows);
   const labels = labelsByReport(labelRows);
-  const board = rows.map((row) => boardRow(row, labels, ctx));
+  const live = {
+    breaks: new Map(openBreaks.map((item) => [item.userId, item.startedAt])),
+    timers: new Map(runningTimers.map((item) => [item.userId, item])),
+  };
+  const board = rows.map((row) => boardRow(row, labels, ctx, live));
   const activeFilter = BOARD_FILTERS.includes(filter) ? filter : 'everyone';
   const shown = board.filter((row) => matchesFilter(row, activeFilter));
   const { officeStart, officeEnd } = ctx.settings;

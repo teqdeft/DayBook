@@ -210,12 +210,28 @@
       "namedRegex": "^/api/reports/(?<nxtPid>[^/]+?)/submit(?:/)?$"
     },
     {
+      "page": "/api/reports/[id]/timers",
+      "regex": "^/api/reports/([^/]+?)/timers(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/reports/(?<nxtPid>[^/]+?)/timers(?:/)?$"
+    },
+    {
       "page": "/api/team/[userId]",
       "regex": "^/api/team/([^/]+?)(?:/)?$",
       "routeKeys": {
         "nxtPuserId": "nxtPuserId"
       },
       "namedRegex": "^/api/team/(?<nxtPuserId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/timers/entries/[id]",
+      "regex": "^/api/timers/entries/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/timers/entries/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
       "page": "/api/users/[id]",
@@ -314,6 +330,18 @@
       "regex": "^/api/attendance(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/attendance(?:/)?$"
+    },
+    {
+      "page": "/api/attendance/break/end",
+      "regex": "^/api/attendance/break/end(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/attendance/break/end(?:/)?$"
+    },
+    {
+      "page": "/api/attendance/break/start",
+      "regex": "^/api/attendance/break/start(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/attendance/break/start(?:/)?$"
     },
     {
       "page": "/api/attendance/check-in",
@@ -500,6 +528,36 @@
       "regex": "^/api/team/today(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/team/today(?:/)?$"
+    },
+    {
+      "page": "/api/timers/away",
+      "regex": "^/api/timers/away(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/timers/away(?:/)?$"
+    },
+    {
+      "page": "/api/timers/current",
+      "regex": "^/api/timers/current(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/timers/current(?:/)?$"
+    },
+    {
+      "page": "/api/timers/entries",
+      "regex": "^/api/timers/entries(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/timers/entries(?:/)?$"
+    },
+    {
+      "page": "/api/timers/start",
+      "regex": "^/api/timers/start(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/timers/start(?:/)?$"
+    },
+    {
+      "page": "/api/timers/stop",
+      "regex": "^/api/timers/stop(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/timers/stop(?:/)?$"
     },
     {
       "page": "/api/users",

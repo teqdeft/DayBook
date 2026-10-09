@@ -134,6 +134,11 @@ export function minutesBetween(a, b) {
   return diff > 0 ? diff : 0;
 }
 
+/** Timer minutes as report minutes, to the nearest 15 (CONTRACT 15): 247 -> 240, 248 -> 255. */
+export function roundToQuarterHour(minutes) {
+  return Math.round(Math.max(0, minutes ?? 0) / 15) * 15;
+}
+
 // ---------- Formatting (copy rules from the build guide, section 13.2) ----------
 
 /** 'Wednesday, 30 September' */

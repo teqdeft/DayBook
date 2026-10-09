@@ -92,6 +92,15 @@ npm run test:e2e
 - **Check out always asks first** (company request). Checking out ends the day, so with the report
   submitted a "Check out now?" dialog opens (Cancel is focused); with the report pending it is the
   guide's "Your report isn't in yet" dialog, as before.
+- **Project timers and breaks** (company request, CONTRACT 15). On Today, a "Working on" card
+  starts and stops a timer per project (one at a time; switching stops the previous one), and a
+  chip in the sidebar shows it on every page. The daily report's "Fill report from timers" turns
+  the timers into hours per project (to the nearest 15 minutes) and task lines. Start break / End
+  break pause and resume the timer; worked time (present minus breaks) drives the gap warning, and
+  HR sees breaks and an over-allowance flag on Attendance. Admin chooses in Settings → Timers and
+  breaks whether timers are off, optional (default) or required, and sets the daily break
+  allowance. The worker stops timers left running at midnight and, in required mode, reminds
+  people who have no timer running.
 
 ## Slack setup (one Slack app per environment)
 

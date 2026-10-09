@@ -1,6 +1,7 @@
 'use client';
 // The navy sidebar: logo, workspace box, nav items (from config/navigation.js, with count badges)
 // and the signed-in person with a menu (Sign out). The active item follows the current path.
+// `footer` sits just above the person (the timer chip, CONTRACT 15).
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronDown } from 'lucide-react';
@@ -17,10 +18,17 @@ import styles from './Sidebar.module.css';
  *     badge?: number }[],
  *   companyName?: string, homeHref?: string,
  *   user: { name: string, email?: string, designation?: string, initials?: string, roleLabel?: string },
- *   className?: string,
+ *   footer?: import('react').ReactNode, className?: string,
  * }} props
  */
-export default function Sidebar({ items = [], companyName, homeHref = '/', user, className = '' }) {
+export default function Sidebar({
+  items = [],
+  companyName,
+  homeHref = '/',
+  user,
+  footer = null,
+  className = '',
+}) {
   const pathname = usePathname() ?? '';
   const shell = useAppShell();
   const activeHref = activeNavHref(items, pathname);
@@ -71,6 +79,8 @@ export default function Sidebar({ items = [], companyName, homeHref = '/', user,
           })}
         </ul>
       </nav>
+
+      {footer ? <div className={styles.footer}>{footer}</div> : null}
 
       <div className={styles.person}>
         <UserMenu user={user} variant="sidebar" />

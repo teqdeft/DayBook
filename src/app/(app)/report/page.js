@@ -14,7 +14,6 @@ import {
   formatTimeAmPm,
   monthOf,
   now,
-  nowDate,
   workDate,
 } from '@/lib/time';
 import { attendance } from '@/modules/attendance';
@@ -109,6 +108,13 @@ async function prioritySuggestions(user, report, picker) {
   );
 }
 
+/** Present time minus the day's breaks (CONTRACT 15), or null without a check-in. */
+async function workedFor(row, userId, day, at, tz) {
+  if (!row) return null;
+  const breaks = await attendance.listBreaks(userId, day);
+  return attendance.workedMinutes(row, breaks, at, tz);
+}
+
 /**
  * Where "Back to ..." goes: Today for today's report, My log for other days. Someone who doesn't
  * track attendance (the CEO) has no Today screen, so their link goes to their home screen.
@@ -150,7 +156,13 @@ export default async function ReportPage({ searchParams }) {
     projects.getPickerFor(user.id),
     attendance.getForUserOnDate(user.id, day),
   ]);
-  const suggestions = await prioritySuggestions(user, report, picker);
+  const at = now();
+  const [suggestions, timersData, workedMinutes] = await Promise.all([
+    prioritySuggestions(user, report, picker),
+    // "From your timers" and required mode (CONTRACT 15); the report still opens without it.
+    reports.timersForReport({ user, report }).catch(() => null),
+    workedFor(row, user.id, day, at, tz),
+  ]);
   const back = backLink({ user, day, today });
   const data = {
     report,
@@ -160,10 +172,12 @@ export default async function ReportPage({ searchParams }) {
     isToday: day === today,
     user: { name: user.name, initials: user.initials, avatarUrl: user.avatarUrl, role: user.role },
     tracksAttendance: Boolean(user.tracksAttendance),
-    presentMinutes: row ? attendance.presentMinutes(row, nowDate(), tz) : null,
+    presentMinutes: row ? attendance.presentMinutes(row, at, tz) : null,
+    workedMinutes,
+    timers: timersData,
     gapWarningMinutes: current.gapWarningMinutes,
     slackLines: slackLines(current),
-    previewTime: formatTimeAmPm(report.submittedAt ?? now(), tz),
+    previewTime: formatTimeAmPm(report.submittedAt ?? at, tz),
     backHref: back.href,
     backLabel: back.label,
     ...noticeTexts(report, tz, today),

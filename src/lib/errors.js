@@ -33,6 +33,11 @@ export const ERROR_CODES = {
   ATTENDANCE_EXISTS: { status: 409, message: 'There is already an attendance row for that day.' },
   REQUEST_ALREADY_HANDLED: { status: 409, message: 'Someone already handled this request.' },
   REQUEST_ALREADY_PENDING: { status: 409, message: 'You already have a pending request for this.' },
+  ALREADY_ON_BREAK: { status: 409, message: "You're already on a break." },
+  NOT_ON_BREAK: { status: 409, message: "You're not on a break." },
+
+  // Project timers
+  TIMERS_OFF: { status: 409, message: 'Timers are turned off for your company.' },
 
   // Reports
   REPORT_LOCKED: { status: 409, message: 'This report is locked. Request an edit to change it.' },

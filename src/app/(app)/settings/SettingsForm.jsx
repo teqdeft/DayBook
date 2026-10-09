@@ -1,7 +1,7 @@
 'use client';
 // The Settings sections (artboard 12) inside one form: Company, Office hours and reports,
-// Check-in, Slack, and Screen time and Notifications (added after the canvas). "Save changes" in
-// the top bar submits it.
+// Check-in, Slack, and Screen time, Timers and breaks and Notifications (added after the canvas).
+// "Save changes" in the top bar submits it.
 import DayToggleGroup from '@/components/DayToggleGroup';
 import Input from '@/components/Input';
 import Select from '@/components/Select';
@@ -11,6 +11,7 @@ import NotificationsSection from './NotificationsSection';
 import ScreenTimeSection from './ScreenTimeSection';
 import Section from './Section';
 import SlackSection from './SlackSection';
+import TimersSection from './TimersSection';
 import { FORM_ID, useSettingsForm } from './SettingsProvider';
 import { clockText, parseClockText } from './timeText';
 import styles from './SettingsForm.module.css';
@@ -149,6 +150,7 @@ export default function SettingsForm({
       <CheckInSection networks={networks} currentIp={currentIp} />
       <SlackSection connection={connection} />
       <ScreenTimeSection />
+      <TimersSection />
       <NotificationsSection configured={pushConfigured} />
     </form>
   );

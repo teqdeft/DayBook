@@ -1,5 +1,6 @@
 // Team dashboard (artboard 05): today's numbers, hours by project, the attendance donut, urgent
-// projects and the team board. PM and Admin.
+// projects and the team board. PM and Admin. Refreshes every minute so check-ins, breaks and
+// running timers stay live.
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import Card, { CardHeader } from '@/components/Card';
@@ -12,6 +13,7 @@ import { requirePage } from '@/lib/session';
 import { plural } from '@/lib/text';
 import { dashboard } from '@/modules/dashboard';
 import { teamTodayQuerySchema, weekMonthQuerySchema } from '@/modules/dashboard/schemas';
+import AutoRefresh from '../today/AutoRefresh';
 import HoursCard from './HoursCard';
 import TeamBoard from './TeamBoard';
 import UrgentList from './UrgentList';
@@ -41,6 +43,7 @@ export default async function TeamPage({ searchParams }) {
 
   return (
     <>
+      <AutoRefresh />
       <TopBar
         title="Team dashboard"
         subtitle={today.subtitle}

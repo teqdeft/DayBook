@@ -46,6 +46,22 @@
   padding: 0 10px;
 }
 
+.timer {
+  --card-pad: 22px 26px 22px;
+}
+
+.timerBox {
+  margin-top: 16px;
+}
+
+.timerRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 52px;
+  border-bottom: 1px solid var(--track);
+}
+
 .urgent {
   display: flex;
   flex-direction: column;

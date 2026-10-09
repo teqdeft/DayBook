@@ -4,28 +4,52 @@ import { db } from '@/lib/db';
 import { AppError } from '@/lib/errors';
 import { nowDate } from '@/lib/time';
 import { projects } from '@/modules/projects';
+import { timers } from '@/modules/timers';
 import * as repo from './repo';
 import { assertEditable, getOwnReport } from './drafts';
 import { checkPriorityLinks } from './links';
 import { contentVersion, loadReportView } from './view';
 
 /**
+ * The projects the person timed on a day (CONTRACT 15), read once and only when needed.
+ * @returns {() => Promise<Set<number>>}
+ */
+function timedProjectsOn(userId, workDate) {
+  let timed = null;
+  return async () => {
+    if (!timed) {
+      const summary = workDate ? await timers.getDaySummary(userId, workDate) : null;
+      timed = new Set((summary?.projects ?? []).map((project) => Number(project.projectId)));
+    }
+    return timed;
+  };
+}
+
+/**
  * Checks the projects of incoming entries. A project already in the saved report may stay even
- * if it stopped being active; a newly picked one must be active. A project request must be the
+ * if it stopped being active; a newly picked one must be active, unless the person timed it on
+ * the report's day (CONTRACT 15: completed or put on hold after the timer ran, it still belongs
+ * in that day's report, and required timer mode asks for it). A project request must be the
  * person's own pending request.
+ * @param {{ user: object, reportId: number | null, workDate?: string, entries: object[] }} input
+ *   workDate: the report's day (without it no timed project is let in)
  * @throws PROJECT_NOT_ACTIVE with a field error on entries.N.project
  */
-export async function checkProjects({ user, reportId, entries }) {
+export async function checkProjects({ user, reportId, workDate, entries }) {
   const stored = reportId ? await repo.listEntries([reportId]) : [];
   const knownProjects = new Set(stored.map((entry) => entry.projectId).filter(Boolean));
   const knownRequests = new Set(stored.map((entry) => entry.projectRequestId).filter(Boolean));
+  const timedProjects = timedProjectsOn(user.id, workDate);
   const checked = new Map();
   for (const [index, entry] of entries.entries()) {
     const field = `entries.${index}.project`;
     if (entry.projectId) {
       if (knownProjects.has(entry.projectId)) continue;
       if (!checked.has(entry.projectId)) {
-        checked.set(entry.projectId, await projects.isActive(entry.projectId));
+        const allowed =
+          (await projects.isActive(entry.projectId)) ||
+          (await timedProjects()).has(Number(entry.projectId));
+        checked.set(entry.projectId, allowed);
       }
       if (!checked.get(entry.projectId)) {
         throw new AppError('PROJECT_NOT_ACTIVE', {
@@ -192,7 +216,7 @@ export async function writeEntries(report, entries, trx, { baseVersion } = {}) {
 export async function saveDraft({ user, reportId, entries, baseVersion }) {
   const report = await getOwnReport(user, reportId);
   assertEditable(report);
-  await checkProjects({ user, reportId, entries });
+  await checkProjects({ user, reportId, workDate: report.workDate, entries });
   await db.transaction(async (trx) => {
     const locked = await repo.findByIdForUpdate(reportId, trx);
     assertEditable(locked);

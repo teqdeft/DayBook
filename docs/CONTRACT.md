@@ -175,7 +175,9 @@ initials }`.
 - `getAll()` → `{ companyName, timezone, workingDays, officeStart, officeEnd, lateAfter,
 reportReminderAt, reportLock, gapWarningMinutes, stuckTaskDays, allowUnverifiedOffice,
 autoMarkMissingCheckout, slackEnabled, slackReportChannelId, slackReportChannelName,
-slackPostReports, slackRemind, slackUrgentNotify, slackRequestsNotify }` (clock values
+slackPostReports, slackRemind, slackUrgentNotify, slackRequestsNotify, activityTrackingEnabled,
+activityIdleMinutes, activityRetentionDays, pushEnabled, timersMode, timerAwayMinutes,
+timerReminderMinutes, breakAllowanceMinutes }` (sections 11, 14 and 15 describe the later keys; clock values
   `'HH:mm'`; cached in-process ~30 s, cleared on save). Defaults come from `db/seeds/03_settings.js`.
 - `update({ user, values, ip })` → saves changed keys, audit `settings.update`, returns `getAll()`.
 - `listOfficeNetworks()`, `addOfficeNetwork({ user, name, ipAddress, ip })`,
@@ -275,6 +277,10 @@ returns empty data, so every page renders. Owners replace the stub completely.
 | reports             | `reports/me`, `reports` (GET), `reports/[id]` (GET, PUT), `reports/[id]/submit`, `reports/[id]/revisions`, `report-edit-requests` (GET, POST), `report-edit-requests/[id]/approve`, `report-edit-requests/[id]/decline`, `me/log`                                                                                         |
 | projects            | `projects` (GET, POST), `projects/picker`, `projects/[id]` (PATCH), `projects/[id]/members`, `projects/[id]/urgent` (POST, DELETE), `clients`, `project-requests` (GET, POST), `project-requests/[id]/approve`, `project-requests/[id]/decline`                                                                           |
 | dashboards          | `team/today`, `team/[userId]`, `stats/hours-by-project`, `overview`, `exports/hours`                                                                                                                                                                                                                                      |
+
+Later sections add: activity → `activity/*` (11), dashboards → `projects/[id]/report*` (12),
+projects → `projects/[id]/tasks`, `project-tasks/*` (13), system → `push/subscriptions` (14),
+timers → `timers/*` and attendance → `attendance/break/start`, `attendance/break/end` (15).
 
 Downloads ("Download Excel" buttons) — each screen uses an endpoint its viewers are allowed to call:
 Team dashboard and Employee detail → `GET /api/exports/hours?from=&to=&userId=` (`export.hours`,
@@ -528,3 +534,216 @@ userAgent })`, `unsubscribe({ user, endpoint })`, `deleteForUser(userId, trx?)` 
   notification, `data.url`) and `notificationclick` (focus a Daybook window and open the link, or open
   a new one); the service worker registers in development too. The bell dropdown gets "Show on this
   computer" (permission + subscribe / unsubscribe); signing out removes this browser's subscription.
+
+## 15. Project timers and breaks (added after the build guide)
+
+Instead of typing hours, a person can run a **timer** per project: pick a project (optionally a
+priority task and a short note) and press Start. One timer runs at a time; starting another stops
+the first. At report time the daily report is **filled from the timers** (hours per project rounded
+to the nearest 15 minutes, task lines from the notes); the person reviews and submits as before.
+**Breaks**: Start break / End break on Today. A break pauses the running timer, and **worked time**
+= present time minus breaks; the gap warning compares worked time with logged hours. Settings:
+`timersMode` off | optional | required (default optional), `timerAwayMinutes` (25),
+`timerReminderMinutes` (20, 0 = never), `breakAllowanceMinutes` (60, 0 = no allowance).
+
+**Who.** Timers and breaks are for people who check in and write reports: active, tracked
+(`tracksAttendance`), with `attendance.self` and `report.self` (employee, HR, tracked Admin; never
+PMs). Everything is about the person's **own** data; PMs and Admin see live status on the Team
+board, HR sees breaks on Attendance.
+
+### Data (migration 009)
+
+- `time_entries`: `user_id`, `work_date` (company date of `started_at`), `project_id` (active
+  project when started; real projects only, never project requests), `project_task_id` (nullable,
+  SET NULL), `note` (≤200, nullable), `started_at`, `ended_at` (NULL = running), `source` timer |
+  manual, `stop_reason` stopped | switched | break | checkout | midnight | away (NULL while
+  running), `away_checked_until` (away prompts already answered up to here), timestamps.
+  Generated `running_user_id` (= user_id while `ended_at` IS NULL) is UNIQUE: at most one running
+  timer per person — an insert that breaks it fails with errno 1062.
+- `attendance_breaks`: `user_id`, `attendance_id` (CASCADE), `work_date`, `started_at`, `ended_at`
+  (NULL = on break), `end_reason` self | checkout | timer | midnight, `paused_entry_id` (the timer
+  the break stopped, SET NULL), timestamps. Generated `open_user_id` UNIQUE: one open break per
+  person.
+- Never insert or update the generated columns. Entries are unbroken stretches: pausing, switching
+  and "remove away time" end a row and start a new one.
+
+### Rules
+
+- **Minutes** of an entry = `minutesBetween(startedAt, endedAt ?? now())`. Report minutes per
+  project = `roundToQuarterHour(sum)` (`@/lib/time`: nearest 15, so 7 min → 0, 8 min → 15).
+- **Start** (`timers.start`): timers not `off` (else `TIMERS_OFF`); today's attendance row open
+  (`NOT_CHECKED_IN` / `ALREADY_CHECKED_OUT` otherwise); project active (`PROJECT_NOT_ACTIVE`,
+  message "Only active projects can be timed."); `projectTaskId` must be an open task of that
+  project that `projectTasks.findOpenForPicker({ userId, projectId })` returns (else
+  `VALIDATION_FAILED` on `projectTaskId`); note trimmed, '' → null. One transaction: lock the
+  running entry; if on a break, end it (`end_reason 'timer'`, no resume); if a timer runs with the
+  same project, task and note, return the state unchanged (double click); otherwise stop it
+  (`switched`) at the same moment and insert the new entry. errno 1062 → `CONFLICT` ("Another
+  timer just started. Refresh to see it.").
+- **Stop**: ends the running entry (`stopped`); with nothing running it just returns the state.
+- **Break start** (`attendance.startBreak`): today's row open, not already on a break
+  (`ALREADY_ON_BREAK`, also for errno 1062). One transaction: lock the attendance row, stop a
+  running timer (`timers.stopRunning({ userId, at, reason: 'break' }, trx)`), insert the break
+  with `pausedEntryId`.
+- **Break end** (`attendance.endBreak`): `NOT_ON_BREAK` without an open break. Ends it (`self`);
+  if it paused a timer and no timer runs now, `timers.resumeAfterBreak({ userId, entryId, at },
+trx)` starts a new entry with the same project, task and note (skipped when that project is no
+  longer active). After commit, if `breakAllowanceMinutes > 0` and this break took today's total
+  over the allowance, notify the person once (`attendance.break_over_allowance`, "Your breaks today
+  are over the 60 min allowance", body "You've had 1h 15m of breaks today.", link `/today`).
+- **Check-out** (`attendance.checkOut`) becomes one transaction: close the row, end an open break
+  (`checkout`, at the check-out time) and stop a running timer (`checkout`). The response adds
+  `breakMinutes` and `workedMinutes`; `gapMinutes = |workedMinutes − loggedMinutes|`.
+- **Worked minutes** (pure, `attendance/rules.js`): `breakMinutesWithin(breaks, row, at, tz)` =
+  total overlap of each break `[startedAt, endedAt ?? at]` with the present window `[checkInAt,
+checkOutAt ?? at]` (capped like `presentMinutes`); `workedMinutes(row, breaks, at, tz) =
+max(0, presentMinutes − breakMinutesWithin)`. A missing check-out counts 0. HR edits and
+  corrections never touch breaks; the overlap clips them.
+- **Away time**: while a timer runs, idle or locked Idle Detection screen-time segments (CONTRACT
+  11, `source: 'system'`; window-mode time never counts and a window segment ends a span) inside the
+  entry, merged when they follow each other within 150 s, that have **ended**, start after
+  `awayCheckedUntil` and last ≥ `timerAwayMinutes`, are offered once: "You were away 32 min
+  (1:10–1:42 PM) while your acme-app timer ran. Keep this time or remove it?" Keep → set
+  `awayCheckedUntil = to`. Remove → end the running entry at `from` (`away`) and start an identical
+  running entry at `to` with `awayCheckedUntil = to`. Only the running entry is checked.
+  The span sent back must match one the server computes now (else `CONFLICT`). No screen-time data
+  (tracking off, no Idle Detection) means no prompts.
+- **Changing entries**: only the person's own entries of **today** (company date), else
+  `BAD_REQUEST` "Only today's timers can be changed." Times are `'HH:mm'` clocks on the work date
+  (`localToUtc`); start < end, end ≤ now, no overlap (to the minute) with the person's other entries or breaks
+  (`VALIDATION_FAILED` on `startClock` / `endClock`), ≥ 1 minute. A running entry can change its
+  project, task, note and start, not its end. Manual adds have `source 'manual'`. Audit
+  `time_entry.create` / `time_entry.update` / `time_entry.delete` (manual changes only; start and
+  stop are not audited).
+- **Locks and races**: every write that touches attendance, breaks or timers locks in one order:
+  the attendance row by primary key (`attendance.lockDay`), then the open break, then the running
+  timer; these transactions run at READ COMMITTED and retry a deadlock up to 3 times, then
+  `CONFLICT` ("Something else changed at the same moment. Try again."). A timer still running from
+  an earlier day is first closed by the midnight rule (on start, stop, break or check-out;
+  `stopRunning` then returns null). `onBreak` counts only today's break. `resumeAfterBreak` does
+  nothing when timers are off, the person can no longer use timers or today's row is closed. Stop
+  works even when timers are off. Removing away time that starts in the timer's first minute moves
+  its start instead. Today's entries stay editable after check-out.
+- **Midnight** (worker `close-open-timers`, once per date after 00:05): entries still running from
+  an earlier date end at the check-out time if the row has one, else at the person's last
+  screen-time `lastActiveAt` that day if it is after the start, else at the start; never after the
+  end of the work date; `midnight`. The person is notified (`timer.stopped_midnight`, "Your timer
+  on acme-app was still running", body "We stopped it at 6:42 PM, the last time Daybook saw you
+  active. Check your report before it locks.", link `/report?date=YYYY-MM-DD`). Breaks still open
+  from an earlier date end at the row's check-out if it has one, else at their own start
+  (`midnight`).
+- **Reminder** (worker `timer-reminders`, every minute, required mode only, `timerReminderMinutes
+  > 0`, working day, between `officeStart`and`officeEnd`): a tracked person with an open row, not
+on a break, no running timer, whose last entry ended (or who checked in) at least
+`timerReminderMinutes`ago and who had no`timer.reminder`in the last 60 minutes gets one ("No
+timer is running", body "Start a timer for what you're working on.", link`/today`).
+- **Required mode** (report submit, `reports` module): applies when the day has at least one time
+  entry or the report's day is today or later. Every project entry's minutes must equal the
+  rounded timer minutes of that project (`entries.N.hours`: "Hours come from your timers (4.25h)." or
+  "No timer time on this project today. Remove it or add time on Today."), and every project with
+  rounded timer minutes > 0 must be in the report (`total`: "acme-app has 1h 30m on your timers.
+  Fill the report from timers."). Entries for pending project requests are exempt, and so is anyone who can't use timers (`timers.canUse`). In optional
+  mode the report is never checked against timers.
+
+### Module APIs
+
+- `timers` (`@/modules/timers`, owner: timers; `export const timers = service`, no spread):
+  - `EntryView` = `{ id, projectId, projectName, projectColor, isUrgent, projectTaskId, priority,
+projectTaskTitle, note, startedAt, endedAt, minutes, source, stopReason, startClock, endClock }`
+    (ISO strings; clocks `'HH:mm'` in company time, `endClock` null while running).
+  - `getState({ user })` → `{ mode, canUse, blocked: null | 'off' | 'not_checked_in' |
+'checked_out' | 'not_allowed', running: EntryView | null, onBreak, breakStartedAt, entries:
+EntryView[] (today, oldest first), totalMinutes, byProject: [{ projectId, projectName,
+projectColor, minutes }], away: { entryId, from, to, minutes, fromClock, toClock, projectName }
+| null, serverNow }` — never throws for a signed-in person.
+  - `start({ user, projectId, projectTaskId?, note? })`, `stop({ user })`,
+    `addEntry({ user, input })`, `updateEntry({ user, id, input })`, `removeEntry({ user, id })`,
+    `resolveAway({ user, entryId, from, to, decision })` → all return `getState`.
+  - `canUse(user)` → boolean (who may use timers at all).
+  - `stopRunning({ userId, at, reason }, trx)` → stopped EntryView | null;
+    `resumeAfterBreak({ userId, entryId, at }, trx)` → new EntryView | null.
+  - `getDaySummary(userId, workDate)` → `{ totalMinutes, projects: [{ projectId, projectName,
+projectColor, isUrgent, minutes, roundedMinutes, tasks: [{ note, projectTaskId, priority,
+projectTaskTitle }] }] }` (biggest first; tasks de-duplicated by priority task, else by
+    case-insensitive note; an entry with only a priority task gives a line titled with the task; a priority task that is no
+    longer open keeps its text but loses the link).
+  - Worker: `closeForgotten(today)` → `{ closed }`, `sendReminders(today)` → `{ reminded }`.
+  - `stopAllRunning({ at, reason })` → `{ stopped }` (`settings.update` calls it after timersMode
+    changes to off; a failure only logs a warning).
+- `attendance` additions (owner: attendance, file `attendance/breaks.js`):
+  - `BreakRow` = `{ id, userId, attendanceId, workDate, startedAt, endedAt, endReason,
+pausedEntryId }`.
+  - `startBreak({ user })` → `{ break: BreakRow, pausedEntryId }`; `endBreak({ user })` →
+    `{ break, breakMinutesToday, overAllowanceMinutes }`.
+  - `lockDay({ userId, workDate }, trx)` → AttendanceRow | null (locks the row, see Locks);
+    `getOpenBreak(userId, trx?)` → BreakRow | null; `endOpenBreak({ userId, at, reason }, trx)` →
+    BreakRow | null (no resume; used by timers.start); `listBreaks(userId, workDate)`;
+    `listBreaksForDate(workDate)` → BreakRow[]; `closeForgottenBreaks(today)` → `{ closed }`.
+  - `getMyToday` adds `breaks`, `openBreak`, `breakMinutes`, `workedMinutes`; `listDay` rows add
+    `breakMinutes`, `workedMinutes`, `overAllowanceMinutes`; `exportDay` adds "Breaks (minutes)"
+    and "Worked (hours)" after "Present (hours)"; `workedMinutes` and `breakMinutesWithin` are
+    exported too.
+- `dashboard.getTeamToday` rows add `onBreak`, `breakSince` (ISO | null) and `workingOn: { name,
+color, note } | null` (read with one extra query each over `attendance_breaks` / `time_entries`).
+
+### API
+
+| Route                              | Permission      | Body / returns                                                             |
+| ---------------------------------- | --------------- | -------------------------------------------------------------------------- |
+| `GET /api/timers/current`          | report.self     | `getState`                                                                 |
+| `POST /api/timers/start`           | report.self     | `{ projectId, projectTaskId?, note? }` → state                             |
+| `POST /api/timers/stop`            | report.self     | → state                                                                    |
+| `POST /api/timers/entries`         | report.self     | `{ projectId, projectTaskId?, note?, startClock, endClock }` → state (201) |
+| `PATCH /api/timers/entries/[id]`   | report.self     | `{ projectId?, projectTaskId?, note?, startClock?, endClock? }` → state    |
+| `DELETE /api/timers/entries/[id]`  | report.self     | → state                                                                    |
+| `POST /api/timers/away`            | report.self     | `{ entryId, from, to, decision: 'keep' or 'remove' }` → state              |
+| `POST /api/attendance/break/start` | attendance.self | → `{ break, pausedEntryId }`                                               |
+| `POST /api/attendance/break/end`   | attendance.self | → `{ break, breakMinutesToday, overAllowanceMinutes }`                     |
+| `GET /api/reports/[id]/timers`     | report.self     | own report only → `{ mode, required, summary }` or null (fresh summary)    |
+
+### Screens
+
+- **Today** (attendance owner): next to Check out, **Start break** (secondary; shown whatever the
+  timers mode, since breaks don't depend on timers); on a break the pill
+  is marigold "On break since 1:10" and the button is **End break** (primary). The "Your day"
+  second tile shows worked time; with breaks its label is "Worked so far · 45m break" ("Worked
+  today · …" after check-out), without breaks it stays "Present so far" / "Present today". A
+  **Working on** card (`TimerCard`, after the "Your day" row) when timers aren't off and the person
+  has checked in today: running → project label, task or note, a ticking `1:24:10`, **Stop** and
+  **Switch project**; idle → project picker (the report's `ProjectPicker` with
+  `allowRequests={false}`), optional priority task, note ("What are you working on?"), **Start**;
+  on a break → "Timer paused for your break"; then today's entries (time range, project, note,
+  duration, Edit / Delete) with **Add time**, and "Tracked today 5h 45m". After any change it
+  dispatches `window` event `daybook:timers-changed` and `router.refresh()`.
+- **Everywhere** (shell): `TimerChip` in the sidebar above the signed-in person, only while a
+  timer runs or the person is on a break ("● acme-app 1:24:10 ■"; the name links to `/today`, ■
+  stops). It loads `GET /api/timers/current` on mount (only while a timer runs or a break is on), every
+  60 s while visible, on `visibilitychange` and on `daybook:timers-changed`; when the state has `away` and the page is
+  visible it opens the away Dialog (only the chip shows it). Mounted by `AppFrame` for timer users
+  when timers aren't off, or while a timer still runs after Admin turned them off (so it can be
+  stopped); `timerStateFor(user)` (React `cache`) shares one `getState` per request with Today.
+- **Daily report** (reports owner): when timers aren't off and the report is editable, a "From your
+  timers" card lists projects with rounded hours and **Fill report from timers**: merge by project
+  (hours become the rounded timer hours; projects with 0 rounded minutes are skipped; missing task
+  lines are added with status In progress — matched by priority task, else case-insensitive title;
+  the lone empty task line of a card is replaced; nothing is removed). Required mode applies exactly where the server checks it (`data.timers.required`, from
+  `reports.timersForReport({ user, report })`): project hours are read-only ("From timers"); on a
+  draft the hours merge runs on load when they differ and follows fresh summaries
+  (`reports.getTimersForReport({ user, reportId })` via `GET /api/reports/[id]/timers`, re-read
+  before Fill, before a required-mode submit, when the page comes back into view and every 60 s on
+  today's open report); a submitted report is never changed automatically — it shows "Your timers
+  changed after you submitted this report" with Fill instead; a card that is added or moved to
+  another project takes that project's timer hours. A project that is no longer active may still be
+  picked in a report when the person timed it that day. The gap notice uses worked minutes.
+- **Team board** (dashboards): marigold "On break" tag under the check-in time; "Projects today"
+  starts with a "Now" tag and the running project.
+- **Attendance** (HR): Present shows worked time with a "Breaks 45m" sub-line, plus a red "Over
+  15m" tag past the allowance; Excel gets the two new columns.
+- **Settings** (people-admin): section "Timers and breaks" (`id="timers"`): Project timers (Off /
+  Optional — people can still type hours / Required — report hours come from timers), Ask about
+  away time after (min), Remind when no timer runs after (min, only when required, 0 = never),
+  Daily break allowance (min, 0 = no allowance).
+- Turning timers off (Settings) stops every running timer (`stopped`); with timers off the Team
+  board shows no "Now" and `getState` reads only a still-running entry.
+- Notification types: `attendance.break_over_allowance`, `timer.reminder`,
+  `timer.stopped_midnight`.

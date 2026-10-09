@@ -1,0 +1,334 @@
+/* Today's Working on card (CONTRACT 15, not on the canvas): the Your day card's padding and
+   type, the stat tiles' Paper box for the timer, the urgent card's tint for a break. */
+.card {
+  --card-pad: 22px 26px 22px;
+  container-type: inline-size;
+}
+
+.total {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.totalValue {
+  font-family: var(--font-heading-stack);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.now {
+  margin-top: 16px;
+}
+
+/* Running */
+.running {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px 24px;
+  min-height: 72px;
+  padding: 12px 14px 12px 18px;
+  border-radius: var(--radius-tile);
+  background: var(--paper);
+}
+
+.what {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.liveDot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 45%, transparent);
+  animation: live 2s ease-out infinite;
+}
+
+@keyframes live {
+  70% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--green) 0%, transparent);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 0%, transparent);
+  }
+}
+
+.project {
+  flex: none;
+  max-width: min(260px, 45%);
+}
+
+/* the large label is the report's picker button, with room on the right for its chevron */
+.running .project {
+  padding-right: 13px;
+}
+
+.whatText {
+  min-width: 0;
+  font-size: var(--text-body);
+}
+
+.elapsed {
+  font-family: var(--font-heading-stack);
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 34px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.buttons {
+  display: flex;
+  gap: 10px;
+}
+
+/* On a break */
+.paused {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 72px;
+  padding: 12px 18px 12px 14px;
+  border: 1px solid var(--urgent-line);
+  border-radius: var(--radius-tile);
+  background: var(--urgent-bg);
+}
+
+.pausedIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--marigold-soft);
+  color: var(--marigold-text);
+}
+
+.pausedText {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pausedTitle {
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.pausedHint {
+  margin-top: 2px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--marigold-text);
+  overflow-wrap: anywhere;
+}
+
+.breakElapsed {
+  font-size: 22px;
+  line-height: 28px;
+  color: var(--marigold-text);
+}
+
+/* Checked out, timers off */
+.message {
+  padding: 14px 18px;
+  border-radius: var(--radius-tile);
+  background: var(--paper);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+/* Start form */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.projectField {
+  position: relative;
+  flex: 0 0 240px;
+  min-width: 0;
+}
+
+.taskField {
+  flex: 0 1 280px;
+  min-width: 0;
+}
+
+.noteField {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.formButtons {
+  display: flex;
+  flex: none;
+  gap: 10px;
+}
+
+.projectButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: var(--control-height);
+  padding: 0 10px 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+
+.projectButton:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+.projectButton:focus-visible {
+  border-color: var(--primary);
+}
+
+.projectButton:disabled {
+  background: var(--surface-muted);
+  cursor: not-allowed;
+}
+
+.projectButton.invalid {
+  border-color: var(--red);
+}
+
+.projectValue {
+  display: flex;
+  min-width: 0;
+}
+
+.projectValue > * {
+  max-width: 100%;
+}
+
+.placeholder {
+  padding-left: 3px;
+  font-size: var(--text-body);
+  line-height: 20px;
+  color: var(--placeholder);
+}
+
+.chevron {
+  flex: none;
+  color: var(--muted);
+}
+
+.error {
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}
+
+/* A narrower card (tablets, the 1024-1180 px layout) wraps the form onto two lines. */
+@container (max-width: 760px) {
+  .formRow {
+    flex-wrap: wrap;
+  }
+
+  .projectField,
+  .taskField {
+    flex: 1 1 220px;
+  }
+
+  .noteField {
+    flex: 1 1 100%;
+  }
+
+  .formButtons {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
+
+  .running {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .what {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .card {
+    --card-pad: 18px 16px 16px;
+  }
+
+  /* project and task on the left, the time on the right, the buttons full width under them */
+  .running {
+    align-items: start;
+    padding: 12px 12px 12px 14px;
+  }
+
+  .what {
+    grid-column: auto;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    padding-top: 2px;
+  }
+
+  .buttons {
+    grid-column: 1 / -1;
+  }
+
+  .buttons > * {
+    flex: 1 1 0;
+  }
+
+  .project {
+    max-width: calc(100% - 22px);
+  }
+
+  .whatText {
+    flex: 1 1 100%;
+  }
+
+  .elapsed {
+    font-size: 24px;
+    line-height: 30px;
+  }
+
+  .breakElapsed {
+    font-size: 18px;
+    line-height: 24px;
+  }
+
+  .paused {
+    padding: 12px 14px 12px 12px;
+  }
+
+  .formButtons > * {
+    flex: 1 1 0;
+  }
+}

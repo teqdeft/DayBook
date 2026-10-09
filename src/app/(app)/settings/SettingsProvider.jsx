@@ -8,6 +8,7 @@ import Button from '@/components/Button';
 import { useToast } from '@/components/ToastProvider';
 import { useUnsavedChangesWarning } from '@/components/useUnsavedChangesWarning';
 import { api, ApiError } from '@/lib/apiClient';
+import { NUMBERS } from './numberFields';
 import { clockText, parseClockText } from './timeText';
 import styles from './SettingsForm.module.css';
 
@@ -39,22 +40,12 @@ const KEYS = [
   'activityTrackingEnabled',
   'activityIdleMinutes',
   'activityRetentionDays',
+  'timersMode',
+  'timerAwayMinutes',
+  'timerReminderMinutes',
+  'breakAllowanceMinutes',
   'pushEnabled',
 ];
-
-// Whole-number fields: shown as text, saved as numbers (same limits as the API).
-const NUMBERS = {
-  activityIdleMinutes: {
-    min: 1,
-    max: 120,
-    message: 'Idle time must be between 1 and 120 minutes.',
-  },
-  activityRetentionDays: {
-    min: 7,
-    max: 3650,
-    message: 'Keep screen time for 7 to 3650 days.',
-  },
-};
 
 /** Saved settings -> what the fields show (clocks as "9:30 AM"). */
 function toForm(saved) {

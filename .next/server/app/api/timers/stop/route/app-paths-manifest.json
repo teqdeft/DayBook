@@ -1,0 +1,3 @@
+{
+  "/api/timers/stop/route": "app/api/timers/stop/route.js"
+}
