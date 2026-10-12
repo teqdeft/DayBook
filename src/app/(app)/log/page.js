@@ -55,6 +55,18 @@ function EditRequests({ items, dates }) {
   );
 }
 
+/**
+ * "142h 30m" in the Hours logged card stays on one line; a long one steps down a size where the
+ * cards are narrow (see page.module.css).
+ */
+function HoursValue({ text }) {
+  return (
+    <span className={`${styles.kpiHours} ${text.length >= 7 ? styles.kpiHoursLong : ''}`}>
+      {text}
+    </span>
+  );
+}
+
 export default async function LogPage({ searchParams }) {
   const user = await requirePage('report.self');
   const params = await searchParams;
@@ -99,7 +111,7 @@ export default async function LogPage({ searchParams }) {
           <Kpi
             key={kpi.key}
             label={kpi.label}
-            value={kpi.value}
+            value={kpi.key === 'hours' ? <HoursValue text={kpi.value} /> : kpi.value}
             sub={kpi.sub}
             percent={kpi.percent}
             color={kpi.color}
@@ -134,7 +146,7 @@ export default async function LogPage({ searchParams }) {
                 key: project.projectId,
                 label: project.name,
                 value: project.minutes,
-                display: formatHours(project.minutes, 1),
+                display: formatHours(project.minutes),
                 color: project.color,
               }))}
               empty={

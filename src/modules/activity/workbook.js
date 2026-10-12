@@ -9,13 +9,15 @@ const SOURCE_WORDS = { system: 'Idle detection', window: 'Daybook window only' }
 const hours = (minutes) => Math.round((minutes / 60) * 100) / 100;
 
 /**
- * The workbook spec for xlsxResponse: one row per tracked person, then every segment.
+ * The workbook spec for xlsxResponse: one row per tracked person, then every segment. The same
+ * people as getTeamDay (Admins only for an Admin viewer).
  * @param {string} date 'YYYY-MM-DD'
+ * @param {{ viewer?: { role: string } }} [options] viewer: the signed-in person
  * @returns {Promise<{ filename: string, sheets: Array<{ name: string, columns: object[],
  *   rows: object[] }> }>}
  */
-export async function exportDay(date) {
-  const [people, current] = await Promise.all([getTeamDay(date), settings.getAll()]);
+export async function exportDay(date, { viewer } = {}) {
+  const [people, current] = await Promise.all([getTeamDay(date, { viewer }), settings.getAll()]);
   // 24-hour clocks: "6:34" alone can't be told from 6:34 AM in a spreadsheet.
   const clock = (at) => (at ? toLocal(at, current.timezone).format('HH:mm') : '');
   const summary = people.map((item) => ({

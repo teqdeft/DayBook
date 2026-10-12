@@ -1,4 +1,10 @@
 /* My projects (artboard 04) */
+
+/* The name search in the top bar, as wide as the PM view's. */
+.search {
+  width: 240px;
+}
+
 .cardGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -35,6 +41,14 @@
   font-size: 14px;
   line-height: 20px;
   color: var(--muted);
+}
+
+/* Below 1024 px the top bar's actions wrap under the title: the search takes the free width. */
+@media (max-width: 1023px) {
+  .search {
+    flex: 1 1 220px;
+    width: auto;
+  }
 }
 
 @media (max-width: 640px) {

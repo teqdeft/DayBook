@@ -33,6 +33,7 @@ let employee;
 let hr;
 let pm;
 let ceo;
+let tia;
 
 function signInAs(user) {
   sessionUser = user && { ...user, sessionExpiresAt: EXPIRES };
@@ -66,6 +67,8 @@ beforeAll(async () => {
   hr = await createUser({ name: 'Neha Gupta', role: 'hr', department: 'HR' });
   pm = await createUser({ name: 'Pat Manager', role: 'pm', tracksAttendance: false });
   ceo = await createUser({ name: 'Cee Eo', role: 'admin', tracksAttendance: false });
+  // An Admin who checks in: their screen time is for other Admins only (company rule).
+  tia = await createUser({ name: 'Tia Admin', role: 'admin' });
   const segment = (user, state, from, to) => ({
     userId: user.id,
     workDate: '2026-09-29',
@@ -78,6 +81,7 @@ beforeAll(async () => {
     segment(employee, 'active', '2026-09-29T04:00:00Z', '2026-09-29T06:00:00Z'),
     segment(employee, 'idle', '2026-09-29T06:00:00Z', '2026-09-29T06:10:00Z'),
     segment(hr, 'active', '2026-09-29T04:30:00Z', '2026-09-29T05:00:00Z'),
+    segment(tia, 'active', '2026-09-29T04:00:00Z', '2026-09-29T04:45:00Z'),
   ]);
 });
 
@@ -192,7 +196,7 @@ describe('GET /api/activity/team and /users/:id', () => {
     }
   });
 
-  it('lists every tracked person for a day, never PMs or untracked Admin', async () => {
+  it('lists every tracked person for a day, never PMs, untracked Admin or (for a PM) Admins', async () => {
     signInAs(pm);
     const response = await get(getTeam, '/team?date=2026-09-29');
     expect(response.status).toBe(200);
@@ -202,6 +206,21 @@ describe('GET /api/activity/team and /users/:id', () => {
     expect(vishal).toMatchObject({ currentState: 'offline', activeMinutes: 120, idleMinutes: 10 });
     expect(vishal.segments).toHaveLength(2);
     expect((await get(getTeam, '/team?date=29-09-2026')).status).toBe(400);
+  });
+
+  it("shows an Admin's screen time to another Admin only", async () => {
+    signInAs(ceo);
+    const { data } = await (await get(getTeam, '/team?date=2026-09-29')).json();
+    expect(data.map((item) => item.user.name)).toEqual(['Neha Gupta', 'Tia Admin', 'Vishal Saini']);
+    const params = { id: String(tia.id) };
+    const theirs = await get(getUser, `/users/${tia.id}?from=2026-09-01&to=2026-09-30`, params);
+    expect(theirs.status).toBe(200);
+    expect((await theirs.json()).data.totals.activeMinutes).toBe(45);
+
+    signInAs(pm);
+    const hidden = await get(getUser, `/users/${tia.id}`, params);
+    expect(hidden.status).toBe(404);
+    expect((await errorOf(hidden)).code).toBe('NOT_FOUND');
   });
 
   it("gives one person's range, 404 for unknown or malformed ids", async () => {
@@ -237,5 +256,12 @@ describe('GET /api/activity/export', () => {
     expect(summary.getCell('A3').value).toBe('Vishal Saini');
     expect(summary.getCell('E3').value).toBe('09:30'); // first active, company time
     expect(book.getWorksheet('Segments').rowCount).toBe(4);
+
+    // Another Admin's download includes the Admin who checks in.
+    signInAs(ceo);
+    const forAdmin = new ExcelJS.Workbook();
+    await forAdmin.xlsx.load(await (await get(getExport, '/export?date=2026-09-29')).arrayBuffer());
+    expect(forAdmin.getWorksheet('Screen time').getCell('A3').value).toBe('Tia Admin');
+    expect(forAdmin.getWorksheet('Segments').rowCount).toBe(5);
   });
 });

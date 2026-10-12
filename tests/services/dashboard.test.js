@@ -396,7 +396,7 @@ describe('hours by project (section 7.10)', () => {
     expect(card).toMatchObject({ range: 'week', from: '2026-09-28', to: TODAY });
     expect(card.subtitle).toBe('This week, whole team');
     expect(card.bars.map((bar) => [bar.label, bar.value, bar.display])).toEqual([
-      ['beta', 810, '13.5h'],
+      ['beta', 810, '13h 30m'],
       ['alpha', 780, '13h'],
       ['New site (requested)', 60, '1h'],
     ]);
@@ -413,7 +413,7 @@ describe('hours by project (section 7.10)', () => {
     ]);
   });
 
-  it('shows quarter hours exactly and folds more than eight projects into one row', () => {
+  it('shows hours and minutes exactly and folds more than eight projects into one row', () => {
     const rows = Array.from({ length: 9 }, (_, index) => ({
       projectId: index + 1,
       requestId: null,
@@ -422,9 +422,9 @@ describe('hours by project (section 7.10)', () => {
       minutes: 315 - index * 15,
     }));
     const bars = hoursBars(rows);
-    expect(bars[0]).toMatchObject({ label: 'p1', display: '5.25h' });
+    expect(bars[0]).toMatchObject({ label: 'p1', display: '5h 15m' });
     expect(bars).toHaveLength(8);
-    expect(bars[7]).toMatchObject({ label: '2 more projects', value: 405, display: '6.75h' });
+    expect(bars[7]).toMatchObject({ label: '2 more projects', value: 405, display: '6h 45m' });
   });
 
   it('answers one person and pages the rows', async () => {
@@ -446,7 +446,7 @@ describe('getOverview', () => {
     expect(kpis.map((k) => [k.label, k.value, k.sub ?? k.footer])).toEqual([
       ['In today', '5', 'of 6 people'],
       ['Reports submitted', '3', 'of 5, due 6:30'],
-      ['Hours this week', '28h', 'Monday to today'],
+      ['Hours this week', '27h 30m', 'Monday to today'],
       ['Active projects', '2', '1 marked urgent'],
       ['Pending requests', '6', 'edits, projects, fixes'],
     ]);
@@ -540,6 +540,19 @@ describe('getNavBadges', () => {
       expect(await badges(people.admin)).toEqual({ requests: 4, corrections: 3 });
     } finally {
       await db('attendanceCorrections').where({ id }).del();
+    }
+  });
+
+  it("counts an Admin's correction request for other Admins only, never for HR", async () => {
+    const meera = await createUser({ name: 'Meera', role: 'admin', tracksAttendance: true });
+    const id = await createCorrection(meera, '2026-09-29');
+    try {
+      expect(await badges(people.hr)).toEqual({ requests: 0, corrections: 2 });
+      expect(await badges(people.admin)).toEqual({ requests: 4, corrections: 3 });
+      expect(await badges(meera)).toEqual({ requests: 4, corrections: 2 }); // never their own
+    } finally {
+      await db('attendanceCorrections').where({ id }).del();
+      await db('users').where({ id: meera.id }).del();
     }
   });
 

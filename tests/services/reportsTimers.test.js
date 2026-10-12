@@ -108,7 +108,7 @@ describe('timerProblems (the rules on their own)', () => {
       { projectRequestId: 4, minutes: 120 },
     ];
     expect(timerProblems(entries, summary)).toEqual({
-      'entries.0.hours': 'Hours come from your timers (4.25h).',
+      'entries.0.hours': 'Hours come from your timers (4h 15m).',
       'entries.1.hours': NO_TIMER_TIME,
       'entries.2.hours': NO_TIMER_TIME,
       total: 'acme-blog has 1h 30m on your timers. Fill the report from timers.',
@@ -176,8 +176,8 @@ describe('required mode', () => {
       reports.submitReport({ user, reportId: draft.id, entries, baseVersion: draft.version }),
     ).rejects.toMatchObject({
       code: 'VALIDATION_FAILED',
-      message: 'Hours come from your timers (4.25h).',
-      fields: { 'entries.0.hours': 'Hours come from your timers (4.25h).' },
+      message: 'Hours come from your timers (4h 15m).',
+      fields: { 'entries.0.hours': 'Hours come from your timers (4h 15m).' },
     });
     expect(await statusOf(draft.id)).toBe('draft');
   });
@@ -267,7 +267,7 @@ describe('required mode', () => {
     ]);
     await reports.saveReport({ user, reportId: draft.id, entries });
     await expect(reports.submitReport({ user, reportId: draft.id })).rejects.toMatchObject({
-      fields: { 'entries.0.hours': 'Hours come from your timers (1.5h).' },
+      fields: { 'entries.0.hours': 'Hours come from your timers (1h 30m).' },
     });
     expect(await statusOf(draft.id)).toBe('draft');
   });

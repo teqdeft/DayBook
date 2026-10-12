@@ -439,6 +439,37 @@ describe('activity.getTeamDay', () => {
     return team.find((item) => item.user.name === name).currentState;
   }
 
+  it("shows an Admin's screen time to other Admins only (company rule)", async () => {
+    await beat(trackedAdmin, '2026-09-30T04:30:00Z', 'active');
+    await beat(trackedAdmin, '2026-09-30T04:31:00Z', 'active');
+    await beat(vishal, '2026-09-30T04:30:00Z', 'active');
+    setNowForTests('2026-09-30T04:31:00Z');
+    const names = async (viewer) =>
+      (await activity.getTeamDay('2026-09-30', { viewer })).map((item) => item.user.name);
+    for (const viewer of [pm, hr]) {
+      expect(await names(viewer)).toEqual(['Neha Gupta', 'Simran Kaur', 'Vishal Saini']);
+    }
+    expect(await names(admin)).toEqual(['Neha Gupta', 'Simran Kaur', 'Tia Admin', 'Vishal Saini']);
+
+    // The Excel file lists the same people, segments included.
+    const [summary, segments] = (await activity.exportDay('2026-09-30', { viewer: pm })).sheets;
+    expect(summary.rows.map((row) => row.name)).not.toContain('Tia Admin');
+    expect(segments.rows.map((row) => row.name)).toEqual(['Vishal Saini']);
+    const forAdmin = (await activity.exportDay('2026-09-30', { viewer: admin })).sheets[1];
+    expect(forAdmin.rows.map((row) => row.name)).toEqual(['Tia Admin', 'Vishal Saini']);
+
+    // One person's range: an Admin is "not found" for anyone but another Admin.
+    for (const target of [trackedAdmin, admin]) {
+      await expectAppError(activity.getUserRange({ userId: target.id, viewer: pm }), 'NOT_FOUND');
+      await expectAppError(activity.getUserRange({ userId: target.id, viewer: hr }), 'NOT_FOUND');
+    }
+    const theirs = await activity.getUserRange({ userId: trackedAdmin.id, viewer: admin });
+    expect(theirs.totals.activeMinutes).toBe(1);
+    expect((await activity.getUserRange({ userId: vishal.id, viewer: pm })).user.id).toBe(
+      vishal.id,
+    );
+  });
+
   it('builds the Excel export from the same numbers', async () => {
     await insertSegment(
       vishal,

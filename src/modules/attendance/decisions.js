@@ -1,6 +1,6 @@
 // HR's decision on a correction request (guide 7.8): approve updates or creates the attendance
 // row and audits it with the person's reason; reject needs a note. The person hears back either
-// way, in the app and by Slack DM (slack_requests_notify).
+// way, in the app and by Slack DM (slack_requests_notify). Only Admins decide on an Admin's.
 import { db } from '@/lib/db';
 import { AppError, validationError } from '@/lib/errors';
 import { formatDayShort, nowDate } from '@/lib/time';
@@ -12,27 +12,34 @@ import { slack } from '@/modules/slack';
 import { users } from '@/modules/users';
 import { assertOrder, auditView } from './hr';
 import * as repo from './repo';
-import { computeLateMinutes, workingDayFlag } from './rules';
+import { computeLateMinutes, showsAttendanceOf, workingDayFlag } from './rules';
 import { approvedDetail } from './wording';
 
 function fieldError(field, message) {
   return validationError({ [field]: message }, message);
 }
 
+/**
+ * The pending request (locked) and the person who asked, once the actor may decide on it. An
+ * Admin's request looks missing to anyone but an Admin, pending or not, so probing ids never
+ * confirms that an Admin asked for a correction.
+ */
 async function loadPending(id, actor, trx) {
   const correction = await repo.findCorrection(id, trx, { forUpdate: true });
-  if (!correction) throw new AppError('NOT_FOUND', { message: 'That request no longer exists.' });
+  const person = correction && (await users.findById(correction.userId));
+  if (!correction || !showsAttendanceOf(actor, person)) {
+    throw new AppError('NOT_FOUND', { message: 'That request no longer exists.' });
+  }
   // Nobody decides on their own attendance; another HR person or an Admin does.
   if (Number(correction.userId) === Number(actor.id)) {
     throw new AppError('FORBIDDEN', { message: "You can't handle your own correction request." });
   }
   if (correction.status !== 'pending') throw new AppError('REQUEST_ALREADY_HANDLED');
-  return correction;
+  return { correction, person };
 }
 
 /** Applies an approved correction to the attendance row; returns [before, after] rows. */
-async function applyCorrection(correction, current, trx) {
-  const person = await users.findById(correction.userId);
+async function applyCorrection({ correction, person }, current, trx) {
   const late = (checkInAt) =>
     computeLateMinutes({
       checkInAt,
@@ -83,7 +90,7 @@ async function applyCorrection(correction, current, trx) {
   return [row, await repo.findById(row.id, trx)];
 }
 
-async function tellRequester({ correction, approved, note, detail }, trx) {
+async function tellRequester({ correction, person, approved, note, detail }, trx) {
   const day = formatDayShort(correction.workDate);
   const verdict = approved ? 'approved' : 'rejected';
   await notifications.notify(
@@ -98,7 +105,6 @@ async function tellRequester({ correction, approved, note, detail }, trx) {
     },
     trx,
   );
-  const person = await users.findById(correction.userId);
   const reasonLine = note ? `\n${approved ? 'Note' : 'Reason'}: ${escapeSlackText(note)}` : '';
   await slack.queueDm(
     {
@@ -116,16 +122,18 @@ async function tellRequester({ correction, approved, note, detail }, trx) {
  * HR approves a correction: updates the row (or creates it for a missing day), sets
  * checkout_status = corrected for check-outs and missing days, recomputes late minutes for a new
  * check-in, writes an 'attendance.correct' audit row with the person's reason, and tells them.
- * @param {{ actor: { id: number }, id: number, note?: string | null, ip?: string | null }} input
+ * @param {{ actor: { id: number, role: string }, id: number, note?: string | null,
+ *   ip?: string | null }} input
  * @returns {Promise<{ correction: object, row: AttendanceRow }>}
- * @throws NOT_FOUND, FORBIDDEN (their own request), REQUEST_ALREADY_HANDLED, ATTENDANCE_EXISTS,
- *   VALIDATION_FAILED (times clash)
+ * @throws NOT_FOUND (also an Admin's request when the actor isn't one), FORBIDDEN (their own
+ *   request), REQUEST_ALREADY_HANDLED, ATTENDANCE_EXISTS, VALIDATION_FAILED (times clash)
  */
 export async function approveCorrection({ actor, id, note = null, ip }) {
   const current = await settings.getAll();
   const rowId = await db.transaction(async (trx) => {
-    const correction = await loadPending(id, actor, trx);
-    const [before, after] = await applyCorrection(correction, current, trx);
+    const pending = await loadPending(id, actor, trx);
+    const { correction } = pending;
+    const [before, after] = await applyCorrection(pending, current, trx);
     const handled = await repo.handleCorrection(
       correction.id,
       {
@@ -153,7 +161,7 @@ export async function approveCorrection({ actor, id, note = null, ip }) {
       trx,
     );
     const detail = approvedDetail(correction, current.timezone);
-    await tellRequester({ correction, approved: true, note, detail }, trx);
+    await tellRequester({ ...pending, approved: true, note, detail }, trx);
     return after.id;
   });
   return { correction: await repo.findCorrection(id), row: await repo.findById(rowId) };
@@ -161,16 +169,18 @@ export async function approveCorrection({ actor, id, note = null, ip }) {
 
 /**
  * HR rejects a correction with a note (required); the person is told why. Audited.
- * @param {{ actor: { id: number }, id: number, note: string, ip?: string | null }} input
+ * @param {{ actor: { id: number, role: string }, id: number, note: string,
+ *   ip?: string | null }} input
  * @returns {Promise<object>} the correction
- * @throws VALIDATION_FAILED (no note), NOT_FOUND, FORBIDDEN (their own request),
- *   REQUEST_ALREADY_HANDLED
+ * @throws VALIDATION_FAILED (no note), NOT_FOUND (also an Admin's request when the actor isn't
+ *   one), FORBIDDEN (their own request), REQUEST_ALREADY_HANDLED
  */
 export async function rejectCorrection({ actor, id, note, ip }) {
   const text = String(note ?? '').trim();
   if (!text) throw fieldError('note', 'Add a note for them.');
   await db.transaction(async (trx) => {
-    const correction = await loadPending(id, actor, trx);
+    const pending = await loadPending(id, actor, trx);
+    const { correction } = pending;
     const at = nowDate();
     const handled = await repo.handleCorrection(
       correction.id,
@@ -191,7 +201,7 @@ export async function rejectCorrection({ actor, id, note, ip }) {
       },
       trx,
     );
-    await tellRequester({ correction, approved: false, note: text }, trx);
+    await tellRequester({ ...pending, approved: false, note: text }, trx);
   });
   return repo.findCorrection(id);
 }

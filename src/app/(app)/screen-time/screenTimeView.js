@@ -208,6 +208,8 @@ export function rangeSummary({ range, from, to, today, workingDays }) {
 /** 'Active means mouse or keyboard use in the last 5 minutes while Daybook is open. …' */
 export function measuredText(idleMinutes) {
   const minutes = Math.max(1, Math.round(Number(idleMinutes) || 5));
-  const window = minutes === 1 ? 'the last minute' : `the last ${minutes} minutes`;
+  let window = `the last ${minutes} minutes`;
+  if (minutes === 1) window = 'the last minute';
+  else if (minutes >= 60) window = `the last ${formatDuration(minutes)}`;
   return `Active means mouse or keyboard use in ${window} while Daybook is open. Apps and websites are never recorded.`;
 }

@@ -37,15 +37,41 @@ function hrefFor({ status, q, page }) {
   return query ? `/projects?${query}` : '/projects';
 }
 
-async function weeklyMinutes(userId) {
+// "All time" starts before any report could exist, so one query covers every project.
+const ALL_TIME_FROM = '2000-01-01';
+
+/**
+ * Submitted report minutes per project: this week (Monday to Sunday) and all time up to today.
+ * The all-time total sits under the week, so a quiet Monday doesn't read as a project with no
+ * hours. The table still renders if it fails.
+ * @returns {Promise<{ week: Record<number, number>, total: Record<number, number> }>}
+ */
+async function projectMinutes(userId) {
   try {
     const { timezone } = await settings.getAll();
-    const week = weekRange(workDate(timezone));
-    return (await reports.getMinutesByProject({ from: week.from, to: week.to })) ?? {};
+    const today = workDate(timezone);
+    const week = weekRange(today);
+    const [thisWeek, total] = await Promise.all([
+      reports.getMinutesByProject({ from: week.from, to: week.to }),
+      reports.getMinutesByProject({ from: ALL_TIME_FROM, to: today }),
+    ]);
+    return { week: thisWeek ?? {}, total: total ?? {} };
   } catch (error) {
-    logger.warn({ err: error, userId }, 'projects: could not load hours this week');
-    return {};
+    logger.warn({ err: error, userId }, 'projects: could not load project hours');
+    return { week: {}, total: {} };
   }
+}
+
+/** "1h 45m" this week, with the all-time total under it when it adds something. */
+function HoursCell({ week, total }) {
+  return (
+    <div className={styles.hoursCell}>
+      <span className={styles.hours}>{formatHours(week)}</span>
+      {total > 0 && total !== week ? (
+        <span className={styles.hoursTotal}>{formatHours(total)} total</span>
+      ) : null}
+    </div>
+  );
 }
 
 /** The data a row menu needs to edit the project (plain, serialisable). */
@@ -146,7 +172,10 @@ function columns({ user, minutes }) {
       label: 'Hours this week',
       width: '11.46%',
       render: (project) => (
-        <span className={styles.hours}>{formatHours(Number(minutes[project.id] ?? 0))}</span>
+        <HoursCell
+          week={Number(minutes.week[project.id] ?? 0)}
+          total={Number(minutes.total[project.id] ?? 0)}
+        />
       ),
     },
     {
@@ -180,7 +209,7 @@ export default async function ManageProjectsView({ user, params }) {
     q ? projects.countByStatus({}) : null,
     projects.listManagerOptions(user),
     projects.listPeopleOptions(),
-    weeklyMinutes(user.id),
+    projectMinutes(user.id),
   ]);
   const activeTotal = (overall ?? counts).active;
   // A search from the top bar opens the first tab that has a match.

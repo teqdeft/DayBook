@@ -34,6 +34,13 @@ export function CheckInCell({ row, tz }) {
   );
 }
 
+// What "Projects today" says before there is a submitted report to take projects from.
+const NO_REPORT_TEXT = {
+  missing: 'No report yet',
+  due: 'No report yet',
+  draft: 'Not submitted yet',
+};
+
 /**
  * The projects on today's submitted report. While a timer runs, a "Now" tag and that project
  * come first (once: it isn't repeated from the report); hover shows the timer's note.
@@ -46,7 +53,8 @@ export function ProjectsCell({ row }) {
     ? row.projects.filter((project) => project.name !== current.name)
     : row.projects;
   if (!current && others.length === 0) {
-    return row.report === 'missing' ? <span className={styles.muted}>No report yet</span> : null;
+    const text = NO_REPORT_TEXT[row.report];
+    return text ? <span className={styles.muted}>{text}</span> : null;
   }
   return (
     <span className={styles.labels}>

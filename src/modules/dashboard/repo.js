@@ -8,12 +8,12 @@ import { db, parseJson } from '@/lib/db';
 /**
  * Pending counts for the sidebar in one query. Parts that are not asked for count as 0.
  * @param {{ edits: false | 'all' | number, projects: boolean, corrections: boolean,
- *   selfId?: number }} scope
+ *   selfId?: number, withAdmins?: boolean }} scope
  *   `edits`: false, 'all' (Admin) or the PM's user id (requests from people who report to them);
  *   `selfId`: the viewer, whose own edit and correction requests never count (nobody decides on
- *   their own).
+ *   their own); `withAdmins: false` leaves out Admins' correction requests (their attendance).
  */
-export async function countNavBadges({ edits, projects, corrections, selfId }) {
+export async function countNavBadges({ edits, projects, corrections, selfId, withAdmins = true }) {
   const zero = db.raw('0');
   const editsQuery =
     edits === false
@@ -35,11 +35,19 @@ export async function countNavBadges({ edits, projects, corrections, selfId }) {
     ? db('projectRequests').count('*').where('status', 'pending')
     : zero;
   const correctionsQuery = corrections
-    ? db('attendanceCorrections')
+    ? db('attendanceCorrections as c')
         .count('*')
-        .where('status', 'pending')
+        .where('c.status', 'pending')
         .modify((q) => {
-          if (selfId) q.whereNot('userId', selfId);
+          if (selfId) q.whereNot('c.userId', selfId);
+          if (!withAdmins) {
+            q.whereNotExists(
+              db('users as cu')
+                .select(db.raw('1'))
+                .whereRaw('cu.id = c.user_id')
+                .where('cu.role', 'admin'),
+            );
+          }
         })
     : zero;
   const row = await db
@@ -59,8 +67,10 @@ export async function countNavBadges({ edits, projects, corrections, selfId }) {
  * anyway), with their attendance row and report for the day (nulls when missing), in the order
  * people were added. The same people the Attendance screen lists for the day.
  * @param {string} date 'YYYY-MM-DD'
+ * @param {{ withAdmins?: boolean }} [options] false leaves out people with role admin (a viewer
+ *   who may not see their attendance)
  */
-export function listTrackedPeopleDay(date) {
+export function listTrackedPeopleDay(date, { withAdmins = true } = {}) {
   return db('users as u')
     .leftJoin('attendance as a', (join) => {
       join.on('a.userId', 'u.id').andOnVal('a.workDate', date);
@@ -69,6 +79,9 @@ export function listTrackedPeopleDay(date) {
       join.on('r.userId', 'u.id').andOnVal('r.workDate', date);
     })
     .where({ 'u.status': 'active', 'u.tracksAttendance': true })
+    .modify((q) => {
+      if (!withAdmins) q.whereNot('u.role', 'admin');
+    })
     .where((q) => {
       q.whereNull('u.joinedOn').orWhere('u.joinedOn', '<=', date).orWhereNotNull('a.id');
     })
@@ -501,8 +514,11 @@ export function listExportTasks({ from, to, userId }) {
     .orderBy([{ column: 't.entryId' }, { column: 't.sortOrder' }, { column: 't.id' }]);
 }
 
-/** Attendance days between two dates that have no report at all (the report is missing). */
-export function listExportDaysWithoutReport({ from, to, userId }) {
+/**
+ * Attendance days between two dates that have no report at all (the report is missing).
+ * `withAdmins: false` leaves out people with role admin (their check-ins are attendance).
+ */
+export function listExportDaysWithoutReport({ from, to, userId, withAdmins = true }) {
   return db('attendance as a')
     .join('users as u', 'u.id', 'a.userId')
     .leftJoin('departments as d', 'd.id', 'u.departmentId')
@@ -513,6 +529,7 @@ export function listExportDaysWithoutReport({ from, to, userId }) {
     .whereBetween('a.workDate', [from, to])
     .modify((q) => {
       if (userId) q.where('a.userId', userId);
+      if (!withAdmins) q.whereNot('u.role', 'admin');
     })
     .select('a.workDate', 'u.id as userId', 'u.name as personName', 'd.name as departmentName');
 }

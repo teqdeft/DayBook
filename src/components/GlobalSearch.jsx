@@ -7,6 +7,7 @@ import { Search } from 'lucide-react';
 import { api } from '@/lib/apiClient';
 import { initials } from '@/lib/text';
 import { resolveColor } from './chartColors';
+import { personHref } from './searchScope';
 import styles from './GlobalSearch.module.css';
 
 const DEBOUNCE_MS = 250;
@@ -32,9 +33,12 @@ function keepOnScreen(panel) {
 /**
  * @param {{
  *   placeholder?: string, width?: number,
- *   scope?: { people?: 'team' | 'people' | null, projects?: boolean },
+ *   scope?: { people?: 'team' | 'people' | null, admins?: 'team' | 'people' | null,
+ *     projects?: boolean },
  * }} props
  *   `scope.people`: 'team' links a person to /team/[id], 'people' to /people?q=, null skips people.
+ *   `scope.admins` does the same for people with the Admin role (default: as `people`); null
+ *   leaves them out (an Admin's Employee page is for Admins only).
  */
 export default function GlobalSearch({
   placeholder = 'Search',
@@ -225,17 +229,18 @@ async function fetchList(path, controller) {
 }
 
 function toOptions({ people, projects, scope }) {
-  const personOptions = people.slice(0, LIMIT).map((person) => ({
-    key: `person-${person.id}`,
-    kind: 'person',
-    title: person.name,
-    subtitle: person.designation ?? person.departmentName ?? '',
-    initials: person.initials ?? initials(person.name),
-    href:
-      scope.people === 'team'
-        ? `/team/${person.id}`
-        : `/people?q=${encodeURIComponent(person.name)}`,
-  }));
+  const personOptions = people
+    .map((person) => ({ person, href: personHref(person, scope) }))
+    .filter((item) => item.href)
+    .slice(0, LIMIT)
+    .map(({ person, href }) => ({
+      key: `person-${person.id}`,
+      kind: 'person',
+      title: person.name,
+      subtitle: person.designation ?? person.departmentName ?? '',
+      initials: person.initials ?? initials(person.name),
+      href,
+    }));
   const projectOptions = projects.slice(0, LIMIT).map((project) => ({
     key: `project-${project.id}`,
     kind: 'project',

@@ -1,4 +1,4 @@
-// GET /api/attendance-corrections?status=pending — requests for HR.
+// GET /api/attendance-corrections?status=pending — requests for HR (Admins' only for an Admin).
 // POST /api/attendance-corrections — a person asks HR to fix their attendance.
 import { listResult, withRoute } from '@/lib/route';
 import { attendance } from '@/modules/attendance';
@@ -6,8 +6,8 @@ import { correctionListSchema, correctionRequestSchema } from '@/modules/attenda
 
 export const GET = withRoute(
   { permission: 'attendance.correct', query: correctionListSchema },
-  async ({ query }) => {
-    const { items, total } = await attendance.listCorrections(query);
+  async ({ user, query }) => {
+    const { items, total } = await attendance.listCorrections({ ...query, viewer: user });
     return listResult(items, { limit: query.limit, offset: query.offset, total });
   },
 );

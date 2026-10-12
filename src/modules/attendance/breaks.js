@@ -151,10 +151,12 @@ async function breakTotals({ userId, ended, today, current }) {
   );
   const allowance = current.breakAllowanceMinutes;
   if (allowance > 0 && before <= allowance && total > allowance) {
+    // "the 30 min allowance", "the 1h allowance": never a bare minute count of an hour or more.
+    const limit = allowance < 60 ? `${allowance} min` : formatDuration(allowance);
     await notifications.notify({
       userIds: [userId],
       type: 'attendance.break_over_allowance',
-      title: `Your breaks today are over the ${allowance} min allowance`,
+      title: `Your breaks today are over the ${limit} allowance`,
       body: `You've had ${formatDuration(total)} of breaks today.`,
       link: '/today',
     });

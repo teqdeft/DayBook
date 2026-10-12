@@ -161,7 +161,8 @@ export async function loadScreenTime({ user, date: asked }) {
   const today = localDate(tz);
   const date = resolveDate(asked, today);
   const isToday = date === today;
-  const items = (await activity.getTeamDay(date)) ?? [];
+  // Admins' screen time is for another Admin only: the module leaves them out for anyone else.
+  const items = (await activity.getTeamDay(date, { viewer: user })) ?? [];
   const scale = timelineScale({
     date,
     tz,

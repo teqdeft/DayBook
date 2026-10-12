@@ -22,6 +22,7 @@ import {
   officeDayMinutes,
   percent,
   periodFor,
+  reportDue,
   reportsKpi,
   summarizeDay,
   totalMinutes,
@@ -46,7 +47,7 @@ function hoursKpi({ weekMinutes, summary, ctx }) {
   return {
     key: 'hours',
     label: 'Hours this week',
-    value: formatHours(weekMinutes, 0),
+    value: formatHours(weekMinutes),
     footer: 'Monday to today',
     percent: percent(weekMinutes, summary.tracked * daysSoFar * officeMinutes),
     color: 'teal',
@@ -79,17 +80,32 @@ function missingCheckoutText(rows, ctx) {
   return `${text} from ${when}`;
 }
 
-/** The "Needs attention" list: only items with something waiting, each linking to its screen. */
+/**
+ * The "Needs attention" list: only items with something waiting, each linking to its screen.
+ * Reports not submitted count as missing only from today's report time on; before it they are
+ * still due, so they wait (Pending) and link to the whole board, as the board shows them.
+ */
 function needsAttention({ summary, counts, missing, ctx }) {
   const items = [];
   const notSubmitted = summary.reports.missing;
+  const due = reportDue(ctx);
   if (notSubmitted > 0) {
-    items.push({
-      key: 'reports',
-      status: 'missing',
-      text: `${notSubmitted} ${plural(notSubmitted, 'report')} not submitted yet`,
-      href: '/team?filter=missing',
-    });
+    const reports = `${notSubmitted} ${plural(notSubmitted, 'report')}`;
+    items.push(
+      due.before
+        ? {
+            key: 'reports',
+            status: 'pending',
+            text: `${reports} due at ${due.label}`,
+            href: '/team',
+          }
+        : {
+            key: 'reports',
+            status: 'missing',
+            text: `${reports} not submitted yet`,
+            href: '/team?filter=missing',
+          },
+    );
   }
   if (counts.edits > 0) {
     items.push({

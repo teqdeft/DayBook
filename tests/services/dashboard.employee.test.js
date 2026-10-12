@@ -264,9 +264,9 @@ describe("someone who doesn't check in", () => {
   it('still shows the hours and report days of someone with tracking off', async () => {
     const chief = await createUser({ name: 'Chief', role: 'admin', tracksAttendance: false });
     await createReport(chief, '2026-09-28', { entries: [{ projectId: beta.id, minutes: 90 }] });
-    const detail = await dashboard.getEmployeeDetail({ userId: chief.id });
+    const detail = await dashboard.getEmployeeDetail({ userId: chief.id, viewer: chief });
     expect(detail.attendanceNote.body).toBe("Their attendance isn't tracked.");
-    expect(detail.hours.bars.map((bar) => [bar.label, bar.display])).toEqual([['beta', '1.5h']]);
+    expect(detail.hours.bars.map((bar) => [bar.label, bar.display])).toEqual([['beta', '1h 30m']]);
     expect(detail.history.map((row) => [row.date, row.report, row.in])).toEqual([
       ['2026-09-28', 'submitted', '—'],
     ]);

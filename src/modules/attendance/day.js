@@ -1,10 +1,18 @@
 // The Attendance screen's read model for one day: everyone who tracks attendance with their row,
-// the five numbers (guide 7.10), the missing check-outs and the Excel export.
+// the five numbers (guide 7.10), the missing check-outs and the Excel export. Every read takes the
+// `viewer`: anyone but an Admin never sees an Admin's attendance (company rule, hidesAdmins()).
 import { addDays, isWorkingDay, now, toLocal } from '@/lib/time';
 import { settings } from '@/modules/settings';
 import { users } from '@/modules/users';
 import * as repo from './repo';
-import { breakMinutesWithin, presentMinutes, todayFor, whereOf } from './rules';
+import {
+  breakMinutesWithin,
+  hidesAdmins,
+  presentMinutes,
+  showsAttendanceOf,
+  todayFor,
+  whereOf,
+} from './rules';
 import { dateString } from './schemas';
 
 const MATCHES = {
@@ -34,15 +42,17 @@ function timeOf(row, breaks, present, { at, tz, allowance }) {
 
 /**
  * Everyone who tracks attendance (active, joined by that day), each with their row for the date,
- * in the order they were added to Daybook. Breaks are read with one query for the date.
+ * in the order they were added to Daybook. Breaks are read with one query for the date. Admins
+ * are left out unless the viewer is an Admin.
  * @param {string} workDate
+ * @param {{ viewer?: { role: string } }} [options] the signed-in person; none = everyone
  * @returns {Promise<Array<{ user: object, attendance: AttendanceRow | null,
  *   where: 'office' | 'wfh' | 'unverified' | 'not_checked_in', presentMinutes: number | null,
  *   breakMinutes: number, workedMinutes: number | null, overAllowanceMinutes: number }>>}
  *   presentMinutes and workedMinutes are null without a row or for a missing check-out;
  *   overAllowanceMinutes is how far breaks go past breakAllowanceMinutes (0 when it is 0)
  */
-export async function listDay(workDate) {
+export async function listDay(workDate, { viewer } = {}) {
   const [people, rows, breakRows, current] = await Promise.all([
     users.listActive({ tracksAttendance: true }),
     repo.listByDate(workDate),
@@ -61,6 +71,7 @@ export async function listDay(workDate) {
   };
   return people
     .filter((person) => person.tracksAttendance !== false)
+    .filter((person) => showsAttendanceOf(viewer, person))
     .filter((person) => !person.joinedOn || person.joinedOn <= workDate || byUser.has(person.id))
     .sort((a, b) => a.id - b.id)
     .map((person) => {
@@ -90,11 +101,11 @@ export function filterDay(items, filter = 'all') {
 /**
  * The day list filtered (GET /api/attendance), with paging.
  * @param {{ date: string, filter?: 'all' | 'late' | 'wfh' | 'not_checked_in' | 'unverified',
- *   limit?: number, offset?: number }} input
+ *   limit?: number, offset?: number, viewer?: { role: string } }} input viewer as for listDay()
  * @returns {Promise<{ items: object[], total: number }>}
  */
-export async function listForDay({ date, filter = 'all', limit = 100, offset = 0 }) {
-  const all = await listDay(date);
+export async function listForDay({ date, filter = 'all', limit = 100, offset = 0, viewer }) {
+  const all = await listDay(date, { viewer });
   const matching = filterDay(all, filter);
   return { items: matching.slice(offset, offset + limit), total: matching.length };
 }
@@ -146,18 +157,24 @@ export function summarize(items, missing) {
  * Numbers for a date (GET /api/attendance/summary and the Attendance KPIs). Missing check-outs
  * are the rows still marked missing from the days missingWindow() covers, among active people who
  * track attendance; missingFromDate is the first of those days with one (or the window's start
- * when there are none) and missingDays how many days have one.
+ * when there are none) and missingDays how many days have one. Admins count only for an Admin.
  * @param {string} workDate
- * @param {object[]} [items] listDay(workDate), when the caller already has it
+ * @param {{ items?: object[], viewer?: { role: string } }} [options] items = listDay(workDate,
+ *   { viewer }) when the caller already has it; viewer as for listDay()
  * @returns {Promise<{ date: string, tracked: number, present: number, inOffice: number,
  *   wfh: number, late: number, lateAverageMinutes: number, notCheckedIn: number,
  *   unverified: number, missingCheckouts: number, missingFromDate: string,
  *   missingDays: number }>}
  */
-export async function getDaySummary(workDate, items) {
-  const [list, current] = await Promise.all([items ?? listDay(workDate), settings.getAll()]);
+export async function getDaySummary(workDate, { items, viewer } = {}) {
+  const [list, current] = await Promise.all([
+    items ?? listDay(workDate, { viewer }),
+    settings.getAll(),
+  ]);
   const span = missingWindow(workDate, current.workingDays);
-  const perDay = await repo.countMissingByDay(span.from, span.to);
+  const perDay = await repo.countMissingByDay(span.from, span.to, {
+    hideAdmins: hidesAdmins(viewer),
+  });
   const missing = {
     count: perDay.reduce((sum, day) => sum + day.count, 0),
     fromDate: perDay[0]?.workDate ?? span.from,
@@ -169,13 +186,17 @@ export async function getDaySummary(workDate, items) {
 /**
  * Rows still marked as a missing check-out (not fixed yet) of active people who track
  * attendance, newest first, with the person. `total` counts the same rows, so it never includes
- * one the list can't show.
- * @param {{ limit?: number }} [options]
+ * one the list can't show. Admins' rows are left out unless the viewer is an Admin.
+ * @param {{ limit?: number, viewer?: { role: string } }} [options] viewer as for listDay()
  * @returns {Promise<{ items: Array<AttendanceRow & { user: object }>, total: number }>}
  */
-export async function listMissingCheckouts({ limit = 20 } = {}) {
+export async function listMissingCheckouts({ limit = 20, viewer } = {}) {
   const size = Math.min(Math.max(Number(limit) || 20, 1), 100);
-  const [rows, total] = await Promise.all([repo.listMissing({ limit: size }), repo.countMissing()]);
+  const hideAdmins = hidesAdmins(viewer);
+  const [rows, total] = await Promise.all([
+    repo.listMissing({ limit: size, hideAdmins }),
+    repo.countMissing({ hideAdmins }),
+  ]);
   const people = await users.findByIds([...new Set(rows.map((row) => row.userId))]);
   const byId = new Map(people.map((person) => [person.id, person]));
   const items = rows.map((row) => {
@@ -200,12 +221,14 @@ const CHECKOUT_WORDS = {
 };
 
 /**
- * The Excel download for a day (GET /api/attendance/export): one sheet, one row per person.
+ * The Excel download for a day (GET /api/attendance/export): one sheet, one row per person the
+ * viewer may see (listDay()). Durations stay numbers so the sheet can add them up.
  * @param {string} workDate
+ * @param {{ viewer?: { role: string } }} [options] viewer as for listDay()
  * @returns {Promise<{ filename: string, sheets: object[] }>} input for xlsxResponse()
  */
-export async function exportDay(workDate) {
-  const [items, current] = await Promise.all([listDay(workDate), settings.getAll()]);
+export async function exportDay(workDate, { viewer } = {}) {
+  const [items, current] = await Promise.all([listDay(workDate, { viewer }), settings.getAll()]);
   const tz = current.timezone;
   // 24-hour clocks: "6:34" alone can't be told from 6:34 AM in a spreadsheet.
   const clock = (at) => (at ? toLocal(at, tz).format('HH:mm') : '');

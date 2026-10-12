@@ -70,9 +70,7 @@ function columns(canCorrect) {
         row.checkIn ? (
           <span className={styles.checkIn}>
             <span className={styles.checkInTime}>{row.checkIn}</span>
-            {row.lateMinutes > 0 ? (
-              <span className={styles.late}>Late {row.lateMinutes}m</span>
-            ) : null}
+            {row.late ? <span className={styles.late}>{row.late}</span> : null}
           </span>
         ) : (
           DASH

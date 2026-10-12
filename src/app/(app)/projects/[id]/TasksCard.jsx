@@ -5,7 +5,6 @@
 // it was first and last reported. Filter by status and person in the browser; long lists show 25
 // rows at a time.
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import Avatar from '@/components/Avatar';
 import PriorityTag from '@/components/PriorityTag';
 import Button from '@/components/Button';
@@ -18,6 +17,7 @@ import StatusCell from '@/components/StatusCell';
 import Tag from '@/components/Tag';
 import { plural } from '@/lib/text';
 import { formatDayShort } from '@/lib/time';
+import PersonName from './PersonName';
 import styles from './TasksCard.module.css';
 
 const STEP = 25;
@@ -97,9 +97,7 @@ const COLUMNS = [
       task.user ? (
         <div className={styles.person}>
           <Avatar user={task.user} size={30} />
-          <Link href={task.user.href} className={styles.name}>
-            {task.user.name}
-          </Link>
+          <PersonName user={task.user} className={styles.name} />
         </div>
       ) : (
         '—'

@@ -1,6 +1,6 @@
 // HR's direct changes to attendance (guide 7.8): add a row for someone who forgot, edit times or
 // place, and confirm an unverified office check-in. Every change needs a reason and is audited
-// with before and after.
+// with before and after. Only an Admin changes an Admin's attendance (company rule).
 import { db } from '@/lib/db';
 import { AppError, validationError } from '@/lib/errors';
 import { dayjs, formatDayShort, now, nowDate } from '@/lib/time';
@@ -9,7 +9,7 @@ import { notifications } from '@/modules/notifications';
 import { settings } from '@/modules/settings';
 import { users } from '@/modules/users';
 import * as repo from './repo';
-import { clockOn, computeLateMinutes, todayFor, workingDayFlag } from './rules';
+import { clockOn, computeLateMinutes, showsAttendanceOf, todayFor, workingDayFlag } from './rules';
 
 /** The fields an audit row keeps for an attendance row. */
 export function auditView(row) {
@@ -82,11 +82,31 @@ export function assertNotSelf(actor, userId) {
   }
 }
 
+/**
+ * Only Admins add attendance for an Admin (showsAttendanceOf()). Rows and requests addressed by
+ * id answer NOT_FOUND instead (findRowForUpdate, decisions.loadPending).
+ * @param {{ role?: string }} actor
+ * @param {{ role?: string } | null} person whose attendance it is
+ * @throws FORBIDDEN
+ */
+export function assertMayChange(actor, person) {
+  if (!showsAttendanceOf(actor, person)) {
+    throw new AppError('FORBIDDEN', { message: "Only an Admin can change an Admin's attendance." });
+  }
+}
+
+/**
+ * The row (locked) and its person, once the actor may change it. An Admin's row looks missing to
+ * anyone but an Admin, so probing ids never confirms that an Admin checked in.
+ */
 async function findRowForUpdate(id, actor, trx) {
   const row = await repo.findById(id, trx, { forUpdate: true });
-  if (!row) throw new AppError('NOT_FOUND', { message: 'That attendance row no longer exists.' });
+  const person = row && (await users.findById(row.userId));
+  if (!row || !showsAttendanceOf(actor, person)) {
+    throw new AppError('NOT_FOUND', { message: 'That attendance row no longer exists.' });
+  }
   assertNotSelf(actor, row.userId);
-  return row;
+  return { row, person };
 }
 
 async function tellPerson({ userId, actor, workDate, what }, trx) {
@@ -105,13 +125,13 @@ async function tellPerson({ userId, actor, workDate, what }, trx) {
 /**
  * HR adds a row for someone who forgot to check in (POST /api/attendance). A past day needs a
  * check-out time; today's row may stay open so the person can check out themselves.
- * @param {{ actor: { id: number, name: string }, userId: number, workDate: string,
+ * @param {{ actor: { id: number, name: string, role: string }, userId: number, workDate: string,
  *   checkIn: string, checkOut?: string | null, location: 'office' | 'wfh', reason: string,
  *   ip?: string | null }} input clocks are 'HH:mm' in company time
  * @returns {Promise<AttendanceRow>}
- * @throws NOT_FOUND (person), FORBIDDEN (their own row), VALIDATION_FAILED (future day or time,
- *   check-out before check-in, missing check-out on a past day), ATTENDANCE_EXISTS, CONFLICT
- *   (the person doesn't track attendance)
+ * @throws NOT_FOUND (person), FORBIDDEN (their own row, or an Admin's when the actor isn't one),
+ *   VALIDATION_FAILED (future day or time, check-out before check-in, missing check-out on a
+ *   past day), ATTENDANCE_EXISTS, CONFLICT (the person doesn't track attendance)
  */
 export async function createForUser({
   actor,
@@ -135,6 +155,7 @@ export async function createForUser({
     throw validationError({ checkOut: message }, message);
   }
   const person = await findPerson(userId);
+  assertMayChange(actor, person);
   // PMs (and Admins who don't track attendance) never check in, so a row would only be hidden.
   if (!person.tracksAttendance) {
     throw new AppError('CONFLICT', {
@@ -194,11 +215,11 @@ export async function createForUser({
  * HR changes a row's check-in, check-out or place (PATCH /api/attendance/:id). A new check-out
  * sets checkout_status = corrected; a new check-in recomputes late minutes; setting the place
  * counts as verified.
- * @param {{ actor: { id: number, name: string }, id: number, checkIn?: string,
+ * @param {{ actor: { id: number, name: string, role: string }, id: number, checkIn?: string,
  *   checkOut?: string, location?: 'office' | 'wfh', reason: string, ip?: string | null }} input
  * @returns {Promise<AttendanceRow>}
- * @throws NOT_FOUND, FORBIDDEN (their own row), VALIDATION_FAILED (future time, check-out
- *   before check-in)
+ * @throws NOT_FOUND (also an Admin's row when the actor isn't one), FORBIDDEN (their own row),
+ *   VALIDATION_FAILED (future time, check-out before check-in)
  */
 export async function updateRow({ actor, id, checkIn, checkOut, location, reason, ip }) {
   const why = requireReason(reason);
@@ -208,14 +229,13 @@ export async function updateRow({ actor, id, checkIn, checkOut, location, reason
   }
   const current = await settings.getAll();
   const rowId = await db.transaction(async (trx) => {
-    const row = await findRowForUpdate(id, actor, trx);
+    const { row, person } = await findRowForUpdate(id, actor, trx);
     const times = resolveTimes({ workDate: row.workDate, checkIn, checkOut, current });
     const checkInAt = times.checkInAt ?? row.checkInAt;
     const checkOutAt = times.checkOutAt ?? row.checkOutAt;
     assertOrder(checkInAt, checkOutAt, times.checkOutAt ? 'checkOut' : 'checkIn');
     const changes = { updatedAt: nowDate() };
     if (times.checkInAt) {
-      const person = await users.findById(row.userId);
       changes.checkInAt = times.checkInAt;
       changes.lateMinutes = computeLateMinutes({
         checkInAt: times.checkInAt,
@@ -255,15 +275,16 @@ export async function updateRow({ actor, id, checkIn, checkOut, location, reason
 
 /**
  * HR confirms an "Office, unverified" check-in: office_verified = 1 (audited with the reason).
- * @param {{ actor: { id: number }, id: number, reason: string, ip?: string | null }} input
+ * @param {{ actor: { id: number, role: string }, id: number, reason: string,
+ *   ip?: string | null }} input
  * @returns {Promise<AttendanceRow>}
- * @throws NOT_FOUND, FORBIDDEN (their own row), CONFLICT when the row is not an unverified
- *   office check-in
+ * @throws NOT_FOUND (also an Admin's row when the actor isn't one), FORBIDDEN (their own row),
+ *   CONFLICT when the row is not an unverified office check-in
  */
 export async function confirmOffice({ actor, id, reason, ip }) {
   const why = requireReason(reason);
   await db.transaction(async (trx) => {
-    const row = await findRowForUpdate(id, actor, trx);
+    const { row } = await findRowForUpdate(id, actor, trx);
     if (row.location !== 'office' || row.officeVerified) {
       throw new AppError('CONFLICT', { message: "This check-in doesn't need confirming." });
     }

@@ -1,4 +1,6 @@
-// Loads and shapes the Attendance page (artboard 09). Server only (called from page.js).
+// Loads and shapes the Attendance page (artboard 09). Server only (called from page.js). Every read
+// passes the viewer: HR and PMs never see an Admin's attendance (company rule). Durations read as
+// hours and minutes ("Late 1h 37m"), never a bare minute count past an hour.
 import { can } from '@/lib/permissions';
 import {
   addDays,
@@ -44,7 +46,8 @@ function actionFor(item, { date, today, dayLabel, tz }) {
 
 /**
  * The Present cell (CONTRACT 15): present time, or worked time (present less breaks) with a
- * "Breaks 45m" line and an "Over 15m" tag past the daily allowance once the person took breaks.
+ * "Breaks 45m" line and an "Over 15m" tag past the daily allowance once the person took breaks
+ * ("Breaks 1h 2m", "Over 1h 15m" past an hour).
  */
 function presentOf(item) {
   const present = item.presentMinutes;
@@ -55,8 +58,8 @@ function presentOf(item) {
   const over = item.overAllowanceMinutes ?? 0;
   return {
     present: formatDuration(worked),
-    breaks: `Breaks ${breaks}m`,
-    over: over > 0 ? `Over ${over}m` : null,
+    breaks: `Breaks ${formatDuration(breaks)}`,
+    over: over > 0 ? `Over ${formatDuration(over)}` : null,
     presentTitle: `Present ${formatDuration(present)}, breaks ${formatDuration(breaks)}, worked ${formatDuration(worked)}`,
   };
 }
@@ -68,7 +71,7 @@ function tableRow(item, ctx) {
     user: item.user,
     where: item.where,
     checkIn: row ? formatTime(row.checkInAt, ctx.tz) : null,
-    lateMinutes: row?.lateMinutes ?? 0,
+    late: row?.lateMinutes > 0 ? `Late ${formatDuration(row.lateMinutes)}` : null,
     checkOut: row?.checkOutAt ? formatTime(row.checkOutAt, ctx.tz) : null,
     missing: row?.checkoutStatus === 'missing',
     ...presentOf(item),
@@ -76,6 +79,11 @@ function tableRow(item, ctx) {
     // HR changes other people's rows; their own go through another HR person or an Admin.
     action: ctx.canCorrect && item.user.id !== ctx.viewerId ? actionFor(item, ctx) : null,
   };
+}
+
+/** "average 26 minutes" (the artboard's words), "average 1h 37m" from an hour up. */
+function averageLate(minutes) {
+  return minutes < 60 ? `${minutes} ${plural(minutes, 'minute')}` : formatDuration(minutes);
 }
 
 function kpis(summary, date) {
@@ -111,9 +119,7 @@ function kpis(summary, date) {
     {
       label: 'Late',
       value: summary.late,
-      sub: summary.late
-        ? `average ${summary.lateAverageMinutes} ${plural(summary.lateAverageMinutes, 'minute')}`
-        : people(0),
+      sub: summary.late ? `average ${averageLate(summary.lateAverageMinutes)}` : people(0),
       percent: pct(summary.late),
       color: 'marigold',
     },
@@ -137,11 +143,12 @@ export async function loadAttendance({ user, date: asked, filter: askedFilter })
   const date = await attendance.resolveDate(asked);
   const filter = FILTERS.includes(askedFilter) ? askedFilter : 'all';
   const canCorrect = can(user, 'attendance.correct');
-  const items = await attendance.listDay(date);
+  const viewer = user;
+  const items = await attendance.listDay(date, { viewer });
   const [summary, corrections, missing] = await Promise.all([
-    attendance.getDaySummary(date, items),
-    canCorrect ? attendance.listCorrections({ status: 'pending', limit: 20 }) : null,
-    attendance.listMissingCheckouts({ limit: 5 }),
+    attendance.getDaySummary(date, { items, viewer }),
+    canCorrect ? attendance.listCorrections({ status: 'pending', limit: 20, viewer }) : null,
+    attendance.listMissingCheckouts({ limit: 5, viewer }),
   ]);
   const dayLabel = formatDayShort(date);
   const ctx = { date, today, dayLabel, tz, canCorrect, viewerId: user.id };

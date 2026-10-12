@@ -113,9 +113,9 @@ describe('the timers the report page gets', () => {
     const loaded = await reports.timersForReport({ user: emp, report: draft });
     expect(loaded.summary.projects[0].roundedMinutes).toBe(360);
 
-    setClock('18:08'); // 6h 08m rounds to 6.25h: the page's copy is out of date
+    setClock('18:08'); // 6h 8m rounds to 6h 15m: the page's copy is out of date
     expect((await caught(submit(emp, draft.id, [card(acme, 6)]))).fields).toEqual({
-      'entries.0.hours': 'Hours come from your timers (6.25h).',
+      'entries.0.hours': 'Hours come from your timers (6h 15m).',
     });
     // Before submitting, the page reads the timers again and takes their hours.
     const fresh = await reports.getTimersForReport({ user: emp, reportId: draft.id });

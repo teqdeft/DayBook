@@ -3,11 +3,18 @@
 import { initials } from '@/lib/text';
 import { formatDayShort, formatHours } from '@/lib/time';
 import { countTasks } from './projectReportTasks';
-import { percent } from './shared';
+import { percent, showsAdmins } from './shared';
 
-/** A person as the report shows them (avatar, name, designation, link to their detail page). */
-export function personOf(row) {
+/**
+ * A person as the report shows them (avatar, name, designation, link to their detail page). An
+ * Admin's detail page is not found for a viewer who isn't an Admin (showsAdmins()), so their name
+ * has no link (`href` null); their hours stay on the report.
+ * @param {object} row an entry or member row with the person's columns
+ * @param {{ role?: string } | null} [viewer] the signed-in person; none links everyone
+ */
+export function personOf(row, viewer) {
   const id = row.userId ?? row.id;
+  const linked = showsAdmins(viewer) || row.role !== 'admin';
   return {
     id,
     name: row.name,
@@ -16,7 +23,7 @@ export function personOf(row) {
     role: row.role ?? null,
     status: row.status ?? null,
     avatarUrl: row.avatarUrl ?? null,
-    href: `/team/${id}`,
+    href: linked ? `/team/${id}` : null,
   };
 }
 

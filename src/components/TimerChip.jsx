@@ -18,6 +18,7 @@ import {
   TIMERS_CHANGED,
   announceTimersChanged,
   awayKey,
+  awayLength,
   createAwayAsks,
   elapsedSeconds,
   formatElapsed,
@@ -170,7 +171,7 @@ export default function TimerChip({ initialState }) {
         decision === 'remove'
           ? {
               title: 'Away time removed',
-              body: `${away.minutes} min came off your ${away.projectName} timer.`,
+              body: `${awayLength(away.minutes)} came off your ${away.projectName} timer.`,
             }
           : { title: 'Away time kept' },
     });

@@ -590,7 +590,7 @@ board, HR sees breaks on Attendance.
 trx)` starts a new entry with the same project, task and note (skipped when that project is no
   longer active). After commit, if `breakAllowanceMinutes > 0` and this break took today's total
   over the allowance, notify the person once (`attendance.break_over_allowance`, "Your breaks today
-  are over the 60 min allowance", body "You've had 1h 15m of breaks today.", link `/today`).
+  are over the 1h allowance" (hours and minutes, see 16), body "You've had 1h 15m of breaks today.", link `/today`).
 - **Check-out** (`attendance.checkOut`) becomes one transaction: close the row, end an open break
   (`checkout`, at the check-out time) and stop a running timer (`checkout`). The response adds
   `breakMinutes` and `workedMinutes`; `gapMinutes = |workedMinutes − loggedMinutes|`.
@@ -747,3 +747,41 @@ color, note } | null` (read with one extra query each over `attendance_breaks` /
   board shows no "Now" and `getState` reads only a still-running entry.
 - Notification types: `attendance.break_over_allowance`, `timer.reminder`,
   `timer.stopped_midnight`.
+
+## 16. Company requests, October 2026 (added after the build guide)
+
+- **Durations read as hours and minutes everywhere** ("Late 1h 37m", "1h 45m", "over the 1h
+  allowance"): `formatHours(minutes)` now returns the same text as `formatDuration` (its decimals
+  argument is gone). Under an hour a few sentences keep "N min". Report hour inputs and the Slack
+  report text stay decimal (`minutesToHours`, `formatSlackHours`).
+- **Late grace.** Settings "Late after" (e.g. 9:35 with office start 9:30) is the late mark;
+  someone with their own shift start gets the same grace (`attendance.lateMarkFor({ shiftStart,
+settings })`: shift start + (late after − office start)). Late minutes are stored at check-in,
+  so earlier rows keep their value.
+- **Report due vs missing (Team board, Employee detail history, Overview "Needs attention").**
+  Before today's `reportReminderAt` someone checked in without a submitted report is `due` ("Due
+  6:30 PM", neutral) or `draft`; from that time on anything not submitted is `missing`. The
+  "Report missing" filter, count and KPI count `missing` only. `getTeamToday` rows carry
+  `reportLabel`, the result `reportDue`.
+- **An Admin's attendance is for Admins only.** For a viewer whose role isn't `admin`, people with
+  role `admin` are left out of every attendance/presence read and count: Team board, Employee
+  detail (NOT_FOUND), screen time (team, user range, export), Attendance day list, summary, missing
+  check-outs, export, corrections list and badge, and hours-export "Missing" rows. An Admin's
+  attendance row or correction request looked up by id answers NOT_FOUND to HR and PMs (the same as
+  a row that doesn't exist); `createForUser` for an Admin answers FORBIDDEN. Notifications about an
+  Admin's attendance (unverified office, missing check-out, correction request and its Slack DM) go
+  to the other active Admins — never HR; nobody when there is no other Admin. Report hours stay
+  visible (project report rows show the Admin's name without a link to non-Admins; global search
+  leaves Admins out for PMs). Reads with no viewer (worker, a person's own pages) see everyone.
+  Functions take `viewer`: `dashboard.getTeamToday({ filter, viewer })`, `getEmployeeDetail`,
+  `getProjectReport` / `getProjectReportEntries`, `activity.getTeamDay` / `getUserRange` /
+  `exportDay`, `attendance.listDay(date, { viewer })`, `listForDay`, `getDaySummary(date, { items,
+viewer })`, `listMissingCheckouts`, `exportDay`, `listCorrections`, `countPendingCorrections`.
+- **Submit and check out** (daily report): offered for today's draft when the person's attendance
+  row is open and they have `attendance.self`; one confirmation dialog ("Submit your report and
+  check out?"), then the normal submit and, only if it succeeded, the normal check-out; a failed
+  check-out after a successful submit says so and sends the person to Today.
+- **Projects**: the employee view has a search box (project or client name). The PM table's
+  "Hours this week" shows a muted all-time total under it when it differs.
+- **Today**: Start break only for people who track attendance.
+- **Not found inside the app**: `src/app/(app)/not-found.js` (shell) renders inside the app frame.

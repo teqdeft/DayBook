@@ -1,5 +1,6 @@
-// 404: any unknown URL and any notFound() call. Signed-in people see it inside the app shell
-// (sidebar and all); everyone else gets a small card with a way to sign in.
+// 404: any unknown URL, and notFound() outside the signed-in app ((app)/not-found.js covers pages
+// inside it). Signed-in people see it inside the app shell (sidebar and all); everyone else gets a
+// small card with a way to sign in.
 import { FileQuestion } from 'lucide-react';
 import AppFrame from '@/components/AppFrame';
 import Button from '@/components/Button';

@@ -6,6 +6,11 @@
   gap: 18.67px;
 }
 
+/* Hours and minutes stay together on one line. */
+.kpiHours {
+  white-space: nowrap;
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 372.33px;
@@ -156,5 +161,14 @@
   .attendance,
   .screenTime {
     --card-pad: 16px 16px 18px;
+  }
+}
+
+/* Four narrow cards (1024-1199 px) or two on a phone: "12h 30m" and longer step down a size. */
+@media (min-width: 1024px) and (max-width: 1199px), (max-width: 479px) {
+  .kpiHoursLong {
+    /* top: the smaller text keeps the card's 36 px number line */
+    vertical-align: top;
+    font-size: 24px;
   }
 }

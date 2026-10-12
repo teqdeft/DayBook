@@ -10,11 +10,13 @@ import { audit } from '@/modules/audit';
 import { notifications } from '@/modules/notifications';
 import { settings } from '@/modules/settings';
 import { users } from '@/modules/users';
-import { hrRecipients, loadRecipientPools, pickRecipients } from './recipients';
+import { loadRecipientPools, pickRecipients, recipientsAbout } from './recipients';
 import * as repo from './repo';
 import {
   breakMinutesWithin,
   computeLateMinutes,
+  hidesAdmins,
+  lateMarkFor,
   presentMinutes,
   todayFor,
   workedMinutes,
@@ -22,7 +24,7 @@ import {
 } from './rules';
 
 export { checkOut } from './checkout';
-export { breakMinutesWithin, presentMinutes, workedMinutes };
+export { breakMinutesWithin, lateMarkFor, presentMinutes, workedMinutes };
 
 /**
  * One person's attendance row for a work date.
@@ -97,9 +99,10 @@ function decideLocation({ onOfficeNetwork, location, unverifiedOffice, allowUnve
  * Checks the person in for today at the server's time.
  * On the office network the only option is Office (verified). Elsewhere the default is WFH;
  * Office needs unverifiedOffice = true and the allow_unverified_office setting, is saved with
- * office_verified = 0 and notifies HR. Late minutes follow the person's shift start or late_after
+ * office_verified = 0 and notifies HR (an Admin's: the other Admins, recipients.js). Late minutes follow the person's shift start or late_after
  * on working days.
- * @param {{ user: { id: number, name: string, shiftStart?: string | null }, ip?: string | null,
+ * @param {{ user: { id: number, name: string, role: string, shiftStart?: string | null },
+ *   ip?: string | null,
  *   location?: 'office' | 'wfh', unverifiedOffice?: boolean, note?: string | null }} input
  * @returns {Promise<AttendanceRow>}
  * @throws ALREADY_CHECKED_IN, OFFICE_NETWORK_REQUIRED, UNVERIFIED_OFFICE_DISABLED
@@ -154,7 +157,7 @@ export async function checkIn({ user, ip, location, unverifiedOffice = false, no
 }
 
 async function reportUnverifiedOffice({ user, id, row, ip }, trx) {
-  const hr = await hrRecipients(user.id);
+  const hr = await recipientsAbout(user);
   await notifications.notify(
     {
       userIds: hr.map((person) => person.id),
@@ -181,7 +184,7 @@ async function reportUnverifiedOffice({ user, id, row, ip }, trx) {
 
 /**
  * Worker job (00:05): marks every check-in still open from an earlier day as missing (audited)
- * and tells HR and the person. Only people the Attendance screen shows (active, tracking
+ * and tells HR (about an Admin: the other Admins, recipients.js) and the person. Only people the Attendance screen shows (active, tracking
  * attendance) are announced: a leaver deactivated after checking in, or someone who doesn't
  * track attendance, has nowhere to fix it, so their row is marked quietly. Does nothing when
  * auto_mark_missing_checkout is off.
@@ -209,7 +212,7 @@ export async function markMissingCheckouts() {
     for (const row of rows) {
       const person = byId.get(row.userId);
       const shown = person?.status === 'active' && person.tracksAttendance;
-      const hr = shown ? pickRecipients(pools, row.userId) : [];
+      const hr = shown ? pickRecipients(pools, person) : [];
       await notifyMissing({ row, person: shown ? person : null, hr }, trx);
     }
     return rows;
@@ -257,9 +260,11 @@ async function notifyMissing({ row, person, hr }, trx) {
 }
 
 /**
- * How many correction requests wait for HR (the Attendance nav badge).
+ * How many correction requests wait for HR (the Attendance nav badge). Requests from Admins
+ * count only for an Admin viewer.
+ * @param {{ viewer?: { role: string } }} [options] the signed-in person; none = all requests
  * @returns {Promise<number>}
  */
-export function countPendingCorrections() {
-  return repo.countCorrections({ status: 'pending' });
+export function countPendingCorrections({ viewer } = {}) {
+  return repo.countCorrections({ status: 'pending', hideAdmins: hidesAdmins(viewer) });
 }

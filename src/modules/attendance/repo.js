@@ -146,17 +146,20 @@ export function markMissing(ids, updatedAt, trx = db) {
 /**
  * Rows still marked missing (not fixed yet) of the people the Attendance screen shows: active and
  * tracking attendance (guide 7.10). A leaver's or an untracked person's row has nowhere to be
- * fixed, so it is never counted or listed.
+ * fixed, so it is never counted or listed. `hideAdmins` leaves out Admins' rows (a viewer who
+ * isn't an Admin never sees an Admin's attendance).
  */
-function missingOfTracked(trx) {
-  return trx('attendance as a')
+function missingOfTracked(trx, { hideAdmins = false } = {}) {
+  const query = trx('attendance as a')
     .join('users as u', 'u.id', 'a.userId')
     .where({ 'a.checkoutStatus': 'missing', 'u.status': 'active', 'u.tracksAttendance': true });
+  if (hideAdmins) query.whereNot('u.role', 'admin');
+  return query;
 }
 
 /** Missing rows (see missingOfTracked), newest day first. */
-export function listMissing({ limit = 20 } = {}, trx = db) {
-  return missingOfTracked(trx)
+export function listMissing({ limit = 20, hideAdmins = false } = {}, trx = db) {
+  return missingOfTracked(trx, { hideAdmins })
     .select(ROW_COLUMNS.map((column) => `a.${column}`))
     .orderBy('a.workDate', 'desc')
     .orderBy('a.userId', 'asc')
@@ -164,8 +167,8 @@ export function listMissing({ limit = 20 } = {}, trx = db) {
 }
 
 /** How many missing rows (see missingOfTracked) there are. */
-export async function countMissing(trx = db) {
-  const row = await missingOfTracked(trx).count({ n: '*' }).first();
+export async function countMissing({ hideAdmins = false } = {}, trx = db) {
+  const row = await missingOfTracked(trx, { hideAdmins }).count({ n: '*' }).first();
   return Number(row?.n ?? 0);
 }
 
@@ -173,8 +176,8 @@ export async function countMissing(trx = db) {
  * Missing rows (see missingOfTracked) per work date from `from` to `to` (inclusive), oldest first.
  * @returns {Promise<Array<{ workDate: string, count: number }>>}
  */
-export async function countMissingByDay(from, to, trx = db) {
-  const rows = await missingOfTracked(trx)
+export async function countMissingByDay(from, to, { hideAdmins = false } = {}, trx = db) {
+  const rows = await missingOfTracked(trx, { hideAdmins })
     .whereBetween('a.workDate', [from, to])
     .groupBy('a.workDate')
     .select('a.workDate')
@@ -261,19 +264,27 @@ export function findPendingCorrection({ userId, workDate, type }, trx = db) {
     .first();
 }
 
-export function listCorrections({ status, userId, limit, offset }, trx = db) {
-  const query = trx('attendanceCorrections').select(CORRECTION_COLUMNS).where({ status });
+/**
+ * Corrections with a status (and one person's, with `userId`). `hideAdmins` leaves out requests
+ * from Admins (only Admins see an Admin's attendance), still in the same query.
+ */
+function correctionsWhere({ status, userId, hideAdmins = false }, trx) {
+  const query = trx('attendanceCorrections').where({ status });
   if (userId) query.where({ userId });
+  if (hideAdmins) query.whereNotIn('userId', trx('users').select('id').where({ role: 'admin' }));
+  return query;
+}
+
+export function listCorrections({ status, userId, hideAdmins, limit, offset }, trx = db) {
+  const query = correctionsWhere({ status, userId, hideAdmins }, trx).select(CORRECTION_COLUMNS);
   // Pending requests are handled oldest first; decided ones are shown newest first.
   if (status === 'pending') query.orderBy('createdAt', 'asc').orderBy('id', 'asc');
   else query.orderBy('handledAt', 'desc').orderBy('id', 'desc');
   return query.limit(limit).offset(offset);
 }
 
-export async function countCorrections({ status, userId }, trx = db) {
-  const query = trx('attendanceCorrections').where({ status });
-  if (userId) query.where({ userId });
-  const row = await query.count({ n: '*' }).first();
+export async function countCorrections({ status, userId, hideAdmins }, trx = db) {
+  const row = await correctionsWhere({ status, userId, hideAdmins }, trx).count({ n: '*' }).first();
   return Number(row?.n ?? 0);
 }
 

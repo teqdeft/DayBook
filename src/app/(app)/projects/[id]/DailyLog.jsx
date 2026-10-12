@@ -4,7 +4,6 @@
 // person per day, newest first. The page renders the first 20; "Show more" asks the API for the
 // next page of the same range.
 import { useState } from 'react';
-import Link from 'next/link';
 import Avatar from '@/components/Avatar';
 import Button from '@/components/Button';
 import Card, { CardHeader } from '@/components/Card';
@@ -14,6 +13,7 @@ import Tag from '@/components/Tag';
 import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/apiClient';
 import { plural } from '@/lib/text';
+import PersonName from './PersonName';
 import styles from './DailyLog.module.css';
 
 const STATUS = {
@@ -36,9 +36,7 @@ const COLUMNS = [
     render: (row) => (
       <div className={styles.person}>
         <Avatar user={row.user} size={30} />
-        <Link href={row.user.href} className={styles.name}>
-          {row.user.name}
-        </Link>
+        <PersonName user={row.user} className={styles.name} />
       </div>
     ),
   },

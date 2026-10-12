@@ -1,13 +1,13 @@
 // "People on this project": everyone with hours in the range and every member without any, with
 // their hours, days, first and last report and task counts. Server-safe. Below 1024 px the rows
 // become cards, where the two dates and the three counts each share one line.
-import Link from 'next/link';
 import Avatar from '@/components/Avatar';
 import Card, { CardHeader } from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import EmptyState from '@/components/EmptyState';
 import { plural } from '@/lib/text';
 import { formatDayShort } from '@/lib/time';
+import PersonName from './PersonName';
 import styles from './PeopleTable.module.css';
 
 const dateOf = (date) => (date ? formatDayShort(date) : '—');
@@ -52,9 +52,7 @@ const COLUMNS = [
       <div className={styles.person}>
         <Avatar user={row.user} size={34} />
         <div className={styles.personText}>
-          <Link href={row.user.href} className={styles.name}>
-            {row.user.name}
-          </Link>
+          <PersonName user={row.user} className={styles.name} />
           {personSub(row.user) ? <span className={styles.sub}>{personSub(row.user)}</span> : null}
         </div>
       </div>

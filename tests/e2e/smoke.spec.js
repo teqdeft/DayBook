@@ -109,3 +109,37 @@ test('PM: an employee detail opens from the team board', async ({ signInAs }) =>
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(PEOPLE.vishal.name);
   expect(problemsOf(page), 'console and page errors').toEqual([]);
 });
+
+test('Employee: the project search filters the cards by name', async ({ signInAs }) => {
+  const page = await signInAs(PEOPLE.vishal);
+  await open(page, '/projects');
+  const cards = page.getByRole('article');
+  const box = page.getByRole('searchbox', { name: 'Search projects' });
+  const all = await cards.count();
+  expect(all).toBeGreaterThan(1);
+
+  await test.step('typing keeps the cards whose name matches, in the address too', async () => {
+    await box.fill('ACME');
+    await expect(page).toHaveURL(/\/projects\?q=ACME$/);
+    await expect(page.getByText(/^\d+ active projects? match(es)?$/)).toBeAttached();
+    const names = await cards.getByRole('heading', { level: 2 }).allInnerTexts();
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) expect(name.toLowerCase()).toContain('acme');
+    await expect(page.getByRole('link', { name: /^Completed \(\d+\)$/ })).toHaveAttribute(
+      'href',
+      '/projects?status=completed&q=ACME',
+    );
+  });
+
+  await test.step('no match says so, and Clear search brings every card back', async () => {
+    await box.fill('no-such-project');
+    await expect(cards).toHaveCount(0);
+    await expect(page.getByText('No projects match “no-such-project”')).toBeVisible();
+    await page.getByRole('button', { name: 'Clear search' }).click();
+    await expect(box).toBeFocused();
+    await expect(box).toHaveValue('');
+    await expect(cards).toHaveCount(all);
+    await expect(page).toHaveURL(/\/projects$/);
+  });
+  expect(problemsOf(page), 'console and page errors').toEqual([]);
+});

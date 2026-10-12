@@ -9,6 +9,7 @@
 //   browser through a Web Lock) is in ActivityTracker.track.js.
 // - Automated browsers (navigator.webdriver: tests, screenshots) are never tracked.
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { formatDuration } from '@/lib/time';
 import Button from './Button';
 import Dialog from './Dialog';
 import { hasIdleDetector, startTracking } from './ActivityTracker.track';
@@ -61,9 +62,10 @@ function useTracker(enabled, idleMs) {
 }
 
 function NoticeStates({ idleMinutes }) {
+  const idleFor = idleMinutes < 60 ? `${idleMinutes} min` : formatDuration(idleMinutes);
   const rows = [
     ['active', 'Active', 'Using the mouse or keyboard.'],
-    ['idle', 'Idle', `No mouse or keyboard for ${idleMinutes} min.`],
+    ['idle', 'Idle', `No mouse or keyboard for ${idleFor}.`],
     ['locked', 'Screen locked', 'The computer is locked.'],
   ];
   return (

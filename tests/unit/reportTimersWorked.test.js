@@ -47,11 +47,11 @@ describe('gapText', () => {
   });
 
   it('stays quiet within the allowed gap of worked time, even when present time is further', () => {
-    // 8h 30m present, 1h of breaks: 7h 30m worked against 7.5h logged.
+    // 8h 30m present, 1h of breaks: 7h 30m worked against 7h 30m logged.
     expect(gapText({ ...base, presentMinutes: 510, workedMinutes: 450 }, 450, 'draft')).toBeNull();
     // Without the breaks the same day would have warned against 8h 30m.
     expect(gapText({ ...base, presentMinutes: 510, workedMinutes: 510 }, 450, 'draft')).toBe(
-      'You logged 7.5h but were checked in for 8h 30m. Check your hours before you submit.',
+      'You logged 7h 30m but were checked in for 8h 30m. Check your hours before you submit.',
     );
   });
 

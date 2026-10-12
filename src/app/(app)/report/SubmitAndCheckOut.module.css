@@ -1,0 +1,11 @@
+/* "Submitting your report…" / "Checking you out…" while both steps run (it holds the focus). */
+.status {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 22px;
+  color: var(--muted);
+}
+
+.status:focus {
+  outline: none;
+}

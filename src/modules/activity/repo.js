@@ -67,15 +67,19 @@ export function sumByDayAndState(userId, from, to, trx = db) {
 
 /**
  * Every active tracked person (by name) with their segments on one work date: one row per
- * segment, or one row with null segment columns for someone without data.
+ * segment, or one row with null segment columns for someone without data. `withAdmins: false`
+ * leaves out people with role admin (a viewer who may not see their screen time).
  */
-export function listTeamDay(workDate, trx = db) {
+export function listTeamDay(workDate, { withAdmins = true } = {}, trx = db) {
   return trx('users as u')
     .leftJoin('departments as d', 'd.id', 'u.departmentId')
     .leftJoin('activitySegments as s', function joinDay() {
       this.on('s.userId', '=', 'u.id').andOnVal('s.workDate', '=', workDate);
     })
     .where({ 'u.status': 'active', 'u.tracksAttendance': true })
+    .modify((q) => {
+      if (!withAdmins) q.whereNot('u.role', 'admin');
+    })
     .select([
       'u.id as userId',
       'u.name',

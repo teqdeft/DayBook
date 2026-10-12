@@ -82,10 +82,24 @@
   color: var(--muted);
 }
 
-/* Numbers use the heading face; proportional figures keep "88.5h" from spreading its dot. */
+/* This week's hours, with the all-time total under it. */
+.hoursCell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Numbers use the heading face. */
 .hours {
   font-family: var(--font-heading-stack);
   font-size: var(--text-body);
+}
+
+.hoursTotal {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 /* The status block fills its column but never gets narrower than "Completed" needs. */

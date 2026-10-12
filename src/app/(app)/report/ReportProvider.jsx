@@ -173,55 +173,70 @@ export default function ReportProvider({ data, children }) {
     [change],
   );
 
-  const submit = useCallback(async () => {
-    const state = live.current;
-    if (state.submitting || state.blocked || !state.reportId) return;
-    const wasSubmitted = state.status === 'submitted';
-    const notSent = wasSubmitted ? "Your report wasn't updated" : "Your report wasn't submitted";
-    // What is on screen is what gets submitted: a wrong hours value stops it here.
-    const wrongHours = firstHoursError(state.entries);
-    if (wrongHours) {
-      toast({ title: notSent, body: wrongHours.message, tone: 'error' });
-      return;
-    }
-    const autosave = autosaveRef.current;
-    if (!autosave) return;
-    state.submitting = true;
-    setSubmitting(true);
-    try {
-      // Required timer mode: a running timer moved on since the page loaded, and the server
-      // checks the hours against the timers as they are now.
-      await timerSync.current?.();
-      autosave.pause();
-      // A save still running finishes first: it returns the version this submit builds on.
-      await autosave.idle();
-      if (state.blocked) return;
-      const { body, keys } = serialize(state.entries);
-      try {
-        const { data: view } = await api.post(`/api/reports/${state.reportId}/submit`, {
-          entries: body,
-          baseVersion: state.version ?? undefined,
-        });
-        autosave.markSaved();
-        clearBackup(state.reportId);
-        adopt(view);
-        toast({ title: wasSubmitted ? 'Report updated' : 'Report submitted' });
-        router.refresh();
-      } catch (error) {
-        if (block(error)) autosave.stop();
-        else {
-          setErrors(mapFieldErrors(error?.fields, keys, error?.message));
-          // A refused submit changes nothing on the server: save the draft now, so nothing typed
-          // is lost and new rows get their ids.
-          if (state.status === 'draft') autosave.saveNow();
-        }
-        toast({ title: notSent, body: error?.message, tone: 'error' });
+  /**
+   * Submits the report (or sends the changes to a submitted one) and says whether it went
+   * through. `quiet` leaves the success toast and the refresh to the caller ("Submit and check
+   * out" checks out first); errors still show as usual.
+   * @param {{ quiet?: boolean }} [options]
+   * @returns {Promise<boolean>}
+   */
+  const submit = useCallback(
+    async (options) => {
+      const quiet = options?.quiet === true;
+      const state = live.current;
+      if (state.submitting || state.blocked || !state.reportId) return false;
+      const wasSubmitted = state.status === 'submitted';
+      const notSent = wasSubmitted ? "Your report wasn't updated" : "Your report wasn't submitted";
+      // What is on screen is what gets submitted: a wrong hours value stops it here.
+      const wrongHours = firstHoursError(state.entries);
+      if (wrongHours) {
+        toast({ title: notSent, body: wrongHours.message, tone: 'error' });
+        return false;
       }
-    } finally {
-      state.submitting = false;
-      setSubmitting(false);
-    }
-  }, [adopt, block, router, toast]);
+      const autosave = autosaveRef.current;
+      if (!autosave) return false;
+      state.submitting = true;
+      setSubmitting(true);
+      try {
+        // Required timer mode: a running timer moved on since the page loaded, and the server
+        // checks the hours against the timers as they are now.
+        await timerSync.current?.();
+        autosave.pause();
+        // A save still running finishes first: it returns the version this submit builds on.
+        await autosave.idle();
+        if (state.blocked) return false;
+        const { body, keys } = serialize(state.entries);
+        try {
+          const { data: view } = await api.post(`/api/reports/${state.reportId}/submit`, {
+            entries: body,
+            baseVersion: state.version ?? undefined,
+          });
+          autosave.markSaved();
+          clearBackup(state.reportId);
+          adopt(view);
+          if (!quiet) {
+            toast({ title: wasSubmitted ? 'Report updated' : 'Report submitted' });
+            router.refresh();
+          }
+          return true;
+        } catch (error) {
+          if (block(error)) autosave.stop();
+          else {
+            setErrors(mapFieldErrors(error?.fields, keys, error?.message));
+            // A refused submit changes nothing on the server: save the draft now, so nothing typed
+            // is lost and new rows get their ids.
+            if (state.status === 'draft') autosave.saveNow();
+          }
+          toast({ title: notSent, body: error?.message, tone: 'error' });
+          return false;
+        }
+      } finally {
+        state.submitting = false;
+        setSubmitting(false);
+      }
+    },
+    [adopt, block, router, toast],
+  );
 
   /** Puts back rows kept in this browser (unsent changes to a submitted report). */
   const restore = useCallback(

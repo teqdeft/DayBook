@@ -3,7 +3,7 @@
 // so every timer on the page shows the same second, and the 'daybook:timers-changed' event.
 // Client-safe: imports only @/lib/time and React.
 import { useSyncExternalStore } from 'react';
-import { dayjs, formatClock, formatClockShort, now } from '@/lib/time';
+import { dayjs, formatClock, formatClockShort, formatDuration, now } from '@/lib/time';
 
 /** Fired on `window` after any timer or break change, so the chip and the card reload. */
 export const TIMERS_CHANGED = 'daybook:timers-changed';
@@ -123,6 +123,11 @@ export function clockRange(fromClock, toClock) {
   return `${from}–${to}`;
 }
 
+/** How long an away span was: "32 min" under an hour, "1h 15m" from an hour on. */
+export function awayLength(minutes) {
+  return minutes < 60 ? `${minutes} min` : formatDuration(minutes);
+}
+
 /**
  * The away question (CONTRACT 15): "You were away 32 min (1:10–1:42 PM) while your acme-app
  * timer ran. Keep this time or remove it?"
@@ -130,7 +135,7 @@ export function clockRange(fromClock, toClock) {
  */
 export function awayQuestion(away) {
   const range = clockRange(away.fromClock, away.toClock);
-  return `You were away ${away.minutes} min (${range}) while your ${away.projectName} timer ran. Keep this time or remove it?`;
+  return `You were away ${awayLength(away.minutes)} (${range}) while your ${away.projectName} timer ran. Keep this time or remove it?`;
 }
 
 /** One key per away span, so each span is asked about once. */

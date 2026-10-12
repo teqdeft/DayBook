@@ -11,13 +11,12 @@ import {
 
 export const GET = withRoute(
   { permission: 'team.view', query: projectReportQuerySchema },
-  async ({ params, query }) => {
+  async ({ user, params, query }) => {
     const id = projectIdParamSchema.safeParse(params.id);
     if (!id.success) throw new AppError('NOT_FOUND', { message: "We couldn't find that project." });
     const { section, ...options } = query;
-    if (section === 'entries') {
-      return dashboard.getProjectReportEntries({ projectId: id.data, ...options });
-    }
-    return dashboard.getProjectReport({ projectId: id.data, ...options });
+    const input = { projectId: id.data, ...options, viewer: user };
+    if (section === 'entries') return dashboard.getProjectReportEntries(input);
+    return dashboard.getProjectReport(input);
   },
 );
