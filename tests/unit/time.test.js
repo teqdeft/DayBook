@@ -65,8 +65,9 @@ describe('time', () => {
 
   it('formats hours and durations like the design', () => {
     expect(formatHours(480)).toBe('8h');
-    expect(formatHours(510)).toBe('8.5h');
-    expect(formatHours(338, 1)).toBe('5.6h');
+    expect(formatHours(510)).toBe('8h 30m');
+    expect(formatHours(338)).toBe('5h 38m');
+    expect(formatHours(45)).toBe('45m');
     expect(minutesToHours(15)).toBe('0.25');
     expect(formatDuration(542)).toBe('9h 2m');
     expect(formatDuration(480)).toBe('8h');

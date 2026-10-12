@@ -3,7 +3,6 @@
 // right. Below 1024 px a menu button opens the sidebar and the actions wrap under the title.
 // Async Server Component (reads the session for the bell and avatar). Every page renders it, so it
 // also asks the browser to re-issue an out-of-date session cookie (SessionRefresh).
-import { can } from '@/lib/permissions';
 import { getSessionUser } from '@/lib/session';
 import { logger } from '@/lib/logger';
 import { notifications } from '@/modules/notifications';
@@ -12,6 +11,7 @@ import { settings } from '@/modules/settings';
 import Breadcrumb from './Breadcrumb';
 import GlobalSearch from './GlobalSearch';
 import NotificationBell from './NotificationBell';
+import { searchScope } from './searchScope';
 import SessionRefresh from './SessionRefresh';
 import ShellMenuButton from './ShellMenuButton';
 import UserMenu from './UserMenu';
@@ -56,14 +56,7 @@ export default async function TopBar({
             <GlobalSearch
               placeholder={search.placeholder}
               width={search.width}
-              scope={{
-                people: can(user, 'team.view')
-                  ? 'team'
-                  : can(user, 'people.manage')
-                    ? 'people'
-                    : null,
-                projects: can(user, 'project.request') || can(user, 'project.manage'),
-              }}
+              scope={searchScope(user)}
             />
           ) : null}
           {bell && user ? (

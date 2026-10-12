@@ -108,4 +108,11 @@
   .toast {
     width: auto;
   }
+
+  /* A dialog is a bottom sheet on phones: while one is open the toasts move to the top, so they
+     never cover its buttons (an error toast from the last try stays up for 8 s). */
+  :global(body:has([data-dialog-root])) .region {
+    top: 16px;
+    bottom: auto;
+  }
 }

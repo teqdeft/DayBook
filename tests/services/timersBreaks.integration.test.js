@@ -358,7 +358,7 @@ describe('worked time and the break allowance', () => {
     });
     const [note] = await notes();
     expect(note).toMatchObject({
-      title: 'Your breaks today are over the 60 min allowance',
+      title: 'Your breaks today are over the 1h allowance',
       body: "You've had 1h 10m of breaks today.",
       link: '/today',
     });

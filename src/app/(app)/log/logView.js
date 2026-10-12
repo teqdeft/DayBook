@@ -147,6 +147,12 @@ export function dayRows(log) {
   });
 }
 
+/** '14 minutes' as the artboard shows it; an hour or more reads '1h 37m', never '97 minutes'. */
+function lateText(minutes) {
+  const value = Number(minutes) || 0;
+  return value < 60 ? `${value} ${plural(value, 'minute')}` : formatDuration(value);
+}
+
 /** The four numbers at the top. */
 export function kpiCards(log) {
   const k = log.kpis;
@@ -155,8 +161,8 @@ export function kpiCards(log) {
     {
       key: 'hours',
       label: 'Hours logged',
-      // Whole hours, like the other number cards (a tabular '.' reads as a gap at this size).
-      value: formatHours(k.loggedMinutes, 0),
+      // Hours and minutes, like every duration (a company request: "16h 30m", not "17h").
+      value: formatHours(k.loggedMinutes),
       sub: isThisMonth ? 'this month' : 'that month',
       percent: k.loggedPercent,
       color: 'primary',
@@ -173,9 +179,7 @@ export function kpiCards(log) {
       key: 'late',
       label: 'Late days',
       value: String(k.lateDays),
-      sub: k.lateDays
-        ? `average ${k.lateAverageMinutes} ${plural(k.lateAverageMinutes, 'minute')}`
-        : 'on time every day',
+      sub: k.lateDays ? `average ${lateText(k.lateAverageMinutes)}` : 'on time every day',
       percent: k.latePercent,
       color: 'marigold',
     },

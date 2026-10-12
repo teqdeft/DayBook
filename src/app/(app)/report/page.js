@@ -25,6 +25,7 @@ import { settings } from '@/modules/settings';
 import ReportActions from './ReportActions';
 import ReportEditor from './ReportEditor';
 import ReportProvider from './ReportProvider';
+import { canCheckOutFromReport } from './reportCheckOut';
 import styles from './page.module.css';
 
 export const metadata = { title: 'Daily report' };
@@ -164,12 +165,15 @@ export default async function ReportPage({ searchParams }) {
     workedFor(row, user.id, day, at, tz),
   ]);
   const back = backLink({ user, day, today });
+  const isToday = day === today;
   const data = {
     report,
     picker,
     suggestions,
     tz,
-    isToday: day === today,
+    isToday,
+    // "Submit and check out" (ReportActions) while the person is still checked in today.
+    canCheckOut: canCheckOutFromReport({ user, row, isToday }),
     user: { name: user.name, initials: user.initials, avatarUrl: user.avatarUrl, role: user.role },
     tracksAttendance: Boolean(user.tracksAttendance),
     presentMinutes: row ? attendance.presentMinutes(row, at, tz) : null,

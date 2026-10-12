@@ -129,5 +129,6 @@ describe('measuredText', () => {
   it('names the idle setting', () => {
     expect(measuredText(5)).toContain('in the last 5 minutes');
     expect(measuredText(1)).toContain('in the last minute');
+    expect(measuredText(90)).toContain('in the last 1h 30m while');
   });
 });

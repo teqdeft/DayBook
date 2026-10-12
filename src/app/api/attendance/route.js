@@ -1,4 +1,5 @@
-// GET /api/attendance?date=&filter=late|wfh|not_checked_in|unverified — everyone's row for a day.
+// GET /api/attendance?date=&filter=late|wfh|not_checked_in|unverified — everyone's row for a day
+// (Admins only for an Admin viewer).
 // POST /api/attendance — HR adds a row for someone who forgot to check in (reason required).
 import { listResult, withRoute } from '@/lib/route';
 import { attendance } from '@/modules/attendance';
@@ -6,9 +7,9 @@ import { createRowSchema, listQuerySchema } from '@/modules/attendance/schemas';
 
 export const GET = withRoute(
   { permission: 'attendance.view_all', query: listQuerySchema },
-  async ({ query }) => {
+  async ({ user, query }) => {
     const date = await attendance.resolveDate(query.date);
-    const { items, total } = await attendance.listForDay({ ...query, date });
+    const { items, total } = await attendance.listForDay({ ...query, date, viewer: user });
     return listResult(items, { limit: query.limit, offset: query.offset, total });
   },
 );

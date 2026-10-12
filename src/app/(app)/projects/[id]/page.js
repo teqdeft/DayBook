@@ -46,9 +46,9 @@ function readRange(query) {
   return { options: { range: 'all' }, errors, input };
 }
 
-async function loadReport(projectId, options) {
+async function loadReport(projectId, options, viewer) {
   try {
-    return await dashboard.getProjectReport({ projectId, ...options });
+    return await dashboard.getProjectReport({ projectId, ...options, viewer });
   } catch (error) {
     if (isAppError(error) && error.code === 'NOT_FOUND') notFound();
     throw error;
@@ -93,7 +93,7 @@ export default async function ProjectReportPage({ params, searchParams }) {
   const id = projectIdParamSchema.safeParse((await params).id);
   if (!id.success) notFound();
   const { options, errors, input } = readRange(await searchParams);
-  const report = await loadReport(id.data, options);
+  const report = await loadReport(id.data, options, user);
   const { project, range, totals, byPeriod } = report;
   const base = `/projects/${project.id}`;
   // Dates without range=custom are a custom range too: show the form, with its errors.

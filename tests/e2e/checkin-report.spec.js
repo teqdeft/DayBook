@@ -1,6 +1,8 @@
 // Guide 15.3: check in, write and submit a report, the PM sees it, then check out (which asks
-// first, a company request). Karan Mehta has not checked in today in the demo data. The demo saves
-// this computer's addresses (127.0.0.1 and ::1) as office networks, so the check-in is an Office one.
+// first, a company request). The report's "Submit and check out" is only asked and cancelled here,
+// since there is no second check-in on a day. Karan Mehta has not checked in today in the demo
+// data. The demo saves this computer's addresses (127.0.0.1 and ::1) as office networks, so the
+// check-in is an Office one.
 import { PEOPLE, cellUnder, expect, open, test, toasts } from './support/fixtures.js';
 
 const PROJECT = 'acme-app';
@@ -46,11 +48,25 @@ test('an employee checks in, submits the daily report and the PM sees it', async
     await card
       .getByRole('combobox', { name: `Status of task 1 for ${PROJECT}` })
       .selectOption({ label: 'In progress' });
-    await expect(karan.getByText('6.5h logged')).toBeVisible();
+    await expect(karan.getByText('6h 30m logged')).toBeVisible();
+
+    // Still checked in: the draft also offers "Submit and check out", which asks first.
+    // Cancel keeps both the report and the day open; Today's check-out is tested below.
+    const both = karan.getByRole('button', { name: 'Submit and check out' });
+    await both.click();
+    const question = karan.getByRole('dialog', { name: 'Submit your report and check out?' });
+    await expect(question).toContainText(
+      /This sends today's report and ends your day at \d{1,2}:\d{2} [AP]M\. You can't check in again today\./,
+    );
+    await expect(question.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await question.getByRole('button', { name: 'Cancel' }).click();
+    await expect(question).toHaveCount(0);
 
     await karan.getByRole('button', { name: 'Submit report' }).click();
     await expect(toasts(karan)).toContainText('Report submitted');
     await expect(karan.getByRole('button', { name: 'Update report' })).toBeVisible();
+    // Only a draft offers it.
+    await expect(both).toHaveCount(0);
     const preview = karan.getByRole('region', { name: 'Slack preview' });
     await expect(preview).toContainText(`Project: ${PROJECT}`);
     await expect(preview).toContainText(`${TASK} (In Progress)`);

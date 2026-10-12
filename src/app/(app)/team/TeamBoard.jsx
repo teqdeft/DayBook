@@ -2,6 +2,7 @@
 // The team board (artboard 05): people grouped into In office, Working from home and Not checked
 // in. Groups collapse from their title and show a few people first ("Show 17 more"). Filters are
 // links (?filter=missing|late), so the Overview's "Needs attention" can link straight to them.
+// Before the report time a report not submitted yet is "Due 6:30 PM" (or Draft), not Missing.
 // Live status (CONTRACT 15): "On break" under the check-in time, "Now" and the timed project
 // first in "Projects today".
 import Link from 'next/link';
@@ -76,7 +77,13 @@ function columns({ day }) {
       header: 'Report',
       width: 153,
       align: 'center',
-      render: (row) => <StatusCell status={row.report} className={styles.report} />,
+      render: (row) => (
+        <StatusCell
+          status={row.report}
+          label={row.reportLabel ?? undefined}
+          className={styles.report}
+        />
+      ),
     },
     {
       key: 'projects',
@@ -91,10 +98,18 @@ function columns({ day }) {
  *   groups: { key: string, title: string, tone: string, count: number, rows: object[] }[],
  *   filter: 'everyone'|'missing'|'late', filterItems: { value: string, label: string, href: string }[],
  *   day: { label: string, now: string, start: string, end: string, tz: string },
- *   exportHref: string, everyoneHref: string,
- * }} props
+ *   exportHref: string, everyoneHref: string, reportDue?: { label: string, before: boolean },
+ * }} props  reportDue: today's report time ('6:30 PM') and whether it is still ahead
  */
-export default function TeamBoard({ groups, filter, filterItems, day, exportHref, everyoneHref }) {
+export default function TeamBoard({
+  groups,
+  filter,
+  filterItems,
+  day,
+  exportHref,
+  everyoneHref,
+  reportDue,
+}) {
   const [collapsed, setCollapsed] = useState({});
   const [expanded, setExpanded] = useState({});
   const filtered = filter !== 'everyone';
@@ -148,11 +163,7 @@ export default function TeamBoard({ groups, filter, filterItems, day, exportHref
         <EmptyState
           className={styles.empty}
           title={emptyTitle(filter)}
-          body={
-            filtered
-              ? 'Everyone else is shown under Everyone.'
-              : 'People appear here once HR adds them.'
-          }
+          body={emptyBody(filter, reportDue)}
           action={
             filtered ? (
               <Button variant="secondary" href={everyoneHref}>
@@ -164,6 +175,14 @@ export default function TeamBoard({ groups, filter, filterItems, day, exportHref
       )}
     </section>
   );
+}
+
+function emptyBody(filter, reportDue) {
+  if (filter === 'missing' && reportDue?.before) {
+    return `Reports are due at ${reportDue.label}. Until then nobody's report is missing.`;
+  }
+  if (filter !== 'everyone') return 'Everyone else is shown under Everyone.';
+  return 'People appear here once HR adds them.';
 }
 
 function emptyTitle(filter) {

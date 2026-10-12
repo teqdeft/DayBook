@@ -14,7 +14,6 @@ import * as repo from './repo';
 import { loadContext, percent } from './shared';
 
 const STATUS_LABELS = { active: 'Active', on_hold: 'On hold', completed: 'Completed' };
-const KPI_WHOLE_HOURS_FROM = 100 * 60;
 
 function projectOf(project, ctx) {
   return {
@@ -67,9 +66,7 @@ function kpisOf({ totals, period, lastUpdate }) {
     {
       key: 'hours',
       label: 'Hours logged',
-      // Whole hours from 100h, like Overview's "Hours this week", so a big all-time total fits the
-      // card on a phone ('709h'); the exact total is in "Hours by person" and the Excel file.
-      value: formatHours(totals.minutes, totals.minutes >= KPI_WHOLE_HOURS_FROM ? 0 : 2),
+      value: formatHours(totals.minutes),
       sub: period.sub,
       footer: totals.days
         ? `Across ${totals.days} ${plural(totals.days, 'day')}`
@@ -129,7 +126,7 @@ function withPriority(row, link) {
 }
 
 /** Loads the project, its range and the submitted entries and tasks in it. */
-async function loadReport({ projectId, range, from, to }) {
+async function loadReport({ projectId, range, from, to, viewer }) {
   const ctx = await loadContext();
   const found = await projects.findById(projectId);
   if (!found) throw new AppError('NOT_FOUND', { message: "We couldn't find that project." });
@@ -151,7 +148,9 @@ async function loadReport({ projectId, range, from, to }) {
     .filter((row) => entryIds.has(row.entryId))
     .map((row) => withPriority(row, links[row.id]));
   const people = new Map();
-  for (const row of entryRows) if (!people.has(row.userId)) people.set(row.userId, personOf(row));
+  for (const row of entryRows) {
+    if (!people.has(row.userId)) people.set(row.userId, personOf(row, viewer));
+  }
   return { ctx, project, span, period, entryRows, taskRows, people };
 }
 
@@ -174,9 +173,10 @@ function exportHrefOf(project, period) {
 /**
  * The project report.
  * @param {{ projectId: number, range?: 'week'|'month'|'all'|'custom', from?: string,
- *   to?: string, limit?: number, offset?: number }} options without `range`, from + to mean a
- *   custom range and nothing means all time; custom needs from <= to (checked by the schema);
- *   limit/offset page the daily log (`entries`), limit Infinity returns all of it
+ *   to?: string, limit?: number, offset?: number, viewer?: object }} options without `range`,
+ *   from + to mean a custom range and nothing means all time; custom needs from <= to (checked by
+ *   the schema); limit/offset page the daily log (`entries`), limit Infinity returns all of it;
+ *   `viewer` (the signed-in person) decides which names link to a detail page (personOf())
  * @returns {Promise<object>} { project, range, totals, lastUpdate, kpis, byPerson, byPeriod,
  *   periodUnit, tasks, entries, entriesPage, today, exportHref }
  * @throws NOT_FOUND when the project doesn't exist
@@ -188,8 +188,9 @@ export async function getProjectReport({
   to,
   limit = PROJECT_REPORT_PAGE_SIZE,
   offset = 0,
+  viewer,
 }) {
-  const loaded = await loadReport({ projectId, range, from, to });
+  const loaded = await loadReport({ projectId, range, from, to, viewer });
   const { ctx, project, span, period, entryRows, taskRows, people } = loaded;
   const [memberRows, lastUpdate] = await Promise.all([
     repo.listProjectMembers(project.id),
@@ -201,7 +202,9 @@ export async function getProjectReport({
     (member) => member.status === 'active' && member.tracksAttendance,
   );
   const memberIds = new Set(memberRows.map((member) => member.id));
-  for (const member of members) if (!people.has(member.id)) people.set(member.id, personOf(member));
+  for (const member of members) {
+    if (!people.has(member.id)) people.set(member.id, personOf(member, viewer));
+  }
 
   const minutesByEntry = new Map(entryRows.map((row) => [row.entryId, Number(row.minutes)]));
   const tasks = collapseTasks(taskRows, minutesByEntry, (userId) => people.get(userId));
@@ -245,7 +248,7 @@ export async function getProjectReport({
 /**
  * One page of the daily log only ("Show more").
  * @param {{ projectId: number, range?: string, from?: string, to?: string, limit?: number,
- *   offset?: number }} options
+ *   offset?: number, viewer?: object }} options as getProjectReport()
  * @returns {Promise<{ entries: object[], entriesPage: { limit, offset, total } }>}
  * @throws NOT_FOUND when the project doesn't exist
  */
@@ -256,8 +259,10 @@ export async function getProjectReportEntries({
   to,
   limit = PROJECT_REPORT_PAGE_SIZE,
   offset = 0,
+  viewer,
 }) {
-  const { entryRows, taskRows, people } = await loadReport({ projectId, range, from, to });
+  const loaded = await loadReport({ projectId, range, from, to, viewer });
+  const { entryRows, taskRows, people } = loaded;
   const log = page(dailyLog(entryRows, taskRows, people), limit, offset);
   return { entries: log.rows, entriesPage: log.page };
 }

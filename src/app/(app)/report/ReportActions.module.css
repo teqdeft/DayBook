@@ -34,12 +34,48 @@
   white-space: nowrap;
 }
 
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .present {
   margin-top: 2px;
   font-size: var(--text-small);
   line-height: 18px;
   color: var(--muted);
   white-space: nowrap;
+}
+
+/* 1024–1199 px with both buttons (Submit and check out, Submit report): in one row they squeeze
+   the page title onto two or three lines, so the buttons take a second row under the save status
+   and the totals. */
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .actions:has(.buttons > :nth-child(2)) {
+    display: grid;
+    grid-template-areas:
+      'save totals'
+      'buttons buttons';
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    justify-content: end;
+    gap: 10px 20px;
+  }
+
+  .actions:has(.buttons > :nth-child(2)) .save {
+    grid-area: save;
+    justify-self: end;
+  }
+
+  .actions:has(.buttons > :nth-child(2)) .totals {
+    grid-area: totals;
+  }
+
+  .actions:has(.buttons > :nth-child(2)) .buttons {
+    grid-area: buttons;
+    justify-content: flex-end;
+  }
 }
 
 @media (max-width: 1023px) {
@@ -63,5 +99,16 @@
   .save {
     order: 3;
     flex-basis: 100%;
+  }
+}
+
+/* Phones: Submit and check out and Submit report don't fit side by side, so each takes a row. */
+@media (max-width: 640px) {
+  .buttons:has(> :nth-child(2)) {
+    flex-basis: 100%;
+  }
+
+  .buttons:has(> :nth-child(2)) > * {
+    flex: 1 1 100%;
   }
 }

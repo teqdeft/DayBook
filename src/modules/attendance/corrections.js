@@ -1,5 +1,6 @@
 // Attendance correction requests (guide 7.8): a person asks HR to fix a check-in time, a
-// forgotten check-out or a whole missing day, and HR sees the list. Decisions are in decisions.js.
+// forgotten check-out or a whole missing day, and HR sees the list. An Admin's request goes to the
+// other Admins instead and only Admins see it (company rule). Decisions are in decisions.js.
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { AppError, validationError } from '@/lib/errors';
@@ -10,10 +11,10 @@ import { escapeSlackText } from '@/modules/slack/format';
 import { slack } from '@/modules/slack';
 import { users } from '@/modules/users';
 import { assertOrder, requireReason, resolveTimes } from './hr';
-import { hrRecipients } from './recipients';
+import { recipientsAbout } from './recipients';
 import * as repo from './repo';
 import { describeCorrection } from './wording';
-import { todayFor } from './rules';
+import { hidesAdmins, todayFor } from './rules';
 
 function fieldError(field, message) {
   return validationError({ [field]: message }, message);
@@ -55,7 +56,7 @@ function checkAgainstRow({ type, row, times }) {
 }
 
 async function tellHr({ user, correction, summary }, trx) {
-  const hr = await hrRecipients(user.id);
+  const hr = await recipientsAbout(user);
   await notifications.notify(
     {
       userIds: hr.map((person) => person.id),
@@ -89,8 +90,9 @@ async function tellHr({ user, correction, summary }, trx) {
  * A person asks HR to fix their attendance (POST /api/attendance-corrections).
  * check_in and check_out need that day's row; missing_day needs no row and stores the check-in
  * time, the check-out time (requested_end_time) and the place. Times are clocks in company time
- * and can't be in the future. Notifies HR in the app and by Slack DM (slack_requests_notify).
- * @param {{ user: { id: number, name: string }, type: 'check_in' | 'check_out' | 'missing_day',
+ * and can't be in the future. Notifies HR in the app and by Slack DM (slack_requests_notify); an
+ * Admin's request notifies the other active Admins instead (nobody when there is none).
+ * @param {{ user: { id: number, name: string, role: string }, type: 'check_in' | 'check_out' | 'missing_day',
  *   workDate: string, checkIn?: string, checkOut?: string, location?: 'office' | 'wfh',
  *   reason: string }} input
  * @returns {Promise<object>} the new correction
@@ -145,16 +147,25 @@ export async function requestCorrection({
 }
 
 /**
- * Corrections by status with the person, the day's row and the card sentence, for HR.
+ * Corrections by status with the person, the day's row and the card sentence, for HR. Requests
+ * from Admins are left out unless the viewer is an Admin.
  * @param {{ status?: 'pending' | 'approved' | 'rejected', userId?: number, limit?: number,
- *   offset?: number }} [options]
+ *   offset?: number, viewer?: { role: string } }} [options] viewer = the signed-in person; none
+ *   (a person's own list on Today) = every request
  * @returns {Promise<{ items: object[], total: number }>}
  */
-export async function listCorrections({ status = 'pending', userId, limit = 50, offset = 0 } = {}) {
+export async function listCorrections({
+  status = 'pending',
+  userId,
+  limit = 50,
+  offset = 0,
+  viewer,
+} = {}) {
   const size = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const where = { status, userId, hideAdmins: hidesAdmins(viewer) };
   const [rows, total, current] = await Promise.all([
-    repo.listCorrections({ status, userId, limit: size, offset: Math.max(Number(offset) || 0, 0) }),
-    repo.countCorrections({ status, userId }),
+    repo.listCorrections({ ...where, limit: size, offset: Math.max(Number(offset) || 0, 0) }),
+    repo.countCorrections(where),
     settings.getAll(),
   ]);
   const attendanceIds = [...new Set(rows.map((row) => row.attendanceId).filter(Boolean))];

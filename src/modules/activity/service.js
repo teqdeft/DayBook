@@ -175,9 +175,15 @@ function teamUser(row) {
   };
 }
 
+// Company rule: an Admin's screen time is for other Admins only (never PMs or HR). No viewer is a
+// system read, which sees everyone, as in the attendance and dashboard modules.
+const showsAdmins = (viewer) => !viewer || viewer.role === 'admin';
+
 /**
- * Every active tracked person's screen time on one work date, by name (one query).
+ * Every active tracked person's screen time on one work date, by name (one query). Admins are
+ * left out unless the viewer is an Admin too (see showsAdmins).
  * @param {string} date 'YYYY-MM-DD'
+ * @param {{ viewer?: { role: string } }} [options] viewer: the signed-in person
  * @returns {Promise<Array<{ user: { id: number, name: string, email: string, designation: string,
  *   departmentName: string | null, role: string, status: string, avatarUrl: string | null,
  *   initials: string }, currentState: 'active' | 'idle' | 'locked' | 'offline',
@@ -186,8 +192,11 @@ function teamUser(row) {
  *   segments: Array<{ state: string, source: string, startedAt: Date, endedAt: Date }> }>>}
  *   currentState is 'offline' when the last report is older than 150 s or `date` isn't today
  */
-export async function getTeamDay(date) {
-  const [rows, current] = await Promise.all([repo.listTeamDay(date), settings.getAll()]);
+export async function getTeamDay(date, { viewer } = {}) {
+  const [rows, current] = await Promise.all([
+    repo.listTeamDay(date, { withAdmins: showsAdmins(viewer) }),
+    settings.getAll(),
+  ]);
   const at = nowDate();
   const today = workDate(current.timezone, at);
   const people = new Map();
@@ -260,15 +269,19 @@ export async function getMyRange({ user, from, to }) {
 
 /**
  * Someone's screen time for PMs and Admin (GET /api/activity/users/[id]).
- * @param {{ userId: number, from?: string, to?: string }} input
+ * @param {{ userId: number, from?: string, to?: string, viewer?: { role: string } }} input
+ *   viewer: the signed-in person (see showsAdmins)
  * @returns {Promise<{ user: { id: number, name: string, designation: string,
  *   departmentName: string | null, role: string, status: string, tracksAttendance: boolean,
  *   initials: string }, from: string, to: string } & Awaited<ReturnType<typeof getRange>>>}
- * @throws NOT_FOUND for an unknown person, VALIDATION_FAILED for a bad range
+ * @throws NOT_FOUND for an unknown person, or an Admin when the viewer isn't one;
+ *   VALIDATION_FAILED for a bad range
  */
-export async function getUserRange({ userId, from, to }) {
+export async function getUserRange({ userId, from, to, viewer }) {
   const person = await users.findById(userId);
-  if (!person) throw new AppError('NOT_FOUND', { message: "We couldn't find that person." });
+  if (!person || (person.role === 'admin' && !showsAdmins(viewer))) {
+    throw new AppError('NOT_FOUND', { message: "We couldn't find that person." });
+  }
   const range = await resolveRange({ from, to });
   const { id, name, designation, departmentName, role, status, tracksAttendance } = person;
   return {

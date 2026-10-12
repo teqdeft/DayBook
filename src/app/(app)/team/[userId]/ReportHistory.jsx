@@ -113,7 +113,7 @@ export default function ReportHistory({ rows, emptyText = 'No working days in th
                     ) : null}
                   </td>
                   <td data-label="Report" className={styles.reportCell}>
-                    <StatusCell status={row.report} />
+                    <StatusCell status={row.report} label={row.reportLabel ?? undefined} />
                   </td>
                 </tr>
                 {isOpen ? (

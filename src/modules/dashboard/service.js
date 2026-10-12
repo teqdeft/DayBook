@@ -14,7 +14,8 @@ export { buildHoursExport } from './exportHours';
  * an Admin: everyone; never their own, as on the Requests screen) plus pending project requests
  * (anyone who handles them);
  * corrections: pending attendance correction requests, only for people who can correct attendance,
- * never their own (another HR person or an Admin decides on those).
+ * never their own (another HR person or an Admin decides on those), and an Admin's only for
+ * another Admin (an Admin's attendance is never shown to HR).
  * @param {{ id: number, role: string, status?: string } | null} user
  * @returns {Promise<{ requests: number, corrections: number }>}
  */
@@ -28,6 +29,10 @@ export async function getNavBadges(user) {
   if (scope.edits === false && !scope.projects && !scope.corrections) {
     return { requests: 0, corrections: 0 };
   }
-  const counts = await repo.countNavBadges({ ...scope, selfId: user.id });
+  const counts = await repo.countNavBadges({
+    ...scope,
+    selfId: user.id,
+    withAdmins: user.role === 'admin',
+  });
   return { requests: counts.edits + counts.projects, corrections: counts.corrections };
 }

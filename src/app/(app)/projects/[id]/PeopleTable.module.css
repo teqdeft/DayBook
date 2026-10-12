@@ -32,7 +32,7 @@
   white-space: nowrap;
 }
 
-.name:hover {
+a.name:hover {
   color: var(--primary-text);
 }
 

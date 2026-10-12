@@ -204,7 +204,7 @@ describe('the page rows', () => {
     ]);
     expect(tuesday).toMatchObject({
       wfh: true,
-      logged: '8.5h',
+      logged: '8h 30m',
       status: 'edit_requested',
       label: 'Edit requested',
       action: null,
@@ -219,7 +219,7 @@ describe('the page rows', () => {
     });
     const cards = kpiCards(log);
     expect(cards.map((card) => [card.label, card.value, card.sub])).toEqual([
-      ['Hours logged', '17h', 'this month'], // 16.5h in whole hours, like the other cards
+      ['Hours logged', '16h 30m', 'this month'], // hours and minutes, like every duration
       ['Days present', '2', 'of 8 working days'],
       ['Late days', '0', 'on time every day'],
       ['Reports submitted', '2', 'of 2 so far'],

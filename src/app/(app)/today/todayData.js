@@ -114,7 +114,7 @@ function weekDays({ today, current, submitted, dayStatus, presentToday }) {
         date,
         label,
         value: presentToday,
-        display: presentToday > 0 ? formatHours(presentToday, 1) : null,
+        display: presentToday > 0 ? formatHours(presentToday) : null,
         highlight: true,
         faded: true,
       };
@@ -124,7 +124,7 @@ function weekDays({ today, current, submitted, dayStatus, presentToday }) {
       date,
       label,
       value: minutes,
-      display: minutes > 0 ? formatHours(minutes, 1) : null,
+      display: minutes > 0 ? formatHours(minutes) : null,
       highlight: date === today,
     };
   });

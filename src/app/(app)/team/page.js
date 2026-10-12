@@ -1,6 +1,6 @@
 // Team dashboard (artboard 05): today's numbers, hours by project, the attendance donut, urgent
-// projects and the team board. PM and Admin. Refreshes every minute so check-ins, breaks and
-// running timers stay live.
+// projects and the team board. PM and Admin; Admins' attendance shows to another Admin only.
+// Refreshes every minute so check-ins, breaks and running timers stay live.
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import Card, { CardHeader } from '@/components/Card';
@@ -30,13 +30,13 @@ function hrefFor({ range, filter }) {
 }
 
 export default async function TeamPage({ searchParams }) {
-  await requirePage('team.view');
+  const user = await requirePage('team.view');
   const query = await searchParams;
   const range = weekMonthQuerySchema.safeParse({ range: query.range }).data?.range ?? 'week';
   const filter =
     teamTodayQuerySchema.safeParse({ filter: query.filter }).data?.filter ?? 'everyone';
   const [today, hours] = await Promise.all([
-    dashboard.getTeamToday({ filter }),
+    dashboard.getTeamToday({ filter, viewer: user }),
     dashboard.getHoursCard({ range, scope: 'team' }),
   ]);
   const { attendance, counts, urgent } = today;
@@ -161,6 +161,7 @@ export default async function TeamPage({ searchParams }) {
           // today) by default, this month when Month is picked. Everyone, every report entry.
           exportHref={`/api/exports/hours?from=${hours.from}&to=${hours.to}`}
           everyoneHref={hrefFor({ range, filter: 'everyone' })}
+          reportDue={today.reportDue}
         />
       </Card>
     </>

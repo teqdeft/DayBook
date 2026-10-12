@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   awayKey,
+  awayLength,
   awayQuestion,
   betterSkew,
   clockRange,
@@ -139,6 +140,14 @@ describe('the away question', () => {
     expect(awayQuestion(away)).toBe(
       'You were away 32 min (1:10–1:42 PM) while your acme-app timer ran. Keep this time or remove it?',
     );
+  });
+
+  it('says hours and minutes from an hour on', () => {
+    expect(awayQuestion({ ...away, minutes: 75, fromClock: '12:30', toClock: '13:45' })).toBe(
+      'You were away 1h 15m (12:30–1:45 PM) while your acme-app timer ran. Keep this time or remove it?',
+    );
+    expect(awayLength(59)).toBe('59 min');
+    expect(awayLength(60)).toBe('1h');
   });
 
   it('names both halves of the day when the span crosses noon', () => {

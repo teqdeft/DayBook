@@ -1,5 +1,6 @@
 // Project report API: who may call it (team.view: PMs on any project, Admin; never employees or
-// HR), 404 for an unknown project, query validation and the Excel download.
+// HR), 404 for an unknown project, query validation, the Excel download, and no link to an Admin's
+// Employee page for a PM (that page is for Admins only).
 import ExcelJS from 'exceljs';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setNowForTests } from '@/lib/time';
@@ -110,6 +111,45 @@ describe('GET /api/projects/:id/report', () => {
     expect(error.code).toBe('VALIDATION_FAILED');
     expect(error.fields.from).toBe('Pick a start and an end date.');
     expect((await call(getReport, project.id, '?limit=500')).status).toBe(400);
+  });
+});
+
+describe("an Admin's hours on the report", () => {
+  let admin;
+  let worker;
+  let atlas;
+  const hrefs = (rows) => Object.fromEntries(rows.map((row) => [row.user.name, row.user.href]));
+
+  beforeAll(async () => {
+    const pm = await createUser({ name: 'Atlas PM', role: 'pm', tracksAttendance: false });
+    admin = await createUser({ name: 'Meera Admin', role: 'admin' });
+    worker = await createUser({ name: 'Kim Worker' });
+    atlas = await createProject(pm, { name: 'atlas' });
+    await addMembers(atlas, [admin, worker]);
+    for (const person of [admin, worker]) {
+      await createReport(person, '2026-09-30', {
+        entries: [{ projectId: atlas.id, minutes: 90, tasks: [{ title: 'Plan', status: 'done' }] }],
+      });
+    }
+  });
+
+  it('keeps the hours but links the Admin only for an Admin viewer', async () => {
+    const linked = { 'Meera Admin': `/team/${admin.id}`, 'Kim Worker': `/team/${worker.id}` };
+    signInAs({ id: otherPm.id, role: 'pm' });
+    const { data } = await (await call(getReport, atlas.id)).json();
+    expect(data.totals).toMatchObject({ minutes: 180, people: 2 });
+    const unlinked = { ...linked, 'Meera Admin': null };
+    expect(hrefs(data.byPerson)).toEqual(unlinked);
+    expect(hrefs(data.tasks)).toEqual(unlinked);
+    expect(hrefs(data.entries)).toEqual(unlinked);
+    const more = await (await call(getReport, atlas.id, '?section=entries')).json();
+    expect(hrefs(more.data.entries)).toEqual(unlinked);
+
+    signInAs({ id: admin.id, role: 'admin' });
+    const forAdmin = (await (await call(getReport, atlas.id)).json()).data;
+    expect(hrefs(forAdmin.byPerson)).toEqual(linked);
+    expect(hrefs(forAdmin.tasks)).toEqual(linked);
+    expect(hrefs(forAdmin.entries)).toEqual(linked);
   });
 });
 

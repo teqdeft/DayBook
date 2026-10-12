@@ -21,7 +21,7 @@ import { initials, plural } from '@/lib/text';
 import { buildCalendar, calendarTitle } from './calendar';
 import { buildHistory } from './history';
 import * as repo from './repo';
-import { hoursBars, loadContext, totalMinutes } from './shared';
+import { hoursBars, loadContext, reportDue, showsAdmins, totalMinutes } from './shared';
 
 export const DETAIL_RANGES = ['week', 'month', 'custom'];
 // Tasks in progress this many working days (after the first) are listed even before they are
@@ -194,18 +194,23 @@ function profileOf(person, ctx) {
 
 /**
  * The Employee detailed view for one person.
- * @param {{ userId: number, range?: 'week'|'month'|'custom', from?: string, to?: string }} options
- *   custom needs from <= to (checked by the schema).
+ * @param {{ userId: number, viewer?: { role: string }, range?: 'week'|'month'|'custom',
+ *   from?: string, to?: string }} options  custom needs from <= to (checked by the schema);
+ *   viewer is the signed-in person (none = a system read, sees everyone)
  * @returns {Promise<object>} { person, attendanceNote, period, stats, calendar, hours, tasks,
  *   history, historyEmptyText, exportHref }. `attendanceNote` ({ title, body }) is set only for
  *   someone who doesn't check in (a PM, or tracking turned off): the page shows it instead of the
  *   attendance numbers, and `calendar.empty` instead of a month without check-ins.
- * @throws NOT_FOUND when the person doesn't exist
+ * @throws NOT_FOUND when the person doesn't exist, or is an Admin and the viewer isn't (an
+ *   Admin's attendance is shown to Admins only)
  */
-export async function getEmployeeDetail({ userId, range = 'month', from, to }) {
-  const ctx = await loadContext();
+export async function getEmployeeDetail({ userId, viewer, range = 'month', from, to }) {
+  const loaded = await loadContext();
+  const ctx = { ...loaded, due: reportDue(loaded) };
   const person = await repo.findPerson(userId);
-  if (!person) throw new AppError('NOT_FOUND', { message: "We couldn't find that person." });
+  if (!person || (person.role === 'admin' && !showsAdmins(viewer))) {
+    throw new AppError('NOT_FOUND', { message: "We couldn't find that person." });
+  }
   const period = detailPeriod({ range, from, to }, ctx.today);
   const month = monthOf(period.end < period.from ? period.from : period.end);
   const monthDays = monthRange(month);

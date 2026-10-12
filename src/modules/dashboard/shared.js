@@ -3,12 +3,14 @@
 import {
   clockToMinutes,
   dayjs,
+  formatClock,
   formatClockShort,
   formatDay,
   formatDayMonthShort,
   formatHours,
   formatTime,
   formatTimeAmPm,
+  localToUtc,
   monthOf,
   monthRange,
   now,
@@ -24,6 +26,28 @@ export async function loadContext() {
   const tz = all.timezone;
   const at = now();
   return { settings: all, tz, now: at, today: workDate(tz, at) };
+}
+
+/**
+ * Whether the viewer may see Admins' attendance (check-ins, breaks, screen time). Company rule:
+ * only another Admin may, so for a PM or HR Admins are left out of every attendance view, count
+ * and detail page. No viewer is a system read (tests, jobs), which sees everyone, as in the
+ * attendance module.
+ * @param {{ role?: string } | null | undefined} viewer the signed-in person
+ */
+export function showsAdmins(viewer) {
+  return !viewer || viewer.role === 'admin';
+}
+
+/**
+ * Today's report time (settings.reportReminderAt, company time): before it a report that isn't
+ * submitted yet is still due, from it on it is missing.
+ * @returns {{ at: Date, label: string, before: boolean }} label '6:30 PM'
+ */
+export function reportDue(ctx) {
+  const clock = ctx.settings.reportReminderAt;
+  const at = localToUtc(ctx.today, clock, ctx.tz).toDate();
+  return { at, label: formatClock(clock), before: ctx.now.isBefore(at) };
 }
 
 /** 'Wednesday, 30 September, 6:52 PM' (the dashboards' top bar subtitle). */

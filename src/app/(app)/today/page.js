@@ -15,6 +15,7 @@ import {
   formatTime,
   greeting,
 } from '@/lib/time';
+import { attendance } from '@/modules/attendance';
 import AutoRefresh from './AutoRefresh';
 import BreakButton from './BreakButton';
 import CheckInCard from './CheckInCard';
@@ -35,9 +36,13 @@ function firstName(name) {
   return value.split(/\s+/)[0];
 }
 
-function TopActions({ data }) {
+/** @param {{ data: object, tracksAttendance: boolean }} props */
+function TopActions({ data, tracksAttendance }) {
   const { row, pill } = data;
   const open = Boolean(row) && !row.checkOutAt && row.checkoutStatus === 'open';
+  // Breaks are for people who check in: attendance.startBreak refuses anyone else (FORBIDDEN).
+  // A break that is already open can always end, so End break stays.
+  const breaks = open && (tracksAttendance || data.onBreak);
   return (
     <>
       {pill ? (
@@ -45,7 +50,7 @@ function TopActions({ data }) {
           {pill.text}
         </Tag>
       ) : null}
-      {open ? <BreakButton onBreak={data.onBreak} /> : null}
+      {breaks ? <BreakButton onBreak={data.onBreak} /> : null}
       {open ? (
         <CheckOutButton
           reportSubmitted={data.reportStatus === 'submitted'}
@@ -70,7 +75,7 @@ export default async function TodayPage() {
       <TopBar
         title={`${greeting(tz)}, ${firstName(user.name)}`}
         subtitle={formatDay(today)}
-        actions={<TopActions data={data} />}
+        actions={<TopActions data={data} tracksAttendance={Boolean(user.tracksAttendance)} />}
         bell
       />
 
@@ -81,7 +86,9 @@ export default async function TodayPage() {
           <CheckInCard
             onOfficeNetwork={data.onOfficeNetwork}
             allowUnverifiedOffice={current.allowUnverifiedOffice}
-            lateAfter={formatClockShort(user.shiftStart || current.lateAfter)}
+            lateAfter={formatClockShort(
+              attendance.lateMarkFor({ shiftStart: user.shiftStart, settings: current }),
+            )}
             officeHours={`${formatClockShort(current.officeStart)} to ${formatClockShort(current.officeEnd)}`}
             tz={tz}
           />

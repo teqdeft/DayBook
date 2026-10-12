@@ -50,7 +50,7 @@ export default function Dialog({
   );
 
   return createPortal(
-    <div className={styles.root}>
+    <div className={styles.root} data-dialog-root>
       <div className={styles.overlay} onClick={onClose} aria-hidden="true" />
       <div
         ref={panelRef}

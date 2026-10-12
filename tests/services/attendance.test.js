@@ -172,6 +172,27 @@ describe('check-in', () => {
     expect((await attendance.checkIn({ user: later, ip: HOME_IP })).lateMinutes).toBe(5);
   });
 
+  it('gives 5 minutes of grace with Late after 9:35, own shift starts included', async () => {
+    await setSettings({ office_start: '09:30', late_after: '09:35' });
+    try {
+      const lateAt = async (clock, extra) => {
+        setNowForTests(at(clock));
+        return (await attendance.checkIn({ user: await person(extra), ip: HOME_IP })).lateMinutes;
+      };
+      // "Late 1m will start after 9:35" (the company's words).
+      expect(await lateAt('09:35')).toBe(0);
+      expect(await lateAt('09:36')).toBe(1);
+      expect(await lateAt('10:05', { shiftStart: '10:00:00' })).toBe(0);
+      expect(await lateAt('10:07', { shiftStart: '10:00:00' })).toBe(2);
+      const company = { officeStart: '09:30', lateAfter: '09:35' };
+      expect(attendance.lateMarkFor({ shiftStart: '10:00:00', settings: company })).toBe('10:05');
+      expect(attendance.lateMarkFor({ shiftStart: null, settings: company })).toBe('09:35');
+      expect(attendance.lateMarkFor({ shiftStart: '23:58', settings: company })).toBe('23:59');
+    } finally {
+      await setSettings({ late_after: '09:30' });
+    }
+  });
+
   it('is allowed on a non-working day, with is_working_day = 0 and no late minutes', async () => {
     setNowForTests(at('11:30', '2026-10-03')); // Saturday
     const row = await attendance.checkIn({ user: await person(), ip: HOME_IP });
@@ -374,7 +395,7 @@ describe('the day view', () => {
     expect(ids).not.toContain(gone.id);
     expect(ids).not.toContain(admin.id);
     expect(ids).toEqual([...ids].sort((a, b) => a - b));
-    const summary = await attendance.getDaySummary(date, items);
+    const summary = await attendance.getDaySummary(date, { items });
     expect(summary).toMatchObject({
       present: 4,
       inOffice: 3,

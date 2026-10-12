@@ -33,7 +33,7 @@ export function MyProjectsSkeleton() {
   return (
     <div className={styles.page} aria-busy="true">
       <span className="visually-hidden">Loading projects</span>
-      <TopBarSkeleton subtitle={186} actions={[183]} />
+      <TopBarSkeleton subtitle={186} actions={[240, 183]} />
       <PillsSkeleton widths={[88, 114]} />
       <div className={styles.grid}>
         {[0, 1, 2, 3, 4, 5].map((index) => (

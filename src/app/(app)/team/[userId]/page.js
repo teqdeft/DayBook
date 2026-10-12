@@ -1,5 +1,6 @@
 // Employee detailed view (artboard 06): a person's numbers for a range, their month calendar,
-// hours by project, tasks to watch and report history. PM and Admin.
+// hours by project, tasks to watch and report history. PM and Admin; an Admin's page is 404 for
+// anyone but another Admin (their attendance is Admin-only).
 import { notFound } from 'next/navigation';
 import Avatar from '@/components/Avatar';
 import Button from '@/components/Button';
@@ -38,9 +39,9 @@ function readRange(query) {
   return { options: { range: 'month' }, errors, input };
 }
 
-async function loadDetail(userId, options) {
+async function loadDetail(userId, options, viewer) {
   try {
-    return await dashboard.getEmployeeDetail({ userId, ...options });
+    return await dashboard.getEmployeeDetail({ userId, viewer, ...options });
   } catch (error) {
     if (isAppError(error) && error.code === 'NOT_FOUND') notFound();
     throw error;
@@ -70,7 +71,7 @@ export default async function EmployeePage({ params, searchParams }) {
   const id = userIdParamSchema.safeParse((await params).userId);
   if (!id.success) notFound();
   const { options, errors, input } = readRange(await searchParams);
-  const detail = await loadDetail(id.data, options);
+  const detail = await loadDetail(id.data, options, viewer);
   const { person, period, calendar, hours, tasks } = detail;
   const screenTime = await loadScreenTimeCard({ viewer, person, period, today: detail.date });
   const base = `/team/${person.id}`;

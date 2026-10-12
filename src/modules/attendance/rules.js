@@ -3,27 +3,50 @@
 import { env } from '@/lib/env';
 import {
   addDays,
+  clockToMinutes,
   dayjs,
   isWorkingDay,
   lateMinutesFor,
   localToUtc,
   minutesBetween,
+  normalizeClock,
   now,
   workDate as localDate,
 } from '@/lib/time';
 
 /**
- * Late minutes for a check-in (guide 7.2.4): whole minutes after the person's own shift start, or
- * after late_after when they have none; 0 on a day that is not a working day.
+ * When a check-in starts counting as late, 'HH:mm' in company time: late_after, or for someone
+ * with their own shift start, that start plus the company's grace (late_after minus office_start
+ * when it is later: Late after 9:35 with the office at 9:30 gives everyone 5 minutes, so a 10:00
+ * shift is late from 10:05). Never past 23:59.
+ * @param {{ shiftStart?: string | null,
+ *   settings: { lateAfter: string, officeStart?: string } }} input
+ * @returns {string}
+ */
+export function lateMarkFor({ shiftStart, settings }) {
+  if (!shiftStart) return normalizeClock(settings.lateAfter);
+  const grace = settings.officeStart
+    ? Math.max(0, clockToMinutes(settings.lateAfter) - clockToMinutes(settings.officeStart))
+    : 0;
+  const mark = Math.min(clockToMinutes(shiftStart) + grace, 23 * 60 + 59);
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${pad(Math.floor(mark / 60))}:${pad(mark % 60)}`;
+}
+
+/**
+ * Late minutes for a check-in (guide 7.2.4): whole minutes after the late mark (lateMarkFor():
+ * late_after, or the person's own shift start plus the company's grace); 0 on a day that is not a
+ * working day.
  * @param {{ checkInAt: Date, workDate: string, shiftStart?: string | null,
- *   settings: { lateAfter: string, timezone: string, workingDays: number[] } }} input
+ *   settings: { lateAfter: string, officeStart?: string, timezone: string,
+ *   workingDays: number[] } }} input
  * @returns {number}
  */
 export function computeLateMinutes({ checkInAt, workDate, shiftStart, settings }) {
   return lateMinutesFor({
     checkInAt,
     date: workDate,
-    lateAfter: shiftStart || settings.lateAfter,
+    lateAfter: lateMarkFor({ shiftStart, settings }),
     tz: settings.timezone,
     workingDays: settings.workingDays,
   });
@@ -139,6 +162,24 @@ export function whereOf(row) {
   if (!row) return 'not_checked_in';
   if (row.location === 'office') return row.officeVerified ? 'office' : 'unverified';
   return 'wfh';
+}
+
+/**
+ * True when a viewer must not see Admins' attendance (company rule): everyone but an Admin. No
+ * viewer is a system read (the worker, a person's own pages), which sees everyone.
+ * @param {{ role?: string } | null | undefined} viewer the signed-in person
+ */
+export function hidesAdmins(viewer) {
+  return Boolean(viewer) && viewer.role !== 'admin';
+}
+
+/**
+ * True when a viewer may see this person's attendance: an Admin's is shown to Admins only.
+ * @param {{ role?: string } | null | undefined} viewer see hidesAdmins()
+ * @param {{ role?: string } | null | undefined} person
+ */
+export function showsAttendanceOf(viewer, person) {
+  return !(hidesAdmins(viewer) && person?.role === 'admin');
 }
 
 /**

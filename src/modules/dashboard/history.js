@@ -77,10 +77,13 @@ function revisionsOf(rows = [], tz) {
 /**
  * Report column: Submitted (or Edited once it was submitted more than once), Missing when the
  * person checked in without submitting, Draft for an unsubmitted report on a day without a
- * check-in, Not checked in otherwise.
+ * check-in, Not checked in otherwise. Today before the report time (`dueToday`), a checked-in
+ * day without a submitted report is still Due (Draft once one is started), as on the Team board.
+ * @returns {'submitted'|'edited'|'missing'|'due'|'draft'|'not_checked_in'}
  */
-export function historyReportStatus(attendance, report) {
+export function historyReportStatus(attendance, report, dueToday = false) {
   if (report?.status === 'submitted') return report.revision > 1 ? 'edited' : 'submitted';
+  if (attendance && dueToday) return report ? 'draft' : 'due';
   if (attendance) return 'missing';
   if (report) return 'draft';
   return 'not_checked_in';
@@ -100,7 +103,8 @@ function whereOf(attendance) {
 }
 
 function historyRow({ date, attendance, report, entries, revisions, requests, ctx }) {
-  const status = historyReportStatus(attendance, report);
+  const dueToday = date === ctx.today && Boolean(ctx.due?.before);
+  const status = historyReportStatus(attendance, report, dueToday);
   const submitted = status === 'submitted' || status === 'edited';
   const present = presentMinutesOf(attendance, ctx);
   const loggedText = attendance ? formatHours(0) : '—';
@@ -116,6 +120,7 @@ function historyRow({ date, attendance, report, entries, revisions, requests, ct
     logged: submitted ? formatHours(report.totalMinutes) : loggedText,
     projects: submitted ? entries.map((entry) => entry.project) : [],
     report: status,
+    reportLabel: status === 'due' ? `Due ${ctx.due.label}` : null,
     reportStatus: report?.status ?? null,
     entries,
     revisions,

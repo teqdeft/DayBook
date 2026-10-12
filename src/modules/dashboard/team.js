@@ -1,7 +1,7 @@
 // Team dashboard (artboard 05): today's numbers, the attendance donut, "Urgent now" and the team
 // board, plus hours by project for a date range.
 import { formatClockShort, formatDuration, formatTime } from '@/lib/time';
-import { initials } from '@/lib/text';
+import { initials, plural } from '@/lib/text';
 import * as repo from './repo';
 import {
   checkedInKpi,
@@ -12,7 +12,9 @@ import {
   people,
   percent,
   periodFor,
+  reportDue,
   reportsKpi,
+  showsAdmins,
   summarizeDay,
   totalMinutes,
   urgentItems,
@@ -32,18 +34,29 @@ function groupOf(row) {
 }
 
 /**
- * One team board row. Report: Submitted when today's report is submitted; Missing when the person
- * checked in without a submitted report (a draft counts as missing, like the "Report missing"
- * filter and the "Reports submitted" number); Not checked in otherwise. Logged is the submitted
- * report's total. onBreak, breakSince and workingOn are the live status (CONTRACT 15).
+ * The Report column for someone with a row. Submitted when today's report is submitted; Not
+ * checked in without a check-in. For someone who checked in without submitting: before today's
+ * report time (settings.reportReminderAt) it is still Due, or Draft once they started one; from
+ * the report time on it is Missing (a draft too, like the "Reports submitted" number).
+ * @returns {'submitted'|'draft'|'due'|'missing'|'not_checked_in'}
+ */
+function boardReportStatus({ checkedIn, reportStatus }, due) {
+  if (reportStatus === 'submitted') return 'submitted';
+  if (!checkedIn) return 'not_checked_in';
+  if (!due.before) return 'missing';
+  return reportStatus === 'draft' ? 'draft' : 'due';
+}
+
+/**
+ * One team board row. Logged is the submitted report's total. reportLabel is the Report cell's
+ * words when they aren't the status's own ('Due 6:30 PM'). onBreak, breakSince and workingOn are
+ * the live status (CONTRACT 15).
  */
 function boardRow(row, labels, ctx, live) {
   const checkedIn = Boolean(row.attendanceId);
   const submitted = row.reportStatus === 'submitted';
   const lateMinutes = Number(row.lateMinutes ?? 0);
-  let report = 'not_checked_in';
-  if (submitted) report = 'submitted';
-  else if (checkedIn) report = 'missing';
+  const report = boardReportStatus({ checkedIn, reportStatus: row.reportStatus }, ctx.due);
   return {
     id: row.id,
     name: row.name,
@@ -62,6 +75,7 @@ function boardRow(row, labels, ctx, live) {
     loggedMinutes: submitted ? Number(row.totalMinutes ?? 0) : 0,
     logged: submitted ? formatDuration(row.totalMinutes) : checkedIn ? formatDuration(0) : '—',
     report,
+    reportLabel: report === 'due' ? `Due ${ctx.due.label}` : null,
     projects: submitted ? (labels.get(row.reportId) ?? []) : [],
     ...liveStatus(row.id, live),
   };
@@ -84,6 +98,12 @@ function matchesFilter(row, filter) {
   return true;
 }
 
+/** '26 minutes' as on the canvas; an hour or more reads '1h 37m'. */
+function lateAverage(minutes) {
+  if (minutes >= 60) return formatDuration(minutes);
+  return `${minutes} ${plural(minutes, 'minute')}`;
+}
+
 function dayKpis(summary, ctx) {
   const { late } = summary;
   return [
@@ -100,9 +120,7 @@ function dayKpis(summary, ctx) {
       key: 'late',
       label: 'Late today',
       value: String(late.count),
-      sub: late.count
-        ? `average ${late.averageMinutes} ${late.averageMinutes === 1 ? 'minute' : 'minutes'}`
-        : 'nobody so far',
+      sub: late.count ? `average ${lateAverage(late.averageMinutes)}` : 'nobody so far',
       percent: percent(late.count, summary.checkedIn),
       color: 'marigold',
     },
@@ -124,18 +142,25 @@ function labelsByReport(rows) {
 /**
  * Everything the Team dashboard shows about today, for every active person who tracks
  * attendance and has joined (the whole team, as on the canvas and the Attendance screen).
- * Project managers and anyone else who doesn't track attendance never appear.
- * @param {{ filter?: 'everyone'|'missing'|'late' }} [options] filters the board rows
+ * Project managers and anyone else who doesn't track attendance never appear, and Admins appear
+ * only to another Admin (company rule: their attendance is never shown to PMs or HR), in rows,
+ * groups, counts, numbers and the donut alike.
+ * @param {{ filter?: 'everyone'|'missing'|'late', viewer?: { role: string } }} [options] filter
+ *   picks the board rows; viewer is the signed-in person (none = a system read, sees everyone)
  * @returns {Promise<object>} { date, now, timezone, subtitle, dayStart, dayEnd, dayLabel, summary,
- *   kpis, attendance, urgent, filter, counts, groups }; each board row also has onBreak,
+ *   kpis, attendance, urgent, reportDue: { label, before }, filter, counts, groups }; each board
+ *   row's report is 'submitted' | 'draft' | 'due' | 'missing' | 'not_checked_in' (see
+ *   boardReportStatus; 'due' and 'draft' only before the report time, so the missing filter and
+ *   its count are empty until then) with reportLabel ('Due 6:30 PM' | null), and onBreak,
  *   breakSince (ISO | null) and workingOn ({ name, color, note } | null, the running timer;
  *   always null while timers are off, when running timers aren't read)
  */
-export async function getTeamToday({ filter = 'everyone' } = {}) {
-  const ctx = await loadContext();
+export async function getTeamToday({ filter = 'everyone', viewer } = {}) {
+  const loaded = await loadContext();
+  const ctx = { ...loaded, due: reportDue(loaded) };
   const timersOff = ctx.settings.timersMode === 'off';
   const [rows, labelRows, urgent, openBreaks, runningTimers] = await Promise.all([
-    repo.listTrackedPeopleDay(ctx.today),
+    repo.listTrackedPeopleDay(ctx.today, { withAdmins: showsAdmins(viewer) }),
     repo.listSubmittedReportProjects(ctx.today),
     repo.listUrgentProjects(),
     repo.listOpenBreaks(ctx.today),
@@ -172,6 +197,7 @@ export async function getTeamToday({ filter = 'everyone' } = {}) {
       ],
     },
     urgent: urgentItems(urgent, ctx, 'members'),
+    reportDue: { label: ctx.due.label, before: ctx.due.before },
     filter: activeFilter,
     counts: {
       everyone: board.length,

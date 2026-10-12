@@ -3,7 +3,7 @@
 import { AppError } from '@/lib/errors';
 import { dayjs } from '@/lib/time';
 import * as repo from './repo';
-import { loadContext, periodFor } from './shared';
+import { loadContext, periodFor, showsAdmins } from './shared';
 
 const TASK_STATUS = { done: 'Done', in_progress: 'In progress', blocked: 'Blocked' };
 
@@ -82,12 +82,15 @@ function summaryRows(entries) {
 /**
  * Builds the hours workbook for xlsxResponse. Defaults to this week (Monday to today).
  * Rows: every report entry (drafts included, marked Draft) and every check-in day without a report
- * (marked Missing). Summary: hours from submitted reports only (build guide 7.10).
- * @param {{ from?: string, to?: string, userId?: number }} options
+ * (marked Missing). Summary: hours from submitted reports only (build guide 7.10). Report hours
+ * are never attendance, so everyone's show; the Missing rows come from check-ins, so an Admin's
+ * are left out for a viewer who isn't an Admin.
+ * @param {{ from?: string, to?: string, userId?: number, viewer?: { role: string } }} options
+ *   viewer: the signed-in person (none = a system read, sees everyone)
  * @returns {Promise<{ filename: string, sheets: object[] }>}
  * @throws NOT_FOUND when userId is not a person
  */
-export async function buildHoursExport({ from, to, userId } = {}) {
+export async function buildHoursExport({ from, to, userId, viewer } = {}) {
   const ctx = await loadContext();
   const week = periodFor('week', ctx.today);
   const range = { from: from ?? week.from, to: to ?? week.to, userId };
@@ -99,7 +102,7 @@ export async function buildHoursExport({ from, to, userId } = {}) {
   const [entries, tasks, withoutReport] = await Promise.all([
     repo.listExportEntries(range),
     repo.listExportTasks(range),
-    repo.listExportDaysWithoutReport(range),
+    repo.listExportDaysWithoutReport({ ...range, withAdmins: showsAdmins(viewer) }),
   ]);
   const who = person ? `-${slug(person.name) || person.id}` : '';
   return {

@@ -211,9 +211,14 @@ export function minutesToHours(minutes) {
   return trimNumber((minutes ?? 0) / 60, 2);
 }
 
-/** Logged hours: 480 -> '8h', 510 -> '8.5h'. */
-export function formatHours(minutes, decimals = 2) {
-  return `${trimNumber((minutes ?? 0) / 60, decimals)}h`;
+/**
+ * Logged hours, in hours and minutes like every other duration (company request: people read
+ * "1h 45m" more easily than "1.75h"): 480 -> '8h', 510 -> '8h 30m', 45 -> '45m'. Report inputs
+ * and Slack keep decimal hours (minutesToHours, formatSlackHours).
+ * @param {number} minutes
+ */
+export function formatHours(minutes) {
+  return formatDuration(minutes);
 }
 
 /** Present time: 495 -> '8h 15m', 480 -> '8h', 38 -> '38m', 0 -> '0h'. */

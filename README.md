@@ -101,6 +101,12 @@ npm run test:e2e
   breaks whether timers are off, optional (default) or required, and sets the daily break
   allowance. The worker stops timers left running at midnight and, in required mode, reminds
   people who have no timer running.
+- **October 2026 requests** (CONTRACT 16): durations everywhere read as hours and minutes ("Late
+  1h 37m", "1h 45m"); "Late after" in Settings gives a grace period (e.g. 9:35); the Team board
+  shows "Due 6:30 PM" until the report time and "Missing" only after it; an Admin's attendance is
+  hidden from Project managers and HR (lists, counts, detail pages, exports and notifications);
+  employees can search their projects; the daily report has "Submit and check out"; the PM
+  projects table shows each project's all-time hours under "Hours this week".
 
 ## Slack setup (one Slack app per environment)
 
