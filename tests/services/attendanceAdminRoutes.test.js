@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import { setNowForTests } from '@/lib/time';
 import { attendance } from '@/modules/attendance';
-import { createUser, resetDatabase } from '../helpers/db.js';
+import { createUser, resetDatabase, setSettings } from '../helpers/db.js';
 
 // A cookie jar standing in for next/headers, and the session the auth module "finds".
 const jar = new Map();
@@ -69,6 +69,7 @@ async function exportedNames(response) {
 
 beforeAll(async () => {
   await resetDatabase();
+  await setSettings({ wfh_requires_approval: false }); // Vishal checks in from home (CONTRACT 17)
   hr = await createUser({ name: 'Neha Gupta', role: 'hr' });
   pm = await createUser({ name: 'Pam Mehta', role: 'pm', tracksAttendance: false });
   ceo = await createUser({ name: 'Ravi Kapoor', role: 'admin' });

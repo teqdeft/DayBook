@@ -122,7 +122,12 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  await setSettings({ break_allowance_minutes: 60, working_days: [1, 2, 3, 4, 5] });
+  // People check in from home as WFH without asking HR first (CONTRACT 17 is tested elsewhere).
+  await setSettings({
+    break_allowance_minutes: 60,
+    working_days: [1, 2, 3, 4, 5],
+    wfh_requires_approval: false,
+  });
   setNowForTests(at('09:30'));
 });
 

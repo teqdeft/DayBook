@@ -18,8 +18,17 @@
   border: 0;
 }
 
+/* An option and, beside it, its action (Ask HR on a WFH option that needs HR's approval) */
+.choiceBox {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  border-radius: var(--radius-tile); /* the focus ring when focus lands on the box (after Ask HR) */
+}
+
 .choice {
   position: relative;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -112,6 +121,18 @@
   color: var(--muted);
 }
 
+/* room on the right for the action, which sits over the option's right edge */
+.hasAction {
+  padding-right: 76px;
+}
+
+.choiceAction {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  transform: translateY(-50%);
+}
+
 .wifi {
   display: flex;
   flex-wrap: wrap;
@@ -167,6 +188,14 @@
   .choice {
     min-height: 68px;
     padding: 12px 14px;
+  }
+
+  .hasAction {
+    padding-right: 70px;
+  }
+
+  .choiceAction {
+    right: 14px;
   }
 
   .bottom {

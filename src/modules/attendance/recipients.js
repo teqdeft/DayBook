@@ -1,7 +1,8 @@
 // Who hears about attendance problems. About an Admin: the other active Admins only (HR and PMs
 // never see an Admin's attendance), so nobody when there is no other Admin. About anyone else: HR,
 // or every Admin when no HR person is left to tell (the company has no HR yet, or the only HR
-// person is the one the message is about).
+// person is the one the message is about). Work-from-home requests go to their approvers
+// (pickWfhApprovers).
 import { users } from '@/modules/users';
 
 /**
@@ -33,4 +34,29 @@ export function pickRecipients({ hr, admins }, about) {
  */
 export async function recipientsAbout(about) {
   return pickRecipients(await loadRecipientPools(), about);
+}
+
+/**
+ * Who decides on `about`'s work-from-home request (CONTRACT 17): an Admin's goes to the other
+ * Admins (nobody when there is none); an HR person's to the Admins (the other HR people when the
+ * company has no Admin); anyone else's to HR, or every Admin when there is no HR person.
+ * @param {{ hr: object[], admins: object[] }} pools from loadRecipientPools()
+ * @param {{ id: number, role?: string }} about the person who asked
+ * @returns {object[]} never `about` themselves
+ */
+export function pickWfhApprovers({ hr, admins }, about) {
+  const others = (list) => list.filter((person) => person.id !== about?.id);
+  if (about?.role === 'admin') return others(admins);
+  const [fromHr, fromAdmins] = [others(hr), others(admins)];
+  if (about?.role === 'hr') return fromAdmins.length > 0 ? fromAdmins : fromHr;
+  return fromHr.length > 0 ? fromHr : fromAdmins;
+}
+
+/**
+ * Who decides on `about`'s work-from-home request (PublicUser list), see pickWfhApprovers().
+ * @param {{ id: number, role?: string }} about
+ * @returns {Promise<object[]>}
+ */
+export async function wfhApproversFor(about) {
+  return pickWfhApprovers(await loadRecipientPools(), about);
 }

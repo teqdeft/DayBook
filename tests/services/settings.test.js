@@ -56,6 +56,8 @@ describe('settings.getAll', () => {
       timerAwayMinutes: 25,
       timerReminderMinutes: 20,
       breakAllowanceMinutes: 60,
+      officeCheckinAnywhere: false,
+      wfhRequiresApproval: true,
     });
   });
 

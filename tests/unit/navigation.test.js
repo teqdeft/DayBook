@@ -35,6 +35,19 @@ describe('navigation', () => {
     expect(homePathFor(pm)).toBe('/team');
   });
 
+  it('shows the Attendance count to HR and Admins (both decide), never to PMs', () => {
+    const hr = { role: 'hr', status: 'active', tracksAttendance: true };
+    const badge = (user) =>
+      navigationFor(user, { corrections: 3, requests: 2 }).find((item) => item.key === 'attendance')
+        ?.badge;
+    expect(badge(hr)).toBe(3);
+    expect(badge(ceo)).toBe(3);
+    expect(badge(pm)).toBe(0);
+    expect(navigationFor(pm, { requests: 2 }).find((item) => item.key === 'requests').badge).toBe(
+      2,
+    );
+  });
+
   it('hides Today and My log from an Admin who is not tracked', () => {
     const keys = navigationFor(ceo).map((item) => item.key);
     expect(keys).not.toContain('today');

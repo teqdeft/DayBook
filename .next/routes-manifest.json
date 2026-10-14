@@ -266,6 +266,30 @@
       "namedRegex": "^/api/users/(?<nxtPid>[^/]+?)/role(?:/)?$"
     },
     {
+      "page": "/api/wfh-requests/[id]/approve",
+      "regex": "^/api/wfh\\-requests/([^/]+?)/approve(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/wfh\\-requests/(?<nxtPid>[^/]+?)/approve(?:/)?$"
+    },
+    {
+      "page": "/api/wfh-requests/[id]/cancel",
+      "regex": "^/api/wfh\\-requests/([^/]+?)/cancel(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/wfh\\-requests/(?<nxtPid>[^/]+?)/cancel(?:/)?$"
+    },
+    {
+      "page": "/api/wfh-requests/[id]/decline",
+      "regex": "^/api/wfh\\-requests/([^/]+?)/decline(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/wfh\\-requests/(?<nxtPid>[^/]+?)/decline(?:/)?$"
+    },
+    {
       "page": "/projects/[id]",
       "regex": "^/projects/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -564,6 +588,12 @@
       "regex": "^/api/users(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/users(?:/)?$"
+    },
+    {
+      "page": "/api/wfh-requests",
+      "regex": "^/api/wfh\\-requests(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/wfh\\-requests(?:/)?$"
     },
     {
       "page": "/attendance",

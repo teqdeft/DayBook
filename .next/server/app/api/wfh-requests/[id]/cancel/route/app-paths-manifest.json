@@ -1,0 +1,3 @@
+{
+  "/api/wfh-requests/[id]/cancel/route": "app/api/wfh-requests/[id]/cancel/route.js"
+}

@@ -57,7 +57,12 @@ beforeAll(async () => {
 beforeEach(async () => {
   await db('notifications').delete();
   await db('attendance').delete();
-  await setSettings({ auto_mark_missing_checkout: true, working_days: [1, 2, 3, 4, 5] });
+  // People check in from home as WFH without asking HR first (CONTRACT 17 is tested elsewhere).
+  await setSettings({
+    auto_mark_missing_checkout: true,
+    working_days: [1, 2, 3, 4, 5],
+    wfh_requires_approval: false,
+  });
 });
 
 describe('the "Missing check-out" number', () => {

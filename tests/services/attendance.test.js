@@ -50,10 +50,13 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  // These tests check in from home as WFH without asking HR first (CONTRACT 17 rules are tested
+  // in attendance.wfhCheckIn.test.js).
   await setSettings({
     allow_unverified_office: true,
     auto_mark_missing_checkout: true,
     working_days: [1, 2, 3, 4, 5],
+    wfh_requires_approval: false,
   });
   setNowForTests(at('09:32'));
 });

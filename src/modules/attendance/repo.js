@@ -9,16 +9,19 @@ const ATTEMPTS = 3;
  * Runs `run(trx)` in a READ COMMITTED transaction, again (up to 3 times) after a deadlock. Break,
  * check-out and timer writes of one person wait for each other on that person's attendance row;
  * READ COMMITTED takes no gap locks, so a lookup that finds nothing (no open break, no running
- * timer) never makes different people wait for, or deadlock with, each other.
+ * timer) never makes different people wait for, or deadlock with, each other. A WFH request
+ * passes 'repeatable read' instead: its overlap check must lock the gap a second request would
+ * be inserted into (findOverlappingWfh).
  * @template T
  * @param {(trx: import('knex').Knex.Transaction) => Promise<T>} run
+ * @param {{ isolationLevel?: 'read committed' | 'repeatable read' }} [options]
  * @returns {Promise<T>}
  * @throws CONFLICT when it still deadlocks on the last try
  */
-export async function transaction(run) {
+export async function transaction(run, { isolationLevel = 'read committed' } = {}) {
   for (let attempt = 1; ; attempt += 1) {
     try {
-      return await db.transaction(run, { isolationLevel: 'read committed' });
+      return await db.transaction(run, { isolationLevel });
     } catch (error) {
       if (error?.errno !== DEADLOCK) throw error;
       if (attempt >= ATTEMPTS) {
@@ -291,4 +294,143 @@ export async function countCorrections({ status, userId, hideAdmins }, trx = db)
 /** Marks a pending correction handled; 0 when it was already handled. */
 export function handleCorrection(id, changes, trx = db) {
   return trx('attendanceCorrections').where({ id, status: 'pending' }).update(changes);
+}
+
+// ---------- work from home requests (CONTRACT 17) ----------
+
+const WFH_COLUMNS = [
+  'id',
+  'userId',
+  'fromDate',
+  'toDate',
+  'reason',
+  'status',
+  'handledBy',
+  'handledAt',
+  'declineReason',
+  'createdAt',
+];
+
+/** Requests with the person who asked and whoever handled them, in one query. */
+function wfhRows(trx) {
+  return trx('wfhRequests as w')
+    .join('users as u', 'u.id', 'w.userId')
+    .leftJoin('users as h', 'h.id', 'w.handledBy')
+    .select([
+      ...WFH_COLUMNS.map((column) => `w.${column}`),
+      'u.name as userName',
+      'u.designation as userDesignation',
+      'u.role as userRole',
+      'u.status as userStatus',
+      'h.name as handlerName',
+    ]);
+}
+
+/**
+ * Filters for lists and counts. `hideAdmins` leaves out Admins' requests (only Admins see an
+ * Admin's attendance); `exceptUserId` leaves out one person's own; `endsFrom` ('YYYY-MM-DD')
+ * keeps requests whose last day is that day or later; `handledSince` ({ date: 'YYYY-MM-DD',
+ * at: UTC Date }) keeps pending requests whose last day is `date` or later and those handled
+ * from `at` on.
+ */
+function filterWfh(
+  query,
+  { status, userId, exceptUserId, hideAdmins = false, endsFrom, handledSince },
+) {
+  if (status) query.where('w.status', status);
+  if (userId) query.where('w.userId', userId);
+  if (exceptUserId) query.whereNot('w.userId', exceptUserId);
+  if (hideAdmins) query.whereNot('u.role', 'admin');
+  if (endsFrom) query.where('w.toDate', '>=', endsFrom);
+  if (handledSince) {
+    query.where((inner) =>
+      inner
+        .where((open) =>
+          open.where('w.status', 'pending').where('w.toDate', '>=', handledSince.date),
+        )
+        .orWhere('w.handledAt', '>=', handledSince.at),
+    );
+  }
+  return query;
+}
+
+/** @returns {Promise<number>} the new request id */
+export async function insertWfh(row, trx = db) {
+  const [id] = await trx('wfhRequests').insert(row);
+  return id;
+}
+
+/** One request with its people (see wfhRows), or undefined. */
+export function findWfh(id, trx = db) {
+  return wfhRows(trx).where('w.id', id).first();
+}
+
+/** The bare request row, locked for the update that follows (only this table's row). */
+export function lockWfh(id, trx) {
+  return trx('wfhRequests').select(WFH_COLUMNS).where({ id }).first().forUpdate();
+}
+
+/**
+ * The person's first pending or approved request sharing a day with fromDate..toDate. With
+ * `forUpdate` (inside a REPEATABLE READ transaction) the scan also locks the gap where an
+ * overlapping request would go, so two requests sent at once can't both pass the check.
+ */
+export function findOverlappingWfh({ userId, fromDate, toDate }, trx = db, { forUpdate } = {}) {
+  const query = trx('wfhRequests')
+    .select(WFH_COLUMNS)
+    .where({ userId })
+    .where('fromDate', '<=', toDate)
+    .where('toDate', '>=', fromDate)
+    .whereIn('status', ['pending', 'approved'])
+    .orderBy('fromDate', 'asc')
+    .first();
+  return forUpdate ? query.forUpdate() : query;
+}
+
+/** The person's pending and approved requests covering a work date (with people), oldest first. */
+export function listWfhCovering(userId, workDate, trx = db) {
+  return wfhRows(trx)
+    .where('w.userId', userId)
+    .whereIn('w.status', ['pending', 'approved'])
+    .where('w.fromDate', '<=', workDate)
+    .where('w.toDate', '>=', workDate)
+    .orderBy('w.createdAt', 'asc')
+    .orderBy('w.id', 'asc');
+}
+
+/** True when an approved request covers the person's work date. */
+export async function hasApprovedWfh(userId, workDate, trx = db) {
+  const row = await trx('wfhRequests')
+    .select('id')
+    .where({ userId, status: 'approved' })
+    .where('fromDate', '<=', workDate)
+    .where('toDate', '>=', workDate)
+    .first();
+  return Boolean(row);
+}
+
+/**
+ * Requests with their people (filters: filterWfh). Pending first, soonest day first; then the
+ * rest, most recently handled (or asked) first.
+ */
+export function listWfh({ limit, offset, ...where }, trx = db) {
+  return filterWfh(wfhRows(trx), where)
+    .orderByRaw("CASE WHEN w.status = 'pending' THEN 0 ELSE 1 END")
+    .orderByRaw("CASE WHEN w.status = 'pending' THEN w.from_date END")
+    .orderByRaw('COALESCE(w.handled_at, w.created_at) DESC')
+    .orderBy('w.id', 'desc')
+    .limit(limit)
+    .offset(offset);
+}
+
+/** How many requests match (filters: filterWfh). */
+export async function countWfh(where, trx = db) {
+  const query = trx('wfhRequests as w').join('users as u', 'u.id', 'w.userId');
+  const row = await filterWfh(query, where).count({ n: '*' }).first();
+  return Number(row?.n ?? 0);
+}
+
+/** Changes a request still in status `from` (a decision, or a shorter toDate); 0 when it wasn't. */
+export function updateWfhStatus(id, from, changes, trx = db) {
+  return trx('wfhRequests').where({ id, status: from }).update(changes);
 }

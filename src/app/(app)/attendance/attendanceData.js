@@ -1,6 +1,7 @@
 // Loads and shapes the Attendance page (artboard 09). Server only (called from page.js). Every read
 // passes the viewer: HR and PMs never see an Admin's attendance (company rule). Durations read as
-// hours and minutes ("Late 1h 37m"), never a bare minute count past an hour.
+// hours and minutes ("Late 1h 37m"), never a bare minute count past an hour. HR and Admins also
+// get the work-from-home requests card (CONTRACT 17, wfhCard.js).
 import { can } from '@/lib/permissions';
 import {
   addDays,
@@ -14,6 +15,7 @@ import {
 import { plural } from '@/lib/text';
 import { attendance } from '@/modules/attendance';
 import { settings } from '@/modules/settings';
+import { handledSinceFor, wfhCard } from './wfhCard';
 
 export const FILTERS = ['all', 'late', 'wfh', 'not_checked_in', 'unverified'];
 
@@ -145,10 +147,15 @@ export async function loadAttendance({ user, date: asked, filter: askedFilter })
   const canCorrect = can(user, 'attendance.correct');
   const viewer = user;
   const items = await attendance.listDay(date, { viewer });
-  const [summary, corrections, missing] = await Promise.all([
+  const [summary, corrections, missing, wfh, wfhWaiting] = await Promise.all([
     attendance.getDaySummary(date, { items, viewer }),
     canCorrect ? attendance.listCorrections({ status: 'pending', limit: 20, viewer }) : null,
     attendance.listMissingCheckouts({ limit: 5, viewer }),
+    // Pending requests, then the ones handled in the last 7 days (whatever day is shown).
+    canCorrect
+      ? attendance.listWfhRequests({ viewer, handledSince: handledSinceFor(today), limit: 30 })
+      : null,
+    canCorrect ? attendance.countPendingWfh({ viewer }) : 0,
   ]);
   const dayLabel = formatDayShort(date);
   const ctx = { date, today, dayLabel, tz, canCorrect, viewerId: user.id };
@@ -161,6 +168,7 @@ export async function loadAttendance({ user, date: asked, filter: askedFilter })
     summary,
     kpis: kpis(summary, date),
     rows: attendance.filterDay(items, filter).map((item) => tableRow(item, ctx)),
+    wfh: wfhCard(wfh, wfhWaiting, { viewer, tz, today }),
     corrections: corrections && {
       total: corrections.total,
       items: corrections.items.map((item) => ({ ...item, own: item.userId === user.id })),

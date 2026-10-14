@@ -1,0 +1,3 @@
+{
+  "/api/wfh-requests/[id]/approve/route": "app/api/wfh-requests/[id]/approve/route.js"
+}

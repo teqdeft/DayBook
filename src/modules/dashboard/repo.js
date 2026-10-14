@@ -8,12 +8,23 @@ import { db, parseJson } from '@/lib/db';
 /**
  * Pending counts for the sidebar in one query. Parts that are not asked for count as 0.
  * @param {{ edits: false | 'all' | number, projects: boolean, corrections: boolean,
- *   selfId?: number, withAdmins?: boolean }} scope
+ *   selfId?: number, withAdmins?: boolean, wfhFrom?: string }} scope
  *   `edits`: false, 'all' (Admin) or the PM's user id (requests from people who report to them);
- *   `selfId`: the viewer, whose own edit and correction requests never count (nobody decides on
- *   their own); `withAdmins: false` leaves out Admins' correction requests (their attendance).
+ *   `corrections` also counts pending work-from-home requests (`wfh`, CONTRACT 17), only those
+ *   whose last day is `wfhFrom` (today, 'YYYY-MM-DD') or later;
+ *   `selfId`: the viewer, whose own edit, correction and WFH requests never count (nobody decides
+ *   on their own); `withAdmins: false` leaves out Admins' correction and WFH requests (their
+ *   attendance).
+ * @returns {Promise<{ edits: number, projects: number, corrections: number, wfh: number }>}
  */
-export async function countNavBadges({ edits, projects, corrections, selfId, withAdmins = true }) {
+export async function countNavBadges({
+  edits,
+  projects,
+  corrections,
+  selfId,
+  withAdmins = true,
+  wfhFrom,
+}) {
   const zero = db.raw('0');
   const editsQuery =
     edits === false
@@ -34,29 +45,39 @@ export async function countNavBadges({ edits, projects, corrections, selfId, wit
   const projectsQuery = projects
     ? db('projectRequests').count('*').where('status', 'pending')
     : zero;
-  const correctionsQuery = corrections
-    ? db('attendanceCorrections as c')
-        .count('*')
-        .where('c.status', 'pending')
-        .modify((q) => {
-          if (selfId) q.whereNot('c.userId', selfId);
-          if (!withAdmins) {
-            q.whereNotExists(
-              db('users as cu')
-                .select(db.raw('1'))
-                .whereRaw('cu.id = c.user_id')
-                .where('cu.role', 'admin'),
-            );
-          }
-        })
-    : zero;
+  // Pending attendance requests (corrections, WFH): not the viewer's own, an Admin's only for Admins.
+  const pendingOf = (table, alias) =>
+    db(`${table} as ${alias}`)
+      .count('*')
+      .where(`${alias}.status`, 'pending')
+      .modify((q) => {
+        if (selfId) q.whereNot(`${alias}.userId`, selfId);
+        if (!withAdmins) {
+          q.whereNotExists(
+            db(`users as ${alias}u`)
+              .select(db.raw('1'))
+              .whereRaw(`${alias}u.id = ${alias}.user_id`)
+              .where(`${alias}u.role`, 'admin'),
+          );
+        }
+      });
   const row = await db
-    .select({ edits: editsQuery, projects: projectsQuery, corrections: correctionsQuery })
+    .select({
+      edits: editsQuery,
+      projects: projectsQuery,
+      corrections: corrections ? pendingOf('attendanceCorrections', 'c') : zero,
+      wfh: corrections
+        ? pendingOf('wfhRequests', 'w').modify((q) => {
+            if (wfhFrom) q.where('w.toDate', '>=', wfhFrom);
+          })
+        : zero,
+    })
     .first();
   return {
     edits: Number(row?.edits ?? 0),
     projects: Number(row?.projects ?? 0),
     corrections: Number(row?.corrections ?? 0),
+    wfh: Number(row?.wfh ?? 0),
   };
 }
 

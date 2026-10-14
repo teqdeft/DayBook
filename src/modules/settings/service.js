@@ -159,7 +159,9 @@ export function setCacheTtlForTests(ms) {
  *   slackRequestsNotify: boolean, activityTrackingEnabled: boolean,
  *   activityIdleMinutes: number, activityRetentionDays: number, pushEnabled: boolean,
  *   timersMode: 'off' | 'optional' | 'required', timerAwayMinutes: number,
- *   timerReminderMinutes: number, breakAllowanceMinutes: number }>} a fresh copy, safe to
+ *   timerReminderMinutes: number, breakAllowanceMinutes: number,
+ *   officeCheckinAnywhere: boolean, wfhRequiresApproval: boolean }>} (check-in rules, CONTRACT
+ *   17) a fresh copy, safe to
  *   change; activityIdleMinutes is 1-120 and activityRetentionDays 7-3650 (screen time,
  *   CONTRACT 11); pushEnabled switches desktop notifications for everyone (CONTRACT 14);
  *   timers and breaks (CONTRACT 15): timerAwayMinutes 5-240, timerReminderMinutes 0-240

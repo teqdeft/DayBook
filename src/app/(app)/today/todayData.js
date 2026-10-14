@@ -28,6 +28,7 @@ import { reports } from '@/modules/reports';
 import { settings } from '@/modules/settings';
 import { shortDuration } from './timerData';
 import { loadTimerParts, timerCard } from './todayTimers';
+import { loadWfh } from './todayWfh';
 
 const OPEN_TASK = new Set(['in_progress', 'blocked']);
 // The artboard's card holds four rows, level with the urgent card beside it; the full list is in
@@ -234,7 +235,7 @@ export async function loadToday({ user, ip }) {
     current.activityTrackingEnabled !== false &&
     can(user, 'activity.self') &&
     Boolean(user.tracksAttendance);
-  const [dayStatus, submitted, tasks, urgent, pending, todayReports, screen, priority, timerParts] =
+  const [dayStatus, submitted, tasks, urgent, pending, todayReports, screen, priority, cards] =
     await Promise.all([
       safe(reports.getDayStatus(user.id, today), { status: 'none', totalMinutes: 0 }),
       safe(reports.getSubmittedMinutesByDay(user.id, week.from, today), {}),
@@ -244,8 +245,9 @@ export async function loadToday({ user, ip }) {
       safe(reports.listReports({ user, from: today, to: today, limit: 1 }), { rows: [] }),
       screenTracked ? safe(activity.getDay(user.id, today), null) : null,
       safe(projectTasks.listOpenForUser(user.id), []),
-      loadTimerParts(user, current),
+      Promise.all([loadTimerParts(user, current), loadWfh({ user, mine, today, current })]),
     ]);
+  const [timerParts, wfhParts] = cards;
   const row = mine.row;
   const presentToday = mine.presentMinutes;
   // Today's bar shows worked time (present minus breaks, CONTRACT 15) until the report is in.
@@ -264,6 +266,10 @@ export async function loadToday({ user, ip }) {
     settings: current,
     row,
     onOfficeNetwork: mine.onOfficeNetwork,
+    // CONTRACT 17: Office from any network, and WFH only on days HR approved.
+    officeAnywhere: Boolean(mine.officeAnywhere),
+    wfh: wfhParts.wfh,
+    wfhLinks: wfhParts.wfhLinks,
     presentToday,
     worked: workedTile(row, mine),
     onBreak: Boolean(row && mine.openBreak),

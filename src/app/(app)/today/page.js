@@ -1,7 +1,9 @@
 // Today (artboard 01): check in, the day so far, this week, the urgent project, this week's tasks,
 // the person's priority tasks (when there are any) and the report strip. Before check-in the
 // "Your day" card is the check-in card. CONTRACT 15 adds Start break / End break beside Check out
-// and the Working on card (project timers) under Your day while timers aren't off.
+// and the Working on card (project timers) under Your day while timers aren't off. CONTRACT 17:
+// Office from any network and HR-approved work from home on the check-in card, and the "Ask HR"
+// line under the correction links.
 import { headers } from 'next/headers';
 import Tag from '@/components/Tag';
 import TopBar from '@/components/TopBar';
@@ -25,16 +27,11 @@ import PriorityCard from './PriorityCard';
 import TimerCard from './TimerCard';
 import { loadToday } from './todayData';
 import { ReportStrip, TasksCard, UrgentCard, WeekCard, YourDayCard } from './TodayCards';
+import WfhLinks from './WfhLinks';
+import { firstName } from './wfhOptions';
 import styles from './page.module.css';
 
 export const metadata = { title: 'Today' };
-
-/** "Vishal" from "Vishal Saini"; placeholder names like "[PM name]" stay whole. */
-function firstName(name) {
-  const value = String(name ?? '').trim();
-  if (!value || value.startsWith('[')) return value;
-  return value.split(/\s+/)[0];
-}
 
 /** @param {{ data: object, tracksAttendance: boolean }} props */
 function TopActions({ data, tracksAttendance }) {
@@ -86,6 +83,9 @@ export default async function TodayPage() {
           <CheckInCard
             onOfficeNetwork={data.onOfficeNetwork}
             allowUnverifiedOffice={current.allowUnverifiedOffice}
+            officeAnywhere={data.officeAnywhere}
+            wfh={data.wfh}
+            today={today}
             lateAfter={formatClockShort(
               attendance.lateMarkFor({ shiftStart: user.shiftStart, settings: current }),
             )}
@@ -110,13 +110,16 @@ export default async function TodayPage() {
 
       <ReportStrip data={data} />
 
-      <CorrectionLinks
-        today={today}
-        yesterday={addDays(today, -1)}
-        checkInClock={row ? formatTime(row.checkInAt, tz) : null}
-        canSayEarlier={Boolean(row) && !data.hasPendingEarlier}
-        pending={data.pending}
-      />
+      <div className={styles.help}>
+        <CorrectionLinks
+          today={today}
+          yesterday={addDays(today, -1)}
+          checkInClock={row ? formatTime(row.checkInAt, tz) : null}
+          canSayEarlier={Boolean(row) && !data.hasPendingEarlier}
+          pending={data.pending}
+        />
+        {data.wfhLinks ? <WfhLinks today={today} {...data.wfhLinks} /> : null}
+      </div>
     </div>
   );
 }

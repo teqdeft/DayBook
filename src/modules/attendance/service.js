@@ -1,6 +1,7 @@
-// Attendance rules for the person: reading rows, today's state, check-in (guide 7.2) and the
-// nightly missing check-out job. Check-out (7.3) lives in checkout.js, breaks in breaks.js, HR's
-// side in hr.js and corrections.js, the day view in day.js.
+// Attendance rules for the person: reading rows, today's state, check-in (guide 7.2, CONTRACT 17)
+// and the nightly missing check-out job. Check-out (7.3) lives in checkout.js, breaks in
+// breaks.js, HR's side in hr.js and corrections.js, the day view in day.js, work-from-home
+// requests in wfh.js.
 import { db } from '@/lib/db';
 import { AppError } from '@/lib/errors';
 import { emit } from '@/lib/events';
@@ -22,6 +23,7 @@ import {
   workedMinutes,
   workingDayFlag,
 } from './rules';
+import { assertWfhAllowed, getWfhForDay } from './wfh';
 
 export { checkOut } from './checkout';
 export { breakMinutesWithin, lateMarkFor, presentMinutes, workedMinutes };
@@ -56,20 +58,24 @@ export function listForDate(workDate) {
 
 /**
  * Today's state for the signed-in person (GET /api/attendance/me/today and the Today page).
- * @param {{ user: { id: number }, ip?: string | null }} input
+ * @param {{ user: { id: number, role?: string, status?: string }, ip?: string | null }} input
  * @returns {Promise<{ workDate: string, row: AttendanceRow | null, onOfficeNetwork: boolean,
  *   allowUnverifiedOffice: boolean, presentMinutes: number, breaks: BreakRow[],
- *   openBreak: BreakRow | null, breakMinutes: number, workedMinutes: number }>} breaks are
- *   today's, oldest first; breakMinutes counts only break time inside the present window and
- *   workedMinutes = presentMinutes - breakMinutes (CONTRACT 15)
+ *   openBreak: BreakRow | null, breakMinutes: number, workedMinutes: number,
+ *   officeAnywhere: boolean, wfh: { required: boolean, approved: object | null,
+ *   pending: object[] }, wfhNeedsApproval: boolean }>} breaks are today's, oldest first;
+ *   breakMinutes counts only break time inside the present window and workedMinutes =
+ *   presentMinutes - breakMinutes (CONTRACT 15); officeAnywhere is the officeCheckinAnywhere
+ *   setting, wfh is getWfhForDay() for today and wfhNeedsApproval = wfh.required (CONTRACT 17)
  */
 export async function getMyToday({ user, ip }) {
   const current = await settings.getAll();
   const workDate = todayFor(current);
-  const [row, onOfficeNetwork, breaks] = await Promise.all([
+  const [row, onOfficeNetwork, breaks, wfh] = await Promise.all([
     getForUserOnDate(user.id, workDate),
     settings.isOfficeIp(ip),
     repo.listBreaksByUserDate(user.id, workDate),
+    getWfhForDay(user.id, workDate, { user, current }),
   ]);
   const at = now();
   const tz = current.timezone;
@@ -83,29 +89,42 @@ export async function getMyToday({ user, ip }) {
     openBreak: breaks.find((item) => !item.endedAt) ?? null,
     breakMinutes: breakMinutesWithin(breaks, row, at, tz),
     workedMinutes: workedMinutes(row, breaks, at, tz),
+    officeAnywhere: current.officeCheckinAnywhere,
+    wfh,
+    wfhNeedsApproval: wfh.required,
   };
 }
 
-/** Where a check-in is saved, from the network and what the person picked (guide 7.2.2-3). */
-function decideLocation({ onOfficeNetwork, location, unverifiedOffice, allowUnverifiedOffice }) {
+/**
+ * Where a check-in is saved, from the network, the settings and what the person picked (guide
+ * 7.2.2-3, CONTRACT 17). With office_checkin_anywhere, Office is the default and is verified from
+ * any network (verification is switched off); otherwise WFH is the default off the network.
+ */
+function decideLocation({ onOfficeNetwork, location, unverifiedOffice, current }) {
   if (onOfficeNetwork) return { location: 'office', officeVerified: true };
-  if (location !== 'office') return { location: 'wfh', officeVerified: true };
+  const picked = location ?? (current.officeCheckinAnywhere ? 'office' : 'wfh');
+  if (picked !== 'office') return { location: 'wfh', officeVerified: true };
+  if (current.officeCheckinAnywhere) return { location: 'office', officeVerified: true };
   if (!unverifiedOffice) throw new AppError('OFFICE_NETWORK_REQUIRED');
-  if (!allowUnverifiedOffice) throw new AppError('UNVERIFIED_OFFICE_DISABLED');
+  if (!current.allowUnverifiedOffice) throw new AppError('UNVERIFIED_OFFICE_DISABLED');
   return { location: 'office', officeVerified: false };
 }
 
 /**
  * Checks the person in for today at the server's time.
- * On the office network the only option is Office (verified). Elsewhere the default is WFH;
- * Office needs unverifiedOffice = true and the allow_unverified_office setting, is saved with
- * office_verified = 0 and notifies HR (an Admin's: the other Admins, recipients.js). Late minutes follow the person's shift start or late_after
- * on working days.
- * @param {{ user: { id: number, name: string, role: string, shiftStart?: string | null },
- *   ip?: string | null,
- *   location?: 'office' | 'wfh', unverifiedOffice?: boolean, note?: string | null }} input
+ * On the office network the only option is Office (verified). With office_checkin_anywhere,
+ * Office (the default) is saved verified from any network. Otherwise the default off the network
+ * is WFH, and Office needs unverifiedOffice = true and the allow_unverified_office setting, is
+ * saved with office_verified = 0 and notifies HR (an Admin's: the other Admins, recipients.js).
+ * With wfh_requires_approval, WFH needs an approved request covering today unless the person has
+ * attendance.correct (wfh.js). Late minutes follow the person's shift start or late_after on
+ * working days.
+ * @param {{ user: { id: number, name: string, role: string, status?: string,
+ *   shiftStart?: string | null }, ip?: string | null, location?: 'office' | 'wfh',
+ *   unverifiedOffice?: boolean, note?: string | null }} input
  * @returns {Promise<AttendanceRow>}
- * @throws ALREADY_CHECKED_IN, OFFICE_NETWORK_REQUIRED, UNVERIFIED_OFFICE_DISABLED
+ * @throws ALREADY_CHECKED_IN, OFFICE_NETWORK_REQUIRED, UNVERIFIED_OFFICE_DISABLED,
+ *   WFH_NOT_APPROVED
  */
 export async function checkIn({ user, ip, location, unverifiedOffice = false, note = null }) {
   const current = await settings.getAll();
@@ -115,8 +134,9 @@ export async function checkIn({ user, ip, location, unverifiedOffice = false, no
     onOfficeNetwork: await settings.isOfficeIp(ip),
     location,
     unverifiedOffice,
-    allowUnverifiedOffice: current.allowUnverifiedOffice,
+    current,
   });
+  if (placed.location === 'wfh') await assertWfhAllowed({ user, workDate, current });
   const at = nowDate();
   const cleanNote = note ? String(note).trim().slice(0, 255) || null : null;
   const row = {
