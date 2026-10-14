@@ -785,3 +785,67 @@ viewer })`, `listMissingCheckouts`, `exportDay`, `listCorrections`, `countPendin
   "Hours this week" shows a muted all-time total under it when it differs.
 - **Today**: Start break only for people who track attendance.
 - **Not found inside the app**: `src/app/(app)/not-found.js` (shell) renders inside the app frame.
+
+## 17. Office check-in from anywhere and HR-approved work from home (added after the build guide)
+
+Company request: for now everyone checks in as **Office** from wherever they are, and **working from
+home needs HR's approval**. Two settings (Settings → Check-in), both booleans:
+
+- `officeCheckinAnywhere` (default false): Office check-in works from any network. The check-in is
+  saved as `location 'office'`, `office_verified = 1` (verification is switched off, so it is not
+  "unverified" and HR is not notified); the IP is still stored. With it off, the guide's rules stay
+  (Office only on an office network, else "Office, unverified" when allowed).
+- `wfhRequiresApproval` (default true): a WFH check-in needs an **approved WFH request covering
+  today**, unless the person has `attendance.correct` (HR, Admin — the approvers). Otherwise
+  `checkIn` refuses with `WFH_NOT_APPROVED` (409, "Working from home needs HR's approval for today.
+  Ask HR first."). The existing rule stays: on the office network the only option is Office.
+
+### WFH requests
+
+- Table `wfh_requests` (migration 010): `user_id`, `from_date`, `to_date` (company dates, both
+  included), `reason` (≤500), `status` pending | approved | declined | cancelled, `handled_by`,
+  `handled_at`, `decline_reason` (≤300), timestamps.
+- **Ask** (`attendance.requestWfh({ user, fromDate, toDate, reason, ip })`, `attendance.self`,
+  tracked people): `fromDate` today or later, `toDate ≥ fromDate`, at most 14 days in the range,
+  reason 5–500 characters (trimmed), no overlap with the person's own pending or approved request
+  (`REQUEST_ALREADY_PENDING` with fields). Notifies the approvers — HR (`hrRecipients`, or the
+  Admins when there is no other HR; an HR person's own request goes to the Admins; an Admin's to the
+  other Admins, CONTRACT 16) — type `wfh_request.created` ("Vishal Saini asked to work from home on
+  Tue, 14 Oct", body = reason, link `/attendance#wfh`), plus a Slack DM to them with setting key
+  `slackRequestsNotify`. Audit `wfh_request.create`.
+- **Approve / decline** (`approveWfh({ actor, id, ip })`, `declineWfh({ actor, id, reason, ip })`,
+  `attendance.correct`): not your own request (`FORBIDDEN`), only pending ones
+  (`REQUEST_ALREADY_HANDLED`); decline needs a reason (2–300). An Admin's request is NOT_FOUND for
+  non-Admins (CONTRACT 16). Notifies the person (`wfh_request.approved` "Working from home approved
+  for Tue, 14 Oct" / `wfh_request.declined` "Working from home declined for Tue, 14 Oct", body = the
+  decline reason, link `/today`) and sends a Slack DM. Audit `wfh_request.approve` /
+  `wfh_request.decline`.
+- **Cancel** (`cancelWfh({ user, id, ip })`): your own request while it is pending, or approved and
+  `fromDate` after today. Audit `wfh_request.cancel`.
+- **Reads**: `listWfhRequests({ viewer, status?, userId?, limit, offset })` (approvers: everyone's,
+  Admins hidden for non-Admins; others: their own), `countPendingWfh({ viewer })` (added to the
+  Attendance nav badge, the same badge as corrections), `getWfhForDay(userId, workDate)` →
+  `{ required, approved: request | null, pending: request[] }`. Dates in rows are 'YYYY-MM-DD';
+  rows carry `{ id, user: { id, name, initials, designation, role, status }, fromDate, toDate,
+reason, status, handledBy: { id, name } | null, handledAt, declineReason, createdAt }`.
+- `getMyToday` adds `officeAnywhere` (setting), `wfh` (`getWfhForDay` for today) and
+  `wfhNeedsApproval` (setting on and the person lacks `attendance.correct`).
+- API: `POST /api/wfh-requests` (attendance.self, 201), `GET /api/wfh-requests?status=&limit=&offset=`
+  (signed_in; scoped as above), `POST /api/wfh-requests/[id]/approve` and `/decline { reason }`
+  (attendance.correct), `POST /api/wfh-requests/[id]/cancel` (attendance.self).
+
+### Screens
+
+- **Today, Check in card**: with `officeCheckinAnywhere` the Office option is always available and
+  selected first ("Office" / hint "Check in from anywhere for now"); the network tag isn't shown.
+  The WFH option: approved today → enabled, hint "Approved by Neha"; when approval is needed and
+  missing → disabled, hint "Needs HR's approval" with a text button **Ask HR** (pending: "Waiting
+  for HR"). Under the card's links: "Working from home another day? **Ask HR**". The request dialog:
+  From / To dates (To defaults to From), Reason, **Send request**; toast "Request sent to HR".
+- **Attendance (HR, Admin)**: a "Work from home requests" card (`id="wfh"`) above the day table
+  when there are pending requests or ones handled in the last 7 days: person, dates ("Tue, 14 Oct"
+  or "Tue, 14 – Thu, 16 Oct"), reason, **Approve** / **Decline** (dialog with a reason); handled ones
+  show their status. The nav badge counts pending corrections + pending WFH requests.
+- **Settings → Check-in**: toggles "Office check-in from any network" (help "Turn on while the
+  office network isn't set up. Everyone can check in as Office from anywhere.") and "Working from
+  home needs HR approval" (help "People ask HR first. HR and Admins don't need approval.").

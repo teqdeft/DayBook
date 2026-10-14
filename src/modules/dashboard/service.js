@@ -1,6 +1,8 @@
 // Dashboards: read models for the sidebar badges, the Team dashboard, the Employee detailed view,
 // the Company overview and the hours export. Nothing here writes to the database.
 import { can } from '@/lib/permissions';
+import { workDate } from '@/lib/time';
+import { settings } from '@/modules/settings';
 import * as repo from './repo';
 
 export { getHoursByProject, getHoursCard, getTeamToday } from './team';
@@ -13,9 +15,10 @@ export { buildHoursExport } from './exportHours';
  * requests: pending report edit requests this user may approve (a PM: people who report to them;
  * an Admin: everyone; never their own, as on the Requests screen) plus pending project requests
  * (anyone who handles them);
- * corrections: pending attendance correction requests, only for people who can correct attendance,
- * never their own (another HR person or an Admin decides on those), and an Admin's only for
- * another Admin (an Admin's attendance is never shown to HR).
+ * corrections: pending attendance correction requests plus pending work-from-home requests whose
+ * last day is today or later (CONTRACT 17), only for people who can correct attendance, never
+ * their own (another HR person or an Admin decides on those), and an Admin's only for another
+ * Admin (an Admin's attendance is never shown to HR).
  * @param {{ id: number, role: string, status?: string } | null} user
  * @returns {Promise<{ requests: number, corrections: number }>}
  */
@@ -29,10 +32,16 @@ export async function getNavBadges(user) {
   if (scope.edits === false && !scope.projects && !scope.corrections) {
     return { requests: 0, corrections: 0 };
   }
+  // Settings are cached in-process, so the company day costs no query on a page load.
+  const wfhFrom = scope.corrections ? workDate((await settings.getAll()).timezone) : undefined;
   const counts = await repo.countNavBadges({
     ...scope,
     selfId: user.id,
     withAdmins: user.role === 'admin',
+    wfhFrom,
   });
-  return { requests: counts.edits + counts.projects, corrections: counts.corrections };
+  return {
+    requests: counts.edits + counts.projects,
+    corrections: counts.corrections + counts.wfh,
+  };
 }

@@ -1,5 +1,6 @@
 // Attendance (artboard 09): who was in, when and where for one day, the five numbers, HR's
-// corrections and missing check-outs. PMs see it read-only; HR and Admin can change rows.
+// corrections and missing check-outs. PMs see it read-only; HR and Admin can change rows and
+// decide on work-from-home requests (CONTRACT 17), above the day table.
 import Button from '@/components/Button';
 import DateSwitcher from '@/components/DateSwitcher';
 import Kpi from '@/components/Kpi';
@@ -9,6 +10,7 @@ import { addDays, formatDay, formatDayShort, formatTimeAmPm, now } from '@/lib/t
 import AutoRefresh from '../today/AutoRefresh';
 import { CorrectionsCard, EveryoneCard, MissingCard } from './AttendanceCards';
 import { loadAttendance } from './attendanceData';
+import WfhRequestsCard from './WfhRequestsCard';
 import styles from './page.module.css';
 
 export const metadata = { title: 'Attendance' };
@@ -95,6 +97,8 @@ export default async function AttendancePage({ searchParams }) {
           <Kpi key={kpi.label} {...kpi} />
         ))}
       </section>
+
+      {data.wfh ? <WfhRequestsCard wfh={data.wfh} /> : null}
 
       <div className={styles.main}>
         <EveryoneCard

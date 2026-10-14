@@ -41,8 +41,10 @@ export const NAV_ITEMS = {
     href: '/attendance',
     icon: 'CalendarDays',
     permission: 'attendance.view_all',
-    badge: 'corrections', // pending correction requests
-    badgeRoles: ['hr'], // guide section 8: correction counts are shown to HR
+    badge: 'corrections', // pending correction and work-from-home requests
+    // Guide section 8 shows correction counts to HR; CONTRACT 17 adds Admins, who decide when the
+    // company has no HR and on HR's and other Admins' requests.
+    badgeRoles: ['hr', 'admin'],
   },
   requests: {
     label: 'Requests',

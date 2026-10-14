@@ -30,6 +30,9 @@ export const DEFAULT_SETTINGS = {
   timer_away_minutes: 25, // idle or locked this long while a timer runs: ask "keep or remove?"
   timer_reminder_minutes: 20, // required mode: remind after this long with no timer (0 = never)
   break_allowance_minutes: 60, // breaks above this in a day are flagged (0 = no allowance)
+  // Check-in rules (company request after the build guide)
+  office_checkin_anywhere: false, // true: Office check-in works from any network
+  wfh_requires_approval: true, // true: WFH only on days HR approved (HR and Admins excepted)
 };
 
 export async function seed(knex) {

@@ -126,6 +126,9 @@ export const settingsUpdateSchema = z
     }),
     // Desktop notifications (CONTRACT section 14)
     pushEnabled: z.boolean({ error: 'Choose on or off.' }),
+    // Check-in rules (CONTRACT section 17)
+    officeCheckinAnywhere: z.boolean({ error: 'Choose on or off.' }),
+    wfhRequiresApproval: z.boolean({ error: 'Choose on or off.' }),
     // Project timers and breaks (CONTRACT section 15)
     timersMode: z.enum(TIMER_MODES, { error: 'Choose off, optional or required.' }),
     timerAwayMinutes: wholeNumber({

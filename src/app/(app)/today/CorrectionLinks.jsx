@@ -1,6 +1,7 @@
 'use client';
 // The line under the report strip: "I came earlier" (after today's check-in) and "Request a
-// correction" for any other day, plus the person's requests still waiting for HR.
+// correction" for any other day, plus the person's requests still waiting for HR. page.js holds
+// the lines' box, so the work-from-home lines (WfhLinks.jsx) can follow in it.
 import { useState } from 'react';
 import Button from '@/components/Button';
 import CorrectionDialog from './CorrectionDialog';
@@ -19,7 +20,7 @@ export default function CorrectionLinks({
 }) {
   const [open, setOpen] = useState(null);
   return (
-    <div className={styles.help}>
+    <>
       <p className={styles.helpText}>
         {canSayEarlier ? (
           <>
@@ -56,6 +57,6 @@ export default function CorrectionLinks({
         today={today}
         yesterday={yesterday}
       />
-    </div>
+    </>
   );
 }

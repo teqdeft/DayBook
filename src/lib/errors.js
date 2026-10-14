@@ -39,6 +39,12 @@ export const ERROR_CODES = {
   // Project timers
   TIMERS_OFF: { status: 409, message: 'Timers are turned off for your company.' },
 
+  // Working from home (CONTRACT 17)
+  WFH_NOT_APPROVED: {
+    status: 409,
+    message: "Working from home needs HR's approval for today. Ask HR first.",
+  },
+
   // Reports
   REPORT_LOCKED: { status: 409, message: 'This report is locked. Request an edit to change it.' },
   REPORT_NOT_LOCKED: { status: 409, message: 'This report is still open, so you can edit it now.' },

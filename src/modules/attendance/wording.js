@@ -1,5 +1,22 @@
 // Sentences about correction requests: the second line of HR's cards and what the person is told.
-import { formatDayShort, formatTime, formatTimeAmPm } from '@/lib/time';
+// Also the days of a work-from-home request (CONTRACT 17).
+import { dayjs, formatDayShort, formatTime, formatTimeAmPm } from '@/lib/time';
+
+/**
+ * The days of a request, as rows show them: "Tue, 14 Oct", "Tue, 14 – Thu, 16 Oct",
+ * "Fri, 30 Oct – Mon, 2 Nov", or with the years when it crosses a year end.
+ * @param {string} from 'YYYY-MM-DD'
+ * @param {string} [to] 'YYYY-MM-DD', same as `from` when left out
+ */
+export function formatDayRange(from, to = from) {
+  if (to === from) return formatDayShort(from);
+  const [first, last] = [dayjs(from, 'YYYY-MM-DD'), dayjs(to, 'YYYY-MM-DD')];
+  if (first.year() !== last.year()) {
+    return `${first.format('ddd, D MMM YYYY')} – ${last.format('ddd, D MMM YYYY')}`;
+  }
+  if (first.month() !== last.month()) return `${formatDayShort(from)} – ${formatDayShort(to)}`;
+  return `${first.format('ddd, D')} – ${formatDayShort(to)}`;
+}
 
 /**
  * The second line of a correction card: what the person says happened.

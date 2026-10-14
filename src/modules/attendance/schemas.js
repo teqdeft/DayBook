@@ -160,5 +160,46 @@ export const approveSchema = z.object({ note: optionalNote(300) }).default({});
 /** POST /api/attendance-corrections/:id/reject */
 export const rejectSchema = z.object({ note: reasonText('a note for them', 300) });
 
-/** Route params { id } for /api/attendance/:id and /api/attendance-corrections/:id. */
+/** Route params { id } for /api/attendance/:id, /api/attendance-corrections/:id and
+ * /api/wfh-requests/:id. */
 export const idParamSchema = z.object({ id });
+
+// ---------- work from home requests (CONTRACT 17) ----------
+
+export const WFH_STATUSES = ['pending', 'approved', 'declined', 'cancelled'];
+
+/** POST /api/wfh-requests — toDate defaults to fromDate; the service checks the days. */
+export const wfhRequestSchema = z.object({
+  fromDate: dateString('Pick the first day.'),
+  toDate: z.preprocess(
+    (value) => (value === '' || value === null ? undefined : value),
+    dateString('Pick the last day.').optional(),
+  ),
+  reason: z
+    .string({ error: 'Add a reason for HR.' })
+    .trim()
+    .min(5, 'Add a reason of at least 5 characters.')
+    .max(500, 'Keep it to 500 characters or fewer.'),
+});
+
+/** GET /api/wfh-requests — handledSince keeps pending ones plus those handled from that day. */
+export const wfhListSchema = z.object({
+  status: z
+    .enum(WFH_STATUSES, { error: 'Pick pending, approved, declined or cancelled.' })
+    .optional(),
+  handledSince: dateString('Pick a date like 2026-10-07.').optional(),
+  limit,
+  offset,
+});
+
+/** POST /api/wfh-requests/:id/approve and /cancel (no fields) */
+export const wfhActionSchema = z.object({}).default({});
+
+/** POST /api/wfh-requests/:id/decline */
+export const wfhDeclineSchema = z.object({
+  reason: z
+    .string({ error: 'Add a reason for them.' })
+    .trim()
+    .min(2, 'Add a reason for them.')
+    .max(300, 'Keep it to 300 characters or fewer.'),
+});

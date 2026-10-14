@@ -1,6 +1,7 @@
 'use client';
 // Check-in settings: the office networks (added and removed right away through their own API)
-// and the two check-in switches (saved with "Save changes").
+// and the check-in switches (saved with "Save changes"), including office check-in from any
+// network and HR approval for working from home (CONTRACT 17).
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
@@ -178,11 +179,17 @@ export default function CheckInSection({ networks, currentIp }) {
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState(null);
 
+  const anywhere = Boolean(form.officeCheckinAnywhere);
+
   return (
     <Section
       id="check-in"
       title="Check-in"
-      subtitle="Office check-in only works on these networks. Anywhere else, people check in as WFH."
+      subtitle={
+        anywhere
+          ? 'Office check-in works from any network for now. On these networks people can only check in as Office.'
+          : 'Office check-in only works on these networks. Anywhere else, people check in as WFH.'
+      }
     >
       {networks.length > 0 ? (
         <ul className={styles.networks}>
@@ -204,7 +211,10 @@ export default function CheckInSection({ networks, currentIp }) {
         </ul>
       ) : (
         <p className={styles.emptyBox}>
-          No office networks yet, so everyone checks in as WFH. Add the office&apos;s IP address.
+          {anywhere
+            ? 'No office networks yet. Office check-in works from anywhere for now.'
+            : 'No office networks yet, so everyone checks in as WFH.'}{' '}
+          Add the office&apos;s IP address.
         </p>
       )}
       <Button
@@ -218,10 +228,28 @@ export default function CheckInSection({ networks, currentIp }) {
       </Button>
       <div className={styles.toggles}>
         <Toggle
+          label="Office check-in from any network"
+          help="Turn on while the office network isn't set up. Everyone can check in as Office from anywhere."
+          checked={form.officeCheckinAnywhere}
+          onChange={(checked) => setField('officeCheckinAnywhere', checked)}
+          className={styles.toggle}
+        />
+        <Toggle
           label="Allow unverified office check-in"
-          help="For when the office Wi-Fi is down. HR confirms these later."
+          help={
+            anywhere
+              ? 'Not used while office check-in works from any network.'
+              : 'For when the office Wi-Fi is down. HR confirms these later.'
+          }
           checked={form.allowUnverifiedOffice}
           onChange={(checked) => setField('allowUnverifiedOffice', checked)}
+          className={styles.toggle}
+        />
+        <Toggle
+          label="Working from home needs HR approval"
+          help="People ask HR first. HR and Admins don't need approval."
+          checked={form.wfhRequiresApproval}
+          onChange={(checked) => setField('wfhRequiresApproval', checked)}
           className={styles.toggle}
         />
         <Toggle
