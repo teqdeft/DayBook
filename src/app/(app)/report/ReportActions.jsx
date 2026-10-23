@@ -9,7 +9,7 @@ import { formatHours } from '@/lib/time';
 import RequestEditDialog from './RequestEditDialog';
 import { useReport } from './ReportProvider';
 import SubmitAndCheckOut from './SubmitAndCheckOut';
-import { totalMinutes } from './reportState';
+import { totalMinutes } from './reportHours';
 import { presentLine } from './reportTotals';
 import styles from './ReportActions.module.css';
 

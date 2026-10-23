@@ -1,5 +1,7 @@
 // Pure helpers for the report editor's state (browser side): turning the API's report into
-// editable rows, back into the PUT body, and mapping the API's field errors onto rows.
+// editable rows, back into the PUT body, and mapping the API's field errors onto rows. The hours
+// boxes (exact minutes, shown as '2h 15m') are read and written by reportHours.js.
+import { entryMinutes, timeText, timeToSend } from './reportHours';
 
 let counter = 0;
 
@@ -7,70 +9,6 @@ let counter = 0;
 export function newKey(prefix) {
   counter += 1;
   return `${prefix}${counter}`;
-}
-
-export const HOURS_MAX = 24;
-
-/**
- * Hours as typed ('1.5', '1,5', '') -> { value } or { error }. '' counts as 0 while drafting.
- * @returns {{ value: number } | { error: string }}
- */
-export function parseHours(text) {
-  const raw = String(text ?? '')
-    .trim()
-    .replace(',', '.');
-  if (raw === '') return { value: 0 };
-  if (!/^\d*\.?\d*$/.test(raw) || raw === '.') {
-    return { error: 'Enter hours as a number, like 1.5.' };
-  }
-  const value = Number(raw);
-  if (!Number.isFinite(value)) return { error: 'Enter hours as a number, like 1.5.' };
-  if (value > HOURS_MAX) return { error: `Hours must be ${HOURS_MAX} or less.` };
-  if (Math.abs(value * 4 - Math.round(value * 4)) > 1e-9) {
-    return { error: 'Use steps of 0.25 hours, like 1.5 or 1.75.' };
-  }
-  return { value };
-}
-
-/** 2 -> '2', 1.5 -> '1.5', 0 -> '' (the field shows a 0 placeholder). */
-export function hoursText(hours) {
-  const value = Number(hours) || 0;
-  return value === 0 ? '' : String(Number(value.toFixed(2)));
-}
-
-/**
- * The hours an entry counts as in the totals and the Slack preview: what is typed when valid,
- * else the last valid value.
- */
-export function entryHours(entry) {
-  const parsed = parseHours(entry.hours);
-  return 'value' in parsed ? parsed.value : entry.savedHours;
-}
-
-/**
- * The hours a save sends: the number when the field is valid, else the text exactly as shown, so
- * the server refuses it under that field instead of quietly saving an older value. Only the
- * keepalive save on leaving the page (`keepLastValid`) falls back to the last valid value, so
- * the rest of a draft still saves when the person leaves with a field still wrong.
- * @returns {number | string}
- */
-export function hoursToSend(entry, { keepLastValid = false } = {}) {
-  const parsed = parseHours(entry.hours);
-  if ('value' in parsed) return parsed.value;
-  return keepLastValid ? entry.savedHours : String(entry.hours ?? '').trim();
-}
-
-/** The first hours field a save can't accept, or null: { entryKey, message }. */
-export function firstHoursError(entries) {
-  for (const entry of entries) {
-    const parsed = parseHours(entry.hours);
-    if ('error' in parsed) return { entryKey: entry.key, message: parsed.error };
-  }
-  return null;
-}
-
-export function totalMinutes(entries) {
-  return entries.reduce((sum, entry) => sum + Math.round(entryHours(entry) * 60), 0);
 }
 
 /** 'p12' or 'r3': one key per project or project request, to spot duplicates. */
@@ -96,21 +34,33 @@ function taskFromView(task) {
   };
 }
 
+/** An API entry's minutes (older copies only had hours). */
+function viewMinutes(entry) {
+  const minutes = Number(entry.minutes);
+  if (entry.minutes !== null && entry.minutes !== undefined && Number.isFinite(minutes)) {
+    return Math.round(minutes);
+  }
+  return Math.round((Number(entry.hours) || 0) * 60);
+}
+
 /** The API's report -> editor rows. */
 export function entriesFromView(view) {
-  return (view?.entries ?? []).map((entry) => ({
-    key: newKey('e'),
-    id: entry.id,
-    projectId: entry.projectId ?? null,
-    projectRequestId: entry.projectRequestId ?? null,
-    projectName: entry.projectName,
-    projectColor: entry.projectColor ?? null,
-    isUrgent: Boolean(entry.isUrgent),
-    waitingForApproval: Boolean(entry.waitingForApproval),
-    hours: hoursText(entry.hours),
-    savedHours: Number(entry.hours) || 0,
-    tasks: entry.tasks.map(taskFromView),
-  }));
+  return (view?.entries ?? []).map((entry) => {
+    const minutes = viewMinutes(entry);
+    return {
+      key: newKey('e'),
+      id: entry.id,
+      projectId: entry.projectId ?? null,
+      projectRequestId: entry.projectRequestId ?? null,
+      projectName: entry.projectName,
+      projectColor: entry.projectColor ?? null,
+      isUrgent: Boolean(entry.isUrgent),
+      waitingForApproval: Boolean(entry.waitingForApproval),
+      hours: timeText(minutes),
+      savedMinutes: minutes,
+      tasks: entry.tasks.map(taskFromView),
+    };
+  });
 }
 
 /** A new card for a picked project, with one empty task row ready to type in. */
@@ -125,7 +75,7 @@ export function newEntry(pick) {
     isUrgent: Boolean(pick.isUrgent),
     waitingForApproval: Boolean(pick.projectRequestId),
     hours: '',
-    savedHours: 0,
+    savedMinutes: 0,
     tasks: [newTask()],
   };
 }
@@ -176,7 +126,7 @@ export function matchSuggestions(suggestions, title, taken = new Set()) {
  * Editor rows -> the PUT / submit body, plus the row keys in the same order (to map ids and
  * field errors from the answer back onto rows).
  * @param {object[]} entries
- * @param {{ keepLastValid?: boolean }} [options] see hoursToSend
+ * @param {{ keepLastValid?: boolean }} [options] see timeToSend
  */
 export function serialize(entries, { keepLastValid = false } = {}) {
   const keys = [];
@@ -186,7 +136,7 @@ export function serialize(entries, { keepLastValid = false } = {}) {
       id: entry.id ?? undefined,
       projectId: entry.projectId ?? undefined,
       projectRequestId: entry.projectRequestId ?? undefined,
-      hours: hoursToSend(entry, { keepLastValid }),
+      ...timeToSend(entry, { keepLastValid }),
       tasks: entry.tasks.map((task) => ({
         id: task.id ?? undefined,
         title: task.title,
@@ -232,6 +182,13 @@ export function applySavedIds(entries, keys, view) {
 
 export const NO_ERRORS = { general: [], entries: {}, tasks: {} };
 
+/** An entry field's error -> the place on the card that shows it (anything else: the project). */
+const ENTRY_SLOTS = new Map([
+  ['hours', 'hours'],
+  ['minutes', 'hours'],
+  ['tasks', 'tasks'],
+]);
+
 /**
  * The API's `fields` map ('entries.0.hours', 'entries.1.tasks.0.title', 'total', ...) -> errors
  * keyed by row, using the keys that were sent.
@@ -251,7 +208,8 @@ export function mapFieldErrors(fields, keys, fallbackMessage) {
       if (taskKey) errors.tasks[taskKey] = message;
       else errors.general.push(message);
     } else {
-      const slot = field === 'hours' || field === 'tasks' ? field : 'project';
+      // The time goes as `minutes` (or `hours` when it couldn't be read): both are the hours box.
+      const slot = ENTRY_SLOTS.get(field) ?? 'project';
       errors.entries[sent.entryKey] = { ...errors.entries[sent.entryKey], [slot]: message };
     }
   }
@@ -285,7 +243,7 @@ export function clearError(errors, { entryKey, field, taskKey }) {
 export function previewEntries(entries) {
   return entries.map((entry) => ({
     projectName: entry.projectName,
-    minutes: Math.round(entryHours(entry) * 60),
+    minutes: entryMinutes(entry),
     tasks: entry.tasks,
   }));
 }

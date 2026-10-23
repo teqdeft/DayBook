@@ -1,6 +1,7 @@
 'use client';
-// "From your timers" above the project cards (CONTRACT 15): the day's timer time per project,
-// rounded to the nearest 15 minutes, with the task notes, a total, and "Fill report from timers".
+// "From your timers" above the project cards (CONTRACT 15): the day's timer time per project, to
+// the minute (company request: a 2h 5m timer fills 2h 5m), with the task notes, a total, and
+// "Fill report from timers".
 // Shown while the report can change and something was tracked; in required mode its subtitle
 // says the hours come from the timers. It shows useReport().timers, which today's report reads
 // again every minute (useTimerFill); a timer stopped from the sidebar chip refreshes the page.
@@ -34,7 +35,7 @@ export default function TimersCard() {
     <Card as="section" padding="none" aria-label="From your timers" className={styles.card}>
       <CardHeader
         title="From your timers"
-        subtitle={required ? 'Hours come from your timers' : 'Rounded to the nearest 15 minutes'}
+        subtitle={required ? 'Hours come from your timers' : 'Tracked time by project'}
         divider
         className={styles.header}
         actions={

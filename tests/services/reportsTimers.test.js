@@ -1,12 +1,15 @@
-// Required timer mode at submit (CONTRACT 15): report hours must equal the day's rounded timer
-// hours, every timed project must be in the report, project requests are exempt, and the check
-// only runs in required mode, for people who can use timers, on days with time entries or today.
+// Required timer mode at submit (CONTRACT 15): report hours must equal the day's timer time to
+// the minute (company request: no 15-minute rounding), give or take TIMER_TOLERANCE_MINUTES for a
+// timer still running; every timed project must be in the report, project requests are exempt,
+// and the check only runs in required mode, for people who can use timers, on days with time
+// entries or today.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { setNowForTests } from '@/lib/time';
 import { reports } from '@/modules/reports';
 import { saveReportSchema } from '@/modules/reports/schemas';
-import { timerProblems } from '@/modules/reports/timerCheck';
+import { TIMER_TOLERANCE_MINUTES as PAGE_TOLERANCE } from '@/app/(app)/report/reportTimers';
+import { TIMER_TOLERANCE_MINUTES, timerProblems } from '@/modules/reports/timerCheck';
 import { resetDatabase, setSettings } from '../helpers/db.js';
 import {
   clearTables,
@@ -92,7 +95,7 @@ describe('timerProblems (the rules on their own)', () => {
     ],
   };
 
-  it('accepts a report whose hours are the rounded timer hours', () => {
+  it('accepts a report whose hours are the timer hours', () => {
     const entries = [
       { projectId: 1, minutes: 255 },
       { projectId: 2, minutes: 90 },
@@ -115,12 +118,38 @@ describe('timerProblems (the rules on their own)', () => {
     });
   });
 
-  it('asks for the biggest missing project and never for one rounded to 0', () => {
+  it('asks for the biggest missing project and never for one with 0 minutes', () => {
     expect(timerProblems([], summary)).toEqual({
       total: 'acme-app has 4h 15m on your timers. Fill the report from timers.',
     });
     expect(timerProblems([{ projectId: 1, minutes: 255 }], summary)).toEqual({
       total: 'acme-blog has 1h 30m on your timers. Fill the report from timers.',
+    });
+  });
+
+  it('compares to the minute, allowing a 2-minute difference either way', () => {
+    // The page and the server agree on the tolerance.
+    expect(TIMER_TOLERANCE_MINUTES).toBe(2);
+    expect(PAGE_TOLERANCE).toBe(TIMER_TOLERANCE_MINUTES);
+    const timed = { projects: [{ projectId: 1, projectName: 'acme-app', roundedMinutes: 125 }] };
+    const at = (minutes) => timerProblems([{ projectId: 1, minutes }], timed);
+    for (const minutes of [123, 124, 125, 126, 127]) expect(at(minutes)).toEqual({});
+    expect(at(120)).toEqual({ 'entries.0.hours': 'Hours come from your timers (2h 5m).' });
+    expect(at(122)).toEqual({ 'entries.0.hours': 'Hours come from your timers (2h 5m).' });
+    expect(at(128)).toEqual({ 'entries.0.hours': 'Hours come from your timers (2h 5m).' });
+  });
+
+  it('does not ask for a project timed for no more than the tolerance', () => {
+    const summary = {
+      projects: [
+        { projectId: 1, projectName: 'acme-app', roundedMinutes: 60 },
+        { projectId: 2, projectName: 'quick-call', roundedMinutes: 2 },
+      ],
+    };
+    expect(timerProblems([{ projectId: 1, minutes: 60 }], summary)).toEqual({});
+    summary.projects[1].roundedMinutes = 3;
+    expect(timerProblems([{ projectId: 1, minutes: 60 }], summary)).toEqual({
+      total: 'quick-call has 3m on your timers. Fill the report from timers.',
     });
   });
 });
@@ -152,7 +181,7 @@ describe('optional mode', () => {
 });
 
 describe('required mode', () => {
-  it('submits when every project has its rounded timer hours', async () => {
+  it('submits when every project has its timer hours', async () => {
     setTimerSummary(user.id, TUESDAY, [
       { projectId: internal.id, projectName: 'internal-tool', roundedMinutes: 255 },
       { projectId: iwill.id, projectName: 'iwilltillimwell', roundedMinutes: 90 },
@@ -182,6 +211,48 @@ describe('required mode', () => {
     expect(await statusOf(draft.id)).toBe('draft');
   });
 
+  it('submits a 2h 5m timer as 2h 5m (no 15-minute rounding)', async () => {
+    setTimerSummary(user.id, TUESDAY, [
+      { projectId: internal.id, projectName: 'internal-tool', roundedMinutes: 125 },
+    ]);
+    const rounded = await draftWith([
+      { projectId: internal.id, minutes: 120, tasks: [task('Working on backend')] },
+    ]);
+    await expect(
+      reports.submitReport({ user, reportId: rounded.draft.id, entries: rounded.entries }),
+    ).rejects.toMatchObject({
+      fields: { 'entries.0.hours': 'Hours come from your timers (2h 5m).' },
+    });
+    const exact = await draftWith([
+      { projectId: internal.id, minutes: 125, tasks: [task('Working on backend')] },
+    ]);
+    await expect(
+      reports.submitReport({ user, reportId: exact.draft.id, entries: exact.entries }),
+    ).resolves.toMatchObject({ status: 'submitted', totalMinutes: 125 });
+  });
+
+  it('takes hours up to 2 minutes behind a timer that kept running, and no more', async () => {
+    // The page read 2h 5m; the timer ran on to 2h 7m before the submit arrived.
+    setTimerSummary(user.id, TUESDAY, [
+      { projectId: internal.id, projectName: 'internal-tool', minutes: 128, roundedMinutes: 128 },
+    ]);
+    const late = await draftWith([
+      { projectId: internal.id, minutes: 125, tasks: [task('Working on backend')] },
+    ]);
+    await expect(
+      reports.submitReport({ user, reportId: late.draft.id, entries: late.entries }),
+    ).rejects.toMatchObject({
+      fields: { 'entries.0.hours': 'Hours come from your timers (2h 8m).' },
+    });
+    setTimerSummary(user.id, TUESDAY, [
+      { projectId: internal.id, projectName: 'internal-tool', minutes: 127, roundedMinutes: 127 },
+    ]);
+    // The report keeps the hours that were sent (the page's), not the timers' at that moment.
+    await expect(
+      reports.submitReport({ user, reportId: late.draft.id, entries: late.entries }),
+    ).resolves.toMatchObject({ status: 'submitted', totalMinutes: 125 });
+  });
+
   it('refuses a project without timer time, also on a day nothing was timed yet', async () => {
     const { draft, entries } = await draftWith([
       { projectId: internal.id, hours: 2, tasks: [task('Working on backend')] },
@@ -209,10 +280,10 @@ describe('required mode', () => {
     );
   });
 
-  it('does not ask for a project whose time rounds to 0', async () => {
+  it('does not ask for a project timed for under the tolerance (a timer just started)', async () => {
     setTimerSummary(user.id, TUESDAY, [
       { projectId: internal.id, projectName: 'internal-tool', roundedMinutes: 60 },
-      { projectId: iwill.id, projectName: 'iwilltillimwell', minutes: 6, roundedMinutes: 0 },
+      { projectId: iwill.id, projectName: 'iwilltillimwell', minutes: 1, roundedMinutes: 1 },
     ]);
     const { draft, entries } = await draftWith([
       { projectId: internal.id, hours: 1, tasks: [task('Working on backend')] },

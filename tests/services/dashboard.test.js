@@ -6,6 +6,7 @@ import { localToUtc, setNowForTests } from '@/lib/time';
 import { attendance } from '@/modules/attendance';
 import { dashboard } from '@/modules/dashboard';
 import { hoursBars } from '@/modules/dashboard/shared';
+import { settings } from '@/modules/settings';
 import { createUser, resetDatabase, setSettings } from '../helpers/db.js';
 import {
   NOW,
@@ -566,11 +567,19 @@ describe('getNavBadges', () => {
   });
 
   it('counts with one query', async () => {
+    // The company day comes from the settings cache, which is warm on a page load in the app
+    // (tests read settings from the database unless the cache is turned on).
+    settings.setCacheTtlForTests(60_000);
     const queries = [];
     const listen = (query) => queries.push(query.sql);
-    db.on('query', listen);
-    await badges(people.admin);
-    db.removeListener('query', listen);
+    try {
+      await settings.getAll();
+      db.on('query', listen);
+      await badges(people.admin);
+    } finally {
+      db.removeListener('query', listen);
+      settings.setCacheTtlForTests(null);
+    }
     expect(queries).toHaveLength(1);
   });
 });

@@ -2,8 +2,17 @@
 // from timers", the hours a card takes from timers in required mode, and what the
 // "From your timers" card lists. `timers` is { mode, required, summary } from
 // reports.timersForReport (the page's data.timers, or a fresher copy from
-// GET /api/reports/:id/timers).
-import { hoursText, newKey, newTask, parseHours, projectKey } from './reportState';
+// GET /api/reports/:id/timers). A summary's `roundedMinutes` is the project's timer time in whole
+// minutes (no 15-minute rounding since the company asked for exact minutes): 2h 5m fills 2h 5m.
+import { entryMinutes, parseHours, timeText } from './reportHours';
+import { newKey, newTask, projectKey } from './reportState';
+
+/**
+ * How far report hours may be off the timers in required mode, as the submit allows it (the same
+ * number as reports/timerCheck.js): a running timer counts on between the page's last read of the
+ * timers and the submit.
+ */
+export const TIMER_TOLERANCE_MINUTES = 2;
 
 /** Lower case without outer spaces, to compare task titles. */
 function normalTitle(text) {
@@ -17,16 +26,16 @@ function timerTitle(task) {
   return String(task.note ?? task.projectTaskTitle ?? '').trim();
 }
 
-/** Whether the shown hours already equal these minutes (so '2.50' and '2.5' are the same). */
+/** Whether the shown hours already equal these minutes (so '2.5' and '2h 30m' are the same). */
 function sameHours(text, minutes) {
   const parsed = parseHours(text);
-  return 'value' in parsed && Math.round(parsed.value * 60) === minutes;
+  return 'minutes' in parsed && parsed.minutes === minutes;
 }
 
-/** A card's hours for rounded timer minutes: 150 -> { hours: '2.5', savedHours: 2.5 }. */
+/** A card's hours for timer minutes: 125 -> { hours: '2h 5m', savedMinutes: 125 }. */
 export function hoursFromMinutes(minutes) {
-  const value = (Number(minutes) || 0) / 60;
-  return { hours: hoursText(value), savedHours: Number(value.toFixed(2)) };
+  const value = Math.max(0, Math.round(Number(minutes) || 0));
+  return { hours: timeText(value), savedMinutes: value };
 }
 
 /** A task line for one timer task (status In progress), reusing `base` (key, id) when given. */
@@ -97,12 +106,14 @@ function entryFromTimer(project) {
 
 /**
  * "Fill report from timers" (CONTRACT 15): merges the day's timer summary into the editor rows.
- * Cards match timer projects by project ('p<id>'); their hours become the rounded timer hours
- * and missing task lines are added (In progress; matched by priority task, else by title in any
- * case; the lone empty line of a card is replaced). Projects with 0 rounded minutes are skipped,
+ * Cards match timer projects by project ('p<id>'); their hours become the timer time (to the
+ * minute) and missing task lines are added (In progress; matched by priority task, else by title
+ * in any case; the lone empty line of a card is replaced). Projects with 0 minutes are skipped,
  * nothing is removed, and timer projects the report doesn't have are added at the end in the
- * summary's order (biggest first). `hoursOnly` (required mode, on load) only changes the hours of
- * cards already in the report.
+ * summary's order (biggest first), except those timed for TIMER_TOLERANCE_MINUTES or less (a
+ * misclick: required mode doesn't ask for them, and their card would only block the submit with
+ * no tasks). `hoursOnly` (required mode, on load) only changes the hours of cards already in the
+ * report.
  * @param {object[]} entries editor rows (reportState.js)
  * @param {{ projects: Array<{ projectId: number, projectName: string, projectColor: string,
  *   isUrgent: boolean, roundedMinutes: number, tasks: Array<{ note: string | null,
@@ -135,8 +146,50 @@ export function mergeTimerSummary(entries, summary, { hoursOnly = false } = {}) 
   });
   const added = hoursOnly
     ? []
-    : projects.filter((project) => !merged.has(`p${project.projectId}`)).map(entryFromTimer);
+    : projects
+        .filter(
+          (project) =>
+            project.roundedMinutes > TIMER_TOLERANCE_MINUTES &&
+            !merged.has(`p${project.projectId}`),
+        )
+        .map(entryFromTimer);
   return changed || added.length ? [...next, ...added] : entries;
+}
+
+/**
+ * Required mode: a draft's hours follow the timers, and a running timer moves them every minute.
+ * They show at once, but a follow saves at most once per FOLLOW_SAVE_MS (the others go out with
+ * that save, the next edit or the submit). So a draft isn't saved every minute, and a second open
+ * copy of the report isn't made stale (CONFLICT) every minute, only about as often as with the old
+ * 15-minute rounding.
+ */
+export const FOLLOW_SAVE_MS = 15 * 60_000;
+
+/**
+ * Whether a follow may save now: the first one (on load), then once per FOLLOW_SAVE_MS.
+ * @param {number | null} lastAt when a follow last could save (ms), null before the first
+ * @param {number} at now (ms)
+ * @returns {boolean}
+ */
+export function followSaves(lastAt, at) {
+  return lastAt === null || at - lastAt >= FOLLOW_SAVE_MS;
+}
+
+/**
+ * Required mode, a draft: the rows with their hours following the timers (mergeTimerSummary,
+ * hoursOnly). When the follow doesn't save (`save` false, followSaves), changed hours count as
+ * `unsaved`; the next follow that saves sends them even when the timers haven't moved since (a
+ * new array, so the change is saved).
+ * @param {object[]} entries editor rows
+ * @param {object} summary timers.getDaySummary()
+ * @param {{ save: boolean, unsaved: boolean }} follow whether this follow saves, and whether hours
+ *   were shown since the last one that did without being saved
+ * @returns {{ rows: object[], unsaved: boolean }} rows is `entries` itself when nothing changes
+ */
+export function followTimerHours(entries, summary, { save, unsaved }) {
+  const rows = mergeTimerSummary(entries, summary, { hoursOnly: true });
+  if (!save) return { rows, unsaved: unsaved || rows !== entries };
+  return { rows: unsaved && rows === entries ? [...entries] : rows, unsaved: false };
 }
 
 /**
@@ -149,29 +202,38 @@ export function hoursComeFromTimers(timers) {
 }
 
 /**
- * Required mode: whether the rows no longer match the timers (a card's hours differ, or a timed
- * project is missing), so "Fill report from timers" would change them. For a submitted report,
- * which never changes on its own.
+ * Required mode: whether the submit would refuse the rows now (a card's hours are more than
+ * TIMER_TOLERANCE_MINUTES off its timers, or a project timed for longer is missing), so the
+ * report should be filled from timers again. For a submitted report, which never changes on its
+ * own; a timer still running after the submit only counts once it is past the tolerance.
  * @param {object[]} entries editor rows
  * @param {{ required?: boolean, summary: object } | null} timers
  * @returns {boolean}
  */
 export function timersChangedSince(entries, timers) {
   if (!hoursComeFromTimers(timers)) return false;
-  if (mergeTimerSummary(entries, timers.summary, { hoursOnly: true }) !== entries) return true;
-  const shown = new Set(entries.map(projectKey).filter(Boolean));
-  return (timers.summary?.projects ?? []).some(
-    (project) => project.roundedMinutes > 0 && !shown.has(`p${project.projectId}`),
+  const timed = new Map(
+    (timers.summary?.projects ?? [])
+      .filter((project) => project.roundedMinutes > 0)
+      .map((project) => [`p${project.projectId}`, project.roundedMinutes]),
   );
+  const shown = new Set();
+  for (const entry of entries) {
+    const key = projectKey(entry);
+    if (!timed.has(key) || shown.has(key)) continue;
+    shown.add(key);
+    if (Math.abs(entryMinutes(entry) - timed.get(key)) > TIMER_TOLERANCE_MINUTES) return true;
+  }
+  return [...timed].some(([key, minutes]) => !shown.has(key) && minutes > TIMER_TOLERANCE_MINUTES);
 }
 
 /**
  * In required mode, a card that moves to (or starts on) a real project takes that project's
- * rounded timer hours ('' when it has none); otherwise nothing changes.
+ * timer time ('' when it has none); otherwise nothing changes.
  * @param {{ mode: string, required?: boolean, summary: object } | null} timers the report's
  *   timers (useReport().timers)
  * @param {{ projectId?: number | null }} pick
- * @returns {{ hours: string, savedHours: number } | null}
+ * @returns {{ hours: string, savedMinutes: number } | null}
  */
 export function timerHoursFor(timers, pick) {
   if (!hoursComeFromTimers(timers) || !pick?.projectId) return null;
@@ -182,7 +244,7 @@ export function timerHoursFor(timers, pick) {
 }
 
 /**
- * The "From your timers" card's rows: each timer project with its rounded minutes and the task
+ * The "From your timers" card's rows: each timer project with its minutes and the task
  * lines a fill would bring ('Login page, Fix the build'), and their total. Empty when nothing was
  * tracked (no card).
  * @returns {{ rows: Array<{ projectId, projectName, projectColor, roundedMinutes, notes }>,

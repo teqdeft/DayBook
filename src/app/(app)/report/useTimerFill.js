@@ -6,20 +6,29 @@
 // change(), so autosave, the local backup of a submitted report and the stale-save check behave
 // exactly as they do for typing.
 // Required mode: a draft's read-only hours follow the timers (on load and whenever newer timers
-// arrive). A submitted report never changes on its own: that would mark it unsaved and overwrite
-// the browser's backup of unsent edits. The editor says when its timers moved on instead, and
-// "Update report" takes the timers' hours.
+// arrive), to the minute; they save at most once per FOLLOW_SAVE_MS and only show in between
+// (followTimerHours). A submitted report never changes on its own: that would mark it unsaved and
+// overwrite the browser's backup of unsent edits. The editor says when its timers moved on
+// instead, and "Update report" takes the timers' hours.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/apiClient';
-import { clearTimerErrors, hoursComeFromTimers, mergeTimerSummary } from './reportTimers';
+import { now } from '@/lib/time';
+import {
+  clearTimerErrors,
+  followSaves,
+  followTimerHours,
+  hoursComeFromTimers,
+  mergeTimerSummary,
+} from './reportTimers';
 
 export const TIMERS_REFRESH_MS = 60_000;
 
 /**
  * @param {{ timers: { mode: string, required: boolean, summary: object } | null,
  *   reportId: number | null, status: string, editable: boolean, isToday: boolean,
- *   change: (updater: (entries: object[]) => object[]) => void,
+ *   change: (updater: (entries: object[]) => object[], clear?: object,
+ *     options?: { quiet?: boolean }) => void,
  *   setErrors: (updater: (errors: object) => object) => void,
  *   syncRef: { current: null | (() => Promise<void>) } }} input timers is the page's data.timers
  *   (null when timers are off, the person can't use them or the report can't change); status is
@@ -96,10 +105,24 @@ export function useTimerFill({
   }, [syncRef, syncHours]);
 
   // Required mode, drafts only: read-only hours follow the timers (no change when they match).
+  // They show at once and save at most once per FOLLOW_SAVE_MS (quiet in between).
+  const follow = useRef({ lastAt: null, unsaved: false });
   const followTimers = editable && status === 'draft' && hoursComeFromTimers(timers);
   useEffect(() => {
     if (!followTimers) return;
-    change((entries) => mergeTimerSummary(entries, timers.summary, { hoursOnly: true }));
+    const state = follow.current;
+    const at = now().valueOf();
+    const save = followSaves(state.lastAt, at);
+    change(
+      (entries) => {
+        const next = followTimerHours(entries, timers.summary, { save, unsaved: state.unsaved });
+        state.unsaved = next.unsaved;
+        return next.rows;
+      },
+      undefined,
+      { quiet: !save },
+    );
+    if (save) state.lastAt = at;
   }, [followTimers, timers, change]);
 
   // Today's timers keep moving: read them every minute while the page is in view, and when it

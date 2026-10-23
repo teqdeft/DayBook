@@ -80,8 +80,7 @@ copy match. Data-driven numbers may differ from the artboard; layout and styling
 - Copy is sentence case. Dates: "Wednesday, 30 September" in titles (`formatDay`), "Wed, 30 Sep"
   in rows (`formatDayShort`). Times: "9:32" in tables (`formatTime`), "6:30 PM" in sentences
   (`formatTimeAmPm` / `formatClock`). Present time "8h 15m" (`formatDuration`), logged hours "8h" /
-  "8.5h" (`formatHours`) — except where the artboard shows otherwise (the Team board "Logged"
-  column shows `formatDuration`, e.g. "7h 30m").
+  "8h 30m" (`formatHours`, the same text as `formatDuration` since CONTRACT 16).
 - No `new Date()` / `Date.now()` in modules or components: use `now()`, `nowDate()`, `workDate(tz)`
   from `@/lib/time`. The company time zone is `settings.timezone`.
 - Prettier: 100 columns, single quotes, semicolons. Functions under ~50 lines, files under ~300.
@@ -570,7 +569,8 @@ board, HR sees breaks on Attendance.
 ### Rules
 
 - **Minutes** of an entry = `minutesBetween(startedAt, endedAt ?? now())`. Report minutes per
-  project = `roundToQuarterHour(sum)` (`@/lib/time`: nearest 15, so 7 min → 0, 8 min → 15).
+  project = the exact whole-minute sum (`roundedMinutes` keeps its name; no 15-minute rounding
+  since CONTRACT 18).
 - **Start** (`timers.start`): timers not `off` (else `TIMERS_OFF`); today's attendance row open
   (`NOT_CHECKED_IN` / `ALREADY_CHECKED_OUT` otherwise); project active (`PROJECT_NOT_ACTIVE`,
   message "Only active projects can be timed."); `projectTaskId` must be an open task of that
@@ -632,16 +632,17 @@ max(0, presentMinutes − breakMinutesWithin)`. A missing check-out counts 0. HR
   active. Check your report before it locks.", link `/report?date=YYYY-MM-DD`). Breaks still open
   from an earlier date end at the row's check-out if it has one, else at their own start
   (`midnight`).
-- **Reminder** (worker `timer-reminders`, every minute, required mode only, `timerReminderMinutes
-  > 0`, working day, between `officeStart`and`officeEnd`): a tracked person with an open row, not
-on a break, no running timer, whose last entry ended (or who checked in) at least
-`timerReminderMinutes`ago and who had no`timer.reminder`in the last 60 minutes gets one ("No
-timer is running", body "Start a timer for what you're working on.", link`/today`).
+- **Reminder** (worker `timer-reminders`, every minute, required mode only, a reminder time above
+  zero, working day, between `officeStart` and `officeEnd`): a tracked person with an open row, not
+  on a break, no running timer, whose last entry ended (or who checked in) at least
+  `timerReminderMinutes` ago and who had no `timer.reminder` in the last 60 minutes gets one ("No
+  timer is running", body "Start a timer for what you're working on.", link `/today`).
 - **Required mode** (report submit, `reports` module): applies when the day has at least one time
-  entry or the report's day is today or later. Every project entry's minutes must equal the
-  rounded timer minutes of that project (`entries.N.hours`: "Hours come from your timers (4.25h)." or
+  entry or the report's day is today or later. Every project entry's minutes must match the
+  timer minutes of that project within 2 minutes (`entries.N.hours`: "Hours come from your timers
+  (4h 15m)." or
   "No timer time on this project today. Remove it or add time on Today."), and every project with
-  rounded timer minutes > 0 must be in the report (`total`: "acme-app has 1h 30m on your timers.
+  more than 2 timer minutes must be in the report (`total`: "acme-app has 1h 30m on your timers.
   Fill the report from timers."). Entries for pending project requests are exempt, and so is anyone who can't use timers (`timers.canUse`). In optional
   mode the report is never checked against timers.
 
@@ -752,8 +753,8 @@ color, note } | null` (read with one extra query each over `attendance_breaks` /
 
 - **Durations read as hours and minutes everywhere** ("Late 1h 37m", "1h 45m", "over the 1h
   allowance"): `formatHours(minutes)` now returns the same text as `formatDuration` (its decimals
-  argument is gone). Under an hour a few sentences keep "N min". Report hour inputs stay decimal
-  (`minutesToHours`); the Slack report text says "Hours: 8h 30m" (`formatSlackHours`, also used by
+  argument is gone). Under an hour a few sentences keep "N min". Report hour inputs are "2h 15m"
+  boxes (CONTRACT 18); the Slack report text says "Hours: 8h 30m" (`formatSlackHours`, also used by
   the report page's Slack preview).
 - **Late grace.** Settings "Late after" (e.g. 9:35 with office start 9:30) is the late mark;
   someone with their own shift start gets the same grace (`attendance.lateMarkFor({ shiftStart,
@@ -850,3 +851,24 @@ reason, status, handledBy: { id, name } | null, handledAt, declineReason, create
 - **Settings → Check-in**: toggles "Office check-in from any network" (help "Turn on while the
   office network isn't set up. Everyone can check in as Office from anywhere.") and "Working from
   home needs HR approval" (help "People ask HR first. HR and Admins don't need approval.").
+
+## 18. Exact minutes in the daily report (added after the build guide)
+
+Company request: "show 8h 30m, proper correct time" and "the timer shows 2h 5m but Fill from timers
+shows only 2h". The daily report now counts **exact minutes**; the 0.25-hour steps are gone.
+
+- **Hours box** (report page, `HoursField`): shows "2h 15m" (`formatDuration`, "0h" when empty) and
+  accepts "2h 15m", "2h15m", "2 h 15 m", "2h", "15m", "15 min", "2:15" and decimal hours in
+  quarter steps only ("6.5", "2.25", "7.50"); any other decimal such as "8.30" is refused ("Enter
+  time like 2h 15m") so it is never read as 8h 18m. Normalised on blur; over 24h → "Hours must be
+  24 or less." The accessible name stays "Hours for <project>". Shared parser:
+  `parseDuration(text, { max })` in `@/lib/time`.
+- **API**: report entries take `minutes` (whole number 0–1440, wins when both are sent) or `hours`
+  (a number of any precision, or text in the forms above). Submit still needs each project above 0
+  and a day total of 16h or less; there is no step rule.
+- **Timers**: `getDaySummary` gives exact whole minutes, so Fill gives "2h 5m". Fill doesn't add a
+  new card for a project timed 2 minutes or less. Required mode accepts a 2-minute difference
+  (a running timer keeps counting); its follow-the-timer updates save at most every 15 minutes
+  (`ReportProvider` `change(updater, clear, { quiet: true })` updates the page without autosave).
+- The Slack text and preview say "Hours: 2h 15m" (`formatSlackHours`).
+- `dashboard.getNavBadges` corrections count includes pending WFH requests (CONTRACT 17).

@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { nowDate } from '@/lib/time';
 import { slack } from '@/modules/slack';
 import * as repo from './repo';
-import { MAX_TASK_LENGTH } from './schemas';
+import { MAX_TASK_LENGTH, entryMinutes } from './schemas';
 import { assertEditable, getOwnReport } from './drafts';
 import { checkPriorityLinks } from './links';
 import { checkProjects, confirmRequests, lockStoredRows, saveDraft, writeEntries } from './save';
@@ -16,7 +16,7 @@ import { loadEntriesFor, loadReportView, snapshotOf } from './view';
 export const MAX_DAY_MINUTES = 16 * 60;
 
 /**
- * The submit rules: at least one project; each project with hours above 0 in 0.25-hour steps and
+ * The submit rules: at least one project; each project with time above 0 (any whole minutes) and
  * at least one task; tasks 2 to 500 characters; no project twice; 16 hours or less in total.
  * Empty task rows (nothing typed) are ignored. Field keys follow the order sent, for example
  * 'entries.0.hours' or 'entries.1.tasks.0.title'.
@@ -36,7 +36,6 @@ export function submitProblems(entries) {
     const minutes = Number(entry.minutes) || 0;
     total += minutes;
     if (minutes <= 0) add(`entries.${i}.hours`, 'Hours must be above 0.');
-    else if (minutes % 15 !== 0) add(`entries.${i}.hours`, 'Use steps of 0.25 hours.');
     const key = entry.projectId ? `p${entry.projectId}` : `r${entry.projectRequestId}`;
     if (seen.has(key)) add(`entries.${i}.project`, 'This project is already in the report.');
     seen.add(key);
@@ -62,7 +61,7 @@ function inputForCheck(entries) {
   return entries.map((entry) => ({
     projectId: entry.projectId,
     projectRequestId: entry.projectRequestId,
-    minutes: Math.round(entry.hours * 60),
+    minutes: entryMinutes(entry),
     tasks: entry.tasks,
   }));
 }

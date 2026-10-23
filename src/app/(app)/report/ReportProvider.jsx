@@ -8,14 +8,13 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/apiClient';
 import { createAutosave } from './autosave';
+import { firstHoursError, parseHours } from './reportHours';
 import {
   NO_ERRORS,
   applySavedIds,
   clearError,
   entriesFromView,
-  firstHoursError,
   mapFieldErrors,
-  parseHours,
   serialize,
 } from './reportState';
 import { clearBackup, writeBackup } from './reportBackup';
@@ -139,8 +138,12 @@ export default function ReportProvider({ data, children }) {
     setSaveState('idle');
   }, []);
 
-  /** Called after every change: autosave for drafts, a local backup for submitted reports. */
-  const change = useCallback((updater, clear) => {
+  /**
+   * Called after every change: autosave for drafts, a local backup for submitted reports.
+   * `quiet` only shows it (hours following a running timer, useTimerFill): the next save or the
+   * submit sends it.
+   */
+  const change = useCallback((updater, clear, options) => {
     const state = live.current;
     const next = updater(state.entries);
     if (next === state.entries) return;
@@ -148,7 +151,7 @@ export default function ReportProvider({ data, children }) {
     state.changes += 1;
     setEntries(next);
     if (clear) setErrors((current) => clearError(current, clear));
-    if (state.blocked) return;
+    if (state.blocked || options?.quiet) return;
     if (state.status === 'draft') {
       autosaveRef.current?.changed();
     } else {
@@ -166,7 +169,7 @@ export default function ReportProvider({ data, children }) {
             if (entry.key !== entryKey) return entry;
             const updated = { ...entry, ...(typeof patch === 'function' ? patch(entry) : patch) };
             const parsed = parseHours(updated.hours);
-            return 'value' in parsed ? { ...updated, savedHours: parsed.value } : updated;
+            return 'minutes' in parsed ? { ...updated, savedMinutes: parsed.minutes } : updated;
           }),
         clear,
       ),
@@ -344,7 +347,7 @@ export default function ReportProvider({ data, children }) {
   }, [block, saveDraftRows]);
 
   // The day's timers and Fill report from timers; in required mode a draft's hours follow the
-  // timers (after the autosave loop above exists, so that change saves like typing).
+  // timers (after the autosave loop above exists, so a follow that saves goes out like typing).
   const { timers, applyTimers } = useTimerFill({
     timers: data.timers ?? null,
     reportId: report.id,

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { dayjs } from '@/lib/time';
+import { dayjs, parseDuration } from '@/lib/time';
 
 export const TASK_STATUSES = ['done', 'in_progress', 'blocked'];
 /** Hard limits that keep one report a sensible size (and inside the column types). */
@@ -8,6 +8,9 @@ export const MAX_TASKS_PER_ENTRY = 50;
 export const MAX_TASK_LENGTH = 500;
 /** An entry may hold at most one day of hours while drafting; submit allows 16 in total. */
 export const MAX_ENTRY_HOURS = 24;
+export const MAX_ENTRY_MINUTES = MAX_ENTRY_HOURS * 60;
+/** The report page's own words for time it can't read (under the hours box). */
+export const TIME_FORMAT_MESSAGE = 'Enter time like 2h 15m';
 
 /** A real calendar date 'YYYY-MM-DD' (rejects 2026-02-31). */
 export function isIsoDate(value) {
@@ -44,25 +47,64 @@ const offset = z.coerce
   .default(0);
 
 /**
- * Hours as the person typed them: a number or a numeric string, '' counts as 0. Must be 0 or
- * more, in 0.25-hour steps, at most 24.
+ * Hours text -> a number of hours, read exactly like the report page's box (parseDuration):
+ * '2h 15m', '2:15', '1.5', '1,5'; NaN for anything else, including decimals off the 0.25-hour
+ * steps ('8.30' may mean 8h 30m, so it is refused rather than saved as 8h 18m).
+ */
+function hoursFromText(text) {
+  const minutes = parseDuration(text, { max: Infinity });
+  return minutes === null ? Number.NaN : minutes / 60;
+}
+
+/**
+ * Hours: a number of any precision (company request: exact minutes), or text as the person typed
+ * it, read like the report page's box ('2h 15m', '2:15', '6.5'; hoursFromText); '' counts as 0.
+ * Must be 0 or more, at most 24. The entry turns them into whole minutes.
  */
 const hours = z.preprocess(
   (value) => {
     if (value === '' || value === null || value === undefined) return 0;
-    if (typeof value === 'string') return value.trim() === '' ? 0 : Number(value.trim());
+    if (typeof value === 'string') return value.trim() === '' ? 0 : hoursFromText(value.trim());
     return value;
   },
   z
-    .number({ error: 'Enter hours as a number, like 1.5.' })
-    .refine(Number.isFinite, 'Enter hours as a number, like 1.5.')
+    .number({ error: TIME_FORMAT_MESSAGE })
+    .refine(Number.isFinite, TIME_FORMAT_MESSAGE)
     .min(0, "Hours can't be below 0.")
-    .max(MAX_ENTRY_HOURS, `Hours must be ${MAX_ENTRY_HOURS} or less.`)
-    .refine(
-      (value) => Math.abs(value * 4 - Math.round(value * 4)) < 1e-9,
-      'Use steps of 0.25 hours, like 1.5 or 1.75.',
-    ),
+    .max(MAX_ENTRY_HOURS, `Hours must be ${MAX_ENTRY_HOURS} or less.`),
 );
+
+/**
+ * An entry's time in whole minutes, 0 to 1440 (what the report page sends). A number or a
+ * numeric string; null, undefined and '' mean "not sent" (then `hours` counts).
+ */
+const minutes = z.preprocess(
+  (value) => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    if (typeof value === 'string') return value.trim() === '' ? undefined : Number(value.trim());
+    return value;
+  },
+  z
+    .number({ error: 'Send the minutes as a whole number.' })
+    .int('Send the minutes as a whole number.')
+    .min(0, "Hours can't be below 0.")
+    .max(MAX_ENTRY_MINUTES, `Hours must be ${MAX_ENTRY_HOURS} or less.`)
+    .optional(),
+);
+
+/**
+ * An entry's whole minutes: `minutes` when set, else `hours` x 60 rounded to the minute. Works on
+ * parsed entries and on entries services get straight from tests or other callers.
+ * @param {{ minutes?: number | null, hours?: number | null }} entry
+ * @returns {number}
+ */
+export function entryMinutes(entry) {
+  const value = Number(entry?.minutes);
+  if (entry?.minutes !== null && entry?.minutes !== undefined && Number.isFinite(value)) {
+    return Math.round(value);
+  }
+  return Math.round((Number(entry?.hours) || 0) * 60);
+}
 
 /**
  * The priority task a task line is linked to (CONTRACT section 13): a plain-digit id, or
@@ -91,12 +133,18 @@ export const taskInputSchema = z.object({
   projectTaskId,
 });
 
+/**
+ * One project of a report. Its time comes as `minutes` (whole, 0-1440; the report page) or as
+ * `hours` (any precision, 0-24); `minutes` wins when both are sent. The parsed entry always has
+ * both: `minutes` whole and `hours` = minutes / 60.
+ */
 export const entryInputSchema = z
   .object({
     id: optionalId,
     projectId: optionalId,
     projectRequestId: optionalId,
     hours,
+    minutes,
     tasks: z
       .array(taskInputSchema)
       .max(MAX_TASKS_PER_ENTRY, `A project can have at most ${MAX_TASKS_PER_ENTRY} tasks.`)
@@ -105,6 +153,10 @@ export const entryInputSchema = z
   .refine((entry) => Boolean(entry.projectId) !== Boolean(entry.projectRequestId), {
     message: 'Pick a project.',
     path: ['project'],
+  })
+  .transform((entry) => {
+    const total = entryMinutes(entry);
+    return { ...entry, minutes: total, hours: total / 60 };
   });
 
 const entries = z

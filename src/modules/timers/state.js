@@ -121,10 +121,11 @@ function withOpenTaskOnly(row, entry) {
  * @param {string} workDate 'YYYY-MM-DD'
  * @returns {Promise<{ totalMinutes: number, projects: Array<{ projectId, projectName,
  *   projectColor, isUrgent, minutes, roundedMinutes, tasks: Array<{ note, projectTaskId,
- *   priority, projectTaskTitle }> }> }>} biggest project first; roundedMinutes to the nearest
- *   15; tasks de-duplicated by priority task, else by case-insensitive note (an entry with only
- *   a priority task gives a line titled with the task); only open priority tasks are linked: a
- *   task that is done since gives a plain line (its note, else its title)
+ *   priority, projectTaskTitle }> }> }>} biggest project first; roundedMinutes is the
+ *   whole-minute total the report takes (no 15-minute rounding); tasks de-duplicated by priority
+ *   task, else by case-insensitive note (an entry with only a priority task gives a line titled
+ *   with the task); only open priority tasks are linked: a task that is done since gives a plain
+ *   line (its note, else its title)
  */
 export async function getDaySummary(userId, workDate) {
   const current = await settings.getAll();

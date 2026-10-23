@@ -185,16 +185,89 @@ describe('autosave', () => {
     });
   });
 
-  it('checks the shape: hours in 0.25 steps, 0 or more', () => {
-    const bad = (hours) =>
-      saveReportSchema.safeParse({ entries: [{ projectId: 1, hours, tasks: [] }] }).error
-        ?.issues[0];
-    expect(bad(1.3)).toMatchObject({ path: ['entries', 0, 'hours'] });
-    expect(bad(-1)).toMatchObject({ path: ['entries', 0, 'hours'] });
-    expect(bad('abc')).toMatchObject({ path: ['entries', 0, 'hours'] });
-    expect(bad(1.75)).toBeUndefined();
+  it('checks the shape: whole minutes, or hours, 0 to 24 hours', () => {
+    const parse = (time) =>
+      saveReportSchema.safeParse({ entries: [{ projectId: 1, tasks: [], ...time }] });
+    const bad = (time) => parse(time).error?.issues[0];
+    const minutesOf = (time) => parse(time).data.entries[0].minutes;
+    // No 0.25-hour steps any more: a number of hours of any precision becomes whole minutes.
+    expect(minutesOf({ hours: 1.3 })).toBe(78);
+    expect(minutesOf({ hours: 1.75 })).toBe(105);
+    // Text is read like the report page's box: decimals in 0.25-hour steps only.
+    expect(minutesOf({ hours: '1,5' })).toBe(90);
+    expect(minutesOf({ hours: ' 7.75 ' })).toBe(465);
+    // "8.30" may mean 8h 30m: refused under the field, never saved as 8.3 hours (8h 18m).
+    for (const text of ['8.30', ' 7.3 ', '2.0833']) {
+      expect(bad({ hours: text })).toMatchObject({
+        path: ['entries', 0, 'hours'],
+        message: 'Enter time like 2h 15m',
+      });
+    }
+    // The report page's own forms are read too.
+    expect(minutesOf({ hours: '2h 5m' })).toBe(125);
+    expect(minutesOf({ hours: '2:15' })).toBe(135);
+    // What the report page sends: whole minutes, which win over hours.
+    expect(minutesOf({ minutes: 125 })).toBe(125);
+    expect(minutesOf({ minutes: '125' })).toBe(125);
+    expect(minutesOf({ minutes: 125, hours: 9 })).toBe(125);
+    expect(minutesOf({ minutes: null, hours: 2 })).toBe(120);
+    expect(minutesOf({ minutes: 0 })).toBe(0);
+    expect(minutesOf({ hours: '' })).toBe(0);
+    expect(minutesOf({})).toBe(0);
+    expect(parse({ minutes: 125 }).data.entries[0].hours).toBe(125 / 60);
+    expect(minutesOf({ minutes: 1440 })).toBe(1440);
+    expect(minutesOf({ hours: 24 })).toBe(1440);
+
+    const hoursPath = ['entries', 0, 'hours'];
+    const minutesPath = ['entries', 0, 'minutes'];
+    expect(bad({ hours: -1 })).toMatchObject({
+      path: hoursPath,
+      message: "Hours can't be below 0.",
+    });
+    expect(bad({ hours: 'abc' })).toMatchObject({
+      path: hoursPath,
+      message: 'Enter time like 2h 15m',
+    });
+    expect(bad({ hours: '2h 75m' })).toMatchObject({ path: hoursPath });
+    expect(bad({ hours: 25 })).toMatchObject({
+      path: hoursPath,
+      message: 'Hours must be 24 or less.',
+    });
+    expect(bad({ hours: '24h 1m' })).toMatchObject({ message: 'Hours must be 24 or less.' });
+    expect(bad({ minutes: 1441 })).toMatchObject({
+      path: minutesPath,
+      message: 'Hours must be 24 or less.',
+    });
+    expect(bad({ minutes: 12.5 })).toMatchObject({ path: minutesPath });
+    expect(bad({ minutes: -5 })).toMatchObject({ path: minutesPath });
+    expect(bad({ minutes: 'abc' })).toMatchObject({ path: minutesPath });
     const noProject = saveReportSchema.safeParse({ entries: [{ hours: 1, tasks: [] }] });
     expect(noProject.error.issues[0].path).toEqual(['entries', 0, 'project']);
+  });
+
+  it('saves time to the minute, sent as minutes or as hours of any precision', async () => {
+    const draft = await reports.openForDate({ user });
+    const saved = await reports.saveReport({
+      user,
+      reportId: draft.id,
+      entries: input([
+        { projectId: internal.id, minutes: 125, tasks: [task('Backend')] },
+        { projectId: iwill.id, hours: 1.3, tasks: [task('Copy')] },
+      ]),
+    });
+    expect(saved.entries.map((e) => e.minutes)).toEqual([125, 78]);
+    expect(saved.totalMinutes).toBe(203);
+    const row = await db('dailyReports').where({ id: draft.id }).first();
+    expect(row.totalMinutes).toBe(203);
+    // The report page loads 125 minutes back as they are (and older clients' hours still save).
+    const again = await reports.saveReport({
+      user,
+      reportId: draft.id,
+      entries: input(entriesFrom(saved)),
+      baseVersion: saved.version,
+    });
+    expect(again.entries.map((e) => e.minutes)).toEqual([125, 78]);
+    expect(again.version).toBe(saved.version);
   });
 
   it('only lets people pick active projects and their own pending requests', async () => {
@@ -294,6 +367,46 @@ describe('submit', () => {
     ).toEqual({
       n: entries.length,
     });
+  });
+
+  it('submits any whole minutes (no 0.25-hour steps), in Slack as hours and minutes', async () => {
+    const { draft, entries } = await draftWith([
+      { projectId: internal.id, minutes: 125, tasks: [task('Working on backend')] },
+      { projectId: iwill.id, hours: '6h 7m', tasks: [task('Content changes', 'done')] },
+    ]);
+    const submitted = await reports.submitReport({ user, reportId: draft.id, entries });
+    expect(submitted).toMatchObject({ status: 'submitted', totalMinutes: 492 });
+    expect(submitted.entries.map((e) => e.minutes)).toEqual([125, 367]);
+    const [revision] = await db('reportRevisions').where({ reportId: draft.id });
+    expect(parseJson(revision.snapshot).entries.map((e) => e.minutes)).toEqual([125, 367]);
+    const [post] = await outboxRows();
+    expect(post.payload.text).toContain('Project: internal-tool\nHours: 2h 5m\nTasks');
+    expect(post.payload.text).toContain('Project: iwilltillimwell\nHours: 6h 7m\nTasks');
+  });
+
+  it('still refuses an entry of 0 minutes and a day over 16 hours, to the minute', async () => {
+    const refused = async (raw) => {
+      const { draft, entries } = await draftWith(raw);
+      return reports.submitReport({ user, reportId: draft.id, entries }).catch((error) => error);
+    };
+    expect(
+      (await refused([{ projectId: internal.id, minutes: 0, tasks: [task('One')] }])).fields,
+    ).toEqual({ 'entries.0.hours': 'Hours must be above 0.' });
+    expect(
+      (
+        await refused([
+          { projectId: internal.id, minutes: 600, tasks: [task('One')] },
+          { projectId: iwill.id, minutes: 361, tasks: [task('Two')] },
+        ])
+      ).fields,
+    ).toEqual({ total: 'A day can have at most 16 hours.' });
+    const { draft, entries } = await draftWith([
+      { projectId: internal.id, minutes: 600, tasks: [task('One')] },
+      { projectId: iwill.id, minutes: 360, tasks: [task('Two')] },
+    ]);
+    await expect(
+      reports.submitReport({ user, reportId: draft.id, entries }),
+    ).resolves.toMatchObject({ status: 'submitted', totalMinutes: 960 });
   });
 
   it('refuses a 500+ character task in the schema', () => {

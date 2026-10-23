@@ -1,6 +1,6 @@
 // Pure timer rules (CONTRACT 15): entry minutes, away spans from screen time, overlaps, and the
 // day summary that fills the daily report. No database access here; unit tested.
-import { addDays, dayjs, localToUtc, minutesBetween, now, roundToQuarterHour } from '@/lib/time';
+import { addDays, dayjs, localToUtc, minutesBetween, now } from '@/lib/time';
 
 /** Idle or locked stretches at most this far apart are one away span (the heartbeat's gap). */
 export const MERGE_GAP_MS = 150_000;
@@ -158,9 +158,11 @@ function taskLine(entry) {
 }
 
 /**
- * A day's entries as the daily report's projects: minutes per project (and rounded to the nearest
- * 15), biggest first, with task lines de-duplicated by priority task, else by case-insensitive
- * note. An entry with only a priority task gives a line titled with the task.
+ * A day's entries as the daily report's projects: minutes per project, biggest first, with task
+ * lines de-duplicated by priority task, else by case-insensitive note. An entry with only a
+ * priority task gives a line titled with the task. `roundedMinutes` (the minutes the report takes)
+ * is the whole-minute total: no 15-minute rounding since the company asked for exact minutes, so
+ * a 2h 5m timer fills 2h 5m.
  * @param {Array<{ projectId: number, projectName: string, projectColor: string,
  *   isUrgent: boolean, projectTaskId: number | null, priority: string | null,
  *   projectTaskTitle: string | null, note: string | null, minutes: number }>} entries oldest
@@ -197,7 +199,7 @@ export function summarizeDay(entries) {
     }
   }
   const projects = [...byProject.values()]
-    .map((project) => ({ ...project, roundedMinutes: roundToQuarterHour(project.minutes) }))
+    .map((project) => ({ ...project, roundedMinutes: Math.round(project.minutes) }))
     .sort(
       (a, b) => b.minutes - a.minutes || String(a.projectName).localeCompare(String(b.projectName)),
     );
