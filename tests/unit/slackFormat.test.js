@@ -25,12 +25,12 @@ describe('formatReport', () => {
         'Date: 30-09-2026',
         '',
         'Project: iwilltillimwell',
-        'Hours: 2',
+        'Hours: 2h',
         'Tasks',
         '• Content changes (Done)',
         '',
         'Project: internal-tool',
-        'Hours: 6',
+        'Hours: 6h',
         'Tasks',
         '• Working on backend (In Progress)',
       ].join('\n'),
@@ -56,9 +56,9 @@ describe('formatReport', () => {
     });
     expect(text).toContain('Date: 05-01-2026');
     expect(text).toContain(
-      'Project: alpha\nHours: 1.5\nTasks\n• One (Done)\n• Two (In Progress)\n• Three (Blocked)',
+      'Project: alpha\nHours: 1h 30m\nTasks\n• One (Done)\n• Two (In Progress)\n• Three (Blocked)',
     );
-    expect(text).toContain('Project: beta\nHours: 0.25\nTasks\n• Four (Done)');
+    expect(text).toContain('Project: beta\nHours: 15m\nTasks\n• Four (Done)');
     expect(text.endsWith('\n')).toBe(false);
   });
 
@@ -78,7 +78,7 @@ describe('formatReport', () => {
       ],
     });
     expect(text).toBe(
-      'Name: Vishal Saini\nDate: 30-09-2026\n\nProject: internal-tool\nHours: 2.5\nTasks\n• Fix the login (Done)',
+      'Name: Vishal Saini\nDate: 30-09-2026\n\nProject: internal-tool\nHours: 2h 30m\nTasks\n• Fix the login (Done)',
     );
   });
 
@@ -91,10 +91,11 @@ describe('formatReport', () => {
 
 describe('formatSlackHours', () => {
   it('drops trailing zeros', () => {
-    expect(formatSlackHours(120)).toBe('2');
-    expect(formatSlackHours(90)).toBe('1.5');
-    expect(formatSlackHours(15)).toBe('0.25');
-    expect(formatSlackHours(0)).toBe('0');
+    expect(formatSlackHours(120)).toBe('2h');
+    expect(formatSlackHours(90)).toBe('1h 30m');
+    expect(formatSlackHours(15)).toBe('15m');
+    expect(formatSlackHours(510)).toBe('8h 30m');
+    expect(formatSlackHours(0)).toBe('0h');
   });
 });
 

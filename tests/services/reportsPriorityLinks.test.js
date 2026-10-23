@@ -413,7 +413,7 @@ describe('carry-over, submit and the version', () => {
     ]);
     const [post] = await outboxRows();
     expect(post.payload.text).toBe(
-      'Name: Vishal Saini\nDate: 29-09-2026\n\nProject: internal-tool\nHours: 3\nTasks\n' +
+      'Name: Vishal Saini\nDate: 29-09-2026\n\nProject: internal-tool\nHours: 3h\nTasks\n' +
         '• Fix login timeout (Done)\n• Code review (In Progress)',
     );
   });

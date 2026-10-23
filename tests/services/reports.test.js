@@ -342,7 +342,7 @@ describe('submit', () => {
       channel: 'C0DAILY',
       relatedId: draft.id,
     });
-    expect(outbox[0].payload.text).toContain('Project: iwilltillimwell\nHours: 2\nTasks');
+    expect(outbox[0].payload.text).toContain('Project: iwilltillimwell\nHours: 2h\nTasks');
     expect(outbox[0].payload.username).toBe('Vishal Saini');
 
     // The outbox posted it; a resubmit updates that message.

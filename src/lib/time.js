@@ -214,7 +214,7 @@ export function minutesToHours(minutes) {
 /**
  * Logged hours, in hours and minutes like every other duration (company request: people read
  * "1h 45m" more easily than "1.75h"): 480 -> '8h', 510 -> '8h 30m', 45 -> '45m'. Report inputs
- * and Slack keep decimal hours (minutesToHours, formatSlackHours).
+ * keep decimal hours (minutesToHours); the Slack text uses formatSlackHours, also "8h 30m".
  * @param {number} minutes
  */
 export function formatHours(minutes) {

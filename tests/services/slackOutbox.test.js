@@ -296,7 +296,7 @@ describe('processOutbox', () => {
     await slack.queueReportPost({ report, userName: 'Vishal Saini', entries });
     expect(await slack.processOutbox()).toMatchObject({ sent: 1, skipped: 1 });
     expect(client.chat.postMessage).toHaveBeenCalledTimes(1);
-    expect(client.chat.postMessage.mock.calls[0][0].text).toContain('Hours: 1.5');
+    expect(client.chat.postMessage.mock.calls[0][0].text).toContain('Hours: 1h 30m');
 
     // A third submit queued as a new post (the caller read the report before the ts was saved)
     // updates the message that was already posted.
