@@ -1,8 +1,9 @@
-// Required timer mode at submit (CONTRACT 15): report hours must equal the day's timers. In
-// optional mode (or for someone who can't use timers) the report is never checked against them.
-// Also the day's timers the report page shows, decided by the same rule.
+// Required timer mode at submit (CONTRACT 15): report hours must equal the day's timers, to the
+// minute (company request: exact minutes, no 15-minute rounding) give or take
+// TIMER_TOLERANCE_MINUTES. In optional mode (or for someone who can't use timers) the report is
+// never checked against them. Also the day's timers the report page shows, by the same rule.
 import { AppError } from '@/lib/errors';
-import { formatDuration, formatHours, workDate } from '@/lib/time';
+import { formatDuration, workDate } from '@/lib/time';
 import { settings } from '@/modules/settings';
 import { timers } from '@/modules/timers';
 import { getOwnReport } from './drafts';
@@ -11,39 +12,55 @@ import { isEditable } from './view';
 const NO_TIMER_TIME = 'No timer time on this project today. Remove it or add time on Today.';
 
 /**
- * The required-mode rules on a report's entries (pure): every project entry's minutes equal the
- * project's rounded timer minutes (`entries.N.hours`), and every project with rounded timer
- * minutes above 0 is in the report (`total`, the biggest missing one). Entries for project
- * requests (no project yet) are exempt.
+ * How many minutes report hours may be off the timers: a timer still running keeps counting
+ * between the page's last read of the timers and the submit (the report page allows the same,
+ * reportTimers.js).
+ */
+export const TIMER_TOLERANCE_MINUTES = 2;
+
+/** A project's timer minutes in the summary (whole minutes since there is no rounding). */
+const timerMinutesOf = (project) => Math.round(Number(project.roundedMinutes) || 0);
+
+/**
+ * The required-mode rules on a report's entries (pure): every project entry's minutes are within
+ * TIMER_TOLERANCE_MINUTES of the project's timer minutes (`entries.N.hours`), and every project
+ * timed for longer than that is in the report (`total`, the biggest missing one). Entries for
+ * project requests (no project yet) are exempt. Messages read as hours and minutes ("2h 5m").
  * @param {Array<{ projectId?: number | null, projectRequestId?: number | null,
  *   minutes: number }>} entries in the order sent (field keys follow it)
  * @param {{ projects: Array<{ projectId: number, projectName: string,
- *   roundedMinutes: number }> }} summary timers.getDaySummary(), biggest project first
+ *   roundedMinutes: number }> }} summary timers.getDaySummary() (roundedMinutes: whole minutes),
+ *   biggest project first
  * @returns {Record<string, string>} field -> message; empty when the report matches
  */
 export function timerProblems(entries, summary) {
   const fields = {};
-  const rounded = new Map(
-    (summary?.projects ?? []).map((project) => [Number(project.projectId), project.roundedMinutes]),
+  const timed = new Map(
+    (summary?.projects ?? []).map((project) => [
+      Number(project.projectId),
+      timerMinutesOf(project),
+    ]),
   );
   const reported = new Set();
   entries.forEach((entry, i) => {
     if (!entry.projectId) return;
     const projectId = Number(entry.projectId);
     reported.add(projectId);
-    const timerMinutes = rounded.get(projectId) ?? 0;
+    const timerMinutes = timed.get(projectId) ?? 0;
     const key = `entries.${i}.hours`;
+    const off = Math.abs((Number(entry.minutes) || 0) - timerMinutes);
     if (timerMinutes <= 0) fields[key] = NO_TIMER_TIME;
-    else if ((Number(entry.minutes) || 0) !== timerMinutes) {
-      fields[key] = `Hours come from your timers (${formatHours(timerMinutes)}).`;
+    else if (off > TIMER_TOLERANCE_MINUTES) {
+      fields[key] = `Hours come from your timers (${formatDuration(timerMinutes)}).`;
     }
   });
   const missing = (summary?.projects ?? []).find(
-    (project) => project.roundedMinutes > 0 && !reported.has(Number(project.projectId)),
+    (project) =>
+      timerMinutesOf(project) > TIMER_TOLERANCE_MINUTES && !reported.has(Number(project.projectId)),
   );
   if (missing) {
     fields.total =
-      `${missing.projectName} has ${formatDuration(missing.roundedMinutes)} on your timers. ` +
+      `${missing.projectName} has ${formatDuration(timerMinutesOf(missing))} on your timers. ` +
       'Fill the report from timers.';
   }
   return fields;

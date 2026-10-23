@@ -213,17 +213,17 @@ describe('resolveAway', () => {
 });
 
 describe('getDaySummary', () => {
-  it('rounds each project to the nearest 15 minutes, biggest first, running to now', async () => {
-    await insertEntry(emp, acme, { from: '09:00', to: '09:07' }); // 7 -> 0
-    await insertEntry(emp, beta, { from: '09:10', to: '09:18' }); // 8 -> 15
+  it('gives each project its exact minutes, biggest first, running to now', async () => {
+    await insertEntry(emp, acme, { from: '09:00', to: '09:07' }); // 7
+    await insertEntry(emp, beta, { from: '09:10', to: '09:18' }); // 8
     await insertEntry(emp, gamma, { from: '06:00', to: '09:00' }); // 180 ...
-    await insertEntry(emp, gamma, { from: '10:03' }); // ... + 67 running = 247 -> 240
+    await insertEntry(emp, gamma, { from: '10:03' }); // ... + 67 running = 247, not 240
     const summary = await timers.getDaySummary(emp.id, TODAY);
     expect(summary.totalMinutes).toBe(262);
     expect(summary.projects.map((p) => [p.projectName, p.minutes, p.roundedMinutes])).toEqual([
-      ['gamma', 247, 240],
-      ['beta', 8, 15],
-      ['acme-app', 7, 0],
+      ['gamma', 247, 247],
+      ['beta', 8, 8],
+      ['acme-app', 7, 7],
     ]);
     expect(summary.projects[0]).toMatchObject({ projectId: gamma.id, isUrgent: true });
     expect(summary.projects[1].projectColor).toBe('green');
@@ -245,7 +245,7 @@ describe('getDaySummary', () => {
     });
     await insertEntry(emp, acme, { from: '10:00', to: '10:10' });
     const [project] = (await timers.getDaySummary(emp.id, TODAY)).projects;
-    expect(project).toMatchObject({ minutes: 70, roundedMinutes: 75 });
+    expect(project).toMatchObject({ minutes: 70, roundedMinutes: 70 });
     expect(project.tasks).toEqual([
       { note: 'Fix login', projectTaskId: null, priority: null, projectTaskTitle: null },
       {

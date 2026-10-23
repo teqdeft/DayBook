@@ -1,5 +1,6 @@
 // "Fill report from timers" and the required-mode hours on the Daily report (CONTRACT 15): the
-// pure merge of a day's timer summary into the editor rows.
+// pure merge of a day's timer summary into the editor rows. Timer time is exact to the minute
+// (company request): a 2h 5m timer fills "2h 5m", never a rounded "2h".
 import { describe, expect, it } from 'vitest';
 import { entriesFromView, newEntry, serialize } from '@/app/(app)/report/reportState';
 import {
@@ -8,6 +9,7 @@ import {
   hoursFromMinutes,
   mergeTimerSummary,
   mergeTimerTasks,
+  TIMER_TOLERANCE_MINUTES,
   timerCardRows,
   timerHoursFor,
   timersChangedSince,
@@ -36,6 +38,7 @@ function view(entries) {
   };
 }
 
+/** A summary project; roundedMinutes is the whole-minute total (no rounding any more). */
 function project(projectId, roundedMinutes, tasks = [], rest = {}) {
   return {
     projectId,
@@ -67,13 +70,29 @@ describe('mergeTimerSummary', () => {
     expect(mergeTimerSummary(entries, { projects: [project(1, 0, [note('B')])] })).toBe(entries);
   });
 
-  it('sets the rounded timer hours on the matching card and keeps the card', () => {
+  it('sets the timer time on the matching card and keeps the card', () => {
     const entries = entriesFromView(
       view([{ projectId: 7, hours: 1, tasks: [{ title: 'Login' }] }]),
     );
     const [card] = mergeTimerSummary(entries, { projects: [project(7, 150)] });
-    expect(card).toMatchObject({ key: entries[0].key, id: 100, hours: '2.5', savedHours: 2.5 });
+    expect(card).toMatchObject({
+      key: entries[0].key,
+      id: 100,
+      hours: '2h 30m',
+      savedMinutes: 150,
+    });
     expect(card.tasks).toBe(entries[0].tasks);
+  });
+
+  it('fills a 2h 5m timer as 2h 5m, to the minute', () => {
+    const entries = entriesFromView(view([{ projectId: 7, hours: 0, tasks: [{ title: '' }] }]));
+    const next = mergeTimerSummary(entries, {
+      projects: [project(7, 125, [note('Login')]), project(8, 7, [note('Quick call')])],
+    });
+    expect(next[0]).toMatchObject({ hours: '2h 5m', savedMinutes: 125 });
+    // Even a few minutes count (they used to round to 0 and were skipped).
+    expect(next[1]).toMatchObject({ projectId: 8, hours: '7m', savedMinutes: 7 });
+    expect(serialize(next).body.map((entry) => entry.minutes)).toEqual([125, 7]);
   });
 
   it('matches cards by project, never a project request with the same number', () => {
@@ -82,7 +101,7 @@ describe('mergeTimerSummary', () => {
     );
     const next = mergeTimerSummary(entries, { projects: [project(7, 60)] });
     expect(next[0]).toBe(entries[0]);
-    expect(next[1]).toMatchObject({ projectId: 7, projectRequestId: null, hours: '1' });
+    expect(next[1]).toMatchObject({ projectId: 7, projectRequestId: null, hours: '1h' });
   });
 
   it('adds missing task lines as In progress, carrying the priority task', () => {
@@ -92,7 +111,7 @@ describe('mergeTimerSummary', () => {
     const [card] = mergeTimerSummary(entries, {
       projects: [project(7, 120, [note('Fix the build'), linked(55, 'Checkout bug')])],
     });
-    expect(card.hours).toBe('2');
+    expect(card.hours).toBe('2h');
     expect(card.tasks[0]).toBe(entries[0].tasks[0]);
     expect(card.tasks.slice(1)).toMatchObject([
       {
@@ -151,7 +170,7 @@ describe('mergeTimerSummary', () => {
       status: 'in_progress',
     });
     expect(card.tasks[1]).toMatchObject({ id: null, title: 'Footer' });
-    expect(card.hours).toBe('0.75');
+    expect(card.hours).toBe('45m');
   });
 
   it('keeps an empty line that is not alone, or that is linked, and never removes lines', () => {
@@ -173,7 +192,7 @@ describe('mergeTimerSummary', () => {
     expect(second.tasks[0].projectTaskId).toBe(9);
   });
 
-  it('leaves cards without timer time alone and skips projects rounded to 0', () => {
+  it('leaves cards without timer time alone and skips projects with 0 minutes', () => {
     const entries = entriesFromView(
       view([
         { projectId: 1, hours: 3, tasks: [{ title: 'Typed by hand' }] },
@@ -212,10 +231,10 @@ describe('mergeTimerSummary', () => {
         projectColor: 'orange',
         isUrgent: true,
         waitingForApproval: false,
-        hours: '4',
-        savedHours: 4,
+        hours: '4h',
+        savedMinutes: 240,
       },
-      { projectId: 6, projectName: 'project-6', isUrgent: false, hours: '0.5' },
+      { projectId: 6, projectName: 'project-6', isUrgent: false, hours: '30m' },
     ]);
     expect(titles(next[1])).toEqual(['Big one']);
     // A timed project without notes gets one empty line to type in.
@@ -254,10 +273,14 @@ describe('mergeTimerSummary', () => {
 
   it('treats hours typed differently but equal as already right', () => {
     const entries = entriesFromView(view([{ projectId: 7, hours: 2.5, tasks: [{ title: 'A' }] }]));
-    entries[0].hours = '2.50';
+    expect(entries[0].hours).toBe('2h 30m');
     expect(mergeTimerSummary(entries, { projects: [project(7, 150)] })).toBe(entries);
+    for (const typed of ['2.50', '2,5', '2:30', '150m', '2H30M']) {
+      entries[0].hours = typed;
+      expect(mergeTimerSummary(entries, { projects: [project(7, 150)] })).toBe(entries);
+    }
     entries[0].hours = 'abc';
-    expect(mergeTimerSummary(entries, { projects: [project(7, 150)] })[0].hours).toBe('2.5');
+    expect(mergeTimerSummary(entries, { projects: [project(7, 150)] })[0].hours).toBe('2h 30m');
   });
 
   it('serializes the filled rows for the save, links included', () => {
@@ -270,14 +293,14 @@ describe('mergeTimerSummary', () => {
         id: 100,
         projectId: 7,
         projectRequestId: undefined,
-        hours: 1.75,
+        minutes: 105,
         tasks: [{ id: 1000, title: 'Checkout bug', status: 'in_progress', projectTaskId: 55 }],
       },
       {
         id: undefined,
         projectId: 9,
         projectRequestId: undefined,
-        hours: 0.25,
+        minutes: 15,
         tasks: [{ id: undefined, title: 'Call', status: 'in_progress', projectTaskId: undefined }],
       },
     ]);
@@ -298,7 +321,7 @@ describe('mergeTimerSummary with hoursOnly (required mode, on load)', () => {
       { hoursOnly: true },
     );
     expect(next).toHaveLength(2);
-    expect(next[0]).toMatchObject({ hours: '1.5', savedHours: 1.5 });
+    expect(next[0]).toMatchObject({ hours: '1h 30m', savedMinutes: 90 });
     expect(next[0].tasks).toBe(entries[0].tasks);
     expect(next[1]).toBe(entries[1]);
   });
@@ -347,9 +370,9 @@ describe('required-mode hours', () => {
 
   it("gives a picked project its timer hours, '' without any", () => {
     const timers = { mode: 'required', required: true, summary };
-    expect(timerHoursFor(timers, { projectId: 7 })).toEqual({ hours: '2.25', savedHours: 2.25 });
-    expect(timerHoursFor(timers, { projectId: 8 })).toEqual({ hours: '', savedHours: 0 });
-    expect(timerHoursFor(timers, { projectId: 99 })).toEqual({ hours: '', savedHours: 0 });
+    expect(timerHoursFor(timers, { projectId: 7 })).toEqual({ hours: '2h 15m', savedMinutes: 135 });
+    expect(timerHoursFor(timers, { projectId: 8 })).toEqual({ hours: '', savedMinutes: 0 });
+    expect(timerHoursFor(timers, { projectId: 99 })).toEqual({ hours: '', savedMinutes: 0 });
   });
 
   it('leaves project requests and optional mode alone', () => {
@@ -362,8 +385,10 @@ describe('required-mode hours', () => {
   });
 
   it('turns minutes into the hours a card shows', () => {
-    expect(hoursFromMinutes(90)).toEqual({ hours: '1.5', savedHours: 1.5 });
-    expect(hoursFromMinutes(0)).toEqual({ hours: '', savedHours: 0 });
+    expect(hoursFromMinutes(90)).toEqual({ hours: '1h 30m', savedMinutes: 90 });
+    expect(hoursFromMinutes(125)).toEqual({ hours: '2h 5m', savedMinutes: 125 });
+    expect(hoursFromMinutes(765)).toEqual({ hours: '12h 45m', savedMinutes: 765 });
+    expect(hoursFromMinutes(0)).toEqual({ hours: '', savedMinutes: 0 });
   });
 });
 
@@ -375,14 +400,18 @@ describe('timersChangedSince (a submitted report in required mode)', () => {
     expect(timersChangedSince(rows, timers([project(7, 135), project(8, 0)]))).toBe(false);
   });
 
-  it('is true once a running timer moved a card past a quarter hour', () => {
+  it('is true once a running timer moved a card past the tolerance the submit allows', () => {
+    expect(TIMER_TOLERANCE_MINUTES).toBe(2);
     const rows = entriesFromView(view([{ projectId: 7, hours: 2.25, tasks: [{ title: 'A' }] }]));
+    expect(timersChangedSince(rows, timers([project(7, 137)]))).toBe(false);
+    expect(timersChangedSince(rows, timers([project(7, 138)]))).toBe(true);
     expect(timersChangedSince(rows, timers([project(7, 150)]))).toBe(true);
   });
 
-  it('is true when a project timed since is not in the report', () => {
+  it('is true when a project timed since (past the tolerance) is not in the report', () => {
     const rows = entriesFromView(view([{ projectId: 7, hours: 2.25, tasks: [{ title: 'A' }] }]));
     expect(timersChangedSince(rows, timers([project(7, 135), project(9, 30)]))).toBe(true);
+    expect(timersChangedSince(rows, timers([project(7, 135), project(9, 2)]))).toBe(false);
   });
 
   it('is false in optional mode and without timers', () => {
@@ -398,7 +427,7 @@ describe('timersChangedSince (a submitted report in required mode)', () => {
 });
 
 describe('timerCardRows', () => {
-  it('lists each timed project with its notes and the rounded total', () => {
+  it('lists each timed project with its notes and the total, to the minute', () => {
     const timers = {
       mode: 'optional',
       summary: {

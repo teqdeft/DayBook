@@ -1,5 +1,6 @@
 // Guide 15.3: edit request approve. Vishal asks to change a locked report, his PM approves it on
 // Requests, the report opens again for him and the request shows as handled.
+import { formatDuration, parseDuration } from '../../src/lib/time.js';
 import { closeDemoData, lockedReportDay } from './support/demoData.js';
 import { PEOPLE, dayMonthShort, dayShort, expect, open, test, toasts } from './support/fixtures.js';
 
@@ -62,13 +63,14 @@ test('a locked report gets an edit request, the PM approves it and it opens agai
       vishal.getByRole('status').filter({ hasText: 'Your edit request was approved' }),
     ).toBeVisible();
     await expect(firstHours).not.toHaveAttribute('readonly', '');
-    const hours = Number(await firstHours.inputValue()) + 0.5;
-    await firstHours.fill(String(hours));
+    // The box shows hours and minutes ('6h 30m'); add the 30 minutes the reason talks about.
+    const minutes = (parseDuration(await firstHours.inputValue()) ?? 0) + 30;
+    await firstHours.fill(formatDuration(minutes));
     await vishal.getByRole('button', { name: 'Update report' }).click();
     await expect(toasts(vishal)).toContainText('Report updated');
 
     await open(vishal, `/report?date=${day}`);
-    await expect(firstHours).toHaveValue(String(hours));
+    await expect(firstHours).toHaveValue(formatDuration(minutes));
   });
 
   await test.step('My log shows the request as approved', async () => {

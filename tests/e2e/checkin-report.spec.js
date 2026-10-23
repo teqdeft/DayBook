@@ -43,8 +43,11 @@ test('an employee checks in, submits the daily report and the PM sees it', async
     await picker.getByRole('option', { name: PROJECT, exact: true }).click();
 
     const card = karan.getByRole('region', { name: PROJECT });
-    await card.getByRole('textbox', { name: `Hours for ${PROJECT}` }).fill('6.5');
+    // Decimal hours still work; leaving the box writes them as hours and minutes.
+    const hours = card.getByRole('textbox', { name: `Hours for ${PROJECT}` });
+    await hours.fill('6.5');
     await card.getByRole('textbox', { name: `Task 1 for ${PROJECT}` }).fill(TASK);
+    await expect(hours).toHaveValue('6h 30m');
     await card
       .getByRole('combobox', { name: `Status of task 1 for ${PROJECT}` })
       .selectOption({ label: 'In progress' });

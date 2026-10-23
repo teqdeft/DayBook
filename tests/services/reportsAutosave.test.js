@@ -4,15 +4,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAutosave, RETRY_DELAY_MS, SAVE_DELAY_MS } from '@/app/(app)/report/autosave';
 import {
-  applySavedIds,
-  entryHours,
+  entryMinutes,
   firstHoursError,
-  mapFieldErrors,
-  newEntry,
   parseHours,
-  serialize,
+  TIME_FORMAT_ERROR,
   totalMinutes,
-} from '@/app/(app)/report/reportState';
+} from '@/app/(app)/report/reportHours';
+import { applySavedIds, mapFieldErrors, newEntry, serialize } from '@/app/(app)/report/reportState';
 
 /** A save the test resolves by hand, to hold a request "in flight". */
 function deferredSaves() {
@@ -159,48 +157,51 @@ describe('autosave loop', () => {
 });
 
 describe('report rows', () => {
-  function entry(hours, savedHours = 0) {
+  function entry(hours, savedMinutes = 0) {
     return {
       ...newEntry({ projectId: 5, name: 'internal-tool' }),
       id: 1,
       hours,
-      savedHours,
+      savedMinutes,
       tasks: [{ key: 't-a', id: 9, title: 'Backend', status: 'done' }],
     };
   }
 
-  it('reads hours as typed', () => {
-    expect(parseHours('1,5')).toEqual({ value: 1.5 });
-    expect(parseHours('')).toEqual({ value: 0 });
-    expect(parseHours('7.3')).toEqual({ error: 'Use steps of 0.25 hours, like 1.5 or 1.75.' });
+  it('reads hours as typed, to the minute', () => {
+    expect(parseHours('1,5')).toEqual({ minutes: 90 });
+    expect(parseHours('')).toEqual({ minutes: 0 });
+    expect(parseHours('7.75')).toEqual({ minutes: 465 });
+    expect(parseHours('2h 5m')).toEqual({ minutes: 125 });
+    // "7.30" may mean 7h 30m: refused rather than read as 7.3 hours (7h 18m).
+    expect(parseHours('7.30')).toEqual({ error: TIME_FORMAT_ERROR });
     expect(parseHours('25')).toEqual({ error: 'Hours must be 24 or less.' });
-    expect(parseHours('abc')).toEqual({ error: 'Enter hours as a number, like 1.5.' });
+    expect(parseHours('abc')).toEqual({ error: TIME_FORMAT_ERROR });
   });
 
-  it('sends the hours shown on screen, never an older value', () => {
-    expect(serialize([entry('2.5', 2)]).body[0].hours).toBe(2.5);
+  it('sends the time shown on screen, never an older value', () => {
+    expect(serialize([entry('2h 30m', 120)]).body[0].minutes).toBe(150);
+    expect(serialize([entry('7:18', 420)]).body[0].minutes).toBe(438);
     // A wrong value goes as typed, so the server refuses it under that field.
-    expect(serialize([entry('7.3', 7)]).body[0].hours).toBe('7.3');
-    expect(serialize([entry(' 25 ', 7)]).body[0].hours).toBe('25');
+    expect(serialize([entry('7h 75m', 420)]).body[0].hours).toBe('7h 75m');
+    expect(serialize([entry('7.3', 420)]).body[0].hours).toBe('7.3');
+    expect(serialize([entry(' 25 ', 420)]).body[0].hours).toBe('25');
     // Only the save on leaving the page keeps the last valid value, to save everything else.
-    expect(serialize([entry('7.3', 7)], { keepLastValid: true }).body[0].hours).toBe(7);
+    expect(serialize([entry('7h 75m', 420)], { keepLastValid: true }).body[0].minutes).toBe(420);
   });
 
   it('finds the first wrong hours field; totals use the last valid value', () => {
-    const rows = [entry('2', 2), entry('7.3', 7)];
-    expect(firstHoursError(rows)).toEqual({
-      entryKey: rows[1].key,
-      message: 'Use steps of 0.25 hours, like 1.5 or 1.75.',
-    });
-    expect(firstHoursError([entry('2', 2)])).toBeNull();
-    expect(entryHours(rows[1])).toBe(7);
+    const rows = [entry('2h', 120), entry('7h 75m', 420)];
+    expect(firstHoursError(rows)).toEqual({ entryKey: rows[1].key, message: TIME_FORMAT_ERROR });
+    expect(firstHoursError([entry('2h 5m', 125)])).toBeNull();
+    expect(entryMinutes(rows[1])).toBe(420);
     expect(totalMinutes(rows)).toBe(540);
+    expect(totalMinutes([entry('2h 5m'), entry('6.5')])).toBe(515);
   });
 
   it('copies new ids from the saved report onto the rows that were sent', () => {
     const added = newEntry({ projectId: 6, name: 'iwilltillimwell' });
     added.tasks[0].title = 'Copy';
-    const rows = [entry('2', 2), added];
+    const rows = [entry('2h', 120), added];
     const { keys } = serialize(rows);
     const view = {
       entries: [
@@ -217,17 +218,17 @@ describe('report rows', () => {
   });
 
   it('puts the API field errors on the rows that were sent', () => {
-    const rows = [entry('2', 2)];
+    const rows = [entry('2h', 120)];
     const { keys } = serialize(rows);
     const errors = mapFieldErrors(
       {
-        'entries.0.hours': 'Use steps of 0.25 hours.',
+        'entries.0.hours': 'Hours must be above 0.',
         'entries.0.tasks.0.title': 'Write at least 2 characters.',
         total: 'A day can have at most 16 hours.',
       },
       keys,
     );
-    expect(errors.entries[rows[0].key]).toEqual({ hours: 'Use steps of 0.25 hours.' });
+    expect(errors.entries[rows[0].key]).toEqual({ hours: 'Hours must be above 0.' });
     expect(errors.tasks['t-a']).toBe('Write at least 2 characters.');
     expect(errors.general).toEqual(['A day can have at most 16 hours.']);
   });

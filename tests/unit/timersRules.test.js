@@ -1,7 +1,7 @@
 // Pure timer rules (CONTRACT 15): entry minutes, stop times, away spans, overlaps, the day summary
 // and the input schemas.
 import { describe, expect, it } from 'vitest';
-import { localToUtc, roundToQuarterHour } from '@/lib/time';
+import { localToUtc } from '@/lib/time';
 import {
   awaySpans,
   countedEnd,
@@ -151,19 +151,20 @@ describe('day summary', () => {
     ...overrides,
   });
 
-  it('rounds each project to the nearest 15 minutes and puts the biggest first', () => {
-    expect([7, 8, 247, 248].map(roundToQuarterHour)).toEqual([0, 15, 240, 255]);
+  it('gives each project its exact minutes (no 15-minute rounding), biggest first', () => {
     const summary = summarizeDay([
       entry({ projectId: 1, projectName: 'acme-app', minutes: 7 }),
       entry({ projectId: 2, projectName: 'beta', minutes: 8 }),
       entry({ projectId: 3, projectName: 'gamma', minutes: 200 }),
       entry({ projectId: 3, projectName: 'gamma', minutes: 47 }),
+      entry({ projectId: 4, projectName: 'delta', minutes: 125 }),
     ]);
-    expect(summary.totalMinutes).toBe(262);
+    expect(summary.totalMinutes).toBe(387);
     expect(summary.projects.map((p) => [p.projectName, p.minutes, p.roundedMinutes])).toEqual([
-      ['gamma', 247, 240],
-      ['beta', 8, 15],
-      ['acme-app', 7, 0],
+      ['gamma', 247, 247],
+      ['delta', 125, 125], // a 2h 5m timer fills 2h 5m, not 2h
+      ['beta', 8, 8],
+      ['acme-app', 7, 7],
     ]);
   });
 

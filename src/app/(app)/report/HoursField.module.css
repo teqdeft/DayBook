@@ -24,8 +24,9 @@
   color: var(--primary-text);
 }
 
+/* wide enough for '12h 45m' */
 .hoursInput {
-  width: 72px;
+  width: 104px;
   height: 40px;
   padding: 0 8px;
   border: 1px solid var(--line-strong);

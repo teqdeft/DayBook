@@ -9,7 +9,8 @@ import HoursField from './HoursField';
 import ProjectPicker from './ProjectPicker';
 import TaskLine from './TaskLine';
 import { useReport } from './ReportProvider';
-import { newTask, parseHours, projectKey, unlinkTasks } from './reportState';
+import { parseHours } from './reportHours';
+import { newTask, projectKey, unlinkTasks } from './reportState';
 import { timerHoursFor } from './reportTimers';
 import styles from './ProjectCard.module.css';
 
@@ -217,6 +218,8 @@ export default function ProjectCard({
           onChange={(hours) =>
             updateEntry(entry.key, { hours }, { entryKey: entry.key, field: 'hours' })
           }
+          // Only the way it reads changes ('2.25' -> '2h 15m'): any error on the box stays.
+          onNormalize={(hours) => updateEntry(entry.key, { hours })}
         />
       </div>
       {entryErrors.project || hoursError ? (

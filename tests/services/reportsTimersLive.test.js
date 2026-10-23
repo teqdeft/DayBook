@@ -113,19 +113,36 @@ describe('the timers the report page gets', () => {
     const loaded = await reports.timersForReport({ user: emp, report: draft });
     expect(loaded.summary.projects[0].roundedMinutes).toBe(360);
 
-    setClock('18:08'); // 6h 8m rounds to 6h 15m: the page's copy is out of date
+    setClock('18:08'); // 6h 8m, past the 2-minute tolerance: the page's copy is out of date
     expect((await caught(submit(emp, draft.id, [card(acme, 6)]))).fields).toEqual({
-      'entries.0.hours': 'Hours come from your timers (6h 15m).',
+      'entries.0.hours': 'Hours come from your timers (6h 8m).',
     });
-    // Before submitting, the page reads the timers again and takes their hours.
+    // Before submitting, the page reads the timers again and takes their minutes.
     const fresh = await reports.getTimersForReport({ user: emp, reportId: draft.id });
     expect(fresh).toMatchObject({ required: true });
-    const hours = fresh.summary.projects[0].roundedMinutes / 60;
-    expect(hours).toBe(6.25);
-    await expect(submit(emp, draft.id, [card(acme, hours)])).resolves.toMatchObject({
+    const minutes = fresh.summary.projects[0].roundedMinutes;
+    expect(minutes).toBe(368);
+    setClock('18:09:30'); // the timer ran on while the submit was on its way
+    await expect(submit(emp, draft.id, [{ ...card(acme), minutes }])).resolves.toMatchObject({
       status: 'submitted',
-      totalMinutes: 375,
+      totalMinutes: 368,
     });
+  });
+
+  it('fills and submits a 2h 5m timer as 2h 5m', async () => {
+    await checkIn(emp, TODAY, { in: '09:30' });
+    await insertEntry(emp, acme, { from: '10:00', to: '12:05', note: 'Login page' });
+    setClock('18:00');
+    const draft = await reports.openForDate({ user: emp, workDate: TODAY });
+    const { summary } = await reports.getTimersForReport({ user: emp, reportId: draft.id });
+    expect(summary.projects[0]).toMatchObject({ minutes: 125, roundedMinutes: 125 });
+    const rows = mergeTimerSummary(entriesFromView(draft), summary);
+    expect(rows[0].hours).toBe('2h 5m');
+    const { body } = serialize(rows);
+    expect(body[0]).toMatchObject({ projectId: acme.id, minutes: 125 });
+    const submitted = await submit(emp, draft.id, body);
+    expect(submitted).toMatchObject({ status: 'submitted', totalMinutes: 125 });
+    expect(submitted.entries[0].minutes).toBe(125);
   });
 
   it("refuses someone else's report and gives null once the report has locked", async () => {
@@ -216,7 +233,7 @@ describe('Fill report from timers after a timed priority task is done', () => {
     const { summary } = await reports.getTimersForReport({ user: emp, reportId: draft.id });
     const { body } = serialize(mergeTimerSummary(entriesFromView(draft), summary));
     expect(body).toHaveLength(1);
-    expect(body[0]).toMatchObject({ projectId: acme.id, hours: 1.5 });
+    expect(body[0]).toMatchObject({ projectId: acme.id, minutes: 90 });
     expect(body[0].tasks.map((task) => [task.title, task.projectTaskId])).toEqual([
       ['Fix login timeout', undefined],
       ['Header spacing', header],

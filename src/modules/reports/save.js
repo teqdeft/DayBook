@@ -8,6 +8,7 @@ import { timers } from '@/modules/timers';
 import * as repo from './repo';
 import { assertEditable, getOwnReport } from './drafts';
 import { checkPriorityLinks } from './links';
+import { entryMinutes } from './schemas';
 import { contentVersion, loadReportView } from './view';
 
 /**
@@ -129,9 +130,10 @@ function sameFields(row, fields) {
  * from later reports survive): known ids are updated, new rows inserted, missing rows deleted.
  * Keeps total_minutes in sync. Call inside a transaction with the report row locked.
  * @param {{ id: number, workDate: string, status: string }} report
- * @param {Array<{ id?: number, projectId?: number, projectRequestId?: number, hours: number,
- *   tasks: Array<{ id?: number, title: string, status: string, projectTaskId?: number }> }>}
- *   entries (links checked with checkPriorityLinks first)
+ * @param {Array<{ id?: number, projectId?: number, projectRequestId?: number, minutes?: number,
+ *   hours?: number, tasks: Array<{ id?: number, title: string, status: string,
+ *   projectTaskId?: number }> }>} entries (links checked with checkPriorityLinks first); the
+ *   time is `minutes`, else `hours` (entryMinutes), stored to the minute
  * @param {import('knex').Knex} trx
  * @param {{ baseVersion?: string }} [options] the version the person's page last saw
  * @returns {Promise<number>} the new total in minutes
@@ -148,7 +150,7 @@ export async function writeEntries(report, entries, trx, { baseVersion } = {}) {
   const at = nowDate();
   let total = 0;
   for (const [sortOrder, entry] of entries.entries()) {
-    const minutes = Math.round(entry.hours * 60);
+    const minutes = entryMinutes(entry);
     total += minutes;
     const fields = {
       projectId: entry.projectId ?? null,
@@ -204,8 +206,8 @@ export async function writeEntries(report, entries, trx, { baseVersion } = {}) {
 }
 
 /**
- * Autosave: saves a draft's entries and tasks (hours 0 or more in 0.25 steps, empty task rows
- * allowed). After the first submit every save is a new revision, so saving a submitted report
+ * Autosave: saves a draft's entries and tasks (time 0 to 24 hours, to the minute; empty task
+ * rows allowed). After the first submit every save is a new revision, so saving a submitted report
  * runs the submit rules instead.
  * @param {{ user: object, reportId: number, entries: object[], baseVersion?: string }} input
  *   entries from saveReportSchema; baseVersion is the report version the page last saw

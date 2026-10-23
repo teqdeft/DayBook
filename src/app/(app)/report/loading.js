@@ -12,7 +12,7 @@ function CardSkeleton() {
         <Skeleton width={60} height={26} radius={13} />
         <span className={styles.spacer} />
         <Skeleton width={40} height={16} />
-        <Skeleton width={72} height={40} radius={10} />
+        <Skeleton width={104} height={40} radius={10} />
       </div>
       <div className={styles.thead} />
       <div className={styles.row}>

@@ -134,7 +134,10 @@ export function minutesBetween(a, b) {
   return diff > 0 ? diff : 0;
 }
 
-/** Timer minutes as report minutes, to the nearest 15 (CONTRACT 15): 247 -> 240, 248 -> 255. */
+/**
+ * Minutes to the nearest 15: 247 -> 240, 248 -> 255. The daily report no longer rounds timer
+ * minutes (company request: exact minutes, timers.getDaySummary gives whole minutes).
+ */
 export function roundToQuarterHour(minutes) {
   return Math.round(Math.max(0, minutes ?? 0) / 15) * 15;
 }
@@ -206,15 +209,19 @@ export function trimNumber(value, decimals = 2) {
   return String(Number(Number(value).toFixed(decimals)));
 }
 
-/** Minutes as hours without trailing zeros, for Slack and inputs: 90 -> '1.5'. */
+/**
+ * Minutes as decimal hours without trailing zeros: 90 -> '1.5'. Nothing in the app shows these
+ * any more (the report's hours boxes and the Slack text read "1h 30m").
+ */
 export function minutesToHours(minutes) {
   return trimNumber((minutes ?? 0) / 60, 2);
 }
 
 /**
  * Logged hours, in hours and minutes like every other duration (company request: people read
- * "1h 45m" more easily than "1.75h"): 480 -> '8h', 510 -> '8h 30m', 45 -> '45m'. Report inputs
- * keep decimal hours (minutesToHours); the Slack text uses formatSlackHours, also "8h 30m".
+ * "1h 45m" more easily than "1.75h"): 480 -> '8h', 510 -> '8h 30m', 45 -> '45m'. The report's
+ * hours boxes show the same text and read it back (reportHours.js, parseDuration); the Slack text
+ * uses formatSlackHours, also "8h 30m".
  * @param {number} minutes
  */
 export function formatHours(minutes) {
@@ -229,6 +236,66 @@ export function formatDuration(minutes) {
   if (h === 0 && m === 0) return '0h';
   if (h === 0) return `${m}m`;
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+/** The longest duration people can type (parseDuration's default limit): one day. */
+export const MAX_DURATION_MINUTES = 24 * 60;
+
+// Units as people type them (and every step while typing them): h, hr, hrs, ho, hou, hour,
+// hours; m, mi, min, mins, minu, minut, minute, minutes.
+const HOURS_UNIT = 'h(?:rs?|o(?:u(?:rs?)?)?)?';
+const MINUTES_UNIT = 'm(?:i(?:n(?:s|u(?:t(?:es?)?)?)?)?)?';
+const DECIMAL_HOURS = /^(?:\d+(?:[.,]\d*)?|[.,]\d+)$/;
+const CLOCK_HOURS = /^(\d+):([0-5]\d)$/;
+const UNIT_HOURS = new RegExp(
+  `^(?:(\\d+(?:[.,]\\d+)?)\\s*${HOURS_UNIT})?\\s*(?:(\\d+)\\s*(${MINUTES_UNIT})?)?$`,
+);
+
+/**
+ * Decimal hours in 0.25-hour steps ('2', '6.5', '2.25', as before exact minutes) -> minutes, else
+ * null: people write '8.30' for 8h 30m, and 8.3 hours (8h 18m) would save the wrong time quietly.
+ */
+function quarterHours(text) {
+  const hours = Number(text.replace(',', '.'));
+  return Math.abs(hours * 4 - Math.round(hours * 4)) < 1e-9 ? Math.round(hours * 60) : null;
+}
+
+/** parseDuration without the limit: minutes, or null when the text isn't a duration. */
+function readDuration(text) {
+  if (DECIMAL_HOURS.test(text)) return quarterHours(text);
+  const clock = CLOCK_HOURS.exec(text);
+  if (clock) return Number(clock[1]) * 60 + Number(clock[2]);
+  const units = UNIT_HOURS.exec(text);
+  if (!units) return null;
+  const [, hours, minutes, minutesUnit] = units;
+  // A bare number is hours (DECIMAL_HOURS); after hours it is minutes ('2h 15' while typing).
+  if (hours === undefined && (minutes === undefined || minutesUnit === undefined)) return null;
+  if (hours !== undefined && minutes !== undefined) {
+    if (/[.,]/.test(hours) || Number(minutes) >= 60) return null;
+  }
+  const hourMinutes = hours === undefined ? 0 : quarterHours(hours);
+  return hourMinutes === null ? null : hourMinutes + Number(minutes ?? 0);
+}
+
+/**
+ * A duration as people type it -> whole minutes (company request: report time in exact minutes).
+ * Reads hours and minutes ('2h 15m', '2h15m', '2 h 15 m', '2h', '15m', '15 min', '2 hrs 15 mins',
+ * '2h 15'), clock style ('2:15') and decimal hours in 0.25-hour steps ('2.25', '2,25', '2',
+ * '1.5h'), in any case with spaces around. Refuses negatives, other decimals ('8.30' or '8.3 hrs'
+ * may mean 8h 30m: exact minutes come as '8h 30m' or '8:30'), anything else, 60 or more minutes
+ * next to hours ('2h 75m', '2:75'; '90m' alone is fine) and more than `max` minutes (24h). Pure,
+ * safe in the browser.
+ * @param {string | number | null | undefined} text
+ * @param {{ max?: number }} [options] the most minutes accepted (Infinity for no limit)
+ * @returns {number | null} whole minutes, or null ('' and spaces too)
+ */
+export function parseDuration(text, { max = MAX_DURATION_MINUTES } = {}) {
+  if (text === null || text === undefined) return null;
+  const raw = String(text).trim().toLowerCase();
+  if (raw === '') return null;
+  const minutes = readDuration(raw);
+  if (minutes === null || !Number.isFinite(minutes) || minutes > max) return null;
+  return minutes;
 }
 
 /**
