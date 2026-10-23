@@ -1,7 +1,7 @@
 [
   {
     "route": "/report",
-    "firstLoadUncompressedJsBytes": 686825,
+    "firstLoadUncompressedJsBytes": 686894,
     "firstLoadChunkPaths": [
       ".next/static/chunks/1koh1rzpqvh7w.js",
       ".next/static/chunks/3c7aaod1woe87.js",
@@ -11,7 +11,7 @@
       ".next/static/chunks/1anel_iobw86v.js",
       ".next/static/chunks/00gikd8hltmh0.js",
       ".next/static/chunks/2ju7_15y5oetb.js",
-      ".next/static/chunks/1ozi710hs5jky.js",
+      ".next/static/chunks/0i8z4sui5bzvr.js",
       ".next/static/chunks/310vm2bl3xxpt.js",
       ".next/static/chunks/2mmpezlrfmbu5.js",
       ".next/static/chunks/39u3ld3zqxqqm.js",

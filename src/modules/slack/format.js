@@ -14,10 +14,18 @@ function dateDmy(value) {
   return match ? `${match[3]}-${match[2]}-${match[1]}` : String(value ?? '');
 }
 
-/** Minutes as hours without trailing zeros: 120 -> '2', 90 -> '1.5', 15 -> '0.25'. */
+/**
+ * Minutes as hours and minutes, like everywhere else in Daybook (company request: "8h 30m" reads
+ * better than "8.5"): 120 -> '2h', 90 -> '1h 30m', 15 -> '15m', 0 -> '0h'. No imports: the
+ * report page's preview runs this in the browser.
+ */
 export function formatSlackHours(minutes) {
-  const hours = Number(minutes) / 60;
-  return Number.isFinite(hours) ? String(Number(hours.toFixed(2))) : '0';
+  const total = Math.round(Number(minutes));
+  if (!Number.isFinite(total) || total <= 0) return '0h';
+  const hours = Math.floor(total / 60);
+  const rest = total % 60;
+  if (hours === 0) return `${rest}m`;
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
 }
 
 /** One line of text: newlines and runs of spaces collapse to a single space. */
@@ -41,7 +49,7 @@ function entryMinutes(entry) {
  *   Date: 30-09-2026
  *
  *   Project: iwilltillimwell
- *   Hours: 2
+ *   Hours: 2h
  *   Tasks
  *   • Content changes (Done)
  *

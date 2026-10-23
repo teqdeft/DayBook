@@ -752,8 +752,9 @@ color, note } | null` (read with one extra query each over `attendance_breaks` /
 
 - **Durations read as hours and minutes everywhere** ("Late 1h 37m", "1h 45m", "over the 1h
   allowance"): `formatHours(minutes)` now returns the same text as `formatDuration` (its decimals
-  argument is gone). Under an hour a few sentences keep "N min". Report hour inputs and the Slack
-  report text stay decimal (`minutesToHours`, `formatSlackHours`).
+  argument is gone). Under an hour a few sentences keep "N min". Report hour inputs stay decimal
+  (`minutesToHours`); the Slack report text says "Hours: 8h 30m" (`formatSlackHours`, also used by
+  the report page's Slack preview).
 - **Late grace.** Settings "Late after" (e.g. 9:35 with office start 9:30) is the late mark;
   someone with their own shift start gets the same grace (`attendance.lateMarkFor({ shiftStart,
 settings })`: shift start + (late after − office start)). Late minutes are stored at check-in,
