@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { AppError } from '@/lib/errors';
 import { nowDate } from '@/lib/time';
 import * as repo from './repo';
 import { notifySchema } from './schemas';
@@ -58,6 +59,44 @@ export function unreadCount(userId) {
  */
 export function markAllRead(userId) {
   return repo.markAllRead(userId, nowDate());
+}
+
+/** A positive whole id, or null (an id that can't exist answers NOT_FOUND like a missing one). */
+function cleanId(value) {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+/**
+ * Marks one of a person's notifications read or unread (the bell, CONTRACT 20). Marking read
+ * keeps the first read time when it is already read.
+ * @param {{ userId: number, id: number, read: boolean }} input
+ * @returns {Promise<{ id: number, type: string, title: string, body: string | null,
+ *   link: string | null, readAt: Date | null, createdAt: Date }>} the row after the change
+ * @throws AppError NOT_FOUND when the notification is missing or belongs to someone else
+ */
+export async function markRead({ userId, id, read }) {
+  const notificationId = cleanId(id);
+  const row = notificationId ? await repo.findForUser({ userId, id: notificationId }) : null;
+  if (!row) throw new AppError('NOT_FOUND');
+  if (Boolean(read) === Boolean(row.readAt)) return row;
+  const at = nowDate();
+  const readAt = read ? at : null;
+  await repo.setReadAt({ userId, id: notificationId, readAt, at });
+  return { ...row, readAt };
+}
+
+/**
+ * Deletes one of a person's notifications, read or not (the bell's Delete and swipe, CONTRACT 20).
+ * @param {{ userId: number, id: number }} input
+ * @returns {Promise<{ id: number }>}
+ * @throws AppError NOT_FOUND when the notification is missing or belongs to someone else
+ */
+export async function remove({ userId, id }) {
+  const notificationId = cleanId(id);
+  const deleted = notificationId ? await repo.deleteForUser({ userId, id: notificationId }) : 0;
+  if (!deleted) throw new AppError('NOT_FOUND');
+  return { id: notificationId };
 }
 
 /**

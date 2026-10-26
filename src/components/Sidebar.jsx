@@ -1,11 +1,13 @@
 'use client';
 // The navy sidebar: logo, workspace box, nav items (from config/navigation.js, with count badges)
 // and the signed-in person with a menu (Sign out). The active item follows the current path.
-// `footer` sits just above the person (the timer chip, CONTRACT 15).
+// `footer` sits just above the person (the timer chip, CONTRACT 15). The version label
+// ("Daybook v1.05", CONTRACT 20) closes the column.
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronDown } from 'lucide-react';
 import { activeNavHref } from '@/config/navigation';
+import { APP_VERSION } from '@/config/version';
 import Logo from './Logo';
 import UserMenu from './UserMenu';
 import { NavIcon } from './NavIcon';
@@ -85,6 +87,8 @@ export default function Sidebar({
       <div className={styles.person}>
         <UserMenu user={user} variant="sidebar" />
       </div>
+
+      <p className={styles.version}>Daybook v{APP_VERSION}</p>
     </div>
   );
 }

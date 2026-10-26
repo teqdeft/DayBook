@@ -1,0 +1,84 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Focus starts here when the dialog opened by itself; the dialog around it shows where it is. */
+.list:focus,
+.list:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--track);
+}
+
+/* One suggestion: the checkbox, then the project, the line as it is and the suggested line. */
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  cursor: pointer;
+}
+
+.list > li:first-child .item {
+  padding-top: 2px;
+}
+
+.check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.check:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.project {
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.before {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.after {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--text-body);
+  font-weight: 500;
+  line-height: 22px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.arrow {
+  flex: none;
+  margin-top: 3px;
+  color: var(--primary);
+}

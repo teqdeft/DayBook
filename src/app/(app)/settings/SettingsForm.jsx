@@ -1,10 +1,11 @@
 'use client';
 // The Settings sections (artboard 12) inside one form: Company, Office hours and reports,
-// Check-in, Slack, and Screen time, Timers and breaks and Notifications (added after the canvas).
-// "Save changes" in the top bar submits it.
+// Check-in, Slack, and Screen time, Timers and breaks, Notifications and AI (added after the
+// canvas). "Save changes" in the top bar submits it.
 import DayToggleGroup from '@/components/DayToggleGroup';
 import Input from '@/components/Input';
 import Select from '@/components/Select';
+import AiSection from './AiSection';
 import CheckInSection from './CheckInSection';
 import ClockField from './ClockField';
 import FormField from './FormField';
@@ -96,7 +97,9 @@ function HoursSection({ reportLocks }) {
  *   reportLocks: Array<{ value: string, label: string }>,
  *   networks: Array<{ id: number, name: string, ipAddress: string }>, currentIp: string | null,
  *   connection: { configured: boolean, connected: boolean, teamName: string | null },
- *   pushConfigured: boolean }} props pushConfigured: the server has VAPID keys (CONTRACT 14)
+ *   pushConfigured: boolean, ai: { configured: boolean, usage: { used: number, limit: number }
+ *   | null } }} props pushConfigured: the server has VAPID keys (CONTRACT 14); ai: the server has
+ *   GEMINI_API_KEY, and today's AI requests (CONTRACT 20)
  */
 export default function SettingsForm({
   timezones,
@@ -105,6 +108,7 @@ export default function SettingsForm({
   currentIp,
   connection,
   pushConfigured,
+  ai,
 }) {
   const { save } = useSettingsForm();
   return (
@@ -127,6 +131,7 @@ export default function SettingsForm({
       <ScreenTimeSection />
       <TimersSection />
       <NotificationsSection configured={pushConfigured} />
+      <AiSection configured={Boolean(ai?.configured)} usage={ai?.usage ?? null} />
     </form>
   );
 }

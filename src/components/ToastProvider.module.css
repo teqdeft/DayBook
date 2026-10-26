@@ -87,6 +87,11 @@
   color: var(--ink);
 }
 
+/* Another toast with its own controls (the bell's Undo, useToastSlot) sits under these. */
+.list:not(:empty) + .slot {
+  margin-top: 10px;
+}
+
 @keyframes toast-in {
   from {
     transform: translateY(12px);
@@ -102,6 +107,12 @@
   }
 
   .list {
+    align-items: stretch;
+  }
+
+  .slot {
+    display: flex;
+    flex-direction: column;
     align-items: stretch;
   }
 

@@ -2,12 +2,17 @@
 // cron job every minute with `npm run worker:cron`. Each run does one pass of the minute jobs
 // (reminders, the check-out reminder and auto check-out, missing check-outs, forgotten timers,
 // timer reminders, cleanup, Slack user sync, health log — their run keys, or for timer reminders
-// the notifications themselves, make them run once per day, hour or 5 minutes), then sends Slack
-// messages and desktop pushes every 10 seconds for about 50 seconds, and exits. A MySQL named lock keeps two runs from overlapping.
+// the notifications themselves, make them run once per day, hour or 5 minutes), then the AI
+// summary jobs (once per day or week; they call Gemini, so each starts only in the first 15
+// seconds of a run, else the next run does it), then sends Slack messages and desktop pushes every
+// 10 seconds until about 50 seconds after the run started, and exits. A MySQL named lock keeps
+// two runs from overlapping.
 // On a server that can keep a process running, use `npm run worker` (src/worker/index.js) instead.
 import { env } from '@/lib/env';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { aiHrNotesJob } from './jobs/aiHrNotes';
+import { aiPmSummaryJob } from './jobs/aiPmSummary';
 import { autoCheckoutJob } from './jobs/autoCheckout';
 import { checkoutReminderJob } from './jobs/checkoutReminder';
 import { cleanupJob } from './jobs/cleanup';
@@ -35,7 +40,14 @@ const MINUTE_JOBS = [
   cleanupJob,
   slackUserSyncJob,
   healthLogJob,
+  aiPmSummaryJob,
+  aiHrNotesJob,
 ];
+// Jobs that wait on Gemini (the PM summaries stop starting requests after 25 s, and one request
+// may take 30 s). Starting one late could push the run past its limit, so after this much of a
+// run it is left for the next run.
+const SLOW_JOBS = new Set([aiPmSummaryJob, aiHrNotesJob]);
+const SLOW_START_LIMIT_MS = 15_000;
 const FAST_JOBS = [slackOutboxJob, pushNotificationsJob];
 const FAST_EVERY_MS = 10_000;
 
@@ -57,6 +69,7 @@ async function runJob(job) {
 }
 
 async function main() {
+  const startedAt = Date.now();
   const limitSeconds = runSeconds() + OVERRUN_SECONDS;
   setTimeout(() => {
     logger.error({ limitSeconds }, 'worker cron run took too long and was stopped');
@@ -75,8 +88,16 @@ async function main() {
       return;
     }
     try {
-      for (const job of MINUTE_JOBS) await runJob(job);
-      const endAt = Date.now() + runSeconds() * 1000;
+      for (const job of MINUTE_JOBS) {
+        if (SLOW_JOBS.has(job) && Date.now() - startedAt >= SLOW_START_LIMIT_MS) {
+          logger.debug({ job: job.name }, 'worker cron: late in the run; left for the next run');
+          continue;
+        }
+        await runJob(job);
+      }
+      // Counted from the start, so slow minute jobs (Gemini) shorten the sending instead of
+      // pushing the run past its limit; the next run sends the rest a minute later.
+      const endAt = startedAt + runSeconds() * 1000;
       do {
         const started = Date.now();
         for (const job of FAST_JOBS) await runJob(job);

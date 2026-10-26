@@ -82,6 +82,13 @@
   text-align: center;
 }
 
+/* "Daybook v1.05" under the card (CONTRACT 20) */
+.version {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
 @media (max-width: 480px) {
   .column {
     padding: 24px 0;

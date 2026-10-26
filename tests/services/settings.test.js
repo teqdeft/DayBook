@@ -60,6 +60,15 @@ describe('settings.getAll', () => {
       wfhRequiresApproval: true,
       autoCheckoutEnabled: true,
       autoCheckoutAt: '20:00',
+      aiEnabled: false,
+      aiDailyLimit: 200,
+      aiPolishEnabled: true,
+      aiPmSummaryEnabled: true,
+      aiPmSummaryAt: '19:00',
+      aiSummarySlack: true,
+      aiHrNotesEnabled: true,
+      aiHrNotesAt: '19:00',
+      aiAskEnabled: true,
     });
   });
 

@@ -1,0 +1,168 @@
+/* One row in the bell's list (CONTRACT 20). */
+.slot {
+  position: relative;
+  border-radius: 10px;
+}
+
+/* While a finger drags the row: the red Delete shows behind it, nothing spills sideways */
+.dragging {
+  overflow: hidden;
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  border-radius: 10px;
+  /* the browser keeps vertical scrolling; a sideways move is the swipe */
+  touch-action: pan-y;
+}
+
+.row:hover {
+  background: var(--surface-muted);
+}
+
+.dragging .row,
+.dragging .row:hover {
+  background: var(--surface);
+  user-select: none;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 4px 10px 12px;
+  border-radius: 10px;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-touch-callout: none;
+}
+
+.main:hover {
+  text-decoration: none;
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.read {
+  background: transparent;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.body {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.time {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+/* Mark as read / unread and Delete: shown on hover and focus, always on touch screens */
+.actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 6px 6px 0 0;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.row:hover .actions,
+.row:focus-within .actions {
+  opacity: 1;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.action:hover {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.delete:hover {
+  background: var(--red-soft);
+  color: var(--red-text);
+}
+
+/* Behind the row while swiping; solid red once letting go would delete */
+.swipeBack {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-right: 18px;
+  border-radius: 10px;
+  background: var(--red-soft);
+  color: var(--red-text);
+  font-size: var(--text-small);
+  font-weight: 600;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.armed {
+  background: var(--red);
+  color: var(--on-fill);
+}
+
+@media (hover: none) {
+  .actions {
+    padding: 2px 2px 0 0;
+    opacity: 1;
+  }
+
+  .row:hover {
+    background: transparent;
+  }
+
+  .action {
+    width: 36px;
+    height: 36px;
+  }
+}

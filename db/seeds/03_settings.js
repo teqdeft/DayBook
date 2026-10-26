@@ -36,6 +36,16 @@ export const DEFAULT_SETTINGS = {
   // Auto check-out (company request after the build guide, CONTRACT 19)
   auto_checkout_enabled: true, // inactive after office end until this time: checked out
   auto_checkout_at: '20:00',
+  // AI with Gemini (company request after the build guide, CONTRACT 20)
+  ai_enabled: false, // Admin switches AI on after adding GEMINI_API_KEY
+  ai_daily_limit: 200, // Gemini requests per day for the whole company
+  ai_polish_enabled: true,
+  ai_pm_summary_enabled: true,
+  ai_pm_summary_at: '19:00',
+  ai_summary_slack: true, // also send the PM summary as a Slack DM
+  ai_hr_notes_enabled: true, // weekly, on the last working day of the week
+  ai_hr_notes_at: '19:00',
+  ai_ask_enabled: true,
 };
 
 export async function seed(knex) {

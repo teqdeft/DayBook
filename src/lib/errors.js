@@ -57,6 +57,15 @@ export const ERROR_CODES = {
   DUPLICATE_NETWORK: { status: 409, message: 'That IP address is already saved.' },
   LAST_ADMIN: { status: 409, message: 'Daybook needs at least one active Admin.' },
   SLACK_ERROR: { status: 502, message: "Slack didn't answer. Please try again." },
+
+  // AI with Gemini (CONTRACT 20)
+  AI_OFF: { status: 409, message: 'AI is turned off.' },
+  AI_LIMIT: {
+    status: 429,
+    message: "Daybook's AI has reached today's limit. Try again tomorrow.",
+  },
+  AI_BUSY: { status: 503, message: 'Gemini is busy. Try again in a minute.' },
+  AI_ERROR: { status: 502, message: "AI couldn't answer right now. Try again later." },
 };
 
 export class AppError extends Error {

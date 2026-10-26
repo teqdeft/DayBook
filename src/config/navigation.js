@@ -54,6 +54,25 @@ export const NAV_ITEMS = {
     badge: 'requests', // pending report edit and project requests for this approver
     badgeRoles: ['pm'], // guide section 8: request counts are shown to PMs
   },
+  // Ask Daybook (CONTRACT 20): Admin, PM and HR, only while AI and Ask Daybook are on (the
+  // `features.ask` flag from aiAsk.isAvailableFor, passed by the app frame).
+  ask: {
+    label: 'Ask Daybook',
+    href: '/ask',
+    icon: 'Sparkles',
+    anyPermission: ['team.view', 'attendance.view_all'],
+    feature: 'ask',
+  },
+  // AI summaries (CONTRACT 20): a PM's daily summaries, HR's weekly notes. Shown once the person
+  // has one their role opens (`features.summaries`), so they find it again after deleting its
+  // bell notification.
+  summaries: {
+    label: 'Summaries',
+    href: '/summaries',
+    icon: 'Newspaper',
+    anyPermission: ['team.view', 'attendance.view_all'],
+    feature: 'summaries',
+  },
   people: { label: 'People', href: '/people', icon: 'SquareUser', permission: 'people.manage' },
   roles: { label: 'Roles', href: '/settings/roles', icon: 'Shield', permission: 'roles.manage' },
   settings: {
@@ -67,8 +86,8 @@ export const NAV_ITEMS = {
 export const NAVIGATION = {
   employee: ['today', 'log', 'projects'],
   // PMs don't check in or write reports, so no Today or My log.
-  pm: ['projects', 'team', 'screenTime', 'attendance', 'requests'],
-  hr: ['today', 'log', 'attendance', 'people'],
+  pm: ['projects', 'team', 'screenTime', 'attendance', 'requests', 'ask', 'summaries'],
+  hr: ['today', 'log', 'attendance', 'ask', 'summaries', 'people'],
   // Today and My log appear for an Admin only when they track attendance (the CEO doesn't).
   admin: [
     'overview',
@@ -78,21 +97,33 @@ export const NAVIGATION = {
     'screenTime',
     'projects',
     'attendance',
+    'ask',
+    'summaries',
     'people',
     'roles',
     'settings',
   ],
 };
 
+/** An item's permission: its one key, or any of `anyPermission`. */
+function allowed(user, item) {
+  if (item.anyPermission) return item.anyPermission.some((key) => can(user, key));
+  return can(user, item.permission);
+}
+
 /**
  * The sidebar items for a user.
  * @param {{ role: string, tracksAttendance: boolean }} user
  * @param {{ corrections?: number, requests?: number }} [badges]
+ * @param {{ ask?: boolean, summaries?: boolean }} [features] items that show only then (ask:
+ *   Ask Daybook is available; summaries: the person has AI summaries; CONTRACT 20); a missing
+ *   flag hides the item
  */
-export function navigationFor(user, badges = {}) {
+export function navigationFor(user, badges = {}, features = {}) {
   return (NAVIGATION[user.role] ?? [])
     .map((key) => ({ key, ...NAV_ITEMS[key] }))
-    .filter((item) => can(user, item.permission))
+    .filter((item) => allowed(user, item))
+    .filter((item) => !item.feature || features?.[item.feature] === true)
     .filter((item) => !(item.tracksAttendance && user.role === 'admin' && !user.tracksAttendance))
     .map((item) => ({
       key: item.key,

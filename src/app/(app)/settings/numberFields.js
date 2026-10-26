@@ -1,5 +1,6 @@
 // Whole-number settings: shown as text, saved as numbers. The limits and messages are the API's
-// (src/modules/settings/schemas.js); tests/services/timersSettings.test.js checks they agree.
+// (src/modules/settings/schemas.js); tests/services/timersSettings.test.js and
+// tests/services/aiSettings.test.js check they agree.
 // Plain data, so the client form and the tests can both import it.
 
 export const NUMBERS = Object.freeze({
@@ -29,6 +30,12 @@ export const NUMBERS = Object.freeze({
     min: 0,
     max: 480,
     message: 'The break allowance must be between 0 and 480 minutes (0 means no allowance).',
+  },
+  // AI with Gemini (CONTRACT 20): requests per day for the whole company
+  aiDailyLimit: {
+    min: 0,
+    max: 2000,
+    message: 'The daily AI limit must be between 0 and 2000.',
   },
 });
 

@@ -49,6 +49,12 @@ const schema = z.object({
   VAPID_PRIVATE_KEY: z.string().trim().default(''),
   VAPID_SUBJECT: z.string().trim().default('mailto:admin@example.com'),
 
+  // Gemini (CONTRACT 20). Without a key every AI feature is off; Admin also switches AI on in
+  // Settings. The models can change when Google renames them.
+  GEMINI_API_KEY: z.string().trim().default(''),
+  GEMINI_MODEL: z.string().trim().default('gemini-3.5-flash-lite'),
+  GEMINI_SMART_MODEL: z.string().trim().default('gemini-3.5-flash'),
+
   WORKER_CRON_ENABLED: bool(true),
   DEV_LOGIN_ENABLED: bool(false),
 });

@@ -13,6 +13,7 @@ export const SECTIONS = [
   { id: 'screen-time', label: 'Screen time' },
   { id: 'timers', label: 'Timers and breaks' },
   { id: 'notifications', label: 'Notifications' },
+  { id: 'ai', label: 'AI' },
 ];
 
 // A section counts as current once its top passes this line (px from the top of the window).

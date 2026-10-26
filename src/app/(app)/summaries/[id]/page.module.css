@@ -1,0 +1,76 @@
+.card {
+  --card-pad: 22px 26px 20px;
+
+  max-width: 820px;
+}
+
+/* The kind square beside the page title, like the project square on a project's page. */
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.titleText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 0 20px;
+  font-size: var(--text-body);
+  line-height: 24px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.paragraph {
+  margin: 0;
+}
+
+.label {
+  margin: 6px 0 -4px;
+  font-family: var(--font-heading-stack);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0 0 0 20px;
+}
+
+.listItem {
+  padding-left: 2px;
+}
+
+.subItem {
+  margin-left: 20px;
+  padding-left: 2px;
+  list-style-type: circle;
+  color: var(--ink-2);
+}
+
+.listItem::marker,
+.subItem::marker {
+  color: var(--muted);
+}
+
+.note {
+  padding-top: 16px;
+  border-top: 1px solid var(--track);
+}
+
+@media (max-width: 640px) {
+  .card {
+    --card-pad: 18px 16px 16px;
+  }
+}

@@ -1,0 +1,37 @@
+/* Polish with AI while Gemini writes: it keeps focus (aria-disabled, not disabled), so it is drawn
+   like a loading Button rather than a disabled one. */
+.busy[aria-disabled='true'][aria-busy='true'] {
+  opacity: 0.75;
+  cursor: progress;
+}
+
+.spinner {
+  animation: polish-spin 0.8s linear infinite;
+}
+
+@keyframes polish-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 1024–1199 px beside Submit and check out and Submit report (three buttons): the row is too
+   wide and squeezes the page title onto two lines, so Polish with AI shows its icon only. Its
+   name stays for screen readers (and as the button's tooltip). */
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .polish:first-child:nth-last-child(3) {
+    width: 47px;
+    padding: 0;
+    gap: 0;
+  }
+
+  .polish:first-child:nth-last-child(3) .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+}

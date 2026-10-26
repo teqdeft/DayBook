@@ -27,6 +27,22 @@
   flex: none;
 }
 
+/* The swing (CONTRACT 20): about every 6 s while something is unread and the list is closed,
+   hung from the top of the bell. ringNow starts with a swing, ringLater waits one cycle. */
+.ring {
+  display: inline-flex;
+  transform-origin: 50% 3px;
+}
+
+.ringNow,
+.ringLater {
+  animation: bell-swing 6s ease-in-out infinite;
+}
+
+.ringLater {
+  animation-delay: 6s;
+}
+
 .dot {
   position: absolute;
   top: 8.5px;
@@ -47,6 +63,7 @@
   width: 380px;
   max-width: calc(100vw - 32px);
   max-height: min(520px, calc(100vh - 120px));
+  overflow: hidden; /* the scrolled list stays inside the rounded corners */
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
@@ -100,64 +117,6 @@
   overflow-y: auto;
   list-style: none;
   overscroll-behavior: contain;
-}
-
-.item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  color: var(--ink);
-  text-decoration: none;
-}
-
-a.item:hover {
-  background: var(--surface-muted);
-  text-decoration: none;
-}
-
-.unreadDot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  margin-top: 7px;
-  border-radius: 50%;
-  background: var(--primary);
-}
-
-.read {
-  background: transparent;
-}
-
-.itemText {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.itemTitle {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
-}
-
-.itemBody {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: var(--text-small);
-  line-height: 18px;
-  color: var(--muted);
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-}
-
-.itemTime {
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--muted);
 }
 
 .message {
@@ -248,6 +207,40 @@ a.item:hover {
   font-size: var(--text-small);
   line-height: 17px;
   color: var(--muted);
+}
+
+/* A short damped swing in the first second of each 6 s cycle, then still */
+@keyframes bell-swing {
+  0%,
+  17%,
+  100% {
+    transform: rotate(0);
+  }
+  2.5% {
+    transform: rotate(12deg);
+  }
+  5% {
+    transform: rotate(-9deg);
+  }
+  7.5% {
+    transform: rotate(6deg);
+  }
+  10% {
+    transform: rotate(-3.5deg);
+  }
+  12.5% {
+    transform: rotate(1.5deg);
+  }
+  15% {
+    transform: rotate(-0.5deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ringNow,
+  .ringLater {
+    animation: none;
+  }
 }
 
 @keyframes panel-in {

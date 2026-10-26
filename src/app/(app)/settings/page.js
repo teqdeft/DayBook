@@ -1,12 +1,14 @@
 // Settings (artboard 12): company, office hours and reports, check-in networks and switches,
-// Slack, screen time, timers and breaks and desktop notifications. One "Save changes" saves every section. Admin
-// only.
+// Slack, screen time, timers and breaks, desktop notifications and AI. One "Save changes" saves
+// every section. Admin only.
 import { headers } from 'next/headers';
 import TopBar from '@/components/TopBar';
+import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { clientIp } from '@/lib/route';
 import { requirePage } from '@/lib/session';
 import { nowDate } from '@/lib/time';
+import { ai } from '@/modules/ai';
 import { push } from '@/modules/push';
 import { settings } from '@/modules/settings';
 import { slack } from '@/modules/slack';
@@ -27,14 +29,27 @@ async function slackConnection() {
   }
 }
 
+/** Today's Gemini requests for Settings → AI (CONTRACT 20), or null when they can't be read. */
+async function aiUsage() {
+  try {
+    return await ai.usageToday();
+  } catch (error) {
+    logger.warn({ err: error }, "settings: could not read today's AI requests");
+    return null;
+  }
+}
+
 export default async function SettingsPage() {
   await requirePage('settings.manage');
-  const [values, networks, connection, requestHeaders] = await Promise.all([
+  const [values, networks, connection, requestHeaders, usage] = await Promise.all([
     settings.getAll(),
     settings.listOfficeNetworks(),
     slackConnection(),
     headers(),
+    aiUsage(),
   ]);
+  // Whether the server has a Gemini key: the page only ever gets this boolean, never the key.
+  const aiConfigured = Boolean(env.GEMINI_API_KEY);
 
   return (
     <SettingsProvider initial={values}>
@@ -52,6 +67,7 @@ export default async function SettingsPage() {
           currentIp={clientIp({ headers: requestHeaders })}
           connection={connection}
           pushConfigured={push.isConfigured()}
+          ai={{ configured: aiConfigured, usage }}
         />
       </div>
     </SettingsProvider>

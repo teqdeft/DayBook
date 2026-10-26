@@ -92,7 +92,9 @@ Each module in `src/modules/<name>/` has `repo.js` (the only file with Knex quer
 (`export const <name> = service;` — other code imports only from the index, e.g.
 `import { attendance } from '@/modules/attendance'`). Services call their own repo and other
 modules' **services**, never other repos. Exception: `modules/dashboard/repo.js` runs read-only
-aggregate queries across tables (one query per widget) — dashboards are read models.
+aggregate queries across tables (one query per widget) — dashboards are read models. The same goes
+for `modules/aiSummaries/repo.js` and `modules/aiAsk/repo.js` (read-only queries that feed Gemini,
+CONTRACT 20).
 
 Database conventions (`src/lib/db.js`, `knexfile.js`):
 
@@ -359,7 +361,12 @@ avatar?: boolean, search?: { placeholder } }`. Page title 30 px bold (−0.02em)
   `var(--overlay)`, focus trap, Escape closes, focus returns to the opener.
 - `Dialog` (client) — `{ open, onClose, title, description?, footer?, children }`.
 - `ToastProvider` + `useToast()` (client) — `toast({ title, body?, tone: 'success' | 'error' })`;
-  the provider is mounted in the app shell.
+  the provider is mounted in the app shell. `useToastSlot()` returns the element under the app
+  toasts where a component portals its own toast (the bell's Undo, CONTRACT 20), so they stack
+  instead of covering each other.
+- `NotificationUndo` (client, used by `NotificationBell`) — `{ pending, onUndo, onDismiss, onHold,
+onLeave }`: "Notification deleted" with Undo for 5 s; the time stops while the pointer or focus
+  is on it (`onHold`) and resumes after, at least 2 s; Tab, Shift+Tab or Escape call `onLeave`.
 - `Menu` (client) — `{ label (aria), items: [{ label, onSelect, tone?, disabled? }] }` (row "⋯").
 - `DataTable` (server-safe, no hooks) — `{ columns: [{ key, header, width?, align?, render?(row) }],
 rows, rowKey = 'id', groups?: [{ key, title, tone, count, rows, collapsed?, onToggle?, footer? }],
@@ -384,6 +391,7 @@ faded? }], height }` (Today's "This week" and Overview's stacked "Attendance thi
 | reports      | `(app)/report/**`, `(app)/log/**`                                                                                                                                        |
 | projects     | `(app)/projects/**`, `(app)/requests/**`                                                                                                                                 |
 | dashboards   | `(app)/team/**`, `(app)/overview/**`                                                                                                                                     |
+| ai           | `(app)/summaries/**`, `(app)/ask/**`, `api/ai/**` (CONTRACT 20)                                                                                                          |
 
 Every page starts with `const user = await requirePage('<permission>')`, renders `<TopBar ... />`
 then its blocks, has a loading skeleton (`loading.js`) and empty states. Page permissions:
@@ -931,3 +939,172 @@ once an hour. The first reminder after check-in says "You haven't started a time
 "You checked in at 9:32. Start a timer for what you're working on.", later ones keep "No timer
 is running". Settings help text becomes "Reminds people who are checked in without a running
 timer. 0 turns it off."
+
+## 20. AI with Gemini, version label, notification center (added after the build guide)
+
+Company requests (phase 1): Polish my tasks, auto-write the report from timers, a daily report
+summary for PMs, weekly HR notes, Ask Daybook; a version number in the UI; a better notification
+center (click marks read, mark unread, delete, swipe to delete, a gently ringing bell).
+
+### AI core (`@/modules/ai`, owner: ai)
+
+- Env (server only): `GEMINI_API_KEY` (empty = every AI feature off), `GEMINI_MODEL` (default
+  `gemini-3.5-flash-lite`, everyday), `GEMINI_SMART_MODEL` (default `gemini-3.5-flash`, Ask).
+  REST `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`,
+  header `x-goog-api-key` (read the official docs for request/response, JSON output and function
+  calling before coding). `fetch` with a 30 s timeout; no SDK needed.
+- Settings (Settings → AI, Admin): `aiEnabled` (default false), `aiDailyLimit` (200, 0–2000, whole
+  company, counted in company-time days), `aiPolishEnabled`, `aiPmSummaryEnabled`,
+  `aiPmSummaryAt` ('19:00'), `aiSummarySlack` (true), `aiHrNotesEnabled`, `aiHrNotesAt`
+  ('19:00'), `aiAskEnabled`.
+- `ai.isAvailable(feature)` → boolean: key set, `aiEnabled` and that feature's switch on
+  (features: `polish`, `pm_summary`, `hr_notes`, `ask`).
+- `ai.generate({ feature, userId?, model: 'fast' | 'smart', system, prompt, json?, tools?,
+onToolCall? })` → `{ text, data }`: checks availability (`AI_OFF`), the company daily limit and
+  the per-person daily caps (polish 20, ask 30) (`AI_LIMIT`), calls Gemini, writes one `ai_usage`
+  row per request (feature, user, model, ok, error code, token counts — never the prompt or the
+  answer), maps HTTP 429 → `AI_BUSY` and other failures → `AI_ERROR` (503 and timeouts: see "Busy Gemini" below). With `json` (a JSON schema)
+  it asks for JSON output and returns the parsed object in `data`. With `tools` it runs Gemini
+  function calling for at most 5 rounds, calling `onToolCall(name, args)` for each call.
+- Error codes (add to `src/lib/errors.js`): `AI_OFF` 409 "AI is turned off.", `AI_LIMIT` 429
+  "Daybook's AI has reached today's limit. Try again tomorrow.", `AI_BUSY` 503 "Gemini is busy.
+  Try again in a minute.", `AI_ERROR` 502 "AI couldn't answer right now. Try again later."
+- **Privacy**: never send emails, phone numbers, IPs or Slack ids. The PM summary and HR notes
+  send people as tokens ("Person 1", "Person 2", …; not `P1`, which is a priority label) and put
+  the names back into the returned text
+  (`pseudonymize` / `restoreNames` helpers in the module); project names, task text and numbers
+  are sent as they are. Ask Daybook sends the names its tools return (the page says so). Logs
+  never contain prompts or answers.
+- Table `ai_usage` (migration 012): `user_id` (nullable), `feature`, `model`, `ok`, `error_code`,
+  `input_tokens`, `output_tokens`, `created_at`. `ai.usageToday()` → `{ used, limit }` for Settings.
+
+### Polish my tasks and auto-write from timers (report page)
+
+- `POST /api/ai/polish { lines: [{ key, title, projectName }] }` (report.self; 1–60 lines, titles ≤ 500) → `{ lines: [{ key, title }] }`: the fast model rewrites each task line as a clear, short
+  line (≤ 120 characters) in the same language, same meaning, no new facts, keeping product and
+  project names; lines it can't improve come back unchanged. Same keys back; anything else is
+  dropped.
+- Report page (when `ai.isAvailable('polish')` and the report is editable): a secondary
+  **Polish with AI** button (sparkle icon) near the submit actions. It opens a dialog "Suggested
+  wording" listing each changed line as before → after with a checkbox (all ticked), **Use
+  selected** applies them through `change()` (priority links stay), Cancel keeps everything.
+  Unchanged lines aren't listed; nothing changed → toast "Your tasks already read well".
+- **Auto-write**: after **Fill report from timers** adds lines, the same dialog opens for just
+  those lines (only when polish is available).
+
+### Daily report summary for PMs (worker `ai-pm-summary`)
+
+- Once per date (`runOnce` key `ai_pm_summary:<date>`) at or after `aiPmSummaryAt` on working days:
+  for each active PM whose active projects had at least one **submitted** report today, one Gemini
+  request (fast model, JSON `{ title, body }`) about their projects: per project the people
+  (tokens) with minutes and task lines (title, status, priority), blocked tasks, priority tasks
+  done today; projects with no report today are listed by the code itself ("No reports yet:
+  acme-seo"). The body is plain text with short "- " lists (Done, In progress, Blocked, Hours),
+  ≤ 1500 characters, hours as "2h 15m", names restored.
+- Saved in `ai_summaries` (`kind 'pm_daily'`, period = today); bell `ai.pm_summary` "Today on your
+  projects", body = the first 300 characters, link `/summaries/<id>`; with `aiSummarySlack` also a
+  Slack DM with the full text (`slack.queueDm` setting key `aiSummarySlack`).
+
+### Weekly HR notes (worker `ai-hr-notes`)
+
+- Once per ISO week (`runOnce` key `ai_hr_notes:<year>-W<week>`) on the week's last working day at
+  or after `aiHrNotesAt`: numbers per tracked, active, non-Admin person for Monday–today (days
+  present, WFH days, late days and total late minutes, missing check-outs, auto check-outs,
+  correction requests, days with breaks over the allowance, missing reports), sent as tokens; the
+  fast model writes neutral, factual notes (patterns, people HR may want to check in with,
+  improvements) — never judgments or disciplinary language. Saved per recipient (`hr_weekly`),
+  bell `ai.hr_notes` "This week's attendance notes", link `/summaries/<id>`. Recipients: active HR
+  people, or the Admins when there is no HR.
+
+### Summaries pages
+
+- `/summaries` (signed in): the person's own AI summaries, newest first (title, date, a short
+  excerpt). `/summaries/[id]`: one summary; someone else's is NOT_FOUND. Each page says "Written
+  by AI from Daybook's data. Check anything important."
+
+### Ask Daybook
+
+- Who: viewers with `team.view` or `attendance.view_all` (Admin, PM, HR), when
+  `ai.isAvailable('ask')`. Nav item "Ask Daybook" (icon `Sparkles`) for them; page `/ask`.
+- `POST /api/ai/ask { question (2–500), history?: [{ question, answer }] (≤ 4) }` →
+  `{ answer }`. The smart model with function calling over read-only tools that enforce the
+  viewer's scope exactly like the screens (PMs: their own projects and the people on them; HR:
+  attendance; Admin: everything; CONTRACT 16 hides Admins' attendance from non-Admins):
+  `list_projects`, `list_people`, `hours_by_project { from, to, projectName? }`,
+  `hours_by_person { from, to, personName?, projectName? }`,
+  `report_tasks { from, to, projectName?, personName?, status? }`,
+  `attendance_summary { from, to, personName? }`, `priority_tasks { projectName?, status? }`.
+  Dates 'YYYY-MM-DD', at most 366 days, results capped at 200 rows; a tool the viewer can't use
+  returns `{ error: 'not allowed' }`. The answer uses only tool results ("I don't have that"
+  otherwise), hours as "2h 15m", short.
+- Page: a question box, example questions, the answers of this visit (not stored), and the note
+  "Your question and the data needed to answer it are sent to Google Gemini."
+
+### Version label
+
+- `APP_VERSION` in `src/config/version.js` (now '1.05'; raised with each release). Shown as small
+  muted "Daybook v1.05" at the bottom of the sidebar and under the sign-in card.
+
+### Notification center
+
+- `notifications.markRead({ userId, id, read })` → row, `notifications.remove({ userId, id })`;
+  `PATCH /api/notifications/[id] { read: boolean }` and `DELETE /api/notifications/[id]` (signed
+  in; someone else's or missing → NOT_FOUND).
+- Bell dropdown: clicking an item marks it read (the blue dot goes at once) and opens its link;
+  each item has Mark as unread / Mark as read and Delete (visible on hover and focus, always on
+  touch); on touch screens swiping an item left past a threshold deletes it, with a toast
+  "Notification deleted" and **Undo** for 5 s (the DELETE is sent when the toast ends).
+- While there are unread notifications the bell rings gently: a short damped swing about every 6 s
+  (and once at once when a new one arrives), with the red dot; no movement under
+  `prefers-reduced-motion`.
+
+### Decisions made while building (phase 1)
+
+- **Contact scrubbing**: besides the person tokens, emails (any script), phone numbers (with or
+  without "+"), IPs and Slack ids in the system text, prompt and tool results become numbered
+  placeholders ("[email 1]") and are put back in the answer and in tool arguments.
+- **Limits count Gemini requests**, tool rounds included (one Ask question takes about 2–6 of the
+  30). Each request first saves its `ai_usage` row as pending (`error_code 'PENDING'`); the limit
+  check and that save run under `GET_LOCK('daybook_ai_limits', 5)`, so parallel requests count
+  each other (lock not free in 5 s → `AI_BUSY`). Rounds of an answer already under way may finish.
+  Per-person rate limits: polish 10 a minute, ask 12 a minute.
+- **Busy Gemini** (found testing on the free tier, where `gemini-3.8-flash` answered "high demand"
+  503s or took over 2 minutes): HTTP 429 and 503 and no answer within 30 s are `AI_BUSY`. The
+  smart model is sent `thinkingConfig.thinkingLevel: 'low'` (Gemini 3 and later only; at its
+  default a Flash model thinks 15 s for a one-word answer). When the smart model is busy on the
+  first request, generate() asks the fast model once instead (a new request, counted like any
+  other); a busy later tool round is not retried.
+- **AI module extras**: `ai.saveSummary`, `listSummaries`, `countSummaries`, `getSummary`
+  (`ai_summaries` storage; the same kind, person and period again replaces the text);
+  `PEOPLE_TOKEN_NOTE`, `AI_FEATURES`, `PERSON_DAILY_CAPS`, `MAX_TOOL_ROUNDS`; test hooks
+  `setTransportForTests`, `fakeGeminiResponse`, `setApiKeyForTests`, `setTimeoutForTests`. JSON
+  answers use `responseMimeType: 'application/json'` with `responseJsonSchema`.
+- **Polish**: lines go to Gemini as `L1…Ln` (never the browser's keys) and come back as JSON with
+  those ids. A line keeps its own title when the answer is empty, over 120 characters (unless the
+  original was longer), holds a leftover placeholder or an email the line didn't have. "Polish
+  with AI" comes first among the report's top-bar buttons (icon only at 1024–1199 px when all
+  three show). Auto-write polish stays silent on errors and when nothing changed, and is dropped
+  if the report's status changed while Gemini was writing.
+- **Settings → AI** (`id="ai"`): "Use AI (Gemini)" is disabled until the key is set (it can always
+  be switched off); the limit and the times are hidden while AI or their feature is off.
+- **Summaries module `@/modules/aiSummaries`** (owner: ai): `sendPmSummaries(date)`,
+  `sendHrNotes(date)`, `listMine({ user, page })`, `getMine({ user, id })`, `countMine`,
+  `readableKinds`, `isoWeekKey`, `lastWorkingDayOfWeek`.
+  - PM summaries go to active users with role `pm` only (Admins who run projects get none).
+  - HR notes count correction requests by the day they were sent; missing reports are days
+    checked in without a submitted report (today only from `reportReminderAt`); no Slack DM.
+  - Both jobs: up to 3 runs 10 minutes apart (run keys `<key>`, `<key>#2`, `<key>#3`), skipping
+    people already written; a failure for one PM is logged (code only) and the next goes on;
+    `AI_LIMIT` or `AI_OFF` ends the run quietly. In `cron.js` they start only in the first 15 s
+    of a run, and the sending loop ends 50 s after the run started.
+  - Summaries are filtered by the current role: `pm_daily` needs `team.view`, `hr_weekly` needs
+    `attendance.view_all` (otherwise not listed and NOT_FOUND). Excerpts are built like the bell's
+    ("Done: Fixed … · …").
+- **Navigation**: `navigationFor(user, badges, { ask, summaries })`: "Ask Daybook" (`Sparkles`)
+  when `aiAsk.isAvailableFor(user)`, "Summaries" (`Newspaper`) for PM, HR and Admin once they have
+  a summary their role can read.
+- **Ask Daybook scope**: a PM's attendance answers cover only the people on their projects
+  (stricter than the Attendance screen). Names are matched only among what the viewer may see, so
+  a hidden name and an unknown one get the same answer. A failing tool gives Gemini "Daybook
+  couldn't read this data just now." and the log gets the tool name only. Examples and Try again
+  keep the draft; Try again is hidden for `AI_LIMIT` and `AI_OFF`.

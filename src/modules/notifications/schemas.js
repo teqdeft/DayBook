@@ -21,3 +21,13 @@ export const notifySchema = z.object({
     .nullish()
     .transform((value) => (value ? value.trim().slice(0, 300) || null : null)),
 });
+
+/** The [id] in /api/notifications/[id]; anything that isn't a positive whole number is NOT_FOUND. */
+export const notificationIdSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
+/** PATCH /api/notifications/[id] { read: boolean } (CONTRACT 20). */
+export const markReadSchema = z.object({
+  read: z.boolean({ error: 'Say whether the notification is read.' }),
+});

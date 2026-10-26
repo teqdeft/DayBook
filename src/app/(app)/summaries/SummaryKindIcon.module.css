@@ -1,0 +1,19 @@
+.icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-box);
+  height: var(--icon-box);
+  border-radius: var(--radius-tile);
+}
+
+.daily {
+  background: var(--primary-soft);
+  color: var(--primary-text);
+}
+
+.weekly {
+  background: var(--violet-soft);
+  color: var(--violet-text);
+}
