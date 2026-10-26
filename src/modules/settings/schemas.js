@@ -39,6 +39,9 @@ export const TIMER_AWAY_MINUTES = Object.freeze({ min: 5, max: 240 });
 export const TIMER_REMINDER_MINUTES = Object.freeze({ min: 0, max: 240 });
 export const BREAK_ALLOWANCE_MINUTES = Object.freeze({ min: 0, max: 480 });
 
+/** Gemini requests per day for the whole company (CONTRACT 20). */
+export const AI_DAILY_LIMIT = Object.freeze({ min: 0, max: 2000 });
+
 /** Empty strings become null, so a cleared picker saves "no channel". */
 const nullableText = (max, message) =>
   z
@@ -134,6 +137,21 @@ export const settingsUpdateSchema = z
     // Auto check-out (CONTRACT section 19)
     autoCheckoutEnabled: z.boolean({ error: 'Choose on or off.' }),
     autoCheckoutAt: clock('the auto check-out time'),
+    // AI with Gemini (CONTRACT section 20)
+    aiEnabled: z.boolean({ error: 'Choose on or off.' }),
+    aiDailyLimit: wholeNumber({
+      min: AI_DAILY_LIMIT.min,
+      max: AI_DAILY_LIMIT.max,
+      typeMessage: 'The daily AI limit must be a whole number.',
+      rangeMessage: `The daily AI limit must be between ${AI_DAILY_LIMIT.min} and ${AI_DAILY_LIMIT.max}.`,
+    }),
+    aiPolishEnabled: z.boolean({ error: 'Choose on or off.' }),
+    aiPmSummaryEnabled: z.boolean({ error: 'Choose on or off.' }),
+    aiPmSummaryAt: clock('the summary time'),
+    aiSummarySlack: z.boolean({ error: 'Choose on or off.' }),
+    aiHrNotesEnabled: z.boolean({ error: 'Choose on or off.' }),
+    aiHrNotesAt: clock('the HR notes time'),
+    aiAskEnabled: z.boolean({ error: 'Choose on or off.' }),
     // Project timers and breaks (CONTRACT section 15)
     timersMode: z.enum(TIMER_MODES, { error: 'Choose off, optional or required.' }),
     timerAwayMinutes: wholeNumber({

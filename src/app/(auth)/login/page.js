@@ -1,9 +1,11 @@
 // Sign in: a centered card on the paper background with "Sign in with Slack". Errors from the
 // Slack callback arrive as ?error=CODE. In development a second card signs in as a demo person.
+// "Daybook v1.05" closes the column (CONTRACT 20).
 import { redirect } from 'next/navigation';
 import { CircleAlert } from 'lucide-react';
 import Button from '@/components/Button';
 import Logo from '@/components/Logo';
+import { APP_VERSION } from '@/config/version';
 import { env } from '@/lib/env';
 import { ERROR_CODES } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -116,6 +118,8 @@ export default async function LoginPage({ searchParams }) {
         </section>
 
         {people ? <DevSignIn people={people} next={next} /> : null}
+
+        <p className={styles.version}>Daybook v{APP_VERSION}</p>
       </div>
     </main>
   );

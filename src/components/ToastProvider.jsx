@@ -1,7 +1,8 @@
 'use client';
 // Toasts: short confirmations and errors after an action ("Report submitted"). Mounted once in
 // the app shell; any Client Component calls `const toast = useToast()` then
-// `toast({ title, body?, tone: 'success' | 'error' })`.
+// `toast({ title, body?, tone: 'success' | 'error' })`. A toast with its own controls (the bell's
+// Undo) portals into `useToastSlot()`, under these, so the two never cover each other.
 import {
   createContext,
   useCallback,
@@ -15,6 +16,7 @@ import { CircleAlert, CircleCheck, X } from 'lucide-react';
 import styles from './ToastProvider.module.css';
 
 const ToastContext = createContext(null);
+const SlotContext = createContext(null);
 const DURATION = { success: 5000, error: 8000 };
 const MAX_VISIBLE = 4;
 
@@ -29,9 +31,19 @@ export function useToast() {
   return useContext(ToastContext) ?? warnMissingProvider;
 }
 
+/**
+ * Where another toast goes so it stacks with these (bottom right, under them): an element to
+ * createPortal into, or null outside a ToastProvider and before it has mounted.
+ * @returns {HTMLElement | null}
+ */
+export function useToastSlot() {
+  return useContext(SlotContext);
+}
+
 /** @param {{ children: import('react').ReactNode }} props */
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
+  const [slot, setSlot] = useState(null);
   const timers = useRef(new Map());
   const nextId = useRef(0);
 
@@ -66,7 +78,7 @@ export function ToastProvider({ children }) {
 
   return (
     <ToastContext.Provider value={value}>
-      {children}
+      <SlotContext.Provider value={slot}>{children}</SlotContext.Provider>
       <div className={styles.region} role="region" aria-label="Updates">
         <ol className={styles.list} aria-live="polite" aria-relevant="additions">
           {toasts.map((t) => (
@@ -105,6 +117,7 @@ export function ToastProvider({ children }) {
             </li>
           ))}
         </ol>
+        <div ref={setSlot} className={styles.slot} />
       </div>
     </ToastContext.Provider>
   );

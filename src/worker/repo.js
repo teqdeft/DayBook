@@ -23,6 +23,11 @@ export function findRunByKey(runKey, trx = db) {
   return trx('job_runs').where({ runKey }).first();
 }
 
+/** The runs of several keys (those that have one). */
+export function findRunsByKeys(runKeys, trx = db) {
+  return trx('job_runs').whereIn('runKey', runKeys).select('runKey', 'status', 'finishedAt');
+}
+
 /** Deletes runs started before a moment (the daily cleanup). Returns how many were deleted. */
 export function deleteRunsStartedBefore(before, trx = db) {
   return trx('job_runs').where('startedAt', '<', before).delete();

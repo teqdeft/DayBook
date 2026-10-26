@@ -2,10 +2,11 @@
 // Right side of the Daily report top bar: the live total ("8h 30m logged", "of 8h 58m checked
 // in", or "of 7h 45m worked" after breaks), a quiet save status, and Submit report / Update report
 // (or Request an edit once locked). While the person is still checked in today, a draft also gets
-// "Submit and check out".
+// "Submit and check out"; with AI on, an editable report gets "Polish with AI" first (CONTRACT 20).
 import { useState } from 'react';
 import Button from '@/components/Button';
 import { formatHours } from '@/lib/time';
+import { PolishButton } from './PolishProvider';
 import RequestEditDialog from './RequestEditDialog';
 import { useReport } from './ReportProvider';
 import SubmitAndCheckOut from './SubmitAndCheckOut';
@@ -60,6 +61,7 @@ export default function ReportActions() {
         </Button>
       ) : (
         <div className={styles.buttons}>
+          <PolishButton />
           {data.canCheckOut ? <SubmitAndCheckOut /> : null}
           <Button size="large" loading={submitting} onClick={() => submit()}>
             {report.status === 'submitted' ? 'Update report' : 'Submit report'}

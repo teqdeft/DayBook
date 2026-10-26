@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { activeNavHref, homePathFor, navigationFor } from '@/config/navigation';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { activeNavHref, homePathFor, NAV_ITEMS, navigationFor } from '@/config/navigation';
 
 const employee = { role: 'employee', status: 'active', tracksAttendance: true };
 const pm = { role: 'pm', status: 'active', tracksAttendance: false };
@@ -46,6 +48,42 @@ describe('navigation', () => {
     expect(navigationFor(pm, { requests: 2 }).find((item) => item.key === 'requests').badge).toBe(
       2,
     );
+  });
+
+  it('shows Summaries to PM, HR and Admin once they have one, with a drawn icon', () => {
+    const hr = { role: 'hr', status: 'active', tracksAttendance: true };
+    const keys = (user, features) => navigationFor(user, {}, features).map((item) => item.key);
+    expect(keys(pm, { summaries: true })).toEqual([
+      'projects',
+      'team',
+      'screenTime',
+      'attendance',
+      'requests',
+      'summaries',
+    ]);
+    expect(keys(hr, { ask: true, summaries: true })).toEqual([
+      'today',
+      'log',
+      'attendance',
+      'ask',
+      'summaries',
+      'people',
+    ]);
+    expect(keys(ceo, { summaries: true })).toContain('summaries');
+    expect(keys(employee, { ask: true, summaries: true })).toEqual(['today', 'log', 'projects']);
+    expect(keys(hr, {})).not.toContain('summaries');
+    const item = navigationFor(hr, {}, { summaries: true }).find((i) => i.key === 'summaries');
+    expect(item).toMatchObject({ label: 'Summaries', href: '/summaries', icon: 'Newspaper' });
+    const ask = navigationFor(hr, {}, { ask: true }).find((i) => i.key === 'ask');
+    expect(ask.icon).toBe('Sparkles');
+  });
+
+  it('has a drawn icon for every item (NavIcon shows a plain circle for a missing one)', () => {
+    const source = readFileSync(path.resolve('src/components/NavIcon.jsx'), 'utf8');
+    const missing = Object.values(NAV_ITEMS)
+      .map((item) => item.icon)
+      .filter((icon) => !source.includes(`\n  ${icon}: {`));
+    expect(missing).toEqual([]);
   });
 
   it('hides Today and My log from an Admin who is not tracked', () => {

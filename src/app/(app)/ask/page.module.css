@@ -1,0 +1,7 @@
+/* Ask Daybook: the top bar over the chat (AskChat) or the "AI is turned off" card. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--block-gap);
+  min-width: 0;
+}

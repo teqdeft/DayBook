@@ -7,6 +7,7 @@ import Button from '@/components/Button';
 import EmptyState from '@/components/EmptyState';
 import { formatDayShort } from '@/lib/time';
 import ProjectCard from './ProjectCard';
+import { usePolish } from './PolishProvider';
 import ProjectPicker from './ProjectPicker';
 import RequestProjectDialog from './RequestProjectDialog';
 import SlackPreview from './SlackPreview';
@@ -49,8 +50,9 @@ function useRestorable(report, entries) {
 }
 
 function Notices({ onRestore }) {
-  const { data, entries, report, errors, readOnly, lockedOut, stale, timers, applyTimers } =
-    useReport();
+  const { data, entries, report, errors, readOnly, lockedOut, stale, timers } = useReport();
+  // Fill report from timers, then polish the lines it wrote (CONTRACT 20).
+  const { fillFromTimers } = usePolish();
   const restorable = useRestorable(report, entries);
   // Required timer mode: a submitted report keeps its hours until the person updates it.
   const timersMoved =
@@ -107,7 +109,7 @@ function Notices({ onRestore }) {
         key="timers"
         tone="warning"
         action={
-          <Button variant="text" size="compact" onClick={applyTimers}>
+          <Button variant="text" size="compact" onClick={fillFromTimers}>
             Fill report from timers
           </Button>
         }

@@ -9,6 +9,7 @@ import * as repo from './repo';
 import {
   ACTIVITY_IDLE_MINUTES,
   ACTIVITY_RETENTION_DAYS,
+  AI_DAILY_LIMIT,
   BREAK_ALLOWANCE_MINUTES,
   checkAutoCheckout,
   normalizeIp,
@@ -37,6 +38,8 @@ const CLOCK_KEYS = new Set([
   'lateAfter',
   'reportReminderAt',
   'autoCheckoutAt',
+  'aiPmSummaryAt',
+  'aiHrNotesAt',
 ]);
 // Whole numbers kept inside their allowed range (a hand-edited row can't turn idle detection into
 // "idle after 0 minutes").
@@ -46,6 +49,7 @@ const BOUNDED_KEYS = {
   timerAwayMinutes: TIMER_AWAY_MINUTES,
   timerReminderMinutes: TIMER_REMINDER_MINUTES,
   breakAllowanceMinutes: BREAK_ALLOWANCE_MINUTES,
+  aiDailyLimit: AI_DAILY_LIMIT,
 };
 
 // ---------- cache ----------
@@ -168,7 +172,9 @@ export function setCacheTtlForTests(ms) {
  *   timersMode: 'off' | 'optional' | 'required', timerAwayMinutes: number,
  *   timerReminderMinutes: number, breakAllowanceMinutes: number,
  *   officeCheckinAnywhere: boolean, wfhRequiresApproval: boolean, autoCheckoutEnabled: boolean,
- *   autoCheckoutAt: string }>} a fresh copy, safe to change; activityIdleMinutes is 1-120 and
+ *   autoCheckoutAt: string, aiEnabled: boolean, aiDailyLimit: number, aiPolishEnabled: boolean,
+ *   aiPmSummaryEnabled: boolean, aiPmSummaryAt: string, aiSummarySlack: boolean,
+ *   aiHrNotesEnabled: boolean, aiHrNotesAt: string, aiAskEnabled: boolean }>} (AI, CONTRACT 20) a fresh copy, safe to change; activityIdleMinutes is 1-120 and
  *   activityRetentionDays 7-3650 (screen time, CONTRACT 11); pushEnabled switches desktop
  *   notifications for everyone (CONTRACT 14); timers and breaks (CONTRACT 15):
  *   timerAwayMinutes 5-240, timerReminderMinutes 0-240 (0 = never), breakAllowanceMinutes 0-480

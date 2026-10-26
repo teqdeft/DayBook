@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/apiClient';
 import { now } from '@/lib/time';
+import { filledLines } from './reportPolish';
 import {
   clearTimerErrors,
   followSaves,
@@ -33,8 +34,10 @@ export const TIMERS_REFRESH_MS = 60_000;
  *   syncRef: { current: null | (() => Promise<void>) } }} input timers is the page's data.timers
  *   (null when timers are off, the person can't use them or the report can't change); status is
  *   the report's current status; syncRef receives the step submit runs first
- * @returns {{ timers: object | null, applyTimers: () => Promise<void> }} timers: the newest copy
- *   (the page's, or a fresher one read since); applyTimers: the "Fill report from timers" button
+ * @returns {{ timers: object | null, applyTimers: () => Promise<object[]> }} timers: the newest
+ *   copy (the page's, or a fresher one read since); applyTimers: the "Fill report from timers"
+ *   button, resolving to the task lines it wrote (reportPolish.filledLines; [] when none), which
+ *   "Polish my tasks" offers to reword (CONTRACT 20)
  */
 export function useTimerFill({
   timers: rendered,
@@ -67,24 +70,27 @@ export function useTimerFill({
   }, [hasTimers, reportId, rendered]);
 
   const applyTimers = useCallback(async () => {
-    if (filling.current) return;
+    if (filling.current) return [];
     filling.current = true;
     try {
       const fresh = await refresh();
       const latest = fresh === undefined ? timers : fresh;
-      if (!latest?.summary) return;
+      if (!latest?.summary) return [];
       let changed = false;
+      let written = [];
       change((entries) => {
         const next = mergeTimerSummary(entries, latest.summary);
         changed = next !== entries;
+        if (changed) written = filledLines(entries, next);
         return next;
       });
       if (!changed) {
         toast({ title: 'Your report already matches your timers' });
-        return;
+        return [];
       }
       setErrors(clearTimerErrors);
       toast({ title: 'Report filled from your timers' });
+      return written;
     } finally {
       filling.current = false;
     }

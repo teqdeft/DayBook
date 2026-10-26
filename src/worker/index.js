@@ -1,6 +1,7 @@
 // The worker process (npm run worker): schedules the six jobs of build guide section 12, plus the
-// desktop-push job (CONTRACT 14), the two timer jobs (CONTRACT 15) and the two auto check-out jobs
-// (CONTRACT 19), with node-cron. Ticks run in UTC; each job decides in company time. Stop it with
+// desktop-push job (CONTRACT 14), the two timer jobs (CONTRACT 15), the two auto check-out jobs
+// (CONTRACT 19) and the two AI summary jobs (CONTRACT 20), with node-cron. Ticks run in UTC; each
+// job decides in company time. Stop it with
 // Ctrl-C / SIGTERM (or the 'shutdown' message process managers send on Windows): it stops
 // scheduling, waits for running jobs, then closes the database pool. A job whose previous tick is
 // still running skips the new tick (the overlap guard in tick()).
@@ -10,6 +11,8 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { push } from '@/modules/push';
 import { slack } from '@/modules/slack';
+import { aiHrNotesJob } from './jobs/aiHrNotes';
+import { aiPmSummaryJob } from './jobs/aiPmSummary';
 import { autoCheckoutJob } from './jobs/autoCheckout';
 import { checkoutReminderJob } from './jobs/checkoutReminder';
 import { cleanupJob } from './jobs/cleanup';
@@ -31,6 +34,8 @@ const JOBS = [
   markMissingCheckoutsJob,
   closeOpenTimersJob,
   timerRemindersJob,
+  aiPmSummaryJob,
+  aiHrNotesJob,
   slackUserSyncJob,
   cleanupJob,
   healthLogJob,

@@ -107,6 +107,11 @@ npm run test:e2e
   hidden from Project managers and HR (lists, counts, detail pages, exports and notifications);
   employees can search their projects; the daily report has "Submit and check out"; the PM
   projects table shows each project's all-time hours under "Hours this week".
+- **AI with Gemini, version label, notification center** (CONTRACT 20): see
+  [AI with Gemini](#ai-with-gemini) below. The sidebar and sign-in page show "Daybook v1.05"
+  (`src/config/version.js`, raised with each release). In the bell, clicking a notification marks
+  it read; each one can be marked unread or deleted (swipe left on touch screens, with Undo), and
+  the bell swings gently while there are unread ones.
 
 ## Slack setup (one Slack app per environment)
 
@@ -185,6 +190,36 @@ delivered within an hour is dropped rather than shown late.
 
 Push needs HTTPS (or `localhost` in development). The worker needs outbound HTTPS to the browsers'
 push services (`fcm.googleapis.com` for Chrome, `*.notify.windows.com` for Edge).
+
+## AI with Gemini
+
+Five features use Google Gemini: **Polish with AI** and polishing after **Fill report from
+timers** (daily report), a **daily summary for PMs** at 7 PM (bell + Slack DM), **weekly HR
+notes** on the week's last working day, and **Ask Daybook** (Admin, PMs, HR; each sees only what
+their screens show). Saved summaries are under **Summaries**.
+
+1. Create a key at [Google AI Studio](https://aistudio.google.com) → **Get API key** → **Create
+   API key**. Keep it private (never in chat, Slack, email or git).
+2. Add it to `.env.local` on the server and restart `web` and `worker`:
+
+   ```bash
+   GEMINI_API_KEY=AIza...
+   ```
+
+   Optional: `GEMINI_MODEL` (default `gemini-3.5-flash-lite`) and `GEMINI_SMART_MODEL` (default
+   `gemini-3.5-flash`, used by Ask Daybook) when Google renames its models. On the free tier the
+   newest models are often overloaded ("high demand") and slow; Ask Daybook then answers with
+   `GEMINI_MODEL` instead.
+
+3. Admin: **Settings → AI → Use AI (Gemini)**, choose the features and the daily limit (200
+   requests for the whole company by default), **Save changes**.
+
+Privacy: people's names go to Gemini as "Person 1", "Person 2" in summaries and HR notes; emails,
+phone numbers, IPs and Slack ids are never sent (Ask Daybook sends the names its answers need,
+and its page says so). Prompts and answers are never logged; `ai_usage` keeps only counts. On the
+free tier Google may use the data to improve its models. Without a key, or with AI switched off,
+Daybook looks and works as before. The worker needs outbound HTTPS to
+`generativelanguage.googleapis.com`.
 
 ## Deployment notes
 

@@ -47,3 +47,18 @@ export async function existsSince({ userId, type, since }, trx = db) {
     .first('id');
   return Boolean(row);
 }
+
+/** One of a person's notifications, or undefined (someone else's or missing). */
+export function findForUser({ userId, id }, trx = db) {
+  return trx('notifications').where({ id, userId }).first(COLUMNS);
+}
+
+/** Sets or clears read_at on one of a person's notifications; returns how many rows changed. */
+export function setReadAt({ userId, id, readAt, at }, trx = db) {
+  return trx('notifications').where({ id, userId }).update({ readAt, updatedAt: at });
+}
+
+/** Deletes one of a person's notifications; returns how many rows were deleted (0 or 1). */
+export function deleteForUser({ userId, id }, trx = db) {
+  return trx('notifications').where({ id, userId }).delete();
+}

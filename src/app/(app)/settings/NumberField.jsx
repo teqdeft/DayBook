@@ -5,8 +5,11 @@ import Input from '@/components/Input';
 import FormField from './FormField';
 import { useSettingsForm } from './SettingsProvider';
 
-/** @param {{ name: string, label: string, help?: string, maxLength?: number }} props */
-export default function NumberField({ name, label, help, maxLength }) {
+/**
+ * @param {{ name: string, label: string, help?: string, maxLength?: number, className?: string }}
+ *   props
+ */
+export default function NumberField({ name, label, help, maxLength, className }) {
   const { form, errors, setField } = useSettingsForm();
   const id = `settings-${name}`;
   return (
@@ -15,6 +18,7 @@ export default function NumberField({ name, label, help, maxLength }) {
       htmlFor={id}
       help={errors[name] ? undefined : help}
       error={errors[name]}
+      className={className}
     >
       <Input
         id={id}

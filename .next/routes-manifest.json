@@ -82,6 +82,14 @@
       "namedRegex": "^/api/attendance\\-corrections/(?<nxtPid>[^/]+?)/reject(?:/)?$"
     },
     {
+      "page": "/api/notifications/[id]",
+      "regex": "^/api/notifications/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/notifications/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
       "page": "/api/office-networks/[id]",
       "regex": "^/api/office\\-networks/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -298,6 +306,14 @@
       "namedRegex": "^/projects/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/summaries/[id]",
+      "regex": "^/summaries/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/summaries/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
       "page": "/team/[userId]",
       "regex": "^/team/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -348,6 +364,18 @@
       "regex": "^/api/activity/team(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/activity/team(?:/)?$"
+    },
+    {
+      "page": "/api/ai/ask",
+      "regex": "^/api/ai/ask(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/ai/ask(?:/)?$"
+    },
+    {
+      "page": "/api/ai/polish",
+      "regex": "^/api/ai/polish(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/ai/polish(?:/)?$"
     },
     {
       "page": "/api/attendance",
@@ -596,6 +624,12 @@
       "namedRegex": "^/api/wfh\\-requests(?:/)?$"
     },
     {
+      "page": "/ask",
+      "regex": "^/ask(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ask(?:/)?$"
+    },
+    {
       "page": "/attendance",
       "regex": "^/attendance(?:/)?$",
       "routeKeys": {},
@@ -684,6 +718,12 @@
       "regex": "^/settings/roles(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/settings/roles(?:/)?$"
+    },
+    {
+      "page": "/summaries",
+      "regex": "^/summaries(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/summaries(?:/)?$"
     },
     {
       "page": "/team",

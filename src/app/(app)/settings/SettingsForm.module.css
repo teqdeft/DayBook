@@ -167,6 +167,22 @@
   margin-top: 14px;
 }
 
+/* ---------- AI (CONTRACT 20) ---------- */
+/* The daily limit: a field row between the switches' dividers. */
+.limitRow {
+  padding: 13.75px 0 14px;
+  border-top: 1px solid var(--track);
+}
+
+.limitField {
+  width: calc(50% - 8px);
+}
+
+/* "Also send as a Slack message" under the PM summary's time. */
+.subToggle {
+  margin-top: 16px;
+}
+
 .dialogFields {
   display: flex;
   flex-direction: column;
@@ -261,7 +277,8 @@
   }
 
   .channel,
-  .toggleField {
+  .toggleField,
+  .limitField {
     width: 100%;
   }
 }

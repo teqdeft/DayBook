@@ -5,6 +5,8 @@ import { cache } from 'react';
 import { homePathFor, navigationFor } from '@/config/navigation';
 import { logger } from '@/lib/logger';
 import { can } from '@/lib/permissions';
+import { aiAsk } from '@/modules/aiAsk';
+import { aiSummaries } from '@/modules/aiSummaries';
 import { dashboard } from '@/modules/dashboard';
 import { push } from '@/modules/push';
 import { settings } from '@/modules/settings';
@@ -46,16 +48,20 @@ async function safely(promise, fallback, message, userId) {
 export default async function AppFrame({ user, children }) {
   // Timers (CONTRACT 15): only for people who can use them; a failure just hides the chip. The
   // state is read even while timers are off: a timer left running then still shows, with Stop.
-  const [all, badges, timerState] = await Promise.all([
+  // AI items (CONTRACT 20): Ask Daybook while it is available to them, Summaries once they have
+  // one; a failure just hides the item.
+  const [all, badges, timerState, ask, summaries] = await Promise.all([
     safely(settings.getAll(), {}, 'shell: could not load settings', user.id),
     safely(dashboard.getNavBadges(user), {}, 'shell: could not load nav badges', user.id),
     timers.canUse(user)
       ? safely(timerStateFor(user), null, 'shell: could not load the timer', user.id)
       : null,
+    safely(aiAsk.isAvailableFor(user), false, 'shell: could not check Ask Daybook', user.id),
+    safely(aiSummaries.countMine(user), 0, 'shell: could not count AI summaries', user.id),
   ]);
   const timersOff = timerState?.mode === 'off' || all?.timersMode === 'off';
   const showTimer = Boolean(timerState?.canUse) && (!timersOff || Boolean(timerState.running));
-  const items = navigationFor(user, badges ?? {});
+  const items = navigationFor(user, badges ?? {}, { ask, summaries: summaries > 0 });
   // Screen time (CONTRACT 11): only tracked people with activity.self, while it's turned on.
   const tracksScreenTime =
     all?.activityTrackingEnabled === true && can(user, 'activity.self') && user.tracksAttendance;

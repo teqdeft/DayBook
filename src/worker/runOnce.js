@@ -1,7 +1,9 @@
 // runOnce(job, runKey, fn): runs fn at most once per run key, across restarts and several workers.
 // The unique job_runs.run_key does the work: the first insert wins, every later one is a duplicate.
+// runAttempts(job, runKey, fn): the same with up to three tries, for jobs that only write what
+// isn't written yet (the AI summaries).
 import { logger } from '@/lib/logger';
-import { nowDate } from '@/lib/time';
+import { now, nowDate } from '@/lib/time';
 import * as repo from './repo';
 
 // Keys this process already handled, so a daily job that checks every minute doesn't try the
@@ -69,4 +71,41 @@ export async function runOnce(job, runKey, fn, { quiet = false } = {}) {
     logger.error({ err: outcome.error, job, runKey, durationMs }, 'job failed');
   }
   return outcome;
+}
+
+/** Attempt 1 uses the run key itself, so a job keeps its key; later ones add "#2", "#3". */
+function attemptKey(runKey, attempt) {
+  return attempt === 1 ? runKey : `${runKey}#${attempt}`;
+}
+
+/**
+ * runOnce with a few tries, for a job whose run only writes what isn't written yet (so running
+ * it again is safe), such as the AI summaries, where a passing Gemini failure or the run's time
+ * budget can leave people without theirs. Attempt 1 uses `runKey`; attempt n (up to `attempts`)
+ * uses `${runKey}#n` and starts once the attempt before finished at least `spacingMs` ago. Each
+ * attempt still runs once across restarts and several workers (runOnce).
+ * @param {string} job
+ * @param {string} runKey for example 'ai_pm_summary:2026-10-28'
+ * @param {() => Promise<unknown>} fn
+ * @param {{ attempts?: number, spacingMs?: number }} [options] defaults: 3 attempts, 10 minutes
+ * @returns {Promise<{ status: 'done', result: unknown } | { status: 'skipped' } |
+ *   { status: 'failed', error: unknown }>} skipped while the next attempt isn't due, an attempt is
+ *   still running, or every attempt was used
+ */
+export async function runAttempts(job, runKey, fn, { attempts = 3, spacingMs = 600_000 } = {}) {
+  const keys = Array.from({ length: attempts }, (_, index) => attemptKey(runKey, index + 1));
+  if (handledKeys.has(keys.at(-1))) return { status: 'skipped' };
+  const runs = new Map((await repo.findRunsByKeys(keys)).map((run) => [run.runKey, run]));
+  const next = keys.findIndex((key) => !runs.has(key));
+  if (next === -1) {
+    handledKeys.add(keys.at(-1));
+    return { status: 'skipped' };
+  }
+  if (next > 0) {
+    const finishedAt = runs.get(keys[next - 1]).finishedAt;
+    if (!finishedAt || now().valueOf() - new Date(finishedAt).valueOf() < spacingMs) {
+      return { status: 'skipped' };
+    }
+  }
+  return runOnce(job, keys[next], fn);
 }

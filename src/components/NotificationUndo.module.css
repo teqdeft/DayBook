@@ -1,0 +1,79 @@
+/* The Undo toast after deleting a notification: drawn like ToastProvider's toasts and stacked
+   with them in its slot (.stacked); placed in the same corner by itself (.region) only when there
+   is no ToastProvider. */
+.region {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 70;
+  pointer-events: none;
+}
+
+.stacked {
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 10px 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--navy) 14%, transparent);
+  pointer-events: auto;
+  animation: undo-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.undo {
+  flex: none;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.undo:hover {
+  background: var(--primary-soft);
+}
+
+@keyframes undo-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .region {
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+  }
+
+  .toast {
+    width: auto;
+    max-width: none;
+  }
+}

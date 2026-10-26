@@ -78,6 +78,34 @@
   }
 }
 
+/* 1200–1399 px with three buttons (Polish with AI too, CONTRACT 20): the same second row. */
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .actions:has(.buttons > :nth-child(3)) {
+    display: grid;
+    grid-template-areas:
+      'save totals'
+      'buttons buttons';
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    justify-content: end;
+    gap: 10px 20px;
+  }
+
+  .actions:has(.buttons > :nth-child(3)) .save {
+    grid-area: save;
+    justify-self: end;
+  }
+
+  .actions:has(.buttons > :nth-child(3)) .totals {
+    grid-area: totals;
+  }
+
+  .actions:has(.buttons > :nth-child(3)) .buttons {
+    grid-area: buttons;
+    justify-content: flex-end;
+  }
+}
+
 @media (max-width: 1023px) {
   .actions {
     flex-wrap: wrap;
