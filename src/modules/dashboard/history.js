@@ -114,6 +114,8 @@ function historyRow({ date, attendance, report, entries, revisions, requests, ct
     where: whereOf(attendance),
     in: attendance ? formatTime(attendance.checkInAt, ctx.tz) : '—',
     out: attendance?.checkOutAt ? formatTime(attendance.checkOutAt, ctx.tz) : '—',
+    // 'auto' counts like 'checked_out'; the page labels it "Auto check-out" (CONTRACT 19).
+    checkoutStatus: attendance?.checkoutStatus ?? null,
     presentMinutes: present,
     present: present === null ? '—' : formatDuration(present),
     loggedMinutes: submitted ? Number(report.totalMinutes) : 0,

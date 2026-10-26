@@ -153,6 +153,20 @@
   padding-bottom: 14px;
 }
 
+/* A switch with a field of its own under it (auto check-out and its "Check at" time): one row
+   between the dividers. */
+.toggleGroup {
+  display: flex;
+  flex-direction: column;
+  padding: 13.75px 0;
+  border-top: 1px solid var(--track);
+}
+
+.toggleField {
+  width: calc(50% - 8px);
+  margin-top: 14px;
+}
+
 .dialogFields {
   display: flex;
   flex-direction: column;
@@ -246,7 +260,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .channel {
+  .channel,
+  .toggleField {
     width: 100%;
   }
 }
@@ -256,7 +271,8 @@
     --card-pad: 18px 16px;
   }
 
-  .toggle {
+  .toggle,
+  .toggleGroup > label {
     align-items: flex-start;
   }
 }

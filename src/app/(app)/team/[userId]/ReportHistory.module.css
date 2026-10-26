@@ -91,6 +91,17 @@
   white-space: nowrap;
 }
 
+/* Out after an auto check-out: "6:12" and a small "Auto" tag on one line. */
+.out {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.out .auto {
+  height: 20px;
+}
+
 .table td:nth-child(6) {
   font-weight: 600;
 }

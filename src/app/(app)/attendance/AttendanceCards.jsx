@@ -1,6 +1,7 @@
 // Attendance page blocks (artboard 09): the "Everyone today" table (Present shows worked time once
-// someone took breaks, CONTRACT 15), the correction requests and the missing check-outs. Server
-// Components; row actions are small client components.
+// someone took breaks, CONTRACT 15; Out says "Auto" for an auto check-out, CONTRACT 19), the
+// correction requests and the missing check-outs. Server Components; row actions are small client
+// components.
 import Link from 'next/link';
 import Avatar from '@/components/Avatar';
 import Badge from '@/components/Badge';
@@ -15,6 +16,7 @@ import RowAction from './RowAction';
 import styles from './page.module.css';
 
 const DASH = <span className={styles.dash}>—</span>;
+const AUTO_TITLE = 'Auto check-out: no activity after office hours';
 
 /**
  * Present time; with breaks, worked time over a muted "Breaks 45m" line (like "Late 38m" under
@@ -32,6 +34,19 @@ function PresentCell({ row }) {
           {row.over}
         </Tag>
       ) : null}
+    </span>
+  );
+}
+
+/** The check-out time; under it a small "Auto" tag when the auto check-out closed the row. */
+function OutCell({ row }) {
+  if (!row.autoOut) return <span className={styles.time}>{row.checkOut}</span>;
+  return (
+    <span className={styles.out}>
+      <span className={styles.time}>{row.checkOut}</span>
+      <Tag tone="neutral" padX={6} className={styles.auto} title={AUTO_TITLE}>
+        Auto<span className="visually-hidden"> check-out</span>
+      </Tag>
     </span>
   );
 }
@@ -82,7 +97,7 @@ function columns(canCorrect) {
       width: 72.67,
       render: (row) =>
         row.checkOut ? (
-          <span className={styles.time}>{row.checkOut}</span>
+          <OutCell row={row} />
         ) : row.missing ? (
           <span className={styles.missing}>Missing</span>
         ) : (

@@ -1,5 +1,6 @@
 // The timer worker jobs (CONTRACT 15): close-open-timers ends timers forgotten overnight (end-time
-// rules and the notification); timer-reminders reminds people with no timer in required mode.
+// rules and the notification); timer-reminders reminds people with no timer whenever timers aren't
+// off, the first time after check-in with "You haven't started a timer yet" (CONTRACT 19).
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { attendance } from '@/modules/attendance';
@@ -182,7 +183,7 @@ describe('sendReminders', () => {
   });
 
   beforeEach(async () => {
-    await setSettings({ timers_mode: 'required' });
+    await setSettings({ timers_mode: 'optional' });
     vi.spyOn(attendance, 'listBreaksForDate').mockResolvedValue([
       breakRow(people.onBreak, '10:40'),
       breakRow(people.backFromBreak, '10:20', '10:50'),
@@ -195,17 +196,15 @@ describe('sendReminders', () => {
   const remindedIds = async () =>
     (await notes('timer.reminder')).map((row) => row.userId).sort((a, b) => a - b);
   const ids = (...names) => names.map((name) => people[name].id).sort((a, b) => a - b);
+  const NOT_YET = "You haven't started a timer yet";
+  const NONE = 'No timer is running';
+  const titles = async (name) =>
+    (await notes('timer.reminder', people[name])).map((row) => row.title);
 
   it('reminds people with no timer for timerReminderMinutes, at most once an hour', async () => {
     setClock('11:00');
     expect(await timers.sendReminders(TODAY)).toEqual({ reminded: 2 });
     expect(await remindedIds()).toEqual(ids('idle', 'stale'));
-    const [note] = await notes('timer.reminder', people.idle);
-    expect(note).toMatchObject({
-      title: 'No timer is running',
-      body: "Start a timer for what you're working on.",
-      link: '/today',
-    });
 
     setClock('11:30');
     expect(await timers.sendReminders(TODAY)).toEqual({ reminded: 3 });
@@ -218,15 +217,45 @@ describe('sendReminders', () => {
     expect(await notes('timer.reminder', people.running)).toHaveLength(0);
   });
 
-  it('only in required mode, with a reminder time, on working days', async () => {
+  it('says the first time after check-in that no timer has started yet', async () => {
     setClock('11:00');
-    await setSettings({ timers_mode: 'optional' });
+    await timers.sendReminders(TODAY);
+    const [first] = await notes('timer.reminder', people.idle);
+    expect(first).toMatchObject({
+      title: NOT_YET,
+      body: "You checked in at 10:00. Start a timer for what you're working on.",
+      link: '/today',
+    });
+    // Someone who has timed something today has started a timer before.
+    const [stale] = await notes('timer.reminder', people.stale);
+    expect(stale).toMatchObject({ title: NONE, body: "Start a timer for what you're working on." });
+
+    setClock('11:30');
+    await timers.sendReminders(TODAY);
+    expect(await titles('fresh')).toEqual([NOT_YET]); // checked in at 10:50
+    expect((await notes('timer.reminder', people.fresh))[0].body).toBe(
+      "You checked in at 10:50. Start a timer for what you're working on.",
+    );
+    expect(await titles('backFromBreak')).toEqual([NOT_YET]); // a break isn't a timer
+    expect(await titles('recent')).toEqual([NONE]);
+
+    setClock('12:01');
+    await timers.sendReminders(TODAY);
+    expect(await titles('idle')).toEqual([NOT_YET, NONE]);
+  });
+
+  it('in optional and required mode, with a reminder time, on working days', async () => {
+    setClock('11:00');
+    await setSettings({ timers_mode: 'off' });
     expect(await timers.sendReminders(TODAY)).toEqual({ reminded: 0 });
-    await setSettings({ timers_mode: 'required', timer_reminder_minutes: 0 });
+    await setSettings({ timers_mode: 'optional', timer_reminder_minutes: 0 });
     expect(await timers.sendReminders(TODAY)).toEqual({ reminded: 0 });
     await setSettings({ timer_reminder_minutes: 20 });
     expect(await timers.sendReminders('2026-10-03')).toEqual({ reminded: 0 }); // a Saturday
     expect(await notes('timer.reminder')).toHaveLength(0);
+    await setSettings({ timers_mode: 'required' });
+    expect(await timers.sendReminders(TODAY)).toEqual({ reminded: 2 });
+    expect(await titles('idle')).toEqual([NOT_YET]);
   });
 
   it('runs as the timer-reminders job only while the office is open', async () => {
@@ -236,10 +265,10 @@ describe('sendReminders', () => {
     expect(await timerRemindersJob.tick()).toBeNull();
     setClock('12:00', '2026-10-03');
     expect(await timerRemindersJob.tick()).toBeNull();
-    await setSettings({ timers_mode: 'optional' });
+    await setSettings({ timers_mode: 'off' });
     setClock('11:00');
     expect(await timerRemindersJob.tick()).toBeNull();
-    await setSettings({ timers_mode: 'required' });
+    await setSettings({ timers_mode: 'optional' });
     expect(await timerRemindersJob.tick()).toEqual({ reminded: 2 });
     expect(await notes('timer.reminder')).toHaveLength(2);
   });

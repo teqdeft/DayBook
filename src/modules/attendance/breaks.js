@@ -9,7 +9,7 @@ import { notifications } from '@/modules/notifications';
 import { settings } from '@/modules/settings';
 import { timers } from '@/modules/timers';
 import * as repo from './repo';
-import { breakMinutesWithin, forgottenBreakEnd, nowToSecond, todayFor } from './rules';
+import { breakMinutesWithin, forgottenBreakEnd, isOpenRow, nowToSecond, todayFor } from './rules';
 
 /**
  * @typedef {{ id: number, userId: number, attendanceId: number, workDate: string,
@@ -30,11 +30,6 @@ import { breakMinutesWithin, forgottenBreakEnd, nowToSecond, todayFor } from './
 export async function lockDay({ userId, workDate }, trx) {
   const row = await repo.findByUserAndDate(userId, workDate, trx);
   return row ? ((await repo.findById(row.id, trx, { forUpdate: true })) ?? null) : null;
-}
-
-/** True when the row is checked in and not checked out. */
-function isOpenRow(row) {
-  return Boolean(row) && !row.checkOutAt && row.checkoutStatus === 'open';
 }
 
 /** Today's row must be open: checked in and not checked out. */

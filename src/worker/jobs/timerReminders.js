@@ -1,6 +1,7 @@
 // timer-reminders: every minute while the office is open (office_start to office_end, company
-// time) on working days, only when timers are required. Reminds people who have no timer running
-// (CONTRACT 15); notifications.hasRecent keeps it to one an hour, so there is no run key.
+// time) on working days, whenever timers aren't off (optional or required, CONTRACT 19). Reminds
+// people who have no timer running (CONTRACT 15); notifications.hasRecent keeps it to one an hour,
+// so there is no run key.
 import { logger } from '@/lib/logger';
 import { timers } from '@/modules/timers';
 import { companyNow, isAtOrAfter } from '../clock';
@@ -10,7 +11,7 @@ export const timerRemindersJob = {
   cron: '0 * * * * *',
   async tick() {
     const { settings, date, minutes, workingDay } = await companyNow();
-    if (settings.timersMode !== 'required' || !workingDay) return null;
+    if (settings.timersMode === 'off' || !workingDay) return null;
     if (!isAtOrAfter(minutes, settings.officeStart) || isAtOrAfter(minutes, settings.officeEnd)) {
       return null;
     }

@@ -54,10 +54,12 @@ describe('settings.getAll', () => {
       pushEnabled: true,
       timersMode: 'optional',
       timerAwayMinutes: 25,
-      timerReminderMinutes: 20,
+      timerReminderMinutes: 25,
       breakAllowanceMinutes: 60,
       officeCheckinAnywhere: false,
       wfhRequiresApproval: true,
+      autoCheckoutEnabled: true,
+      autoCheckoutAt: '20:00',
     });
   });
 

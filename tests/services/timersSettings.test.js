@@ -40,11 +40,11 @@ const pick = (values) => ({
 });
 
 describe('timers and breaks settings', () => {
-  it('defaults to optional timers, away after 25, reminder after 20, 60 min of breaks', async () => {
+  it('defaults to optional timers, away after 25, reminder after 25, 60 min of breaks', async () => {
     expect(pick(await settings.getAll())).toEqual({
       timersMode: 'optional',
       timerAwayMinutes: 25,
-      timerReminderMinutes: 20,
+      timerReminderMinutes: 25,
       breakAllowanceMinutes: 60,
     });
   });
@@ -72,7 +72,7 @@ describe('timers and breaks settings', () => {
     expect(JSON.parse(audit.before)).toEqual({
       timersMode: 'optional',
       timerAwayMinutes: 25,
-      timerReminderMinutes: 20,
+      timerReminderMinutes: 25,
       breakAllowanceMinutes: 60,
     });
     expect(JSON.parse(audit.after)).toEqual({

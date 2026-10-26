@@ -10,6 +10,7 @@ import {
   ACTIVITY_IDLE_MINUTES,
   ACTIVITY_RETENTION_DAYS,
   BREAK_ALLOWANCE_MINUTES,
+  checkAutoCheckout,
   normalizeIp,
   officeNetworkSchema,
   settingsUpdateSchema,
@@ -30,7 +31,13 @@ const DEFAULTS = Object.freeze(
     ]),
   ),
 );
-const CLOCK_KEYS = new Set(['officeStart', 'officeEnd', 'lateAfter', 'reportReminderAt']);
+const CLOCK_KEYS = new Set([
+  'officeStart',
+  'officeEnd',
+  'lateAfter',
+  'reportReminderAt',
+  'autoCheckoutAt',
+]);
 // Whole numbers kept inside their allowed range (a hand-edited row can't turn idle detection into
 // "idle after 0 minutes").
 const BOUNDED_KEYS = {
@@ -160,12 +167,13 @@ export function setCacheTtlForTests(ms) {
  *   activityIdleMinutes: number, activityRetentionDays: number, pushEnabled: boolean,
  *   timersMode: 'off' | 'optional' | 'required', timerAwayMinutes: number,
  *   timerReminderMinutes: number, breakAllowanceMinutes: number,
- *   officeCheckinAnywhere: boolean, wfhRequiresApproval: boolean }>} (check-in rules, CONTRACT
- *   17) a fresh copy, safe to
- *   change; activityIdleMinutes is 1-120 and activityRetentionDays 7-3650 (screen time,
- *   CONTRACT 11); pushEnabled switches desktop notifications for everyone (CONTRACT 14);
- *   timers and breaks (CONTRACT 15): timerAwayMinutes 5-240, timerReminderMinutes 0-240
- *   (0 = never), breakAllowanceMinutes 0-480 (0 = no allowance)
+ *   officeCheckinAnywhere: boolean, wfhRequiresApproval: boolean, autoCheckoutEnabled: boolean,
+ *   autoCheckoutAt: string }>} a fresh copy, safe to change; activityIdleMinutes is 1-120 and
+ *   activityRetentionDays 7-3650 (screen time, CONTRACT 11); pushEnabled switches desktop
+ *   notifications for everyone (CONTRACT 14); timers and breaks (CONTRACT 15):
+ *   timerAwayMinutes 5-240, timerReminderMinutes 0-240 (0 = never), breakAllowanceMinutes 0-480
+ *   (0 = no allowance); check-in rules (CONTRACT 17); auto check-out (CONTRACT 19):
+ *   autoCheckoutAt is 'HH:mm', later than officeEnd while autoCheckoutEnabled is on
  */
 export async function getAll() {
   if (cacheTtlMs > 0 && cache.value && performance.now() - cache.loadedAt < cacheTtlMs) {
@@ -194,12 +202,15 @@ function parseInput(schema, input) {
  * @param {{ user: { id: number } | null, values: object, ip?: string | null }} input
  *   values: any subset of the keys getAll() returns
  * @returns {Promise<ReturnType<typeof getAll>>} the settings after the save
- * @throws VALIDATION_FAILED with fields, for example { timezone: 'Pick a valid time zone.' }
+ * @throws VALIDATION_FAILED with fields, for example { timezone: 'Pick a valid time zone.' } or,
+ *   while auto check-out is on, { autoCheckoutAt: 'Pick a time after office hours end.' } when
+ *   the auto check-out time isn't later than office end (CONTRACT 19)
  */
 export async function update({ user, values, ip }) {
   const parsed = parseInput(settingsUpdateSchema, values ?? {});
   const changes = await db.transaction(async (trx) => {
     const current = fromRows(await repo.listSettings(trx));
+    checkAutoCheckout(current, parsed);
     const before = {};
     const after = {};
     for (const [key, value] of Object.entries(parsed)) {

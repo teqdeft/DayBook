@@ -154,6 +154,15 @@ export function forgottenBreakEnd(item, row) {
 }
 
 /**
+ * True when the row is checked in and not checked out. A closed row is 'checked_out', 'auto'
+ * (auto check-out, CONTRACT 19), 'missing' or 'corrected'.
+ * @param {{ checkOutAt?: Date | string | null, checkoutStatus?: string } | null | undefined} row
+ */
+export function isOpenRow(row) {
+  return Boolean(row) && !row.checkOutAt && row.checkoutStatus === 'open';
+}
+
+/**
  * The "Where" status a row shows: office, wfh, unverified (office without the office network)
  * or not_checked_in.
  * @param {{ location: string, officeVerified: boolean } | null} row

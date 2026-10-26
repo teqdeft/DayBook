@@ -1,7 +1,7 @@
 // Attendance rules for the person: reading rows, today's state, check-in (guide 7.2, CONTRACT 17)
 // and the nightly missing check-out job. Check-out (7.3) lives in checkout.js, breaks in
 // breaks.js, HR's side in hr.js and corrections.js, the day view in day.js, work-from-home
-// requests in wfh.js.
+// requests in wfh.js, the auto check-out of inactive people (CONTRACT 19) in autoCheckout.js.
 import { db } from '@/lib/db';
 import { AppError } from '@/lib/errors';
 import { emit } from '@/lib/events';
@@ -206,7 +206,8 @@ async function reportUnverifiedOffice({ user, id, row, ip }, trx) {
  * Worker job (00:05): marks every check-in still open from an earlier day as missing (audited)
  * and tells HR (about an Admin: the other Admins, recipients.js) and the person. Only people the Attendance screen shows (active, tracking
  * attendance) are announced: a leaver deactivated after checking in, or someone who doesn't
- * track attendance, has nowhere to fix it, so their row is marked quietly. Does nothing when
+ * track attendance, has nowhere to fix it, so their row is marked quietly. Rows already closed
+ * ('checked_out', 'auto', 'corrected') are never touched. Does nothing when
  * auto_mark_missing_checkout is off.
  * @returns {Promise<{ marked: number }>}
  */

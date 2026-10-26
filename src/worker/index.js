@@ -1,15 +1,17 @@
 // The worker process (npm run worker): schedules the six jobs of build guide section 12, plus the
-// desktop-push job (CONTRACT 14) and the two timer jobs (CONTRACT 15), with node-cron. Ticks run
-// in UTC; each job decides in company time. Stop it with Ctrl-C / SIGTERM (or the 'shutdown'
-// message process managers send on Windows): it stops scheduling, waits for running jobs, then
-// closes the database pool. A job whose previous tick is still running skips the new tick (the
-// overlap guard in tick()).
+// desktop-push job (CONTRACT 14), the two timer jobs (CONTRACT 15) and the two auto check-out jobs
+// (CONTRACT 19), with node-cron. Ticks run in UTC; each job decides in company time. Stop it with
+// Ctrl-C / SIGTERM (or the 'shutdown' message process managers send on Windows): it stops
+// scheduling, waits for running jobs, then closes the database pool. A job whose previous tick is
+// still running skips the new tick (the overlap guard in tick()).
 import { env } from '@/lib/env';
 import cron from 'node-cron';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { push } from '@/modules/push';
 import { slack } from '@/modules/slack';
+import { autoCheckoutJob } from './jobs/autoCheckout';
+import { checkoutReminderJob } from './jobs/checkoutReminder';
 import { cleanupJob } from './jobs/cleanup';
 import { closeOpenTimersJob } from './jobs/closeOpenTimers';
 import { healthLogJob } from './jobs/healthLog';
@@ -24,6 +26,8 @@ const JOBS = [
   slackOutboxJob,
   pushNotificationsJob,
   reportReminderJob,
+  checkoutReminderJob,
+  autoCheckoutJob,
   markMissingCheckoutsJob,
   closeOpenTimersJob,
   timerRemindersJob,

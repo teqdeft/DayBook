@@ -8,78 +8,10 @@ import Button from '@/components/Button';
 import { useToast } from '@/components/ToastProvider';
 import { useUnsavedChangesWarning } from '@/components/useUnsavedChangesWarning';
 import { api, ApiError } from '@/lib/apiClient';
-import { NUMBERS } from './numberFields';
-import { clockText, parseClockText } from './timeText';
+import { changedKeys, KEYS, toForm, toValues } from './settingsValues';
 import styles from './SettingsForm.module.css';
 
 export const FORM_ID = 'settings-form';
-
-const CLOCKS = {
-  officeStart: 'the office start time',
-  officeEnd: 'the office end time',
-  reportReminderAt: 'the report reminder time',
-  lateAfter: 'the late mark time',
-};
-const KEYS = [
-  'companyName',
-  'timezone',
-  'workingDays',
-  'officeStart',
-  'officeEnd',
-  'reportReminderAt',
-  'lateAfter',
-  'reportLock',
-  'officeCheckinAnywhere',
-  'allowUnverifiedOffice',
-  'wfhRequiresApproval',
-  'autoMarkMissingCheckout',
-  'slackReportChannelId',
-  'slackReportChannelName',
-  'slackPostReports',
-  'slackRemind',
-  'slackUrgentNotify',
-  'slackRequestsNotify',
-  'activityTrackingEnabled',
-  'activityIdleMinutes',
-  'activityRetentionDays',
-  'timersMode',
-  'timerAwayMinutes',
-  'timerReminderMinutes',
-  'breakAllowanceMinutes',
-  'pushEnabled',
-];
-
-/** Saved settings -> what the fields show (clocks as "9:30 AM"). */
-function toForm(saved) {
-  const form = {};
-  for (const key of KEYS) form[key] = key in CLOCKS ? clockText(saved[key]) : saved[key];
-  for (const key of Object.keys(NUMBERS)) form[key] = String(saved[key] ?? '');
-  form.workingDays = [...(saved.workingDays ?? [])];
-  return form;
-}
-
-/** Field text -> setting values, or the errors to show under the fields. */
-function toValues(form) {
-  const values = { ...form, companyName: String(form.companyName ?? '').trim() };
-  const errors = {};
-  for (const [key, label] of Object.entries(CLOCKS)) {
-    const clock = parseClockText(form[key]);
-    if (!clock) errors[key] = `Enter ${label} like 9:30 AM.`;
-    else values[key] = clock;
-  }
-  for (const [key, { min, max, message }] of Object.entries(NUMBERS)) {
-    const text = String(form[key] ?? '').trim();
-    const number = Number(text);
-    if (!/^\d+$/.test(text) || number < min || number > max) errors[key] = message;
-    else values[key] = number;
-  }
-  if (!values.companyName) errors.companyName = 'Enter the company name.';
-  if (values.workingDays.length === 0) errors.workingDays = 'Pick at least one working day.';
-  if (!errors.officeStart && !errors.officeEnd && values.officeEnd <= values.officeStart) {
-    errors.officeEnd = 'The office must close after it opens.';
-  }
-  return { values, errors };
-}
 
 /** Puts focus in the first field (in page order) that has an error. */
 function focusFirstError(errors) {
@@ -87,17 +19,6 @@ function focusFirstError(errors) {
     .map((name) => document.getElementById(`settings-${name}`))
     .find(Boolean);
   field?.focus();
-}
-
-function changedKeys(values, saved) {
-  const body = {};
-  for (const key of KEYS) {
-    const value = key === 'workingDays' ? [...values[key]].sort((a, b) => a - b) : values[key];
-    if (JSON.stringify(value ?? null) !== JSON.stringify(saved[key] ?? null)) body[key] = value;
-  }
-  // The channel name travels with its id.
-  if ('slackReportChannelId' in body) body.slackReportChannelName = values.slackReportChannelName;
-  return body;
 }
 
 const SettingsContext = createContext(null);
@@ -136,7 +57,7 @@ export default function SettingsProvider({ initial, children }) {
 
   const save = useCallback(async () => {
     if (saving) return;
-    const { values, errors: local } = toValues(form);
+    const { values, errors: local } = toValues(form, saved);
     if (Object.keys(local).length > 0) {
       setErrors(local);
       focusFirstError(local);

@@ -1,7 +1,7 @@
 'use client';
 // Project timers and breaks (CONTRACT 15): whether people time their projects, when a timer asks
-// about away time, the reminder in required mode and the daily break allowance. Saved with
-// "Save changes".
+// about away time, the reminder for people checked in without a running timer (whenever timers
+// aren't off, CONTRACT 19) and the daily break allowance. Saved with "Save changes".
 import Select from '@/components/Select';
 import FormField from './FormField';
 import NumberField from './NumberField';
@@ -38,7 +38,7 @@ export default function TimersSection() {
         <NumberField
           name="timerReminderMinutes"
           label="Remind when no timer runs after (minutes)"
-          help="Only when timers are required. 0 turns it off."
+          help="Reminds people who are checked in without a running timer. 0 turns it off."
           maxLength={3}
         />
         <NumberField

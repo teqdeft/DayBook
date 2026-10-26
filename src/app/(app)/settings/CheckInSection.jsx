@@ -1,7 +1,8 @@
 'use client';
 // Check-in settings: the office networks (added and removed right away through their own API)
 // and the check-in switches (saved with "Save changes"), including office check-in from any
-// network and HR approval for working from home (CONTRACT 17).
+// network and HR approval for working from home (CONTRACT 17) and auto check-out when inactive
+// (CONTRACT 19).
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
@@ -11,6 +12,7 @@ import Input from '@/components/Input';
 import Toggle from '@/components/Toggle';
 import { useToast } from '@/components/ToastProvider';
 import { api, ApiError } from '@/lib/apiClient';
+import AutoCheckoutSetting from './AutoCheckoutSetting';
 import FormField from './FormField';
 import Section from './Section';
 import { useSettingsForm } from './SettingsProvider';
@@ -252,6 +254,7 @@ export default function CheckInSection({ networks, currentIp }) {
           onChange={(checked) => setField('wfhRequiresApproval', checked)}
           className={styles.toggle}
         />
+        <AutoCheckoutSetting />
         <Toggle
           label="Mark missing check-outs at midnight"
           help="HR can fix them from Attendance."

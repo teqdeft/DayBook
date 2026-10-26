@@ -28,11 +28,14 @@ export const DEFAULT_SETTINGS = {
   // Project timers and breaks (company request after the build guide)
   timers_mode: 'optional', // off | optional | required
   timer_away_minutes: 25, // idle or locked this long while a timer runs: ask "keep or remove?"
-  timer_reminder_minutes: 20, // required mode: remind after this long with no timer (0 = never)
+  timer_reminder_minutes: 25, // remind after this long checked in with no timer (0 = never)
   break_allowance_minutes: 60, // breaks above this in a day are flagged (0 = no allowance)
   // Check-in rules (company request after the build guide)
   office_checkin_anywhere: false, // true: Office check-in works from any network
   wfh_requires_approval: true, // true: WFH only on days HR approved (HR and Admins excepted)
+  // Auto check-out (company request after the build guide, CONTRACT 19)
+  auto_checkout_enabled: true, // inactive after office end until this time: checked out
+  auto_checkout_at: '20:00',
 };
 
 export async function seed(knex) {

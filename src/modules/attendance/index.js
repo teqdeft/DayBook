@@ -1,6 +1,7 @@
-// The attendance module: check-in and check-out, the day view, HR edits, corrections and
-// work-from-home requests.
+// The attendance module: check-in and check-out, the day view, HR edits, corrections,
+// work-from-home requests and the auto check-out of inactive people (CONTRACT 19).
 // Other code imports only this: import { attendance } from '@/modules/attendance'.
+import * as autoCheckout from './autoCheckout';
 import * as breaks from './breaks';
 import * as corrections from './corrections';
 import * as day from './day';
@@ -20,6 +21,8 @@ export const attendance = {
   listBreaks: breaks.listBreaks,
   listBreaksForDate: breaks.listBreaksForDate,
   closeForgottenBreaks: breaks.closeForgottenBreaks,
+  sendCheckoutReminders: autoCheckout.sendCheckoutReminders,
+  autoCheckOut: autoCheckout.autoCheckOut,
   listDay: day.listDay,
   listForDay: day.listForDay,
   filterDay: day.filterDay,

@@ -125,6 +125,18 @@ export function lastEndedByUser(workDate, userIds, trx = db) {
     .max({ lastEndedAt: 'endedAt' });
 }
 
+/**
+ * Whether one of the person's entries of a work date is still running, and when the last finished
+ * one ended (null without any).
+ * @returns {Promise<{ running: boolean, lastEndedAt: Date | null }>}
+ */
+export async function lastRunOn({ userId, workDate }, trx = db) {
+  const entries = () => trx('timeEntries').where({ userId, workDate });
+  if (await entries().whereNull('endedAt').first('id')) return { running: true, lastEndedAt: null };
+  const last = await entries().whereNotNull('endedAt').orderBy('endedAt', 'desc').first('endedAt');
+  return { running: false, lastEndedAt: last?.endedAt ?? null };
+}
+
 // ---------- locks (bare rows, inside the caller's transaction) ----------
 
 /**

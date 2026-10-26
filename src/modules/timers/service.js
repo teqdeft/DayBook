@@ -4,7 +4,7 @@
 // - running.js: start, stop, stopRunning, stopAllRunning, resumeAfterBreak
 // - entries.js: addEntry, updateEntry, removeEntry (changes by hand, audited)
 // - away.js: resolveAway (away time while a timer runs)
-// - worker.js: closeForgotten, sendReminders
+// - worker.js: closeForgotten, sendReminders, lastRanAt (auto check-out, CONTRACT 19)
 // - forgotten.js: the midnight rule for a timer left running from an earlier day (the worker, and
 //   any start or stop that finds one first)
 export { resolveAway } from './away';
@@ -12,4 +12,4 @@ export { addEntry, removeEntry, updateEntry } from './entries';
 export { resumeAfterBreak, start, stop, stopAllRunning, stopRunning } from './running';
 export { canUse } from './shared';
 export { getDaySummary, getState } from './state';
-export { closeForgotten, sendReminders } from './worker';
+export { closeForgotten, lastRanAt, sendReminders } from './worker';

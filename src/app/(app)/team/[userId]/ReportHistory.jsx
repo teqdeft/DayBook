@@ -1,13 +1,16 @@
 'use client';
 // "Report history" on the Employee detailed view: one row per day, newest first. Opening a day
 // shows its tasks and its edit history (every submit, who made it, when and why). The latest few
-// days show first; "Show N more days" reveals the rest of the range.
+// days show first; "Show N more days" reveals the rest of the range. A day the auto check-out
+// closed says "Auto" next to its Out time (CONTRACT 19).
 import { Fragment, useState } from 'react';
 import ProjectLabel from '@/components/ProjectLabel';
 import StatusCell from '@/components/StatusCell';
+import Tag from '@/components/Tag';
 import styles from './ReportHistory.module.css';
 
 const FIRST_DAYS = 5;
+const AUTO_TITLE = 'Auto check-out: no activity after office hours';
 
 const COLUMNS = [
   { key: 'date', label: 'Date', width: 184 },
@@ -22,6 +25,7 @@ const COLUMNS = [
 
 /**
  * @param {{ rows: object[], emptyText?: string }} props rows from dashboard.getEmployeeDetail().history
+ *   (`checkoutStatus` is the day's attendance checkout status, 'auto' after an auto check-out)
  */
 export default function ReportHistory({ rows, emptyText = 'No working days in this range yet.' }) {
   const [open, setOpen] = useState(() => new Set());
@@ -95,7 +99,16 @@ export default function ReportHistory({ rows, emptyText = 'No working days in th
                     {row.in}
                   </td>
                   <td data-label="Out" className={styles.num}>
-                    {row.out}
+                    {row.checkoutStatus === 'auto' ? (
+                      <span className={styles.out}>
+                        {row.out}
+                        <Tag tone="neutral" padX={6} className={styles.auto} title={AUTO_TITLE}>
+                          Auto<span className="visually-hidden"> check-out</span>
+                        </Tag>
+                      </span>
+                    ) : (
+                      row.out
+                    )}
                   </td>
                   <td data-label="Present" className={styles.num}>
                     {row.present}
