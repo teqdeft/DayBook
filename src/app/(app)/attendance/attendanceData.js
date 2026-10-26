@@ -1,7 +1,8 @@
 // Loads and shapes the Attendance page (artboard 09). Server only (called from page.js). Every read
 // passes the viewer: HR and PMs never see an Admin's attendance (company rule). Durations read as
 // hours and minutes ("Late 1h 37m"), never a bare minute count past an hour. HR and Admins also
-// get the work-from-home requests card (CONTRACT 17, wfhCard.js).
+// get the work-from-home requests card (CONTRACT 17, wfhCard.js). Rows the auto check-out closed
+// carry `autoOut` (CONTRACT 19).
 import { can } from '@/lib/permissions';
 import {
   addDays,
@@ -75,6 +76,8 @@ function tableRow(item, ctx) {
     checkIn: row ? formatTime(row.checkInAt, ctx.tz) : null,
     late: row?.lateMinutes > 0 ? `Late ${formatDuration(row.lateMinutes)}` : null,
     checkOut: row?.checkOutAt ? formatTime(row.checkOutAt, ctx.tz) : null,
+    // Checked out by the auto check-out (no activity after office hours, CONTRACT 19).
+    autoOut: Boolean(row?.checkOutAt) && row.checkoutStatus === 'auto',
     missing: row?.checkoutStatus === 'missing',
     ...presentOf(item),
     note: row?.note ?? null,

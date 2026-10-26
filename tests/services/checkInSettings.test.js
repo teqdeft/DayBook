@@ -1,6 +1,6 @@
 // Check-in rules (CONTRACT 17, Settings -> Check-in): officeCheckinAnywhere and
 // wfhRequiresApproval — defaults, saving with an audit row, on/off only, and hand-edited or
-// missing rows.
+// missing rows. Also the auto check-out time against office end (CONTRACT 19) when either moves.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { db, parseJson } from '@/lib/db';
 import { setNowForTests } from '@/lib/time';
@@ -111,5 +111,50 @@ describe('check-in rules', () => {
       { key: 'office_checkin_anywhere', value: 'false' },
       { key: 'wfh_requires_approval', value: 'true' },
     ]);
+  });
+});
+
+describe('the auto check-out time against office end', () => {
+  const MESSAGE = 'Pick a time after office hours end.';
+  const clocks = async () => {
+    const all = await settings.getAll();
+    return [all.officeEnd, all.autoCheckoutAt, all.autoCheckoutEnabled];
+  };
+
+  it('refuses moving office end to or past it while auto check-out is on', async () => {
+    for (const officeEnd of ['20:00', '20:30']) {
+      const error = await expectAppError(
+        settings.update({ user: admin, values: { officeEnd } }),
+        'VALIDATION_FAILED',
+      );
+      expect(error.fields).toEqual({ autoCheckoutAt: MESSAGE });
+    }
+    expect(await clocks()).toEqual(['18:30', '20:00', true]);
+  });
+
+  it('checks the values after the save, so both can move together', async () => {
+    await settings.update({ user: admin, values: { officeEnd: '20:30', autoCheckoutAt: '22:00' } });
+    expect(await clocks()).toEqual(['20:30', '22:00', true]);
+    await settings.update({ user: admin, values: { autoCheckoutAt: '20:00', officeEnd: '18:30' } });
+    expect(await clocks()).toEqual(['18:30', '20:00', true]);
+  });
+
+  it('refuses turning it back on while its time is not after office end', async () => {
+    await settings.update({
+      user: admin,
+      values: { autoCheckoutEnabled: false, officeEnd: '20:00' },
+    });
+    const error = await expectAppError(
+      settings.update({ user: admin, values: { autoCheckoutEnabled: true } }),
+      'VALIDATION_FAILED',
+    );
+    expect(error.fields).toEqual({ autoCheckoutAt: MESSAGE });
+    // An unrelated save doesn't trip over the stored pair.
+    await settings.update({ user: admin, values: { companyName: 'Acme Studio' } });
+    await settings.update({
+      user: admin,
+      values: { autoCheckoutEnabled: true, officeEnd: '18:30' },
+    });
+    expect(await clocks()).toEqual(['18:30', '20:00', true]);
   });
 });

@@ -1,8 +1,9 @@
-// The timer side of the worker (CONTRACT 15): closing timers forgotten overnight and reminding
-// people in required mode who have no timer running.
+// The timer side of the worker (CONTRACT 15): closing timers forgotten overnight, reminding
+// people who have no timer running (whenever timers aren't off, CONTRACT 19) and telling auto
+// check-out when someone's timer last ran.
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import { dayjs, isWorkingDay, now } from '@/lib/time';
+import { dayjs, formatTime, isWorkingDay, now } from '@/lib/time';
 import { attendance } from '@/modules/attendance';
 import { notifications } from '@/modules/notifications';
 import { settings } from '@/modules/settings';
@@ -64,7 +65,11 @@ function breaksByUser(breaks) {
   return { onBreak, lastEnd };
 }
 
-/** The people to remind: checked in, timer users, no timer, no break, idle long enough. */
+/**
+ * The people to remind: checked in, timer users, no timer, no break, idle long enough.
+ * @returns {Promise<Array<{ row: object, timedToday: boolean }>>} timedToday: the person has a
+ *   finished entry today (so they have started a timer before)
+ */
 async function dueForReminder(today, minutes) {
   const rows = (await attendance.listForDate(today)).filter(isOpenRow);
   const ids = rows.map((row) => Number(row.userId));
@@ -80,45 +85,74 @@ async function dueForReminder(today, minutes) {
   const { onBreak, lastEnd: breakEnd } = breaksByUser(breaks);
   const entryEnd = new Map(lastEnded.map((row) => [Number(row.userId), row.lastEndedAt]));
   const threshold = now().subtract(minutes, 'minute');
-  return rows.filter((row) => {
-    const userId = Number(row.userId);
-    if (!allowed.has(userId) || busy.has(userId) || onBreak.has(userId)) return false;
-    const since = latest([row.checkInAt, entryEnd.get(userId), breakEnd.get(userId)]);
-    return Boolean(since) && !later(since, threshold);
-  });
+  return rows
+    .filter((row) => {
+      const userId = Number(row.userId);
+      if (!allowed.has(userId) || busy.has(userId) || onBreak.has(userId)) return false;
+      const since = latest([row.checkInAt, entryEnd.get(userId), breakEnd.get(userId)]);
+      return Boolean(since) && !later(since, threshold);
+    })
+    .map((row) => ({ row, timedToday: entryEnd.has(Number(row.userId)) }));
 }
 
 /**
- * Worker (timer-reminders, every minute while the office is open in required mode): reminds each
- * checked-in timer user who is not on a break and has had no timer running for
- * timerReminderMinutes (since their last entry ended, their last break ended or they checked in),
- * at most once an hour ("No timer is running"). Re-checks the mode; the job checks the clock.
+ * The reminder's words (CONTRACT 19): the first one after check-in, while no timer has run today,
+ * says so with the check-in time; later ones say "No timer is running".
+ */
+function reminderText({ first, checkInAt, tz }) {
+  const body = "Start a timer for what you're working on.";
+  if (!first) return { title: 'No timer is running', body };
+  return {
+    title: "You haven't started a timer yet",
+    body: `You checked in at ${formatTime(checkInAt, tz)}. ${body}`,
+  };
+}
+
+/**
+ * Worker (timer-reminders, every minute while the office is open on working days, whenever timers
+ * aren't off): reminds each checked-in timer user who is not on a break and has had no timer
+ * running for timerReminderMinutes (since their last entry ended, their last break ended or they
+ * checked in), at most once an hour. The first reminder after check-in, while they haven't timed
+ * anything today, is "You haven't started a timer yet" ("You checked in at 9:32. ..."); later ones
+ * are "No timer is running". Re-checks the mode; the job checks the clock.
  * @param {string} today 'YYYY-MM-DD' (company date)
  * @returns {Promise<{ reminded: number }>}
  */
 export async function sendReminders(today) {
   const current = await settings.getAll();
   const minutes = Number(current.timerReminderMinutes) || 0;
-  if (current.timersMode !== 'required' || minutes <= 0) return { reminded: 0 };
+  if (current.timersMode === 'off' || minutes <= 0) return { reminded: 0 };
   if (!isWorkingDay(today, current.workingDays)) return { reminded: 0 };
   const since = now().subtract(REMINDER_EVERY_MINUTES, 'minute').toDate();
   let reminded = 0;
-  for (const row of await dueForReminder(today, minutes)) {
+  for (const { row, timedToday } of await dueForReminder(today, minutes)) {
     const userId = Number(row.userId);
     if (await notifications.hasRecent({ userId, type: REMINDER_TYPE, since })) continue;
+    const first =
+      !timedToday &&
+      !(await notifications.hasRecent({ userId, type: REMINDER_TYPE, since: row.checkInAt }));
+    const text = reminderText({ first, checkInAt: row.checkInAt, tz: current.timezone });
     await db.transaction((trx) =>
       notifications.notify(
-        {
-          userIds: [userId],
-          type: REMINDER_TYPE,
-          title: 'No timer is running',
-          body: "Start a timer for what you're working on.",
-          link: '/today',
-        },
+        { userIds: [userId], type: REMINDER_TYPE, ...text, link: '/today' },
         trx,
       ),
     );
     reminded += 1;
   }
   return { reminded };
+}
+
+/**
+ * When the person's project timer last ran on a work date (one of auto check-out's signs of work,
+ * CONTRACT 19): `at` while one of that date's entries is still running, else when the last one
+ * ended; null without entries. One left running from an earlier work date doesn't count (the
+ * midnight rule ends it).
+ * @param {{ userId: number, workDate: string, at: Date }} input at: now, as the caller sees it
+ * @param {import('knex').Knex} [trx] the caller's transaction
+ * @returns {Promise<Date | null>}
+ */
+export async function lastRanAt({ userId, workDate, at }, trx) {
+  const { running, lastEndedAt } = await repo.lastRunOn({ userId, workDate }, trx);
+  return running ? at : lastEndedAt;
 }

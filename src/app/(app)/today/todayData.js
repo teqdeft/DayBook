@@ -27,6 +27,7 @@ import { projectTasks } from '@/modules/projectTasks';
 import { reports } from '@/modules/reports';
 import { settings } from '@/modules/settings';
 import { shortDuration } from './timerData';
+import { statusPill, stillWorkingNote } from './todayStatus';
 import { loadTimerParts, timerCard } from './todayTimers';
 import { loadWfh } from './todayWfh';
 
@@ -37,27 +38,6 @@ const MAX_TASKS = 4;
 const STATUS_ORDER = { in_progress: 0, blocked: 1, done: 2 };
 // The "Priority tasks" card shows this many; "Show more" opens the rest.
 const MAX_PRIORITY_TASKS = 6;
-
-/**
- * The status pill next to "Check out": "In office since 9:32", WFH, unverified, on a break
- * ("On break since 1:10", CONTRACT 15) or checked out.
- */
-function statusPill(row, tz, openBreak) {
-  if (!row) return null;
-  const since = formatTime(row.checkInAt, tz);
-  if (row.checkOutAt) {
-    return { tone: 'neutral', text: `Checked out at ${formatTime(row.checkOutAt, tz)}` };
-  }
-  if (row.checkoutStatus !== 'open') return { tone: 'neutral', text: 'Checked out' };
-  if (openBreak) {
-    return { tone: 'marigold', text: `On break since ${formatTime(openBreak.startedAt, tz)}` };
-  }
-  if (row.location === 'wfh') return { tone: 'violet', text: `Working from home since ${since}` };
-  if (!row.officeVerified) {
-    return { tone: 'marigold', text: `In office since ${since}, unverified` };
-  }
-  return { tone: 'green', text: `In office since ${since}` };
-}
 
 /**
  * Day bar labels for phones, where the bar is too short for all four: the start, the moving
@@ -274,6 +254,8 @@ export async function loadToday({ user, ip }) {
     worked: workedTile(row, mine),
     onBreak: Boolean(row && mine.openBreak),
     pill: statusPill(row, tz, mine.openBreak),
+    // After office hours, while still checked in (auto check-out, CONTRACT 19).
+    stillWorking: stillWorkingNote({ row, settings: current, tz }),
     phoneLabels: phoneLabels({ row, current, tz }),
     reportStatus: dayStatus.status,
     locksText: `${formatTimeAmPm(locksAt, tz)} ${lockDay}`,

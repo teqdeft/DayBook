@@ -543,7 +543,7 @@ to the nearest 15 minutes, task lines from the notes); the person reviews and su
 **Breaks**: Start break / End break on Today. A break pauses the running timer, and **worked time**
 = present time minus breaks; the gap warning compares worked time with logged hours. Settings:
 `timersMode` off | optional | required (default optional), `timerAwayMinutes` (25),
-`timerReminderMinutes` (20, 0 = never), `breakAllowanceMinutes` (60, 0 = no allowance).
+`timerReminderMinutes` (25, 0 = never), `breakAllowanceMinutes` (60, 0 = no allowance).
 
 **Who.** Timers and breaks are for people who check in and write reports: active, tracked
 (`tracksAttendance`), with `attendance.self` and `report.self` (employee, HR, tracked Admin; never
@@ -632,7 +632,7 @@ max(0, presentMinutes − breakMinutesWithin)`. A missing check-out counts 0. HR
   active. Check your report before it locks.", link `/report?date=YYYY-MM-DD`). Breaks still open
   from an earlier date end at the row's check-out if it has one, else at their own start
   (`midnight`).
-- **Reminder** (worker `timer-reminders`, every minute, required mode only, a reminder time above
+- **Reminder** (worker `timer-reminders`, every minute, whenever timers are not off (CONTRACT 19), a reminder time above
   zero, working day, between `officeStart` and `officeEnd`): a tracked person with an open row, not
   on a break, no running timer, whose last entry ended (or who checked in) at least
   `timerReminderMinutes` ago and who had no `timer.reminder` in the last 60 minutes gets one ("No
@@ -872,3 +872,62 @@ shows only 2h". The daily report now counts **exact minutes**; the 0.25-hour ste
   (`ReportProvider` `change(updater, clear, { quiet: true })` updates the page without autosave).
 - The Slack text and preview say "Hours: 2h 15m" (`formatSlackHours`).
 - `dashboard.getNavBadges` corrections count includes pending WFH requests (CONTRACT 17).
+
+## 19. Auto check-out when inactive, and "no timer yet" reminders in every mode (added after the build guide)
+
+Company requests: people who forget to check out disrupt the reports, but someone genuinely
+working late must never be checked out; and people who check in but don't start a project timer
+within about 25 minutes should be reminded.
+
+### Auto check-out when inactive
+
+Settings (Settings → Check-in): `autoCheckoutEnabled` (default true) and `autoCheckoutAt` ('HH:mm',
+default '20:00', must be later than `officeEnd`). The check window is `[officeEnd, autoCheckoutAt]`
+in company time (6:30 PM – 8:00 PM by default).
+
+- **Reminder at `officeEnd`** (worker `checkout-reminder`, once per date via `runOnce` key
+  `checkout_reminder:<date>`): everyone with an open row today (checked in, not checked out) gets
+  `attendance.checkout_reminder` — "You're still checked in", body "Check out if you're done for
+  the day. If you're still working, carry on.", link `/today`. Skipped when `autoCheckoutEnabled`
+  is off.
+- **Check at `autoCheckoutAt`** (worker `auto-checkout`, once per date, key
+  `auto_checkout:<date>`; does nothing while `autoCheckoutEnabled` or `activityTrackingEnabled` is
+  off): for each open row of today checked in before `officeEnd` (people whose own shift ends
+  after `officeEnd` are skipped), the person is **working late** — and left alone — when there is
+  a sign of work after `officeEnd` and within the 60 minutes before the check. Signs of work:
+  active screen time (any source), window-mode idle (no Idle Detection), a timer (now while it
+  runs) and break starts and ends. Otherwise they are checked out automatically:
+  - check-out time = their latest sign of work if it is after check-in, else `officeEnd`;
+  - `checkout_status = 'auto'` (migration 011), `check_out_ip` null; an open break ends there
+    (`end_reason 'checkout'`) and a running timer stops there (`stop_reason 'checkout'`), in the
+    same transaction and lock order as `checkOut` (CONTRACT 15); the check time is read after the
+    row is locked, so a heartbeat or timer start during the run counts;
+  - the person is notified (`attendance.auto_checkout`): "You were checked out at 6:12 PM", body
+    "There was no activity on your computer after 6:30 PM. If you were working, request a
+    correction." (the later of office end and the check-out time), link `/today`; audit
+    `attendance.auto_checkout` (actor null);
+  - rows checked in after `officeEnd` are left for the midnight rule.
+- APIs: `attendance.sendCheckoutReminders(today)` → `{ reminded }`,
+  `attendance.autoCheckOut(today)` → `{ checkedOut, kept }`, `timers.lastRanAt({ userId,
+workDate, at }, trx)` → Date | null; Employee detail history rows carry `checkoutStatus`.
+- `'auto'` behaves like `'checked_out'` everywhere (present/worked time, reports, Team board), but
+  is shown as "Auto check-out" next to the Out time on Attendance, Employee detail history and
+  the person's Today ("Checked out automatically at 6:12"). A check-out correction or HR edit of
+  an auto row sets `'corrected'`, as for any row. The midnight `markMissingCheckouts` never
+  touches `'auto'` rows. HR's Attendance filters gain nothing new; the Excel "Check-out status"
+  column says "Auto".
+- The person's own Today, when open after `officeEnd`, shows a gentle line "Still working? You'll
+  stay checked in as long as you're active." under the top bar (only while the row is open,
+  after `officeEnd` and `autoCheckoutEnabled` is on).
+- CONTRACT 16 applies: notifications go to the person only.
+
+### Timer reminder in optional and required mode
+
+`timerReminderMinutes` (default now 25 — migration 011 moves a database still on the old 20 to 25; 0 = never) applies whenever timers aren't **off** (it was
+required mode only). The rule is otherwise unchanged (CONTRACT 15 "Reminder"): a tracked person
+with an open row, not on a break, no running timer, whose check-in (or last entry's end, or last
+break's end) was at least that many minutes ago, during office hours on a working day, at most
+once an hour. The first reminder after check-in says "You haven't started a timer yet", body
+"You checked in at 9:32. Start a timer for what you're working on.", later ones keep "No timer
+is running". Settings help text becomes "Reminds people who are checked in without a running
+timer. 0 turns it off."

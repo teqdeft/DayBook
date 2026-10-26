@@ -3,8 +3,11 @@
 // "Your day" card is the check-in card. CONTRACT 15 adds Start break / End break beside Check out
 // and the Working on card (project timers) under Your day while timers aren't off. CONTRACT 17:
 // Office from any network and HR-approved work from home on the check-in card, and the "Ask HR"
-// line under the correction links.
+// line under the correction links. CONTRACT 19: "Checked out automatically at 6:12" after an auto
+// check-out, and a "Still working?" line under the top bar after office hours.
 import { headers } from 'next/headers';
+import { Info } from 'lucide-react';
+import Card from '@/components/Card';
 import Tag from '@/components/Tag';
 import TopBar from '@/components/TopBar';
 import { clientIp } from '@/lib/route';
@@ -75,6 +78,13 @@ export default async function TodayPage() {
         actions={<TopActions data={data} tracksAttendance={Boolean(user.tracksAttendance)} />}
         bell
       />
+
+      {data.stillWorking ? (
+        <Card padding="compact" className={styles.notice} role="status">
+          <Info size={18} strokeWidth={1.8} aria-hidden="true" className={styles.noticeIcon} />
+          <p className={styles.noticeText}>{data.stillWorking}</p>
+        </Card>
+      ) : null}
 
       <section className={styles.rowDay} aria-label="Your day">
         {row ? (

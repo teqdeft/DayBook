@@ -1,13 +1,15 @@
 // The worker for hosts that can't keep a process running (shared cPanel hosting): run it from a
 // cron job every minute with `npm run worker:cron`. Each run does one pass of the minute jobs
-// (reminders, missing check-outs, forgotten timers, timer reminders, cleanup, Slack user sync,
-// health log — their run keys, or for timer reminders the notifications themselves, make them run
-// once per day, hour or 5 minutes), then sends Slack messages and desktop pushes every 10
-// seconds for about 50 seconds, and exits. A MySQL named lock keeps two runs from overlapping.
+// (reminders, the check-out reminder and auto check-out, missing check-outs, forgotten timers,
+// timer reminders, cleanup, Slack user sync, health log — their run keys, or for timer reminders
+// the notifications themselves, make them run once per day, hour or 5 minutes), then sends Slack
+// messages and desktop pushes every 10 seconds for about 50 seconds, and exits. A MySQL named lock keeps two runs from overlapping.
 // On a server that can keep a process running, use `npm run worker` (src/worker/index.js) instead.
 import { env } from '@/lib/env';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { autoCheckoutJob } from './jobs/autoCheckout';
+import { checkoutReminderJob } from './jobs/checkoutReminder';
 import { cleanupJob } from './jobs/cleanup';
 import { closeOpenTimersJob } from './jobs/closeOpenTimers';
 import { healthLogJob } from './jobs/healthLog';
@@ -25,6 +27,8 @@ const OVERRUN_SECONDS = 30;
 const EXIT_GRACE_MS = 2_000;
 const MINUTE_JOBS = [
   reportReminderJob,
+  checkoutReminderJob,
+  autoCheckoutJob,
   markMissingCheckoutsJob,
   closeOpenTimersJob,
   timerRemindersJob,

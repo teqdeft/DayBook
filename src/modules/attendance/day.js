@@ -218,6 +218,7 @@ const CHECKOUT_WORDS = {
   checked_out: 'Checked out',
   missing: 'Missing',
   corrected: 'Corrected',
+  auto: 'Auto', // auto check-out when inactive (CONTRACT 19)
 };
 
 /**

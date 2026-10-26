@@ -5,41 +5,16 @@
 import DayToggleGroup from '@/components/DayToggleGroup';
 import Input from '@/components/Input';
 import Select from '@/components/Select';
-import FormField from './FormField';
 import CheckInSection from './CheckInSection';
+import ClockField from './ClockField';
+import FormField from './FormField';
 import NotificationsSection from './NotificationsSection';
 import ScreenTimeSection from './ScreenTimeSection';
 import Section from './Section';
 import SlackSection from './SlackSection';
 import TimersSection from './TimersSection';
 import { FORM_ID, useSettingsForm } from './SettingsProvider';
-import { clockText, parseClockText } from './timeText';
 import styles from './SettingsForm.module.css';
-
-/** A time field that shows "9:30 AM" and tidies what was typed ("17:30" -> "5:30 PM") on blur. */
-function ClockField({ name, label }) {
-  const { form, errors, setField } = useSettingsForm();
-  const id = `settings-${name}`;
-  return (
-    <FormField label={label} htmlFor={id} error={errors[name]}>
-      <Input
-        id={id}
-        name={name}
-        value={form[name]}
-        error={Boolean(errors[name])}
-        inputMode="text"
-        autoComplete="off"
-        maxLength={12}
-        placeholder="9:30 AM"
-        onChange={(event) => setField(name, event.target.value)}
-        onBlur={() => {
-          const clock = parseClockText(form[name]);
-          if (clock && clockText(clock) !== form[name]) setField(name, clockText(clock));
-        }}
-      />
-    </FormField>
-  );
-}
 
 function CompanySection({ timezones }) {
   const { form, errors, setField } = useSettingsForm();

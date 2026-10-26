@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { validationError } from '@/lib/errors';
+import { clockToMinutes } from '@/lib/time';
 
 /** '9:30', '09:30' or '09:30:00' -> '09:30'. Anything else fails with a readable message. */
 const clock = (label) =>
@@ -129,6 +131,9 @@ export const settingsUpdateSchema = z
     // Check-in rules (CONTRACT section 17)
     officeCheckinAnywhere: z.boolean({ error: 'Choose on or off.' }),
     wfhRequiresApproval: z.boolean({ error: 'Choose on or off.' }),
+    // Auto check-out (CONTRACT section 19)
+    autoCheckoutEnabled: z.boolean({ error: 'Choose on or off.' }),
+    autoCheckoutAt: clock('the auto check-out time'),
     // Project timers and breaks (CONTRACT section 15)
     timersMode: z.enum(TIMER_MODES, { error: 'Choose off, optional or required.' }),
     timerAwayMinutes: wholeNumber({
@@ -151,6 +156,26 @@ export const settingsUpdateSchema = z
     }),
   })
   .partial();
+
+const AUTO_CHECKOUT_KEYS = ['autoCheckoutEnabled', 'autoCheckoutAt', 'officeEnd'];
+
+/**
+ * CONTRACT 19: while auto check-out is on, its time must be later than office end (the check
+ * window runs from office end to it). Checked on the values after the save whenever one of the
+ * three keys is sent.
+ * @param {{ autoCheckoutEnabled: boolean, autoCheckoutAt: string, officeEnd: string }} current
+ *   the stored settings
+ * @param {object} parsed settingsUpdateSchema output (keys not sent are undefined)
+ * @throws VALIDATION_FAILED on autoCheckoutAt ("Pick a time after office hours end.")
+ */
+export function checkAutoCheckout(current, parsed) {
+  if (!AUTO_CHECKOUT_KEYS.some((key) => parsed[key] !== undefined)) return;
+  const pick = (key) => parsed[key] ?? current[key];
+  if (!pick('autoCheckoutEnabled')) return;
+  if (clockToMinutes(pick('autoCheckoutAt')) > clockToMinutes(pick('officeEnd'))) return;
+  const message = 'Pick a time after office hours end.';
+  throw validationError({ autoCheckoutAt: message }, message);
+}
 
 /** '::ffff:203.0.113.24' -> '203.0.113.24'; IPv6 in lowercase. */
 export function normalizeIp(value) {

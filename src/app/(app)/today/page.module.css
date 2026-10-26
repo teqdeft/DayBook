@@ -5,6 +5,25 @@
   min-width: 0;
 }
 
+/* "Still working? ..." under the top bar after office hours (auto check-out, CONTRACT 19) */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.noticeIcon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--muted);
+}
+
+.noticeText {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+
 /* Your day (or Check in) wide + This week narrow */
 .rowDay {
   display: grid;
