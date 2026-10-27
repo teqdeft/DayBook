@@ -2,6 +2,7 @@
 // report_edit_requests. Read queries join projects, project_requests and users for display
 // fields only (names, colours), so lists never need one query per row.
 import { db } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 const REPORT_COLUMNS = [
   'id',
@@ -126,12 +127,38 @@ export function listEntries(reportIds, trx = db) {
     );
 }
 
+// report_tasks.timer_note comes with migration 014 (CONTRACT 21). Code that runs before
+// `npm run migrate` reads and writes task lines without it (Fill then matches lines by priority
+// task and title only, as before) and logs one warning; once the column is there it stays in use.
+let timerNoteReady = false;
+let warnedNoTimerNote = false;
+
+/**
+ * Whether report_tasks has its timer_note column (a deploy before `npm run migrate` hasn't). Once
+ * it has, the answer is kept for the life of the process; until then every call asks again.
+ * @returns {Promise<boolean>}
+ */
+export async function hasTimerNote(trx = db) {
+  if (timerNoteReady) return true;
+  const [rows] = await trx.raw("SHOW COLUMNS FROM report_tasks WHERE Field = 'timer_note'");
+  timerNoteReady = rows.length > 0;
+  if (!timerNoteReady && !warnedNoTimerNote) {
+    warnedNoTimerNote = true;
+    logger.warn(
+      'report_tasks.timer_note is missing (run npm run migrate); timer notes are not kept',
+    );
+  }
+  return timerNoteReady;
+}
+
 /**
  * Tasks of the given entries in their order, with the linked priority task's priority and title
- * for display (CONTRACT section 13).
+ * for display (CONTRACT section 13), and the timer note a line was filled from (CONTRACT 21;
+ * missing before migration 014, see hasTimerNote).
  */
-export function listTasks(entryIds, trx = db) {
-  if (entryIds.length === 0) return Promise.resolve([]);
+export async function listTasks(entryIds, trx = db) {
+  if (entryIds.length === 0) return [];
+  const timerNote = (await hasTimerNote(trx)) ? ['t.timerNote'] : [];
   return trx('reportTasks as t')
     .leftJoin('projectTasks as pt', 'pt.id', 't.projectTaskId')
     .whereIn('t.entryId', entryIds)
@@ -148,6 +175,7 @@ export function listTasks(entryIds, trx = db) {
       't.firstReportedOn',
       't.carriedFromTaskId',
       't.projectTaskId',
+      ...timerNote,
       't.sortOrder',
       'pt.priority as projectTaskPriority',
       'pt.title as projectTaskTitle',
@@ -170,9 +198,13 @@ export function lockEntries(reportId, trx) {
     .select('id', 'reportId', 'projectId', 'projectRequestId', 'minutes', 'sortOrder');
 }
 
-/** The task rows of the given entries in their order, locked until the transaction ends. */
-export function lockTasks(entryIds, trx) {
-  if (entryIds.length === 0) return Promise.resolve([]);
+/**
+ * The task rows of the given entries in their order, locked until the transaction ends (without
+ * `timerNote` before migration 014, see hasTimerNote).
+ */
+export async function lockTasks(entryIds, trx) {
+  if (entryIds.length === 0) return [];
+  const timerNote = (await hasTimerNote(trx)) ? ['timerNote'] : [];
   return trx('reportTasks')
     .whereIn('entryId', entryIds)
     .orderBy([
@@ -181,7 +213,7 @@ export function lockTasks(entryIds, trx) {
       { column: 'id', order: 'asc' },
     ])
     .forUpdate()
-    .select('id', 'entryId', 'title', 'status', 'projectTaskId', 'sortOrder');
+    .select('id', 'entryId', 'title', 'status', 'projectTaskId', ...timerNote, 'sortOrder');
 }
 
 /**

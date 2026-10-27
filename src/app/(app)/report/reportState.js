@@ -31,6 +31,8 @@ function taskFromView(task) {
     projectTaskId: task.projectTaskId ?? null,
     priority: task.projectTaskId ? (task.priority ?? null) : null,
     projectTaskTitle: task.projectTaskId ? (task.projectTaskTitle ?? null) : null,
+    // The timer note the line was filled from (CONTRACT 21): never shown, sent back on save.
+    timerNote: task.timerNote ?? null,
   };
 }
 
@@ -88,7 +90,8 @@ const TASK_STATUSES = new Set(['done', 'in_progress', 'blocked']);
 
 /**
  * An empty task line. Lines added by hand start with the person's "New tasks start as"
- * (CONTRACT 21); lines from timers set their own status, and anything else is In progress.
+ * (CONTRACT 21); lines from timers set their own status (and their timer note), and anything
+ * else is In progress.
  * @param {string} [status]
  */
 export function newTask(status) {
@@ -99,13 +102,22 @@ export function newTask(status) {
     status: TASK_STATUSES.has(status) ? status : 'in_progress',
     carried: false,
     ...NO_LINK,
+    timerNote: null,
   };
 }
 
-/** The tasks with every priority link removed (the card moved to another project). */
+/** Whether a line holds something that belongs to its card's project: a link or a timer note. */
+function tiedToProject(task) {
+  return Boolean(task.projectTaskId || task.timerNote);
+}
+
+/**
+ * The tasks with every priority link and timer note removed (the card moved to another project:
+ * both belonged to the old one, CONTRACT 13 and 21).
+ */
 export function unlinkTasks(tasks) {
-  return tasks.some((task) => task.projectTaskId)
-    ? tasks.map((task) => (task.projectTaskId ? { ...task, ...NO_LINK } : task))
+  return tasks.some(tiedToProject)
+    ? tasks.map((task) => (tiedToProject(task) ? { ...task, ...NO_LINK, timerNote: null } : task))
     : tasks;
 }
 
@@ -153,6 +165,8 @@ export function serialize(entries, { keepLastValid = false } = {}) {
         title: task.title,
         status: task.status,
         projectTaskId: task.projectTaskId ?? undefined,
+        // Left out (undefined) for lines that weren't filled from a timer note.
+        timerNote: task.timerNote ?? undefined,
       })),
     };
   });

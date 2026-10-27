@@ -294,14 +294,30 @@ describe('mergeTimerSummary', () => {
         projectId: 7,
         projectRequestId: undefined,
         minutes: 105,
-        tasks: [{ id: 1000, title: 'Checkout bug', status: 'in_progress', projectTaskId: 55 }],
+        tasks: [
+          {
+            id: 1000,
+            title: 'Checkout bug',
+            status: 'in_progress',
+            projectTaskId: 55,
+            timerNote: 'Checkout bug',
+          },
+        ],
       },
       {
         id: undefined,
         projectId: 9,
         projectRequestId: undefined,
         minutes: 15,
-        tasks: [{ id: undefined, title: 'Call', status: 'in_progress', projectTaskId: undefined }],
+        tasks: [
+          {
+            id: undefined,
+            title: 'Call',
+            status: 'in_progress',
+            projectTaskId: undefined,
+            timerNote: 'Call',
+          },
+        ],
       },
     ]);
   });

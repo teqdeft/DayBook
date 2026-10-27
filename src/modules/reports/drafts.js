@@ -39,7 +39,7 @@ export function assertEditable(report) {
  * settings (CONTRACT 21); drafts that already exist are never changed by it.
  * @returns {Promise<Array<{ projectId: number|null, projectRequestId: number|null,
  *   tasks: Array<{ id: number, title: string, status: string, firstReportedOn: string,
- *   projectTaskId: number|null }> }>>}
+ *   projectTaskId: number|null, timerNote: string|null }> }>>}
  */
 export async function planCarryOver(userId, forDate) {
   const { carryOver } = await preferences.getFor(userId);
@@ -71,8 +71,8 @@ export async function planCarryOver(userId, forDate) {
 }
 
 /**
- * Inserts a draft report with its carried-over entries (0 hours; tasks keep first_reported_on and
- * their priority task link, and link back with carried_from_task_id).
+ * Inserts a draft report with its carried-over entries (0 hours; tasks keep first_reported_on,
+ * their priority task link and timer note, and link back with carried_from_task_id).
  * @returns {Promise<number>} the new report id
  */
 export async function insertDraft(
@@ -80,6 +80,8 @@ export async function insertDraft(
   trx,
 ) {
   const at = nowDate();
+  // Before migration 014 carried lines are written without their timer note (repo.hasTimerNote).
+  const keepNotes = plan.length > 0 && (await repo.hasTimerNote(trx));
   const reportId = await repo.insertReport(
     {
       userId,
@@ -117,6 +119,9 @@ export async function insertDraft(
           carriedFromTaskId: task.id,
           // The carried line keeps working on the same priority task (CONTRACT section 13).
           projectTaskId: task.projectTaskId ?? null,
+          // And keeps the timer note it was filled from, so today's fill of that note doesn't add
+          // it again after the line was reworded (CONTRACT 21).
+          ...(keepNotes ? { timerNote: task.timerNote ?? null } : null),
           sortOrder: taskOrder,
           createdAt: at,
           updatedAt: at,

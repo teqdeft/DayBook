@@ -21,6 +21,7 @@ import {
   followTimerHours,
   hoursComeFromTimers,
   mergeTimerSummary,
+  rememberTimerNotes,
 } from './reportTimers';
 
 export const TIMERS_REFRESH_MS = 60_000;
@@ -76,6 +77,12 @@ export function useTimerFill({
       const fresh = await refresh();
       const latest = fresh === undefined ? timers : fresh;
       if (!latest?.summary) return [];
+      // Lines that already say a timer note remember it first (CONTRACT 21), so rewording them
+      // later doesn't bring the note back. Nothing shows: a draft saves it as usual, and a
+      // submitted report keeps it for its next update instead of showing unsaved changes.
+      change((entries) => rememberTimerNotes(entries, latest.summary), undefined, {
+        quiet: status !== 'draft',
+      });
       let changed = false;
       let written = [];
       change((entries) => {
@@ -94,7 +101,7 @@ export function useTimerFill({
     } finally {
       filling.current = false;
     }
-  }, [refresh, timers, change, setErrors, toast]);
+  }, [refresh, timers, status, change, setErrors, toast]);
 
   // Before a submit in required mode: the hours become the timers' hours as they are now (the
   // server checks the timers at that moment).

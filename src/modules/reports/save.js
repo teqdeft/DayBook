@@ -132,8 +132,9 @@ function sameFields(row, fields) {
  * @param {{ id: number, workDate: string, status: string }} report
  * @param {Array<{ id?: number, projectId?: number, projectRequestId?: number, minutes?: number,
  *   hours?: number, tasks: Array<{ id?: number, title: string, status: string,
- *   projectTaskId?: number }> }>} entries (links checked with checkPriorityLinks first); the
- *   time is `minutes`, else `hours` (entryMinutes), stored to the minute
+ *   projectTaskId?: number, timerNote?: string | null }> }>} entries (links checked with
+ *   checkPriorityLinks first); the time is `minutes`, else `hours` (entryMinutes), stored to the
+ *   minute
  * @param {import('knex').Knex} trx
  * @param {{ baseVersion?: string }} [options] the version the person's page last saw
  * @returns {Promise<number>} the new total in minutes
@@ -143,6 +144,8 @@ export async function writeEntries(report, entries, trx, { baseVersion } = {}) {
   const { entries: storedEntries, tasks: storedTasks } = await lockStoredRows(report, trx, {
     baseVersion,
   });
+  // Before migration 014 the lines are written without their timer note (repo.hasTimerNote).
+  const keepNotes = await repo.hasTimerNote(trx);
   const entryById = new Map(storedEntries.map((entry) => [entry.id, entry]));
   const taskById = new Map(storedTasks.map((task) => [task.id, task]));
   const keptEntries = new Set();
@@ -172,6 +175,8 @@ export async function writeEntries(report, entries, trx, { baseVersion } = {}) {
         title: task.title.trim(),
         status: task.status,
         projectTaskId: task.projectTaskId ?? null,
+        // The timer note the line was filled from (CONTRACT 21); a line sent without one has none.
+        ...(keepNotes ? { timerNote: task.timerNote ?? null } : null),
         sortOrder: taskOrder,
         updatedAt: at,
       };

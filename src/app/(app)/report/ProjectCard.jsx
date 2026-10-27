@@ -120,7 +120,8 @@ export default function ProjectCard({
         projectColor: pick.color ?? null,
         isUrgent: Boolean(pick.isUrgent),
         waitingForApproval: Boolean(pick.projectRequestId),
-        // Priority tasks belong to a project: lines moved to another one lose their links.
+        // Priority tasks and timer notes belong to a project: lines moved to another one lose
+        // their links and notes (so the new project's fill doesn't match the old notes).
         tasks: moved ? unlinkTasks(card.tasks) : card.tasks,
         // Required timer mode: the hours are the new project's timer hours.
         ...(moved ? timerHoursFor(timers, pick) : null),

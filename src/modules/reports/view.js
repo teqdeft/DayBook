@@ -56,6 +56,8 @@ export function minutesToHoursNumber(minutes) {
 /**
  * One task line. `projectTaskId` links it to a priority task (CONTRACT section 13); `priority`
  * ('p1' | 'p2' | 'p3') and `projectTaskTitle` describe that task for display, null without one.
+ * `timerNote` is the timer note "Fill report from timers" wrote the line from (CONTRACT 21), null
+ * for other lines; the report page sends it back and nothing shows it.
  */
 function taskView(task) {
   const linked = Boolean(task.projectTaskId);
@@ -68,6 +70,7 @@ function taskView(task) {
     projectTaskId: linked ? Number(task.projectTaskId) : null,
     priority: linked ? (task.projectTaskPriority ?? null) : null,
     projectTaskTitle: linked ? (task.projectTaskTitle ?? null) : null,
+    timerNote: task.timerNote ?? null,
   };
 }
 

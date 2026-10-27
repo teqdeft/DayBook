@@ -121,6 +121,10 @@ npm run test:e2e
   don't write reports (PMs, an Admin who isn't tracked) see only Notifications and Appearance.
   Stored in `user_preferences` (migration 013); until `npm run migrate` has run, everyone gets the
   defaults and changes can't be saved.
+- **Timer lines remember their note** (fix, CONTRACT 21): a task line written by "Fill report from
+  timers" keeps the timer note it came from (`report_tasks.timer_note`, migration 014), so a line
+  reworded by Polish or by hand is no longer added again by the next Fill. Until
+  `npm run migrate` has run, reports work as before and Fill matches by title only.
 
 ## Slack setup (one Slack app per environment)
 

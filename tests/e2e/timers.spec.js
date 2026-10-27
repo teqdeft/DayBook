@@ -6,15 +6,57 @@
 // checkin-report.spec.js (which runs first) checks Karan in and out, and there is no second
 // check-in on a day. The hand-added time is 00:05-00:20 company time, before anyone's check-in,
 // so the spec expects to run after 00:35 (India time).
-import { PEOPLE, expect, open, test, toasts } from './support/fixtures.js';
+//
+// The second test is CONTRACT 21 "Timer lines remember their note" (the owner's report showed
+// "Deploying new features" twice and "Deploting new features" once): a line written by "Fill
+// report from timers" and then reworded still stands for its timer note, so the next Fill doesn't
+// add the note again. The line is reworded by hand here; Polish with AI's Use changes it the same
+// way, and the e2e server has no Gemini key. Rohit Verma is that person: the demo leaves him
+// checked in today with no report yet, and no other spec uses him. His time is 00:10-00:30.
+import { PEOPLE, expect, open, problemsOf, test, toasts } from './support/fixtures.js';
 
 const PROJECT = 'acme-seo';
 const NOTE = 'Keyword research for the shop';
 const MANUAL_PROJECT = 'urbanfit-seo';
 const MANUAL_NOTE = 'Audit call with the client';
 
+const ROHIT = { email: 'rohit@company.com', name: 'Rohit Verma' };
+const FILL_PROJECT = 'internal-tool';
+const TYPO_NOTE = 'Deploting new features';
+const FIXED_TITLE = 'Deploying new features';
+
 /** A running time on the card or the chip: '0:07', '12:03' or '1:24:10'. */
 const RUNNING_TIME = /^\d{1,2}:\d{2}(:\d{2})?$/;
+
+/**
+ * The task lines' text on a report card, top to bottom (a line linked to a priority task has
+ * ", linked to the ..." after its name).
+ * @param {import('@playwright/test').Locator} card
+ * @param {string} project
+ * @returns {Promise<string[]>}
+ */
+function taskTitles(card, project) {
+  return card
+    .getByLabel(new RegExp(`^Task \\d+ for ${project}`))
+    .evaluateAll((inputs) => inputs.map((input) => input.value));
+}
+
+/**
+ * Runs a change on a draft report and waits until its autosave answered and the top bar says
+ * "Saved".
+ * @param {import('@playwright/test').Page} page
+ * @param {() => Promise<void>} change
+ */
+async function saveReport(page, change) {
+  const saved = page.waitForResponse(
+    (response) =>
+      /^\/api\/reports\/\d+$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === 'PUT',
+  );
+  await change();
+  expect((await saved).status()).toBe(200);
+  await expect(page.getByRole('status').filter({ hasText: /^Saved$/ })).toBeVisible();
+}
 
 test('an employee times their work, takes a break and fixes their times by hand', async ({
   signInAs,
@@ -145,4 +187,60 @@ test('an employee times their work, takes a break and fixes their times by hand'
     await expect(entries).not.toContainText(MANUAL_PROJECT);
     await expect(card.getByRole('button', { name: 'Add time' })).toBeFocused();
   });
+});
+
+test('a timer line reworded after Fill report from timers is not added again', async ({
+  signInAs,
+}) => {
+  const rohit = await signInAs(ROHIT);
+  const card = rohit.getByRole('region', { name: FILL_PROJECT, exact: true });
+  const fill = rohit.getByRole('button', { name: 'Fill report from timers' });
+  const noteLines = async () =>
+    (await taskTitles(card, FILL_PROJECT)).filter((title) => /new features/i.test(title));
+
+  await test.step('time with a typo in its note', async () => {
+    await open(rohit, '/today');
+    await rohit
+      .getByRole('region', { name: 'Working on' })
+      .getByRole('button', { name: 'Add time' })
+      .click();
+    const dialog = rohit.getByRole('dialog', { name: 'Add time' });
+    await dialog.getByLabel('Project', { exact: true }).selectOption({ label: FILL_PROJECT });
+    await dialog.getByRole('textbox', { name: 'Note' }).fill(TYPO_NOTE);
+    await dialog.getByLabel('From', { exact: true }).fill('00:10');
+    await dialog.getByLabel('To', { exact: true }).fill('00:30');
+    await dialog.getByRole('button', { name: 'Add time' }).click();
+    await expect(toasts(rohit)).toContainText('Time added');
+    await expect(dialog).toBeHidden();
+  });
+
+  await test.step('Fill writes the note as a task line', async () => {
+    await open(rohit, '/report');
+    await expect(rohit.getByRole('region', { name: 'From your timers' })).toContainText(TYPO_NOTE);
+    await saveReport(rohit, () => fill.click());
+    await expect(toasts(rohit)).toContainText('Report filled from your timers');
+    await expect(card.getByRole('textbox', { name: `Hours for ${FILL_PROJECT}` })).toHaveValue(
+      '20m',
+    );
+    await expect.poll(noteLines).toEqual([TYPO_NOTE]);
+  });
+
+  await test.step('the typo is fixed by hand and saved', async () => {
+    const line = (await taskTitles(card, FILL_PROJECT)).indexOf(TYPO_NOTE) + 1;
+    const title = card.getByLabel(`Task ${line} for ${FILL_PROJECT}`, { exact: true });
+    await saveReport(rohit, () => title.fill(FIXED_TITLE));
+    await expect.poll(noteLines).toEqual([FIXED_TITLE]);
+  });
+
+  await test.step('after a reload, Fill adds nothing', async () => {
+    await open(rohit, '/report');
+    await expect.poll(noteLines).toEqual([FIXED_TITLE]);
+    await fill.click();
+    await expect(toasts(rohit)).toContainText('Your report already matches your timers');
+    // One line for the timer note, as reworded: no second "Deploying" line, no "Deploting" one.
+    await expect.poll(noteLines).toEqual([FIXED_TITLE]);
+  });
+
+  await rohit.waitForLoadState('networkidle');
+  expect(problemsOf(rohit), 'console and page errors').toEqual([]);
 });
