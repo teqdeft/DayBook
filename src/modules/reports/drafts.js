@@ -2,6 +2,7 @@
 import { db } from '@/lib/db';
 import { AppError } from '@/lib/errors';
 import { dayjs, locksAtFor, now, nowDate, workDate } from '@/lib/time';
+import { preferences } from '@/modules/preferences';
 import { projects } from '@/modules/projects';
 import { settings } from '@/modules/settings';
 import * as repo from './repo';
@@ -34,12 +35,15 @@ export function assertEditable(report) {
 /**
  * What a new draft carries over: every in_progress or blocked task from the person's latest
  * submitted report before `forDate`, grouped by project, only for projects that are still active
- * (or project requests still pending).
+ * (or project requests still pending). Nothing when the person turned carry-over off in My
+ * settings (CONTRACT 21); drafts that already exist are never changed by it.
  * @returns {Promise<Array<{ projectId: number|null, projectRequestId: number|null,
  *   tasks: Array<{ id: number, title: string, status: string, firstReportedOn: string,
  *   projectTaskId: number|null }> }>>}
  */
 export async function planCarryOver(userId, forDate) {
+  const { carryOver } = await preferences.getFor(userId);
+  if (!carryOver) return [];
   const source = await repo.findLatestSubmittedBefore(userId, forDate);
   if (!source) return [];
   const entries = await repo.listEntries([source.id]);
@@ -148,8 +152,9 @@ async function missingDayView(userId, day, locksAt) {
 
 /**
  * The person's report for a day, as the report page opens it. Creates the day's draft (with
- * carry-over) when there is none and the day hasn't locked yet. A missing day after its lock
- * comes back with id null and status 'none' (only an approved edit request can create it).
+ * carry-over, unless they turned it off) when there is none and the day hasn't locked yet. A
+ * missing day after its lock comes back with id null and status 'none' (only an approved edit
+ * request can create it).
  * @param {{ user: { id: number }, workDate?: string }} input workDate defaults to today
  * @returns {Promise<object>} the report view (see view.reportView)
  * @throws REPORT_IN_FUTURE

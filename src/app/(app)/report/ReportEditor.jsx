@@ -1,6 +1,7 @@
 'use client';
 // The Daily report body: notices, "From your timers", one card per project, "Add another
-// project", "Back to today", and the Slack preview on the right.
+// project", "Back to today", and the Slack preview on the right (unless the person turned it off
+// in My settings, CONTRACT 21: then the cards take the full width).
 import { useEffect, useRef, useState } from 'react';
 import { CircleAlert, Info, TriangleAlert } from 'lucide-react';
 import Button from '@/components/Button';
@@ -14,6 +15,7 @@ import SlackPreview from './SlackPreview';
 import TimersCard from './TimersCard';
 import { useReport } from './ReportProvider';
 import { totalMinutes } from './reportHours';
+import { preferencesOf } from './reportPreferences';
 import { newEntry, newKey, projectKey, serialize, unlinkTasks } from './reportState';
 import { hoursComeFromTimers, timerHoursFor, timersChangedSince } from './reportTimers';
 import { gapText } from './reportTotals';
@@ -170,6 +172,7 @@ export default function ReportEditor() {
   const used = new Set(entries.map(projectKey).filter(Boolean));
   // Required timer mode: real projects' hours come from the timers (project requests are exempt).
   const fromTimers = hoursComeFromTimers(timers);
+  const { newTaskStatus, slackPreview } = preferencesOf(data);
 
   useEffect(() => {
     const taskKey = focusAfterDialogRef.current;
@@ -179,8 +182,9 @@ export default function ReportEditor() {
   }, [requesting]);
 
   function addProject(pick, { fromDialog = false } = {}) {
-    // Required timer mode: a new card starts with the project's timer hours.
-    const entry = { ...newEntry(pick), ...timerHoursFor(timers, pick) };
+    // Required timer mode: a new card starts with the project's timer hours. Its empty line starts
+    // as the person's "New tasks start as".
+    const entry = { ...newEntry(pick, newTaskStatus), ...timerHoursFor(timers, pick) };
     if (fromDialog) focusAfterDialogRef.current = entry.tasks[0].key;
     else focusRequestRef.current = entry.tasks[0].key;
     change((list) => [...list, entry]);
@@ -215,7 +219,7 @@ export default function ReportEditor() {
   }
 
   return (
-    <div className={styles.layout}>
+    <div className={slackPreview ? styles.layout : `${styles.layout} ${styles.full}`}>
       <div className={styles.main}>
         <Notices onRestore={restoreRows} />
         {report.status === 'none' ? <MissingDay /> : null}
@@ -287,7 +291,7 @@ export default function ReportEditor() {
           </Button>
         </p>
       </div>
-      {report.status === 'none' ? null : (
+      {report.status === 'none' || !slackPreview ? null : (
         <aside className={styles.side}>
           <SlackPreview />
         </aside>

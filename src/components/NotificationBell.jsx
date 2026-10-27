@@ -1,6 +1,7 @@
 'use client';
 // The bell in the top bar: a red dot when something is unread, and a gentle swing about every 6 s
-// while it is (once at once when the count goes up). It opens the latest 20 notifications with
+// while it is (once at once when the count goes up), unless the person turned the swing off in My
+// settings (`bellRing`, CONTRACT 21; read from UserPrefs). It opens the latest 20 notifications with
 // "Mark all as read"; each item marks itself read and opens its screen, and can be marked read or
 // unread and deleted with Undo (NotificationItem, CONTRACT 20). The dropdown ends with "Show on
 // this computer" (desktop notifications for this browser, CONTRACT 14).
@@ -10,11 +11,15 @@ import { api } from '@/lib/apiClient';
 import { now, workDate } from '@/lib/time';
 import { useNotificationActions } from './NotificationBell.actions';
 import { hidePending } from './NotificationBell.list';
+import { bellSwing } from './NotificationBell.ring';
 import NotificationList from './NotificationList';
 import NotificationUndo from './NotificationUndo';
 import PushSwitch, { useDesktopPush } from './PushSwitch';
 import { useToast } from './ToastProvider';
+import { useBellRing } from './UserPrefs';
 import styles from './NotificationBell.module.css';
+
+const SWING_CLASS = { now: styles.ringNow, later: styles.ringLater };
 
 const REFRESH_AFTER_MS = 60_000;
 
@@ -60,6 +65,7 @@ export default function NotificationBell({ initialUnread = 0, tz = 'Asia/Kolkata
   const router = useRouter();
   const toast = useToast();
   const desktop = useDesktopPush(push);
+  const ringEnabled = useBellRing();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState(null);
   const [status, setStatus] = useState('idle'); // idle | loading | error
@@ -118,8 +124,8 @@ export default function NotificationBell({ initialUnread = 0, tz = 'Asia/Kolkata
     setSeenUnread(unread);
     if (unread > seenUnread && !open) setRing((r) => ({ key: r.key + 1, now: true }));
   }
-  let ringClass = '';
-  if (unread > 0 && !open) ringClass = ring.now ? styles.ringNow : styles.ringLater;
+  const swing = bellSwing({ enabled: ringEnabled, unread, open, now: ring.now });
+  const ringClass = swing ? SWING_CLASS[swing] : '';
 
   function toggle() {
     if (open) {

@@ -10,6 +10,7 @@ import ProjectPicker from './ProjectPicker';
 import TaskLine from './TaskLine';
 import { useReport } from './ReportProvider';
 import { parseHours } from './reportHours';
+import { preferencesOf } from './reportPreferences';
 import { newTask, projectKey, unlinkTasks } from './reportState';
 import { timerHoursFor } from './reportTimers';
 import styles from './ProjectCard.module.css';
@@ -95,7 +96,8 @@ export default function ProjectCard({
   }
 
   function addTaskAfter(index) {
-    const task = newTask();
+    // Add task and Enter at the end of a line: the person's "New tasks start as" (CONTRACT 21).
+    const task = newTask(preferencesOf(data).newTaskStatus);
     focusRequestRef.current = task.key;
     setTasks((tasks) => [...tasks.slice(0, index + 1), task, ...tasks.slice(index + 1)], {
       entryKey: entry.key,

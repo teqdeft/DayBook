@@ -1,7 +1,9 @@
 // Daily report (artboard 02). Opening the page creates the day's draft with carry-over; the editor
 // autosaves one second after the last change. /report?date=YYYY-MM-DD opens another day, which is
 // read-only once locked, with "Request an edit". With AI on (CONTRACT 20) an editable report also
-// gets "Polish with AI" (PolishProvider).
+// gets "Polish with AI" and a sparkle on each task line (PolishProvider). The person's own
+// settings (My settings, CONTRACT 21) pick the submit buttons, the status of new task lines, the
+// Slack preview and the polish switches (data.preferences).
 import Button from '@/components/Button';
 import EmptyState from '@/components/EmptyState';
 import TopBar from '@/components/TopBar';
@@ -19,6 +21,7 @@ import {
 } from '@/lib/time';
 import { ai } from '@/modules/ai';
 import { attendance } from '@/modules/attendance';
+import { preferences, preferencesFor } from '@/modules/preferences';
 import { projects } from '@/modules/projects';
 import { projectTasks } from '@/modules/projectTasks';
 import { reports } from '@/modules/reports';
@@ -29,6 +32,7 @@ import ReportEditor from './ReportEditor';
 import PolishProvider from './PolishProvider';
 import ReportProvider from './ReportProvider';
 import { canCheckOutFromReport } from './reportCheckOut';
+import { reportPreferences } from './reportPreferences';
 import styles from './page.module.css';
 
 export const metadata = { title: 'Daily report' };
@@ -121,6 +125,15 @@ async function polishAvailable(report) {
   return ai.isAvailable('polish').catch(() => false);
 }
 
+/**
+ * The person's report settings (CONTRACT 21), read once per request with the layout; the report
+ * still opens with the defaults when they can't be read.
+ */
+async function reportSettings(user) {
+  const all = await preferencesFor(user).catch(() => preferences.PREFERENCE_DEFAULTS);
+  return reportPreferences(all);
+}
+
 /** Present time minus the day's breaks (CONTRACT 15), or null without a check-in. */
 async function workedFor(row, userId, day, at, tz) {
   if (!row) return null;
@@ -170,12 +183,13 @@ export default async function ReportPage({ searchParams }) {
     attendance.getForUserOnDate(user.id, day),
   ]);
   const at = now();
-  const [suggestions, timersData, workedMinutes, aiPolish] = await Promise.all([
+  const [suggestions, timersData, workedMinutes, aiPolish, prefs] = await Promise.all([
     prioritySuggestions(user, report, picker),
     // "From your timers" and required mode (CONTRACT 15); the report still opens without it.
     reports.timersForReport({ user, report }).catch(() => null),
     workedFor(row, user.id, day, at, tz),
     polishAvailable(report),
+    reportSettings(user),
   ]);
   const back = backLink({ user, day, today });
   const isToday = day === today;
@@ -192,8 +206,11 @@ export default async function ReportPage({ searchParams }) {
     presentMinutes: row ? attendance.presentMinutes(row, at, tz) : null,
     workedMinutes,
     timers: timersData,
-    // "Polish with AI" and polishing the lines Fill report from timers writes (CONTRACT 20).
+    // "Polish with AI", the line sparkles and polishing the lines Fill report from timers writes
+    // (CONTRACT 20 and 21).
     aiPolish,
+    // submitButtons, newTaskStatus, slackPreview, polishButton, polishLines, polishAfterTimers.
+    preferences: prefs,
     gapWarningMinutes: current.gapWarningMinutes,
     slackLines: slackLines(current),
     previewTime: formatTimeAmPm(report.submittedAt ?? at, tz),

@@ -8,6 +8,9 @@
 // submitted report behave as they do for typing. The auto-write offer opens without putting focus
 // on Use selected (the person may be typing), and is dropped when the report was submitted or
 // otherwise changed status while Gemini was writing.
+// CONTRACT 21: each task line also gets a sparkle that polishes just that line (useLinePolish.js,
+// LinePolish.jsx), and the person's own switches (My settings) turn off the top-bar button, the
+// line sparkles or the offer after a fill, one by one (reportPreferences.polishGates).
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { LoaderCircle, Sparkles } from 'lucide-react';
 import Button from '@/components/Button';
@@ -17,6 +20,7 @@ import { plural } from '@/lib/text';
 import PolishDialog from './PolishDialog';
 import styles from './PolishProvider.module.css';
 import { useReport } from './ReportProvider';
+import { polishGates, preferencesOf } from './reportPreferences';
 import {
   applySuggestions,
   changedSuggestions,
@@ -25,13 +29,17 @@ import {
   polishRequest,
   reportStage,
 } from './reportPolish';
+import { useLinePolish } from './useLinePolish';
 
 const PolishContext = createContext(null);
 
 /**
- * @returns {{ available: boolean, busy: boolean, polishAll: () => Promise<void>,
- *   fillFromTimers: () => Promise<void> }} fillFromTimers is "Fill report from timers" (use it
- *   instead of useReport().applyTimers)
+ * @returns {{ available: boolean, button: boolean, busy: boolean, polishAll: () => Promise<void>,
+ *   fillFromTimers: () => Promise<void>, lines: { enabled: boolean, states: object,
+ *   polish: (key: string) => Promise<void>, use: (key: string) => boolean,
+ *   keep: (key: string) => void, drop: (key: string) => void } }} fillFromTimers is "Fill report
+ *   from timers" (use it instead of useReport().applyTimers); button: the top bar shows Polish
+ *   with AI; lines: the task lines' sparkles (useLinePolish), enabled when they show
  */
 export function usePolish() {
   const value = useContext(PolishContext);
@@ -43,7 +51,12 @@ export function usePolish() {
 export default function PolishProvider({ children }) {
   const { data, entries, report, readOnly, change, applyTimers } = useReport();
   const toast = useToast();
-  const available = Boolean(data.aiPolish) && !readOnly;
+  const gates = polishGates({
+    aiPolish: data.aiPolish,
+    readOnly,
+    preferences: preferencesOf(data),
+  });
+  const { available, afterTimers } = gates;
   // The report's status and submit time: an auto offer is dropped when they change meanwhile.
   const stage = reportStage(report);
   const [busy, setBusy] = useState(false);
@@ -97,8 +110,11 @@ export default function PolishProvider({ children }) {
 
   const fillFromTimers = useCallback(async () => {
     const written = await applyTimers();
-    if (written?.length) await polish(written, { auto: true });
-  }, [applyTimers, polish]);
+    // "Suggest wording after Fill report from timers" may be off (My settings).
+    if (written?.length && afterTimers) await polish(written, { auto: true });
+  }, [applyTimers, polish, afterTimers]);
+
+  const linePolish = useLinePolish({ entries, enabled: gates.lines, change, toast });
 
   const use = useCallback(
     (picked) => {
@@ -115,7 +131,14 @@ export default function PolishProvider({ children }) {
     [change, toast],
   );
 
-  const value = { available, busy, polishAll, fillFromTimers };
+  const value = {
+    available,
+    button: gates.button,
+    busy,
+    polishAll,
+    fillFromTimers,
+    lines: { enabled: gates.lines, ...linePolish },
+  };
   return (
     <PolishContext.Provider value={value}>
       {children}
@@ -138,11 +161,12 @@ export default function PolishProvider({ children }) {
  * disabled): a disabled button drops keyboard focus to the page, and the dialog would then hand
  * it back there instead of to this button. At 1024–1199 px beside both submit buttons it shows
  * its icon only (PolishProvider.module.css), keeping its name for screen readers and as a tooltip.
+ * The person may turn it off in My settings ("Polish with AI button").
  */
 export function PolishButton() {
   const { submitting } = useReport();
-  const { available, busy, polishAll } = usePolish();
-  if (!available) return null;
+  const { button, busy, polishAll } = usePolish();
+  if (!button) return null;
   return (
     <Button
       size="large"

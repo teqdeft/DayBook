@@ -1,5 +1,5 @@
 // AI limits (CONTRACT 20): the company's daily limit in company-time days, the per-person caps
-// (polish 20, ask 30), checked before Gemini is called — also for requests sent at the same
+// (polish 40, ask 30), checked before Gemini is called — also for requests sent at the same
 // time — and usageToday() for Settings.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
@@ -111,6 +111,8 @@ describe('requests at the same time', () => {
 
   it('never lets one person past their cap', async () => {
     slowGemini();
+    // 20 of the 40 already used today, so 40 requests at once meet the cap halfway.
+    await usage({ count: 20, userId: alice.id, feature: 'polish' });
     const results = await Promise.allSettled(
       Array.from({ length: 40 }, () =>
         ai.generate({ feature: 'polish', userId: alice.id, prompt: 'Fix' }),
@@ -122,7 +124,7 @@ describe('requests at the same time', () => {
     expect(refused.every((result) => result.reason.code === 'AI_LIMIT')).toBe(true);
     expect(requests).toBe(20);
     const rows = await db('ai_usage').where({ userId: alice.id });
-    expect(rows).toHaveLength(20);
+    expect(rows).toHaveLength(40);
     expect(rows.every((row) => row.ok === true && row.errorCode === null)).toBe(true);
   });
 
@@ -160,11 +162,11 @@ describe('requests at the same time', () => {
 });
 
 describe('per-person caps', () => {
-  it('stops a person at 20 polish requests a day, not others', async () => {
-    expect(ai.PERSON_DAILY_CAPS).toEqual({ polish: 20, ask: 30 });
-    await usage({ count: 19, userId: alice.id, feature: 'polish' });
+  it('stops a person at 40 polish requests a day, not others', async () => {
+    expect(ai.PERSON_DAILY_CAPS).toEqual({ polish: 40, ask: 30 });
+    await usage({ count: 39, userId: alice.id, feature: 'polish' });
     await usage({ count: 5, userId: alice.id, feature: 'polish', at: '2026-10-25T10:00:00Z' });
-    await ai.generate({ feature: 'polish', userId: alice.id, prompt: 'twentieth' });
+    await ai.generate({ feature: 'polish', userId: alice.id, prompt: 'fortieth' });
     const error = await expectAppError(
       ai.generate({ feature: 'polish', userId: alice.id, prompt: 'one more' }),
       'AI_LIMIT',

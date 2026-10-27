@@ -22,7 +22,11 @@ import {
 } from './reportCheckOut';
 import styles from './SubmitAndCheckOut.module.css';
 
-export default function SubmitAndCheckOut() {
+/**
+ * @param {{ primary?: boolean }} props primary: the person's "Submit buttons" left out Submit
+ *   report, so this is the top bar's main button (blue) rather than the secondary one beside it
+ */
+export default function SubmitAndCheckOut({ primary = false }) {
   const router = useRouter();
   const toast = useToast();
   const { data, report, submit, submitting } = useReport();
@@ -83,7 +87,12 @@ export default function SubmitAndCheckOut() {
   return (
     <>
       {report.status === 'draft' || busy ? (
-        <Button size="large" variant="secondary" disabled={submitting || busy} onClick={ask}>
+        <Button
+          size="large"
+          variant={primary ? 'primary' : 'secondary'}
+          disabled={submitting || busy}
+          onClick={ask}
+        >
           Submit and check out
         </Button>
       ) : null}

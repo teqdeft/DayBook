@@ -1,6 +1,6 @@
 // Server only: loads what the shell needs (company name, nav badges, the timer state for the
-// sidebar's timer chip) and renders the sidebar and main area around a page. Used by
-// src/app/(app)/layout.js and by the not-found page for signed-in people.
+// sidebar's timer chip, the person's preferences) and renders the sidebar and main area around a
+// page. Used by src/app/(app)/layout.js and by the not-found page for signed-in people.
 import { cache } from 'react';
 import { homePathFor, navigationFor } from '@/config/navigation';
 import { logger } from '@/lib/logger';
@@ -8,6 +8,7 @@ import { can } from '@/lib/permissions';
 import { aiAsk } from '@/modules/aiAsk';
 import { aiSummaries } from '@/modules/aiSummaries';
 import { dashboard } from '@/modules/dashboard';
+import { preferences, preferencesFor } from '@/modules/preferences';
 import { push } from '@/modules/push';
 import { settings } from '@/modules/settings';
 import { timers } from '@/modules/timers';
@@ -15,8 +16,10 @@ import ActivityTracker from './ActivityTracker';
 import AppShell from './AppShell';
 import { PushSync } from './PushSwitch';
 import Sidebar from './Sidebar';
+import ThemeSync from './ThemeSync';
 import TimerChip from './TimerChip';
 import { ToastProvider } from './ToastProvider';
+import { UserPrefsProvider } from './UserPrefs';
 
 // React's cache lasts one server request: the layout and the page share these.
 const timerStates = cache(() => new Map());
@@ -49,8 +52,9 @@ export default async function AppFrame({ user, children }) {
   // Timers (CONTRACT 15): only for people who can use them; a failure just hides the chip. The
   // state is read even while timers are off: a timer left running then still shows, with Stop.
   // AI items (CONTRACT 20): Ask Daybook while it is available to them, Summaries once they have
-  // one; a failure just hides the item.
-  const [all, badges, timerState, ask, summaries] = await Promise.all([
+  // one; a failure just hides the item. Preferences (CONTRACT 21): read once per request (the
+  // page shares the read); a failure gives the defaults (the computer's theme, a ringing bell).
+  const [all, badges, timerState, ask, summaries, prefs] = await Promise.all([
     safely(settings.getAll(), {}, 'shell: could not load settings', user.id),
     safely(dashboard.getNavBadges(user), {}, 'shell: could not load nav badges', user.id),
     timers.canUse(user)
@@ -58,6 +62,12 @@ export default async function AppFrame({ user, children }) {
       : null,
     safely(aiAsk.isAvailableFor(user), false, 'shell: could not check Ask Daybook', user.id),
     safely(aiSummaries.countMine(user), 0, 'shell: could not count AI summaries', user.id),
+    safely(
+      preferencesFor(user),
+      preferences.PREFERENCE_DEFAULTS,
+      'shell: could not load preferences',
+      user.id,
+    ),
   ]);
   const timersOff = timerState?.mode === 'off' || all?.timersMode === 'off';
   const showTimer = Boolean(timerState?.canUse) && (!timersOff || Boolean(timerState.running));
@@ -69,30 +79,33 @@ export default async function AppFrame({ user, children }) {
   const pushKey = all?.pushEnabled === true ? push.publicKey() : null;
 
   return (
-    <ToastProvider>
-      <AppShell
-        sidebar={
-          <Sidebar
-            items={items}
-            companyName={all?.companyName}
-            homeHref={homePathFor(user)}
-            user={{
-              name: user.name,
-              email: user.email,
-              designation: user.designation ?? user.roleLabel,
-              initials: user.initials,
-              avatarUrl: user.avatarUrl,
-            }}
-            footer={showTimer ? <TimerChip initialState={timerState} /> : null}
-          />
-        }
-      >
-        {children}
-      </AppShell>
-      {tracksScreenTime ? (
-        <ActivityTracker userId={user.id} idleMinutes={all.activityIdleMinutes} />
-      ) : null}
-      {pushKey ? <PushSync push={{ publicKey: pushKey, userId: user.id }} /> : null}
-    </ToastProvider>
+    <UserPrefsProvider prefs={prefs}>
+      <ThemeSync theme={prefs.theme} />
+      <ToastProvider>
+        <AppShell
+          sidebar={
+            <Sidebar
+              items={items}
+              companyName={all?.companyName}
+              homeHref={homePathFor(user)}
+              user={{
+                name: user.name,
+                email: user.email,
+                designation: user.designation ?? user.roleLabel,
+                initials: user.initials,
+                avatarUrl: user.avatarUrl,
+              }}
+              footer={showTimer ? <TimerChip initialState={timerState} /> : null}
+            />
+          }
+        >
+          {children}
+        </AppShell>
+        {tracksScreenTime ? (
+          <ActivityTracker userId={user.id} idleMinutes={all.activityIdleMinutes} />
+        ) : null}
+        {pushKey ? <PushSync push={{ publicKey: pushKey, userId: user.id }} /> : null}
+      </ToastProvider>
+    </UserPrefsProvider>
   );
 }

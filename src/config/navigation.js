@@ -1,5 +1,6 @@
 // Sidebar items per role, in the order the design canvas shows them. Items are also filtered by
-// permission, so a role never sees a link it can't open. Later phases add items here.
+// permission, so a role never sees a link it can't open. Later phases add items here. My settings
+// (CONTRACT 21) closes every role's list.
 import { can } from '@/lib/permissions';
 
 /**
@@ -81,13 +82,24 @@ export const NAV_ITEMS = {
     icon: 'SlidersHorizontal',
     permission: 'settings.manage',
   },
+  // My settings (CONTRACT 21): every signed-in person's own choices, so no permission key.
+  mySettings: { label: 'My settings', href: '/my-settings', icon: 'UserCog', signedIn: true },
 };
 
 export const NAVIGATION = {
-  employee: ['today', 'log', 'projects'],
+  employee: ['today', 'log', 'projects', 'mySettings'],
   // PMs don't check in or write reports, so no Today or My log.
-  pm: ['projects', 'team', 'screenTime', 'attendance', 'requests', 'ask', 'summaries'],
-  hr: ['today', 'log', 'attendance', 'ask', 'summaries', 'people'],
+  pm: [
+    'projects',
+    'team',
+    'screenTime',
+    'attendance',
+    'requests',
+    'ask',
+    'summaries',
+    'mySettings',
+  ],
+  hr: ['today', 'log', 'attendance', 'ask', 'summaries', 'people', 'mySettings'],
   // Today and My log appear for an Admin only when they track attendance (the CEO doesn't).
   admin: [
     'overview',
@@ -102,11 +114,17 @@ export const NAVIGATION = {
     'people',
     'roles',
     'settings',
+    'mySettings',
   ],
 };
 
-/** An item's permission: its one key, or any of `anyPermission`. */
+/**
+ * An item's permission: its one key, or any of `anyPermission`. `signedIn` items are open to every
+ * active person (like can(), a deactivated one gets nothing); an item with none of these is
+ * shown to no one.
+ */
 function allowed(user, item) {
+  if (item.signedIn === true) return !user.status || user.status === 'active';
   if (item.anyPermission) return item.anyPermission.some((key) => can(user, key));
   return can(user, item.permission);
 }

@@ -75,7 +75,7 @@ function checkInput({ feature, model, prompt, json, tools, onToolCall }) {
 
 /**
  * Asks Gemini. Checks, in order: the feature is available (AI_OFF), the company's daily limit
- * (`aiDailyLimit` requests per company-time day) and the person's cap for polish (20) and ask
+ * (`aiDailyLimit` requests per company-time day) and the person's cap for polish (40) and ask
  * (30) (AI_LIMIT). Every HTTP request — each tool round too — writes one ai_usage row before it
  * is sent and counts towards the limits; the limits are checked under a lock that every process
  * shares, so requests at the same time can't overrun them. An answer that has started may finish

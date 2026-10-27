@@ -86,12 +86,15 @@ export function resetRateLimitsForTests() {
   buckets.clear();
 }
 
-/** zod issues -> { 'entries.0.hours': 'Hours must be above 0' } */
+/**
+ * zod issues -> { 'entries.0.hours': 'Hours must be above 0' }, the first message per field. No
+ * prototype, so a field named "__proto__" or like an Object method ("toString") is kept too.
+ */
 function fieldsFromZod(error) {
-  const fields = {};
+  const fields = Object.create(null);
   for (const issue of error.issues) {
     const path = issue.path.join('.') || '_';
-    if (!fields[path]) fields[path] = issue.message;
+    if (!Object.hasOwn(fields, path)) fields[path] = issue.message;
   }
   return fields;
 }

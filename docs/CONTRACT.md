@@ -392,13 +392,15 @@ faded? }], height }` (Today's "This week" and Overview's stacked "Attendance thi
 | projects     | `(app)/projects/**`, `(app)/requests/**`                                                                                                                                 |
 | dashboards   | `(app)/team/**`, `(app)/overview/**`                                                                                                                                     |
 | ai           | `(app)/summaries/**`, `(app)/ask/**`, `api/ai/**` (CONTRACT 20)                                                                                                          |
+| preferences  | `(app)/my-settings/**`, `api/me/preferences/**`, `src/modules/preferences/**` (CONTRACT 21)                                                                              |
 
 Every page starts with `const user = await requirePage('<permission>')`, renders `<TopBar ... />`
 then its blocks, has a loading skeleton (`loading.js`) and empty states. Page permissions:
 /today `attendance.self`, /report and /log `report.self`, /projects `project.request`
 (`project.manage` holders see the PM view), /team `team.view`, /requests
 `project_request.handle`, /attendance `attendance.view_all`, /people `people.manage`, /overview
-`overview.view`, /settings `settings.manage`, /settings/roles `roles.manage`.
+`overview.view`, /settings `settings.manage`, /settings/roles `roles.manage`, /my-settings any
+signed-in person (`requireUser()`).
 
 ## 10. Tests
 
@@ -961,7 +963,7 @@ center (click marks read, mark unread, delete, swipe to delete, a gently ringing
   (features: `polish`, `pm_summary`, `hr_notes`, `ask`).
 - `ai.generate({ feature, userId?, model: 'fast' | 'smart', system, prompt, json?, tools?,
 onToolCall? })` → `{ text, data }`: checks availability (`AI_OFF`), the company daily limit and
-  the per-person daily caps (polish 20, ask 30) (`AI_LIMIT`), calls Gemini, writes one `ai_usage`
+  the per-person daily caps (polish 40 since CONTRACT 21, ask 30) (`AI_LIMIT`), calls Gemini, writes one `ai_usage`
   row per request (feature, user, model, ok, error code, token counts — never the prompt or the
   answer), maps HTTP 429 → `AI_BUSY` and other failures → `AI_ERROR` (503 and timeouts: see "Busy Gemini" below). With `json` (a JSON schema)
   it asks for JSON output and returns the parsed object in `data`. With `tools` it runs Gemini
@@ -1067,7 +1069,7 @@ onToolCall? })` → `{ text, data }`: checks availability (`AI_OFF`), the compan
   30). Each request first saves its `ai_usage` row as pending (`error_code 'PENDING'`); the limit
   check and that save run under `GET_LOCK('daybook_ai_limits', 5)`, so parallel requests count
   each other (lock not free in 5 s → `AI_BUSY`). Rounds of an answer already under way may finish.
-  Per-person rate limits: polish 10 a minute, ask 12 a minute.
+  Per-person rate limits: polish 20 a minute (CONTRACT 21; was 10), ask 12 a minute.
 - **Busy Gemini** (found testing on the free tier, where `gemini-3.8-flash` answered "high demand"
   503s or took over 2 minutes): HTTP 429 and 503 and no answer within 30 s are `AI_BUSY`. The
   smart model is sent `thinkingConfig.thinkingLevel: 'low'` (Gemini 3 and later only; at its
@@ -1108,3 +1110,152 @@ onToolCall? })` → `{ text, data }`: checks availability (`AI_OFF`), the compan
   a hidden name and an unknown one get the same answer. A failing tool gives Gemini "Daybook
   couldn't read this data just now." and the log gets the tool name only. Examples and Try again
   keep the draft; Try again is hidden for `AI_LIMIT` and `AI_OFF`.
+
+## 21. My settings and polish on each task line (added after the build guide)
+
+Company request (phase 1.06): keep **Polish with AI** in the report's top bar and add a sparkle to
+each task line; give every person a **My settings** page (in the sidebar under Projects) to turn
+these on or off, choose which submit buttons the report shows, and change a few other things for
+themselves only. Company rules stay in Settings (Admin).
+
+### Preferences (`@/modules/preferences`, owner: preferences)
+
+- Table `user_preferences` (migration 013): `user_id` (PK, FK users, ON DELETE CASCADE), `prefs`
+  (JSON: only keys that differ from the defaults are needed), `updated_at`. One row per person,
+  created on the first change.
+- Keys, values and defaults (`PREFERENCE_DEFAULTS`, frozen):
+
+  | Key                 | Values                           | Default         | Used by                    |
+  | ------------------- | -------------------------------- | --------------- | -------------------------- |
+  | `submitButtons`     | `'both'` `'checkout'` `'submit'` | `'both'`        | report top bar             |
+  | `newTaskStatus`     | `'in_progress'` `'done'`         | `'in_progress'` | report editor              |
+  | `carryOver`         | boolean                          | `true`          | new report drafts (server) |
+  | `slackPreview`      | boolean                          | `true`          | report page                |
+  | `polishButton`      | boolean                          | `true`          | report top bar             |
+  | `polishLines`       | boolean                          | `true`          | report task lines          |
+  | `polishAfterTimers` | boolean                          | `true`          | Fill report from timers    |
+  | `bellRing`          | boolean                          | `true`          | notification bell          |
+  | `theme`             | `'system'` `'light'` `'dark'`    | `'system'`      | whole app                  |
+
+- `preferences.getFor(userId)` → every key (stored values over the defaults; an unknown key or a
+  stored value that is no longer valid is ignored). A missing table (MySQL errno 1146, a deploy
+  before `npm run migrate`) gives the defaults and one warning in the log; other errors throw.
+- `preferences.update({ user, values })` → validates `values` (zod, strict: a wrong value is
+  `VALIDATION_FAILED` with the field named; of unknown keys only the first is named, so
+  `error.fields` stays one entry; an empty body is `fields._` "Choose a setting to change."), saves
+  in one statement (`INSERT … ON DUPLICATE KEY UPDATE prefs = JSON_MERGE_PATCH(prefs, ?)`, so
+  changes saved at the same moment all stay; a value set back to its default is removed from the
+  row), returns `getFor(user.id)`. A missing table → `PREFERENCES_UNAVAILABLE` (503). A person only
+  ever changes their own row; no audit entry.
+- `preferencesFor(user)`: the same object, cached per request (React `cache()`), so the layout and
+  a page share one query.
+- `GET /api/me/preferences` (signed_in) → the object. `PATCH /api/me/preferences` (signed_in,
+  body: one or more keys) → the object. Rate limit 60 a minute per person, GET and PATCH sharing
+  one count. PATCH reads the body itself: the rate limit is counted first (refused bodies count
+  too), then a body over 2,048 characters is 413 `PAYLOAD_TOO_LARGE`, then it is parsed and handed
+  to `update`.
+- Every key may be saved by anyone; a key that doesn't apply to someone's role (a PM has no
+  report) just has no effect.
+
+### My settings page (`/my-settings`)
+
+- Any signed-in person (`requireUser()`). Nav item `mySettings`: "My settings", icon `UserCog`,
+  the last item for every role (an employee sees Today, My log, Projects, My settings); also
+  "My settings" (same icon) above "Sign out" in the account menu (sidebar and top-bar avatar).
+- Built like Settings (artboard 12): TopBar "My settings", subtitle "How Daybook looks and works
+  for you", a section list card on the left (anchors) and one card per section on the right, rows
+  with a label, a muted help line and the control on the right (Toggle) or below (Segmented).
+  **Every change saves at once** (PATCH with that one key; no Save button): a quiet "Saved" /
+  "Saving…" status at the top right, placed over the TopBar so it never takes a row of its own on
+  narrow screens; a failed save puts the control back and shows a toast.
+- Sections, in this order (a section that doesn't apply is left out, and so is its anchor). "Writes
+  reports" (`writesReports(user)` in `my-settings/sections.js`) is `report.self`, except an Admin
+  who doesn't track attendance (the same rule that hides Today and My log in the sidebar):
+  1. **Daily report** (people who write reports):
+     - "Submit buttons" (Segmented: Both · Submit and check out · Submit report). Help: "Submit and
+       check out shows while you're checked in today. Update report always shows once the report
+       is submitted."
+     - "New tasks start as" (Segmented: In progress · Done). Help: "For tasks you add yourself.
+       Tasks from your timers start as In progress."
+     - "Bring unfinished tasks into my next report" (Toggle). Help: "Tasks still in progress or
+       blocked in your last report start your next one."
+     - "Show the Slack preview" (Toggle). Help: "Beside your report, what will post to Slack."
+  2. **AI** (people who write reports, while `ai.isAvailable('polish')`):
+     - "Polish with AI button" (Toggle). Help: "At the top of your report, for every task at once."
+     - "Polish on each task line" (Toggle). Help: "A sparkle at the end of each task line, for one
+       task at a time."
+     - "Suggest wording after Fill report from timers" (Toggle).
+     - Under them, muted: "When you use these, your task lines are sent to Google Gemini."
+  3. **Notifications** (everyone): "Ring the bell for unread notifications" (Toggle). Help: "A
+     small swing every few seconds while you have unread ones." Then the existing desktop switch
+     (`PushSwitch` "Show on this computer"), only while desktop notifications are on for the
+     company.
+  4. **Appearance** (everyone): "Theme" (Segmented: Match my computer · Light · Dark).
+- Loading skeleton (`loading.js`) like Settings'. Desktop, < 1024 px and 375 px layouts, dark theme.
+
+### What the preferences change
+
+- **Submit buttons** (report top bar). "Update report" and "Request an edit" never hide.
+  `'submit'` hides "Submit and check out". `'checkout'` hides "Submit report" only while
+  "Submit and check out" is shown (today's draft, still checked in); otherwise "Submit report"
+  shows as before, so a report can always be sent. When "Submit and check out" is the only submit
+  button it is the primary (blue) one (`submitButtonsShown(...).checkOutPrimary`).
+- **New tasks start as**: lines added by hand (Add task, Enter at the end of a line, the empty line
+  of a newly added project) get this status; lines written by Fill report from timers and carried
+  lines keep theirs.
+- **Carry-over off**: a new draft (opening the report, or an approved edit request creating a
+  missing day) starts without carried lines. Existing drafts are not changed.
+- **Slack preview off**: the side panel isn't rendered and the cards take the full width.
+- **Polish**: `polishButton` off hides the top-bar button; `polishLines` off hides the line
+  sparkles; `polishAfterTimers` off skips the "Suggested wording" offer after Fill report from
+  timers. All three still need the company's AI (`data.aiPolish`) and an editable report.
+- **Bell**: `bellRing` off stops the swing; the red dot and the count stay.
+- **Theme**: `data-theme="light" | "dark"` on `<html>` overrides the device setting.
+  `globals.css` writes each colour that changes as `light-dark(light, dark)` (one list for both
+  themes), and three rules pick `color-scheme`: `:root` light, `:root[data-theme='dark']` dark,
+  and under `prefers-color-scheme: dark` `:root:not([data-theme='light'])` dark. Any other rule
+  that differs in the dark theme uses `light-dark()` too, never its own `prefers-color-scheme`
+  query. Browsers without `light-dark()` (before Chrome/Edge 123, Firefox 120, Safari 17.5) get the
+  light theme from an `@supports not` block (`tests/unit/themeFallback.test.js` keeps it equal to
+  the light side). `'system'` removes the attribute. AppFrame renders `ThemeSync`, which puts the
+  theme script in `<head>` before the first paint and keeps a copy in
+  `localStorage['daybook-theme']`; the launch script (root layout) applies that copy first on every
+  page, the sign-in page included (only `'light'` or `'dark'` are ever applied), so pages don't
+  flash. My settings applies a
+  change at once, without a reload. Sign out resets the theme to `'system'` (attribute and stored
+  copy), so the sign-in page on a shared computer doesn't keep the last person's theme.
+
+### Polish on each task line
+
+- Shown on an editable report's task line when `data.aiPolish`, `polishLines` is on and the line
+  has text (1–500 characters trimmed). A small icon button (lucide `Sparkles` 16 px) inside the
+  task field's cell, at its right end before the remove ×; visible while the row is hovered (only
+  on devices that can hover, so a tap never leaves a sticky hover) or has focus, and while it is
+  busy or showing a suggestion. On touch screens wider than 640 px it always shows. On touch phones
+  (640 px and narrower) it shows only while the line is focused, busy or suggesting, so the title
+  keeps its width; while hidden, taps go through to the field. Name "Polish task 2 for Daybook
+  with AI", tooltip "Polish with AI".
+- Press → `POST /api/ai/polish` with that one line. While waiting the icon is a spinner
+  (`aria-busy`, presses ignored) and the line stays editable. Lines are independent: several may
+  be waiting at once, and the top-bar button works meanwhile.
+- A changed answer → a suggestion strip under the line (inside the row, full width; violet tokens
+  `--violet-soft` / `--violet-text`): an arrow, the suggested text ("Suggested:" for screen
+  readers), and two small buttons **Keep mine** and **Use**. Focus moves to **Use**; Escape in the
+  strip is Keep mine. **Use** changes only the title (status and priority link stay), through the
+  same `change()` path and only while the line still says what was sent; focus returns to the
+  task field. Keep mine closes it; focus returns to the sparkle. Typing in the line, removing it,
+  or the report becoming read-only drops the strip. While the report is submitting, Keep mine and
+  Use are disabled (Escape does nothing). The arrow and the buttons line up with the first line of
+  a long suggestion.
+- An unchanged answer → toast "This task already reads well". An error → toast "Couldn't polish
+  this task" with the error's message.
+- Limits: each press is one Gemini request. The per-person polish cap is now **40 a day** (was 20) and the polish rate limit **20 a minute** (was 10); the company's daily limit is unchanged.
+
+### Version
+
+- `APP_VERSION` '1.06'.
+
+### Tests
+
+- `tests/e2e/my-settings.spec.js` signs in as Ankit Rana (ankit@company.com): the evening demo
+  leaves Vishal checked out with a submitted report, so only Ankit shows "Submit and check out".

@@ -120,7 +120,7 @@ export default function AiSection({ configured, usage }) {
             <FeatureToggle
               name="aiPolishEnabled"
               label="Polish my tasks"
-              help="A Polish with AI button on the daily report, also offered after Fill report from timers. 20 a day per person."
+              help="A Polish with AI button and a sparkle on each task line of the daily report, also offered after Fill report from timers. 40 a day per person."
             />
             <TimedFeature
               name="aiPmSummaryEnabled"
