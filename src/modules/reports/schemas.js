@@ -6,6 +6,8 @@ export const TASK_STATUSES = ['done', 'in_progress', 'blocked'];
 export const MAX_ENTRIES = 20;
 export const MAX_TASKS_PER_ENTRY = 50;
 export const MAX_TASK_LENGTH = 500;
+/** A task line's timer note (report_tasks.timer_note): as long as a timer note can be. */
+export const MAX_TIMER_NOTE_LENGTH = 200;
 /** An entry may hold at most one day of hours while drafting; submit allows 16 in total. */
 export const MAX_ENTRY_HOURS = 24;
 export const MAX_ENTRY_MINUTES = MAX_ENTRY_HOURS * 60;
@@ -123,6 +125,21 @@ const projectTaskId = z.preprocess(
     .optional(),
 );
 
+/**
+ * The timer note a task line was filled from (CONTRACT 21, "Timer lines remember their note"):
+ * trimmed; '', null or missing mean none (null). Only "Fill report from timers" sets it, and it
+ * never shows, so a reworded line still stands for its note.
+ */
+const timerNote = z
+  .string({ error: 'Send the timer note as text.' })
+  .trim()
+  .max(
+    MAX_TIMER_NOTE_LENGTH,
+    `Keep the timer note to ${MAX_TIMER_NOTE_LENGTH} characters or fewer.`,
+  )
+  .nullish()
+  .transform((value) => value || null);
+
 export const taskInputSchema = z.object({
   id: optionalId,
   title: z
@@ -131,6 +148,7 @@ export const taskInputSchema = z.object({
     .default(''),
   status: z.enum(TASK_STATUSES, { error: 'Pick Done, In progress or Blocked.' }),
   projectTaskId,
+  timerNote,
 });
 
 /**

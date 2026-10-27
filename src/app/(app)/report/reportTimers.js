@@ -26,6 +26,14 @@ function timerTitle(task) {
   return String(task.note ?? task.projectTaskTitle ?? '').trim();
 }
 
+/**
+ * A timer task's note, trimmed, or null. The day summary gives a priority task timed without a
+ * note the task's title as its note (timers/rules.js), so its line keeps that title.
+ */
+function timerNoteOf(task) {
+  return String(task.note ?? '').trim() || null;
+}
+
 /** Whether the shown hours already equal these minutes (so '2.5' and '2h 30m' are the same). */
 function sameHours(text, minutes) {
   const parsed = parseHours(text);
@@ -38,7 +46,11 @@ export function hoursFromMinutes(minutes) {
   return { hours: timeText(value), savedMinutes: value };
 }
 
-/** A task line for one timer task (status In progress), reusing `base` (key, id) when given. */
+/**
+ * A task line for one timer task (status In progress), reusing `base` (key, id) when given. The
+ * line remembers the timer note it was written from (`timerNote`, CONTRACT 21), which stays when
+ * its title is reworded later.
+ */
 function lineFromTimer(task, base = newTask()) {
   const linked = Boolean(task.projectTaskId);
   return {
@@ -49,17 +61,33 @@ function lineFromTimer(task, base = newTask()) {
     projectTaskId: linked ? task.projectTaskId : null,
     priority: linked ? (task.priority ?? null) : null,
     projectTaskTitle: linked ? (task.projectTaskTitle ?? null) : null,
+    timerNote: timerNoteOf(task),
   };
 }
 
-/** A line already says this: the same priority task, else the same title (any case). */
-function hasLine(lines, task) {
+/**
+ * The line that already says this timer task, and how. A line with the same priority task
+ * ('task') or filled from the same note ('note': any case, maybe reworded since by hand or by
+ * Polish with AI) comes first; else a line with the same title in any case ('title': the first
+ * such line without a timer note of its own, else the first). A line emptied by hand no longer
+ * stands for its note.
+ * @returns {{ by: 'task' | 'note' | 'title', index: number } | null}
+ */
+function lineFor(lines, task) {
   const title = normalTitle(timerTitle(task));
-  return lines.some(
-    (line) =>
-      (task.projectTaskId && Number(line.projectTaskId) === Number(task.projectTaskId)) ||
-      normalTitle(line.title) === title,
-  );
+  const note = normalTitle(timerNoteOf(task));
+  let byTitle = null;
+  for (const [index, line] of lines.entries()) {
+    if (task.projectTaskId && Number(line.projectTaskId) === Number(task.projectTaskId)) {
+      return { by: 'task', index };
+    }
+    const said = normalTitle(line.title);
+    if (note && said && normalTitle(line.timerNote) === note) return { by: 'note', index };
+    if (said === title && (byTitle === null || (lines[byTitle].timerNote && !line.timerNote))) {
+      byTitle = index;
+    }
+  }
+  return byTitle === null ? null : { by: 'title', index: byTitle };
 }
 
 /** The card's only line is empty (nothing typed, no priority task): timer lines replace it. */
@@ -77,7 +105,7 @@ export function mergeTimerTasks(lines, timerTasks) {
   let next = lines;
   let lone = loneEmptyLine(lines);
   for (const task of timerTasks ?? []) {
-    if (!timerTitle(task) || hasLine(next, task)) continue;
+    if (!timerTitle(task) || lineFor(next, task)) continue;
     if (lone) {
       next = [lineFromTimer(task, lone)];
       lone = null;
@@ -86,6 +114,53 @@ export function mergeTimerTasks(lines, timerTasks) {
     }
   }
   return next;
+}
+
+/**
+ * A card's lines where each line that says a timer note by its title but has no timer note of its
+ * own (saved before migration 014, carried from such a report, or typed by hand) now remembers
+ * it, so rewording it later doesn't bring the note back.
+ * @returns {object[]} the same array when no line changed
+ */
+function rememberNotes(lines, timerTasks) {
+  let next = lines;
+  for (const task of timerTasks ?? []) {
+    const note = timerNoteOf(task);
+    const match = note ? lineFor(next, task) : null;
+    if (match?.by !== 'title' || next[match.index].timerNote) continue;
+    next = next.map((line, index) => (index === match.index ? { ...line, timerNote: note } : line));
+  }
+  return next;
+}
+
+/**
+ * The first step of "Fill report from timers" (CONTRACT 21, "Timer lines remember their note"):
+ * on the card a fill would fill (the first card of each timer project with minutes), a line that
+ * already says a timer note by its title but has no timer note remembers it. Nothing shows, so
+ * the page doesn't treat it as a fill.
+ * @param {object[]} entries editor rows (reportState.js)
+ * @param {object | null} summary timers.getDaySummary()
+ * @returns {object[]} the same array when no line changed
+ */
+export function rememberTimerNotes(entries, summary) {
+  const projects = new Map(
+    (summary?.projects ?? [])
+      .filter((project) => project.roundedMinutes > 0)
+      .map((project) => [`p${project.projectId}`, project]),
+  );
+  const seen = new Set();
+  let changed = false;
+  const next = entries.map((entry) => {
+    const key = projectKey(entry);
+    const project = key ? projects.get(key) : null;
+    if (!project || seen.has(key)) return entry;
+    seen.add(key);
+    const tasks = rememberNotes(entry.tasks, project.tasks);
+    if (tasks === entry.tasks) return entry;
+    changed = true;
+    return { ...entry, tasks };
+  });
+  return changed ? next : entries;
 }
 
 /** A new card for a timer project the report doesn't have yet. */
@@ -105,15 +180,16 @@ function entryFromTimer(project) {
 }
 
 /**
- * "Fill report from timers" (CONTRACT 15): merges the day's timer summary into the editor rows.
- * Cards match timer projects by project ('p<id>'); their hours become the timer time (to the
- * minute) and missing task lines are added (In progress; matched by priority task, else by title
- * in any case; the lone empty line of a card is replaced). Projects with 0 minutes are skipped,
- * nothing is removed, and timer projects the report doesn't have are added at the end in the
- * summary's order (biggest first), except those timed for TIMER_TOLERANCE_MINUTES or less (a
- * misclick: required mode doesn't ask for them, and their card would only block the submit with
- * no tasks). `hoursOnly` (required mode, on load) only changes the hours of cards already in the
- * report.
+ * "Fill report from timers" (CONTRACT 15): merges the day's timer summary into the editor rows
+ * (the page runs rememberTimerNotes first). Cards match timer projects by project ('p<id>'); their
+ * hours become the timer time (to the minute) and missing task lines are added (In progress;
+ * matched by priority task, else by title in any case, else by the timer note a line was filled
+ * from (CONTRACT 21), so a reworded line isn't added again; the lone empty line of a card is
+ * replaced). Projects with 0 minutes are skipped, nothing is removed, and timer projects the
+ * report doesn't have are added at the end in the summary's order (biggest first), except those
+ * timed for TIMER_TOLERANCE_MINUTES or less (a misclick: required mode doesn't ask for them, and
+ * their card would only block the submit with no tasks). `hoursOnly` (required mode, on load) only
+ * changes the hours of cards already in the report.
  * @param {object[]} entries editor rows (reportState.js)
  * @param {{ projects: Array<{ projectId: number, projectName: string, projectColor: string,
  *   isUrgent: boolean, roundedMinutes: number, tasks: Array<{ note: string | null,

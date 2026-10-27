@@ -736,8 +736,9 @@ color, note } | null` (read with one extra query each over `attendance_breaks` /
 - **Daily report** (reports owner): when timers aren't off and the report is editable, a "From your
   timers" card lists projects with rounded hours and **Fill report from timers**: merge by project
   (hours become the rounded timer hours; projects with 0 rounded minutes are skipped; missing task
-  lines are added with status In progress — matched by priority task, else case-insensitive title;
-  the lone empty task line of a card is replaced; nothing is removed). Required mode applies exactly where the server checks it (`data.timers.required`, from
+  lines are added with status In progress — matched by priority task, else case-insensitive title,
+  else the timer note a line was filled from (`timerNote`, CONTRACT 21 "Timer lines remember their
+  note"; a line that says a note by title but has none takes the note first); the lone empty task line of a card is replaced; nothing is removed). Required mode applies exactly where the server checks it (`data.timers.required`, from
   `reports.timersForReport({ user, report })`): project hours are read-only ("From timers"); on a
   draft the hours merge runs on load when they differ and follows fresh summaries
   (`reports.getTimersForReport({ user, reportId })` via `GET /api/reports/[id]/timers`, re-read
@@ -1250,6 +1251,58 @@ themselves only. Company rules stay in Settings (Admin).
 - An unchanged answer → toast "This task already reads well". An error → toast "Couldn't polish
   this task" with the error's message.
 - Limits: each press is one Gemini request. The per-person polish cap is now **40 a day** (was 20) and the polish rate limit **20 a minute** (was 10); the company's daily limit is unchanged.
+
+### Timer lines remember their note (fix found testing 1.06)
+
+Bug: a line written by **Fill report from timers** and then reworded (Polish → Use, the top-bar
+dialog, or a hand edit such as fixing a typo) no longer matched its timer's note, so the next Fill
+added the original note again as a new line. Fill twice with a polish in between and the card shows
+"Deploying new features", "Deploying new features", "Deploting new features".
+
+- Migration 014: `report_tasks.timer_note` VARCHAR(200) NULL (the timer note's length), no index,
+  no default. Additive; existing rows stay NULL.
+- A task line's `timerNote` (string or null): the trimmed timer note the line stands for, which is
+  the timer summary task's `note`. For a priority task timed without a note that is the task's
+  title (`timers/rules.js` taskLine), so such a line stores the title (it then still matches after
+  the task is marked done and the timer line becomes a plain note). Set only by Fill, never by
+  typing:
+  - on the lines Fill writes (`lineFromTimer`, including the lone empty line it replaces);
+  - before the merge, on a line of the card Fill fills that already says a timer note by title
+    (case-insensitive, trimmed) but has no note (`rememberTimerNotes`): lines saved before 014,
+    lines carried from such a report, and lines typed by hand. Not when another line already
+    matches that timer task by priority task or by note; the first such line without a note gets
+    it.
+
+  Otherwise null. It never shows on the page and never changes when the title changes, by hand or by
+  polish.
+
+- Fill's match (`lineFor` in `reportTimers.js`): same priority task, else the title equals the note
+  (case-insensitive, trimmed), else the line's `timerNote` equals the note (the same comparison). So
+  a reworded line still stands for its timer note and isn't added again. A line the person removed
+  is still added again by the next Fill (as before: "nothing is removed", and Fill brings back what
+  is missing). A line emptied by hand no longer stands for its note: the lone empty line is refilled,
+  otherwise the note is added as a new line.
+- A Fill that only gives lines their notes says "Your report already matches your timers" and
+  offers nothing to polish. A draft autosaves the notes; on a submitted report the change is quiet
+  (no "Unsaved changes", no backup) and goes out with the next Update report.
+- It travels with the line everywhere the line goes: `serialize` sends it (`timerNote`, omitted when
+  null), `taskInputSchema` takes it (optional, trimmed, '' → null, max 200), `writeEntries` saves it
+  on insert and update (part of the fields `sameFields` compares), the report view returns it on
+  every task, `entriesFromView` reads it, and the browser backup of a submitted report keeps it.
+  Carry-over copies it to the carried line (so a carried, reworded line isn't added again by today's
+  Fill of the same note). It is not part of the report's version check: a page opened before the
+  deploy saves without it (clearing it), and the next save from a new page restores it.
+- Moving a card to another project (`unlinkTasks`, used by `pickProject` and by the request-a-project
+  move) clears `timerNote` on its lines: the note belonged to the old project's timer.
+- Nothing else reads it: Slack text, the PM views, exports, revisions and AI prompts are unchanged.
+- Lines saved before migration 014 have no note. A line that still says its timer note gets it on
+  the next Fill. A line already reworded before 014 no longer matches, so the next Fill adds the
+  note once more as a new line that remembers it. Keep that new line (reword or polish it) and
+  remove the old reworded one; removing the new line instead brings it back on every Fill.
+- A deploy before `npm run migrate` (no `report_tasks.timer_note` yet; `reports/repo.hasTimerNote`):
+  task lines are read and written without `timerNote`, so Fill matches by priority task and title
+  only, as before. One warning is logged, and reports open, save, submit and carry over as usual.
+  Once the migration has run, notes are kept again without a restart.
 
 ### Version
 
