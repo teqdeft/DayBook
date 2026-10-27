@@ -2,11 +2,15 @@
 // One task line of a project card: the title, with the project's open priority tasks suggested
 // while it is typed (CONTRACT section 13), the linked priority task's tag, remove, and the
 // status select. Picking a suggestion fills the title and links the line; the × on the tag
-// unlinks it, and so does clearing the title.
+// unlinks it, and so does clearing the title. With AI on, a written line also has a sparkle that
+// polishes just this line, and Gemini's suggestion shows under it (CONTRACT 21, LinePolish.jsx).
 import { useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import PriorityTag, { PRIORITY_LABELS } from '@/components/PriorityTag';
 import StatusCell from '@/components/StatusCell';
+import { LinePolishButton, LineSuggestion } from './LinePolish';
+import { usePolish } from './PolishProvider';
+import { canPolish } from './reportPolish';
 import { NO_LINK, matchSuggestions } from './reportState';
 import styles from './TaskLine.module.css';
 
@@ -80,6 +84,11 @@ export default function TaskLine({
   const label = `Task ${index + 1} for ${projectName}`;
   const linked = Boolean(task.projectTaskId);
   const inputElement = useRef(null);
+  const sparkleRef = useRef(null);
+  // Polish on each task line: shown for a written line while the person and the company have it on.
+  const { lines } = usePolish();
+  const polishState = lines.states[task.key] ?? null;
+  const sparkle = lines.enabled && !readOnly && canPolish(task);
   // The line is a combobox only when it has priority tasks to suggest; otherwise a plain field.
   const combobox = !readOnly && !linked && matchSuggestions(suggestions, '', taken).length > 0;
   const items = combobox && !disabled ? matchSuggestions(suggestions, task.title, taken) : [];
@@ -122,6 +131,8 @@ export default function TaskLine({
     // An emptied line no longer says which priority task it worked on.
     const unlink = linked && !title.trim() ? NO_LINK : null;
     onUpdate({ title, ...unlink });
+    // Typing drops the line's suggestion (one still on its way is dropped when it arrives).
+    lines.drop(task.key);
     setDismissed(false);
     setActive(-1);
   }
@@ -178,6 +189,16 @@ export default function TaskLine({
               setActive(-1);
             }}
           />
+          {sparkle ? (
+            <LinePolishButton
+              ref={sparkleRef}
+              label={`Polish task ${index + 1} for ${projectName} with AI`}
+              busy={polishState?.phase === 'busy'}
+              disabled={disabled}
+              className={`${styles.polish} ${polishState ? styles.polishShown : ''}`}
+              onPolish={() => lines.polish(task.key)}
+            />
+          ) : null}
         </div>
         {readOnly ? null : (
           <button
@@ -221,6 +242,22 @@ export default function TaskLine({
           items={items}
           active={activeItem ? items.indexOf(activeItem) : -1}
           onPick={pick}
+        />
+      ) : null}
+      {sparkle && polishState?.phase === 'suggest' ? (
+        <LineSuggestion
+          key={polishState.id}
+          text={polishState.after}
+          label={`Suggested wording for task ${index + 1} for ${projectName}`}
+          disabled={disabled}
+          onUse={() => {
+            lines.use(task.key);
+            inputElement.current?.focus();
+          }}
+          onKeep={() => {
+            lines.keep(task.key);
+            sparkleRef.current?.focus();
+          }}
         />
       ) : null}
       {error ? (

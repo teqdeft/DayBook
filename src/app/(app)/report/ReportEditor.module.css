@@ -5,6 +5,11 @@
   gap: 20px;
 }
 
+/* Slack preview off (My settings, CONTRACT 21): the cards take the full width. */
+.full {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .main {
   display: flex;
   flex-direction: column;

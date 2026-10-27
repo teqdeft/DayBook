@@ -138,6 +138,7 @@ describe('the Ask Daybook nav item', () => {
       'attendance',
       'requests',
       'ask',
+      'mySettings',
     ]);
     expect(keys(user('hr'), { ask: true })).toEqual([
       'today',
@@ -145,6 +146,7 @@ describe('the Ask Daybook nav item', () => {
       'attendance',
       'ask',
       'people',
+      'mySettings',
     ]);
     expect(keys(user('admin', false), { ask: true })).toContain('ask');
     expect(keys(user('employee'), { ask: true })).not.toContain('ask');

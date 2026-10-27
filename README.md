@@ -21,7 +21,7 @@ Requirements: Node.js 20.9 or newer (24 LTS recommended) and MySQL 8.4 (MariaDB 
 ```bash
 npm install
 cp .env.example .env.local        # then fill in DB_*, SESSION_SECRET and the Slack values
-npm run migrate                   # creates the 19 tables
+npm run migrate                   # creates the tables
 npm run seed                      # departments, the Internal client, default settings, first Admin
 npm run dev                       # http://localhost:3000
 npm run worker                    # in a second terminal: reminders, midnight jobs, Slack sending
@@ -108,10 +108,19 @@ npm run test:e2e
   employees can search their projects; the daily report has "Submit and check out"; the PM
   projects table shows each project's all-time hours under "Hours this week".
 - **AI with Gemini, version label, notification center** (CONTRACT 20): see
-  [AI with Gemini](#ai-with-gemini) below. The sidebar and sign-in page show "Daybook v1.05"
-  (`src/config/version.js`, raised with each release). In the bell, clicking a notification marks
-  it read; each one can be marked unread or deleted (swipe left on touch screens, with Undo), and
-  the bell swings gently while there are unread ones.
+  [AI with Gemini](#ai-with-gemini) below. The sidebar and sign-in page show the version, now
+  "Daybook v1.06" (`src/config/version.js`, raised with each release). In the bell, clicking a
+  notification marks it read; each one can be marked unread or deleted (swipe left on touch
+  screens, with Undo), and the bell swings gently while there are unread ones.
+- **My settings** (company request, CONTRACT 21): every person has a **My settings** page (last
+  item in the sidebar, and in the account menu above Sign out). Changes save at once and affect
+  only that person: which submit buttons the daily report shows (both, only Submit and check out,
+  or only Submit report; a report can always be sent), whether new tasks start as In progress or
+  Done, carrying unfinished tasks into the next report, the Slack preview, the three AI polish
+  switches, the bell's swing, and the theme (match the computer, light or dark). People who
+  don't write reports (PMs, an Admin who isn't tracked) see only Notifications and Appearance.
+  Stored in `user_preferences` (migration 013); until `npm run migrate` has run, everyone gets the
+  defaults and changes can't be saved.
 
 ## Slack setup (one Slack app per environment)
 
@@ -193,10 +202,11 @@ push services (`fcm.googleapis.com` for Chrome, `*.notify.windows.com` for Edge)
 
 ## AI with Gemini
 
-Five features use Google Gemini: **Polish with AI** and polishing after **Fill report from
-timers** (daily report), a **daily summary for PMs** at 7 PM (bell + Slack DM), **weekly HR
-notes** on the week's last working day, and **Ask Daybook** (Admin, PMs, HR; each sees only what
-their screens show). Saved summaries are under **Summaries**.
+Five features use Google Gemini: **Polish with AI** (the top-bar button for every task, a
+sparkle on each task line for one task, and polishing after **Fill report from timers**; each
+person can turn these off in My settings), a **daily summary for PMs** at 7 PM (bell + Slack
+DM), **weekly HR notes** on the week's last working day, and **Ask Daybook** (Admin, PMs, HR;
+each sees only what their screens show). Saved summaries are under **Summaries**.
 
 1. Create a key at [Google AI Studio](https://aistudio.google.com) → **Get API key** → **Create
    API key**. Keep it private (never in chat, Slack, email or git).
@@ -212,7 +222,9 @@ their screens show). Saved summaries are under **Summaries**.
    `GEMINI_MODEL` instead.
 
 3. Admin: **Settings → AI → Use AI (Gemini)**, choose the features and the daily limit (200
-   requests for the whole company by default), **Save changes**.
+   requests for the whole company by default), **Save changes**. Each person also has their own
+   daily caps: 40 polish requests (each sparkle press is one) and 30 Ask Daybook questions. With
+   many people polishing line by line, raise the company limit to match.
 
 Privacy: people's names go to Gemini as "Person 1", "Person 2" in summaries and HR notes; emails,
 phone numbers, IPs and Slack ids are never sent (Ask Daybook sends the names its answers need,

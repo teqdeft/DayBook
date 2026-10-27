@@ -1,7 +1,8 @@
 // Pure helpers for "Polish my tasks" on the daily report (CONTRACT 20, browser side): which task
 // lines go to POST /api/ai/polish, which lines "Fill report from timers" just wrote (they are
 // polished on their own), whether Gemini's answer may still be offered, the dialog's before →
-// after rows, and applying the ticked ones.
+// after rows, and applying the ticked ones. A task line's own sparkle (CONTRACT 21) sends one line
+// (polishLineFor) and uses the same answer and apply rules (reportLinePolish.js).
 
 /** The API takes at most this many lines, each up to this many characters. */
 export const MAX_POLISH_LINES = 60;
@@ -39,10 +40,11 @@ function polishLine(entry, task) {
   };
 }
 
-const canPolish = (task) => {
-  const title = String(task.title ?? '').trim();
+/** Whether a task line can be polished: it has text (1–MAX_POLISH_TITLE characters, trimmed). */
+export function canPolish(task) {
+  const title = String(task?.title ?? '').trim();
   return title.length > 0 && title.length <= MAX_POLISH_TITLE;
-};
+}
 
 /**
  * The report's task lines that can be polished: written (not empty) and not too long, in page
@@ -58,6 +60,21 @@ export function polishableLines(entries) {
     }
   }
   return lines.slice(0, MAX_POLISH_LINES);
+}
+
+/**
+ * One task line to polish on its own (its sparkle), like polishableLines gives it; null when the
+ * report has no such line or it can't be polished (empty or too long).
+ * @param {object[]} entries editor rows
+ * @param {string} key the task line's key
+ * @returns {{ key: string, title: string, projectName: string, projectColor: string | null } | null}
+ */
+export function polishLineFor(entries, key) {
+  for (const entry of entries ?? []) {
+    const task = (entry.tasks ?? []).find((item) => item.key === key);
+    if (task) return canPolish(task) ? polishLine(entry, task) : null;
+  }
+  return null;
 }
 
 /**

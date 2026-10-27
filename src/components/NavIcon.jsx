@@ -109,6 +109,17 @@ const SHAPES = {
       </>
     ),
   },
+  // My settings (not on the canvas: lucide's user-cog, CONTRACT 21)
+  UserCog: {
+    body: (
+      <>
+        <path d="M10 15H6a4 4 0 0 0-4 4v2" />
+        <path d="m14.305 16.53.923-.382M15.228 13.852l-.923-.383M16.852 12.228l-.383-.923M16.852 17.772l-.383.924M19.148 12.228l.383-.923M19.53 18.696l-.382-.924M20.772 13.852l.924-.383M20.772 16.148l.924.383" />
+        <circle cx="18" cy="15" r="3" />
+        <circle cx="9" cy="7" r="4" />
+      </>
+    ),
+  },
   // Requests
   Inbox: {
     body: (

@@ -16,6 +16,7 @@
 
 /* The title, and before it the linked priority task's tag. */
 .titleCell {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -124,10 +125,64 @@
   color: var(--red-text);
 }
 
+/* The line's polish sparkle (CONTRACT 21, LinePolish.module.css): like the remove ×, it shows on
+   hover and focus, and stays while it waits for Gemini or shows a suggestion. It sits over the
+   right end of the field, which makes room for it only while it shows, so a hidden sparkle never
+   cuts a title shorter. */
+.polish {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  opacity: 0;
+  translate: 0 -50%;
+  transition: opacity 0.12s ease;
+}
+
+.row:focus-within .polish,
+.polish:focus-visible,
+.polishShown {
+  opacity: 1;
+}
+
+.row:focus-within .titleCell:has(> .polish) > .taskInput,
+.titleCell:has(> .polishShown) > .taskInput {
+  padding-right: 36px;
+}
+
 @media (hover: none) {
   .removeTask,
   .unlink {
     opacity: 1;
+  }
+}
+
+/* Hover only with a pointer (a tap leaves :hover stuck on a touch row); always on touch screens
+   wider than a phone. */
+@media (hover: hover) {
+  .row:hover .polish {
+    opacity: 1;
+  }
+
+  .row:hover .titleCell:has(> .polish) > .taskInput {
+    padding-right: 36px;
+  }
+}
+
+@media (hover: none) and (min-width: 641px) {
+  .polish {
+    opacity: 1;
+  }
+
+  .titleCell:has(> .polish) > .taskInput {
+    padding-right: 36px;
+  }
+}
+
+/* On a phone, room on every line would shrink titles to a word: it shows once the line is tapped
+   (focus), and while hidden lets taps through to the end of the field. */
+@media (hover: none) and (max-width: 640px) {
+  .row:not(:focus-within) .polish:not(.polishShown) {
+    pointer-events: none;
   }
 }
 

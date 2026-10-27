@@ -28,7 +28,8 @@
 }
 
 /* The swing (CONTRACT 20): about every 6 s while something is unread and the list is closed,
-   hung from the top of the bell. ringNow starts with a swing, ringLater waits one cycle. */
+   hung from the top of the bell. ringNow starts with a swing, ringLater waits one cycle. Neither
+   is set when the person turned the swing off in My settings (bellSwing, CONTRACT 21). */
 .ring {
   display: inline-flex;
   transform-origin: 50% 3px;

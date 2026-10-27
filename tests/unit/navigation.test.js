@@ -32,6 +32,7 @@ describe('navigation', () => {
       'screenTime',
       'attendance',
       'requests',
+      'mySettings',
     ]);
     expect(activeNavHref(items, '/report')).toBeNull();
     expect(homePathFor(pm)).toBe('/team');
@@ -60,6 +61,7 @@ describe('navigation', () => {
       'attendance',
       'requests',
       'summaries',
+      'mySettings',
     ]);
     expect(keys(hr, { ask: true, summaries: true })).toEqual([
       'today',
@@ -68,9 +70,15 @@ describe('navigation', () => {
       'ask',
       'summaries',
       'people',
+      'mySettings',
     ]);
     expect(keys(ceo, { summaries: true })).toContain('summaries');
-    expect(keys(employee, { ask: true, summaries: true })).toEqual(['today', 'log', 'projects']);
+    expect(keys(employee, { ask: true, summaries: true })).toEqual([
+      'today',
+      'log',
+      'projects',
+      'mySettings',
+    ]);
     expect(keys(hr, {})).not.toContain('summaries');
     const item = navigationFor(hr, {}, { summaries: true }).find((i) => i.key === 'summaries');
     expect(item).toMatchObject({ label: 'Summaries', href: '/summaries', icon: 'Newspaper' });
@@ -84,6 +92,36 @@ describe('navigation', () => {
       .map((item) => item.icon)
       .filter((icon) => !source.includes(`\n  ${icon}: {`));
     expect(missing).toEqual([]);
+  });
+
+  it('ends every role with My settings, open to anyone signed in (CONTRACT 21)', () => {
+    const hr = { role: 'hr', status: 'active', tracksAttendance: true };
+    for (const user of [employee, pm, hr, ceo, { ...ceo, tracksAttendance: true }]) {
+      const items = navigationFor(user, {}, { ask: true, summaries: true });
+      expect(items.at(-1)).toEqual({
+        key: 'mySettings',
+        label: 'My settings',
+        href: '/my-settings',
+        icon: 'UserCog',
+        matches: [],
+        badge: 0,
+      });
+    }
+    // An employee sees Today, My log, Projects, My settings.
+    expect(navigationFor(employee).map((item) => item.label)).toEqual([
+      'Today',
+      'My log',
+      'Projects',
+      'My settings',
+    ]);
+    // /my-settings lights up My settings, not Settings.
+    const items = navigationFor(ceo);
+    expect(activeNavHref(items, '/my-settings')).toBe('/my-settings');
+    expect(activeNavHref(items, '/settings')).toBe('/settings');
+  });
+
+  it('shows a deactivated person nothing, My settings included', () => {
+    expect(navigationFor({ ...employee, status: 'deactivated' })).toEqual([]);
   });
 
   it('hides Today and My log from an Admin who is not tracked', () => {

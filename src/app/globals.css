@@ -1,83 +1,85 @@
-/* Design tokens (build guide section 13). Components use these variables, never raw hex values. */
+/* Design tokens (build guide section 13). Components use these variables, never raw hex values.
+   A colour that changes in the dark theme (from the phone artboard) is light-dark(light, dark):
+   one list for both themes, and color-scheme below picks the side. */
 :root {
   /* surfaces */
-  --paper: #f5f6fa; /* page background */
-  --surface: #ffffff; /* cards, drawers */
-  --surface-muted: #f8f9fc; /* table headers, inner boxes */
-  --track: #eef0f6; /* bar tracks, row dividers */
-  --line: #e6e8f0; /* card borders */
-  --line-strong: #dcdfea; /* inputs, secondary buttons */
+  --paper: light-dark(#f5f6fa, #0f1226); /* page background */
+  --surface: light-dark(#ffffff, #1a1e3a); /* cards, drawers */
+  --surface-muted: light-dark(#f8f9fc, #151935); /* table headers, inner boxes */
+  --track: light-dark(#eef0f6, #252a4d); /* bar tracks, row dividers */
+  --line: light-dark(#e6e8f0, #2c3156); /* card borders */
+  --line-strong: light-dark(#dcdfea, #363c66); /* inputs, secondary buttons */
 
   /* text */
-  --ink: #1b1e33;
-  --ink-2: #3e4460; /* form labels */
-  --muted: #5b6178; /* secondary text */
+  --ink: light-dark(#1b1e33, #eceef7);
+  --ink-2: light-dark(#3e4460, #cdd1e6); /* form labels */
+  --muted: light-dark(#5b6178, #a0a5c3); /* secondary text */
 
   /* sidebar */
-  --navy: #151833;
-  --navy-raised: #20244a; /* workspace switcher */
-  --navy-active: #2d3272; /* active nav item */
+  --navy: light-dark(#151833, #0b0d1f);
+  --navy-raised: light-dark(#20244a, #171a38); /* workspace switcher */
+  --navy-active: light-dark(#2d3272, #262b66); /* active nav item */
   --navy-text: #c9cce0;
   --navy-muted: #9ea2c4;
-  --navy-line: #262a52;
+  --navy-line: light-dark(#262a52, #1d2146);
 
   /* brand and status */
-  --primary: #3848d6;
-  --primary-hover: #2733a8;
-  --primary-soft: #e7e9fb;
-  --primary-text: #26329a;
+  --primary: light-dark(#3848d6, #8c97ff);
+  --primary-hover: light-dark(#2733a8, #a6aeff);
+  --primary-soft: light-dark(#e7e9fb, #262b5c);
+  --primary-text: light-dark(#26329a, #c3c9ff);
   --marigold: #ffb020;
   --marigold-ink: #3b2600;
-  --marigold-soft: #fff1d6;
-  --marigold-text: #6b4500;
+  --marigold-soft: light-dark(#fff1d6, #3a2c10);
+  --marigold-text: light-dark(#6b4500, #ffd48a);
   --green: #0c8a5b;
-  --green-soft: #e1f3eb;
-  --green-text: #09633f;
+  --green-soft: light-dark(#e1f3eb, #12352a);
+  --green-text: light-dark(#09633f, #7fd8b3);
   --red: #d12f3a;
-  --red-soft: #fbe3e4;
-  --red-text: #9a1f28;
+  --red-soft: light-dark(#fbe3e4, #3d1a22);
+  --red-text: light-dark(#9a1f28, #ff9aa3);
   --violet: #7b45d6;
-  --violet-soft: #eee7fa;
-  --violet-text: #55289f;
+  --violet-soft: light-dark(#eee7fa, #2c2350);
+  --violet-text: light-dark(#55289f, #cdb5ff);
   /* a status colour used as text on a card (Team board group titles, "Show 18 more") */
-  --red-on-surface: #d12f3a;
-  --violet-on-surface: #7b45d6;
+  --red-on-surface: light-dark(#d12f3a, #ff6b76);
+  --violet-on-surface: light-dark(#7b45d6, #a985ff);
 
   /* project label colours (label background, label text, bar and square) */
-  --label-blue-bg: #e7e9fb;
-  --label-blue-text: #26329a;
+  --label-blue-bg: light-dark(#e7e9fb, #262b5c);
+  --label-blue-text: light-dark(#26329a, #c3c9ff);
   --label-blue: #3848d6;
-  --label-green-bg: #e1f3eb;
-  --label-green-text: #09633f;
+  --label-green-bg: light-dark(#e1f3eb, #12352a);
+  --label-green-text: light-dark(#09633f, #7fd8b3);
   --label-green: #0c8a5b;
-  --label-violet-bg: #eee7fa;
-  --label-violet-text: #55289f;
+  --label-violet-bg: light-dark(#eee7fa, #2c2350);
+  --label-violet-text: light-dark(#55289f, #cdb5ff);
   --label-violet: #7b45d6;
-  --label-orange-bg: #fdebdd;
-  --label-orange-text: #8a3f05;
+  --label-orange-bg: light-dark(#fdebdd, #3d2614);
+  --label-orange-text: light-dark(#8a3f05, #ffbd85);
   --label-orange: #f07a1a;
-  --label-teal-bg: #ddf1f5;
-  --label-teal-text: #0d5f72;
+  --label-teal-bg: light-dark(#ddf1f5, #0f3440);
+  --label-teal-text: light-dark(#0d5f72, #8adcee);
   --label-teal: #1a9bb8;
-  --label-pink-bg: #fbe5ee;
-  --label-pink-text: #8e2350;
+  --label-pink-bg: light-dark(#fbe5ee, #3d1a2b);
+  --label-pink-text: light-dark(#8e2350, #ffa3c4);
   --label-pink: #d6457a;
 
   /* urgent card */
-  --urgent-bg: #fff7e4;
-  --urgent-line: #f8e2b0;
+  --urgent-bg: light-dark(#fff7e4, #2e2412);
+  --urgent-line: light-dark(#f8e2b0, #4d3a17);
 
   /* measured from the design canvas (not in the guide's token list) */
-  --on-primary: #ffffff; /* text on --primary fills */
+  --on-primary: light-dark(#ffffff, #0f1226); /* text on --primary fills */
   --on-fill: #ffffff; /* text on green, red, violet, navy and ink fills */
-  --line-dashed: #c5c8d4; /* dashed "add" boxes */
-  --switch-off: #c9ccdb; /* toggle track when off */
-  --placeholder: #757575; /* input placeholders */
+  --line-dashed: light-dark(#c5c8d4, #454b7a); /* dashed "add" boxes */
+  --switch-off: light-dark(#c9ccdb, #3d4370); /* toggle track when off */
+  --placeholder: light-dark(#757575, #7d82a3); /* input placeholders */
   --radius-tile: 12px; /* stat tiles, project squares */
   --radius-pill: 999px;
 
   /* overlay behind drawers and dialogs */
-  --overlay: rgba(21, 24, 51, 0.36);
+  --overlay: light-dark(rgba(21, 24, 51, 0.36), rgba(5, 6, 16, 0.6));
   --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--primary);
 
   /* type */
@@ -107,60 +109,77 @@
   --table-head-height: 40px;
   --table-row-height: 54px;
   --drawer-width: 460px;
+}
 
+/* The theme (CONTRACT 21). Light by default; dark when the person chose dark (data-theme on <html>)
+   and, unless they chose light, when the computer is set to dark. color-scheme also themes the
+   scrollbars and form controls. Any other rule that differs in the dark theme uses light-dark()
+   too, never its own prefers-color-scheme query, so it follows the person's choice as well. */
+:root {
   color-scheme: light;
 }
 
-/* Dark theme (from the phone artboard), following the device setting. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0f1226;
-    --surface: #1a1e3a;
-    --surface-muted: #151935;
-    --track: #252a4d;
-    --line: #2c3156;
-    --line-strong: #363c66;
-    --ink: #eceef7;
-    --ink-2: #cdd1e6;
-    --muted: #a0a5c3;
-    --navy: #0b0d1f;
-    --navy-raised: #171a38;
-    --navy-active: #262b66;
-    --navy-line: #1d2146;
-    --primary: #8c97ff;
-    --primary-hover: #a6aeff;
-    --primary-soft: #262b5c;
-    --primary-text: #c3c9ff;
-    --marigold-soft: #3a2c10;
-    --marigold-text: #ffd48a;
-    --green-soft: #12352a;
-    --green-text: #7fd8b3;
-    --red-soft: #3d1a22;
-    --red-text: #ff9aa3;
-    --violet-soft: #2c2350;
-    --violet-text: #cdb5ff;
-    --red-on-surface: #ff6b76;
-    --violet-on-surface: #a985ff;
-    --label-blue-bg: #262b5c;
-    --label-blue-text: #c3c9ff;
-    --label-green-bg: #12352a;
-    --label-green-text: #7fd8b3;
-    --label-violet-bg: #2c2350;
-    --label-violet-text: #cdb5ff;
-    --label-orange-bg: #3d2614;
-    --label-orange-text: #ffbd85;
-    --label-teal-bg: #0f3440;
-    --label-teal-text: #8adcee;
-    --label-pink-bg: #3d1a2b;
-    --label-pink-text: #ffa3c4;
-    --urgent-bg: #2e2412;
-    --urgent-line: #4d3a17;
-    --on-primary: #0f1226;
-    --line-dashed: #454b7a;
-    --switch-off: #3d4370;
-    --placeholder: #7d82a3;
-    --overlay: rgba(5, 6, 16, 0.6);
+  :root:not([data-theme='light']) {
     color-scheme: dark;
+  }
+}
+
+/* Browsers without light-dark() (before Chrome and Edge 123, Firefox 120 and Safari 17.5, such as
+   iPhones that stop at iOS 16) would lose every colour above. They get the light theme instead.
+   tests/unit/themeFallback.test.js keeps this list equal to the light side of each colour. */
+@supports not (color: light-dark(#000, #fff)) {
+  :root {
+    --paper: #f5f6fa;
+    --surface: #ffffff;
+    --surface-muted: #f8f9fc;
+    --track: #eef0f6;
+    --line: #e6e8f0;
+    --line-strong: #dcdfea;
+    --ink: #1b1e33;
+    --ink-2: #3e4460;
+    --muted: #5b6178;
+    --navy: #151833;
+    --navy-raised: #20244a;
+    --navy-active: #2d3272;
+    --navy-line: #262a52;
+    --primary: #3848d6;
+    --primary-hover: #2733a8;
+    --primary-soft: #e7e9fb;
+    --primary-text: #26329a;
+    --marigold-soft: #fff1d6;
+    --marigold-text: #6b4500;
+    --green-soft: #e1f3eb;
+    --green-text: #09633f;
+    --red-soft: #fbe3e4;
+    --red-text: #9a1f28;
+    --violet-soft: #eee7fa;
+    --violet-text: #55289f;
+    --red-on-surface: #d12f3a;
+    --violet-on-surface: #7b45d6;
+    --label-blue-bg: #e7e9fb;
+    --label-blue-text: #26329a;
+    --label-green-bg: #e1f3eb;
+    --label-green-text: #09633f;
+    --label-violet-bg: #eee7fa;
+    --label-violet-text: #55289f;
+    --label-orange-bg: #fdebdd;
+    --label-orange-text: #8a3f05;
+    --label-teal-bg: #ddf1f5;
+    --label-teal-text: #0d5f72;
+    --label-pink-bg: #fbe5ee;
+    --label-pink-text: #8e2350;
+    --urgent-bg: #fff7e4;
+    --urgent-line: #f8e2b0;
+    --on-primary: #ffffff;
+    --line-dashed: #c5c8d4;
+    --switch-off: #c9ccdb;
+    --placeholder: #757575;
+    --overlay: rgba(21, 24, 51, 0.36);
   }
 }
 

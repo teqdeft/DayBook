@@ -50,14 +50,17 @@
   --card-pad: 19px 24px 20px;
 }
 
+/* The navy department bar is ink-2 in the dark theme, where navy would vanish into the card.
+   light-dark() follows the theme globals.css picks (the person's choice, else the computer's). */
 .departments {
   --card-pad: 18px 24px 19px;
-  --department-navy: var(--navy);
+  --department-navy: light-dark(var(--navy), var(--ink-2));
 }
 
-@media (prefers-color-scheme: dark) {
+/* Without light-dark() the app is light (globals.css), so the bar stays navy. */
+@supports not (color: light-dark(#000, #fff)) {
   .departments {
-    --department-navy: var(--ink-2);
+    --department-navy: var(--navy);
   }
 }
 

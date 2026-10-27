@@ -492,6 +492,12 @@
       "namedRegex": "^/api/me/log(?:/)?$"
     },
     {
+      "page": "/api/me/preferences",
+      "regex": "^/api/me/preferences(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/me/preferences(?:/)?$"
+    },
+    {
       "page": "/api/notifications",
       "regex": "^/api/notifications(?:/)?$",
       "routeKeys": {},
@@ -664,6 +670,12 @@
       "regex": "^/manifest\\.webmanifest(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/manifest\\.webmanifest(?:/)?$"
+    },
+    {
+      "page": "/my-settings",
+      "regex": "^/my\\-settings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/my\\-settings(?:/)?$"
     },
     {
       "page": "/no-access",

@@ -3,6 +3,7 @@
 // in", or "of 7h 45m worked" after breaks), a quiet save status, and Submit report / Update report
 // (or Request an edit once locked). While the person is still checked in today, a draft also gets
 // "Submit and check out"; with AI on, an editable report gets "Polish with AI" first (CONTRACT 20).
+// The person's "Submit buttons" (My settings, CONTRACT 21) may leave out one of the two submits.
 import { useState } from 'react';
 import Button from '@/components/Button';
 import { formatHours } from '@/lib/time';
@@ -11,6 +12,7 @@ import RequestEditDialog from './RequestEditDialog';
 import { useReport } from './ReportProvider';
 import SubmitAndCheckOut from './SubmitAndCheckOut';
 import { totalMinutes } from './reportHours';
+import { preferencesOf, submitButtonsShown } from './reportPreferences';
 import { presentLine } from './reportTotals';
 import styles from './ReportActions.module.css';
 
@@ -30,6 +32,11 @@ export default function ReportActions() {
   const present = presentLine(data);
   const pending = report.pendingEditRequest;
   const saveText = readOnly ? null : SAVE_TEXT[saveState];
+  const shown = submitButtonsShown({
+    submitButtons: preferencesOf(data).submitButtons,
+    canCheckOut: data.canCheckOut,
+    status: report.status,
+  });
 
   return (
     <div className={styles.actions}>
@@ -62,10 +69,12 @@ export default function ReportActions() {
       ) : (
         <div className={styles.buttons}>
           <PolishButton />
-          {data.canCheckOut ? <SubmitAndCheckOut /> : null}
-          <Button size="large" loading={submitting} onClick={() => submit()}>
-            {report.status === 'submitted' ? 'Update report' : 'Submit report'}
-          </Button>
+          {shown.checkOut ? <SubmitAndCheckOut primary={shown.checkOutPrimary} /> : null}
+          {shown.submit ? (
+            <Button size="large" loading={submitting} onClick={() => submit()}>
+              {report.status === 'submitted' ? 'Update report' : 'Submit report'}
+            </Button>
+          ) : null}
         </div>
       )}
       {readOnly && !stale ? (

@@ -63,8 +63,12 @@ export function entriesFromView(view) {
   });
 }
 
-/** A new card for a picked project, with one empty task row ready to type in. */
-export function newEntry(pick) {
+/**
+ * A new card for a picked project, with one empty task row ready to type in.
+ * @param {object} pick the project picker's pick
+ * @param {string} [taskStatus] that row's status (the person's "New tasks start as")
+ */
+export function newEntry(pick, taskStatus) {
   return {
     key: newKey('e'),
     id: null,
@@ -76,16 +80,23 @@ export function newEntry(pick) {
     waitingForApproval: Boolean(pick.projectRequestId),
     hours: '',
     savedMinutes: 0,
-    tasks: [newTask()],
+    tasks: [newTask(taskStatus)],
   };
 }
 
-export function newTask() {
+const TASK_STATUSES = new Set(['done', 'in_progress', 'blocked']);
+
+/**
+ * An empty task line. Lines added by hand start with the person's "New tasks start as"
+ * (CONTRACT 21); lines from timers set their own status, and anything else is In progress.
+ * @param {string} [status]
+ */
+export function newTask(status) {
   return {
     key: newKey('t'),
     id: null,
     title: '',
-    status: 'in_progress',
+    status: TASK_STATUSES.has(status) ? status : 'in_progress',
     carried: false,
     ...NO_LINK,
   };

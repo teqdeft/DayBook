@@ -1,0 +1,100 @@
+/* Polish on each task line (CONTRACT 21). The sparkle: the size of the line's remove ×, at the
+   right end of the task field's cell; TaskLine.module.css decides when it shows. */
+.sparkle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+}
+
+.sparkle:hover:not(:disabled):not([aria-busy='true']) {
+  background: var(--violet-soft);
+  color: var(--violet-on-surface);
+}
+
+/* Waiting for Gemini: still focusable (aria-disabled), drawn like a loading button. */
+.busy {
+  color: var(--violet-on-surface);
+  cursor: progress;
+}
+
+.spinner {
+  animation: line-polish-spin 0.8s linear infinite;
+}
+
+@keyframes line-polish-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The suggestion: under the line, inside the row, as wide as the row's content. */
+.strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: -4px 20px 12px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 10px;
+  background: var(--violet-soft);
+  color: var(--violet-text);
+}
+
+/* The arrow and the buttons line up with the text's first line, so a long suggestion still reads
+   as "this line becomes…"; one line is centred on the 32 px buttons as before. */
+.arrow {
+  flex: none;
+  margin-top: 8px;
+}
+
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 0;
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.buttons {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+/* Two small buttons, a little lower than Button's small size so the strip stays slim. */
+.buttons .action {
+  --btn-pad-x: 12px;
+  --btn-pad-top: 1px;
+  height: 32px;
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .strip {
+    flex-wrap: wrap;
+    margin-right: 16px;
+    margin-left: 16px;
+  }
+
+  /* the buttons take their own row: the text needs no room to centre on them */
+  .arrow {
+    margin-top: 2px;
+  }
+
+  .text {
+    flex-basis: calc(100% - 26px);
+    padding: 0;
+  }
+
+  .buttons {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+}

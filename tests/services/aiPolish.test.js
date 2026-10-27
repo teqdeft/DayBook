@@ -202,21 +202,21 @@ describe('POST /api/ai/polish', () => {
     expect(requests).toHaveLength(0);
   });
 
-  it('stops after 20 polish requests a person a day, and on the company limit', async () => {
+  it('stops after 40 polish requests a person a day, and on the company limit', async () => {
     geminiAnswers({ L1: 'Fixed the login page bug' });
-    for (let i = 0; i < 20; i += 1) {
-      // Six seconds apart: ten a minute is the most one person may send.
-      setNowForTests(new Date(Date.parse(T0) + i * 6000).toISOString());
+    for (let i = 0; i < 40; i += 1) {
+      // Three seconds apart: twenty a minute is the most one person may send.
+      setNowForTests(new Date(Date.parse(T0) + i * 3000).toISOString());
       expect((await polish({ lines: LINES.slice(0, 1) })).status).toBe(200);
     }
-    setNowForTests(new Date(Date.parse(T0) + 20 * 6000).toISOString());
+    setNowForTests(new Date(Date.parse(T0) + 40 * 3000).toISOString());
     const capped = await polish({ lines: LINES.slice(0, 1) });
     expect(capped.status).toBe(429);
     expect(capped.error).toMatchObject({
       code: 'AI_LIMIT',
       message: "You've reached today's AI limit. Try again tomorrow.",
     });
-    expect(requests).toHaveLength(20);
+    expect(requests).toHaveLength(40);
 
     // The next company day starts again; a company limit of 0 stops everyone.
     setNowForTests('2026-10-26T19:00:00Z'); // 00:30 on Tuesday in Kolkata
@@ -231,13 +231,13 @@ describe('POST /api/ai/polish', () => {
 
   it('rate-limits each person, not the office network everyone shares', async () => {
     geminiAnswers({ L1: 'Fixed the login page bug' });
-    for (let i = 0; i < 10; i += 1) {
+    for (let i = 0; i < 20; i += 1) {
       expect((await polish({ lines: LINES.slice(0, 1) })).status).toBe(200);
     }
     const stuck = await polish({ lines: LINES.slice(0, 1) });
     expect(stuck.status).toBe(429);
     expect(stuck.error.code).toBe('RATE_LIMITED');
-    expect(requests).toHaveLength(10);
+    expect(requests).toHaveLength(20);
 
     // Someone else at the same address still gets an answer.
     signInAs(await createUser({ name: 'Asha Rao', email: 'asha@example.com' }));

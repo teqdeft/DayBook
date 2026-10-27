@@ -1,4 +1,8 @@
-/* Sidebar: avatar + name + designation */
+/* Sidebar: avatar + name + designation. The wrapper only listens for clicks on the menu's links. */
+.sidebarWrap {
+  display: contents;
+}
+
 .sidebarMenu {
   display: flex;
   width: 100%;

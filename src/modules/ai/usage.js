@@ -9,7 +9,7 @@ import { settings } from '@/modules/settings';
 import * as repo from './repo';
 
 /** Gemini requests one person may make per day, per feature (features not listed: no cap). */
-export const PERSON_DAILY_CAPS = Object.freeze({ polish: 20, ask: 30 });
+export const PERSON_DAILY_CAPS = Object.freeze({ polish: 40, ask: 30 });
 /** error_code of a request on its way to Gemini (it counts towards the limits already). */
 export const PENDING_CODE = 'PENDING';
 /** How long a request waits while others check the limits, before giving up with AI_BUSY. */
@@ -26,7 +26,7 @@ export function todayBounds(timezone) {
 
 /**
  * Throws AI_LIMIT when the company has used today's `aiDailyLimit`, or when this person has used
- * their cap for this feature (polish 20, ask 30). Requests without a person only count towards
+ * their cap for this feature (polish 40, ask 30). Requests without a person only count towards
  * the company limit.
  * @param {{ feature: string, userId?: number | null, values: { timezone: string,
  *   aiDailyLimit: number } }} input values = settings.getAll()

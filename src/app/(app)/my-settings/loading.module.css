@@ -1,0 +1,100 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--block-gap);
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  min-height: 59px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.nav {
+  --card-pad: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 27px;
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 19px;
+  min-width: 0;
+}
+
+.section {
+  --card-pad: 22px 24px 21.5px;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin-top: 16px;
+}
+
+.row,
+.choiceRow {
+  display: flex;
+  padding: 14px 0;
+  border-top: 1px solid var(--track);
+}
+
+.rows > :first-child {
+  padding-top: 2px;
+  border-top: 0;
+}
+
+.row {
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.choiceRow {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rowText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.choice {
+  max-width: 100%;
+  margin-top: 6px;
+}
+
+.switch {
+  flex: none;
+}
+
+@media (max-width: 1023px) {
+  .nav {
+    display: none;
+  }
+
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .section {
+    --card-pad: 18px 16px;
+  }
+}
