@@ -60,12 +60,19 @@ export function MyProjectsSkeleton() {
   );
 }
 
-export function ManageProjectsSkeleton() {
+/** `custom`: the page will show the custom range form, so its place is held above the table. */
+export function ManageProjectsSkeleton({ custom = false }) {
   return (
     <div className={styles.page} aria-busy="true">
       <span className="visually-hidden">Loading projects</span>
       <TopBarSkeleton subtitle={150} actions={[240, 150]} />
-      <PillsSkeleton widths={[94, 94, 122]} />
+      <div className={styles.filters}>
+        <PillsSkeleton widths={[94, 94, 122]} />
+        <Skeleton width={340} height={40} radius={10} className={styles.range} />
+      </div>
+      {custom ? (
+        <Skeleton height={98} radius="var(--radius-card)" className={styles.rangeForm} />
+      ) : null}
       <Card padding="none">
         <div className={styles.tableHead} />
         {[0, 1, 2, 3, 4, 5, 6, 7].map((index) => (

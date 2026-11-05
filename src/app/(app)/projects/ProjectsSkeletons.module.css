@@ -28,6 +28,24 @@
   gap: 8px;
 }
 
+/* The status pills and the hours range, as on the projects table. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+
+/* Both may shrink, so a narrow screen doesn't scroll sideways while the page loads. */
+.filters > * {
+  min-width: 0;
+}
+
+.range {
+  max-width: 100%;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -95,6 +113,13 @@
   margin-left: auto;
 }
 
+/* As on the table: the range overhangs its row, which stays as tall as the pills. */
+@media (min-width: 1024px) {
+  .range {
+    margin-block: -2px;
+  }
+}
+
 @media (max-width: 1023px) {
   .actions {
     display: none;
@@ -108,5 +133,12 @@
 @media (max-width: 640px) {
   .grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The custom range form stacks on phones (RangeForm.module.css). */
+@media (max-width: 639px) {
+  .rangeForm {
+    min-height: 183px;
   }
 }

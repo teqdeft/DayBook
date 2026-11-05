@@ -242,7 +242,7 @@ firstReportedOn }]`.
 - `saveSlackMessage({ reportId, channelId, ts })` — called by the Slack outbox after a report post
   succeeds, so later submits update the same message.
 - `getMinutesByProject({ from, to, userId? })` → `{ [projectId]: minutes }` from submitted reports
-  (Projects cards "Your hours this month", PM table "Hours this week").
+  (Projects cards "Your hours this month", PM table hours column).
 - `getLastReportDateByProject(userId)` → `{ [projectId]: 'YYYY-MM-DD' }` ("Your last update").
 
 ### projects (owner: projects)
@@ -794,8 +794,12 @@ viewer })`, `listMissingCheckouts`, `exportDay`, `listCorrections`, `countPendin
   row is open and they have `attendance.self`; one confirmation dialog ("Submit your report and
   check out?"), then the normal submit and, only if it succeeded, the normal check-out; a failed
   check-out after a successful submit says so and sends the person to Today.
-- **Projects**: the employee view has a search box (project or client name). The PM table's
-  "Hours this week" shows a muted all-time total under it when it differs.
+- **Projects**: the employee view has a search box (project or client name). The PM and Admin table
+  has the project report's range next to the status tabs: This week (the default), This month, All
+  time, Custom (`?range=&from=&to=`, `projectsRange.js`; the tabs, the search and the pager keep
+  it). The hours column follows the range ("Hours this week", "Hours this month", "Total hours",
+  "Hours in range") and shows a muted all-time total under it when it differs. Every project stays
+  listed: the range changes the hours, not the rows.
 - **Today**: Start break only for people who track attendance.
 - **Not found inside the app**: `src/app/(app)/not-found.js` (shell) renders inside the app frame.
 

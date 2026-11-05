@@ -9,6 +9,7 @@ export { getHoursByProject, getHoursCard, getTeamToday } from './team';
 export { getEmployeeDetail, daysInProgress, isStuckTask } from './employee';
 export { getOverview } from './overview';
 export { buildHoursExport } from './exportHours';
+export { projectReportPeriod } from './projectReportPeriods';
 
 /**
  * Counts for the sidebar badges, in one query.

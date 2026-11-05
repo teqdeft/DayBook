@@ -115,6 +115,68 @@ test('PM: an employee detail opens from the team board', async ({ signInAs }) =>
   expect(problemsOf(page), 'console and page errors').toEqual([]);
 });
 
+test('PM: the hours range on the projects table stays with the tabs and the search', async ({
+  signInAs,
+}) => {
+  const page = await signInAs(PEOPLE.pm);
+  await open(page, '/projects');
+  const range = page.getByRole('group', { name: 'Hours range' });
+  const hoursHeader = (name) => page.getByRole('columnheader', { name, exact: true });
+
+  await test.step('it opens on this week', async () => {
+    await expect(range.getByRole('link', { name: 'This week' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(hoursHeader('Hours this week')).toBeVisible();
+  });
+
+  await test.step('a range follows the status tab and the search', async () => {
+    await range.getByRole('link', { name: 'This month' }).click();
+    await expect(page).toHaveURL(/\/projects\?range=month$/);
+    await expect(hoursHeader('Hours this month')).toBeVisible();
+    await page.getByRole('link', { name: /^On hold \(\d+\)$/ }).click();
+    await expect(page).toHaveURL(/\/projects\?status=on_hold&range=month$/);
+    await expect(
+      hoursHeader('Hours this month').or(page.getByText('No on hold projects')),
+    ).toBeVisible();
+    await page.getByRole('link', { name: /^Active \(\d+\)$/ }).click();
+    await expect(page).toHaveURL(/\/projects\?range=month$/);
+    await page.getByRole('searchbox', { name: 'Search projects' }).fill('acme');
+    await expect(page).toHaveURL(/\/projects\?range=month&q=acme$/);
+    await expect(page.getByRole('link', { name: /^Completed \(\d+\)$/ })).toHaveAttribute(
+      'href',
+      '/projects?status=completed&q=acme&range=month',
+    );
+  });
+
+  await test.step('all time shows one total', async () => {
+    await range.getByRole('link', { name: 'All time' }).click();
+    await expect(page).toHaveURL(/range=all/);
+    await expect(hoursHeader('Total hours')).toBeVisible();
+    await expect(page.getByText(/^\d+h( \d+m)? total$/)).toHaveCount(0);
+  });
+
+  await test.step('a custom range keeps the search, and a wrong one says so', async () => {
+    await range.getByRole('link', { name: 'Custom' }).click();
+    await expect(page).toHaveURL(
+      /q=acme&range=custom&from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}$/,
+    );
+    await expect(hoursHeader('Hours in range')).toBeVisible();
+    await page.getByLabel('From').fill('2026-10-31');
+    await page.getByLabel('To', { exact: true }).fill('2026-10-01');
+    await page.getByRole('button', { name: 'Show' }).click();
+    await expect(page.getByText('The start date must be on or before the end date.')).toBeVisible();
+    await expect(page).toHaveURL(/q=acme/);
+    await expect(hoursHeader('Hours this week')).toBeVisible();
+    await page.getByLabel('To', { exact: true }).fill('2026-11-15');
+    await page.getByRole('button', { name: 'Show' }).click();
+    await expect(page).toHaveURL(/q=acme&range=custom&from=2026-10-31&to=2026-11-15$/);
+    await expect(hoursHeader('Hours in range')).toBeVisible();
+  });
+  expect(problemsOf(page), 'console and page errors').toEqual([]);
+});
+
 test('Employee: the project search filters the cards by name', async ({ signInAs }) => {
   const page = await signInAs(PEOPLE.vishal);
   await open(page, '/projects');

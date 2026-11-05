@@ -2,6 +2,16 @@
   width: 240px;
 }
 
+/* Status tabs on the left, the hours range on the right; the range drops below when they don't
+   fit on one line. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+
 .tableCard {
   overflow: hidden;
 }
@@ -82,7 +92,7 @@
   color: var(--muted);
 }
 
-/* This week's hours, with the all-time total under it. */
+/* The range's hours, with the all-time total under it. */
 .hoursCell {
   display: flex;
   flex-direction: column;
@@ -134,8 +144,16 @@
   gap: 8px;
 }
 
+/* The range isn't on artboard 07. It overhangs its row by 2 px above and below, so the row stays as
+   tall as the pills and the pills and the table stay where the canvas has them. */
+@media (min-width: 1024px) {
+  .range {
+    margin-block: -2px;
+  }
+}
+
 /* 1024-1279 px: the table fits a 718-973 px card. Team gives up width (2 avatars and "+N"), and
-   "Project manager" and "Hours this week" shorten (the full header stays for screen readers). */
+   "Project manager" and the hours header shorten (the full header stays for screen readers). */
 @media (min-width: 1024px) and (max-width: 1279px) {
   .team.teamFull {
     display: none;
@@ -169,5 +187,18 @@
   .search {
     flex: 1 1 220px;
     width: auto;
+  }
+}
+
+/* The smallest phones: tighter items fit the range on a 360 px screen, and anything narrower
+   scrolls it sideways, not the page. A scroll box clips the focus ring, so it stays down here. */
+@media (max-width: 380px) {
+  .range {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .range > a {
+    padding-inline: 10px;
   }
 }
