@@ -16,10 +16,8 @@ import WeekBars from '@/components/WeekBars';
 import { isAppError } from '@/lib/errors';
 import { requirePage } from '@/lib/session';
 import { dashboard } from '@/modules/dashboard';
-import {
-  projectIdParamSchema,
-  projectReportRangeSchema,
-} from '@/modules/dashboard/projectReportSchemas';
+import { projectIdParamSchema } from '@/modules/dashboard/projectReportSchemas';
+import { readRange } from '../projectsRange';
 import DailyLog from './DailyLog';
 import PeopleTable from './PeopleTable';
 import PriorityTasks from './PriorityTasks';
@@ -30,21 +28,7 @@ import styles from './page.module.css';
 
 export const metadata = { title: 'Project report' };
 
-const first = (value) => (Array.isArray(value) ? value[0] : value);
 const UNIT_LABELS = { day: 'By day', week: 'By week', month: 'By month' };
-
-/** The range from the URL; an invalid custom range falls back to all time with its errors. */
-function readRange(query) {
-  const input = { range: first(query.range), from: first(query.from), to: first(query.to) };
-  const parsed = projectReportRangeSchema.safeParse(input);
-  if (parsed.success) return { options: parsed.data, errors: null, input };
-  const errors = {};
-  for (const issue of parsed.error.issues) {
-    const key = String(issue.path[0] ?? 'from');
-    errors[key] ??= issue.message;
-  }
-  return { options: { range: 'all' }, errors, input };
-}
 
 async function loadReport(projectId, options, viewer) {
   try {
@@ -92,15 +76,10 @@ export default async function ProjectReportPage({ params, searchParams }) {
   const user = await requirePage('team.view');
   const id = projectIdParamSchema.safeParse((await params).id);
   if (!id.success) notFound();
-  const { options, errors, input } = readRange(await searchParams);
+  const { options, errors, input, showCustom } = readRange(await searchParams);
   const report = await loadReport(id.data, options, user);
   const { project, range, totals, byPeriod } = report;
   const base = `/projects/${project.id}`;
-  // Dates without range=custom are a custom range too: show the form, with its errors.
-  const showCustom =
-    options.range === 'custom' ||
-    input.range === 'custom' ||
-    Boolean(errors && (input.from || input.to));
   const rangeItems = [
     { value: 'week', label: 'This week', href: `${base}?range=week` },
     { value: 'month', label: 'This month', href: `${base}?range=month` },

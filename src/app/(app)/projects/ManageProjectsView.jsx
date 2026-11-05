@@ -1,5 +1,6 @@
-// PM and Admin view of /projects (artboard 07): search, status tabs and the projects table with
-// the New project / Edit drawer. PMs see every project but manage only their own.
+// PM and Admin view of /projects (artboard 07): search, status tabs, the hours range and the
+// projects table with the New project / Edit drawer. PMs see every project but manage only their
+// own.
 import Link from 'next/link';
 import { AvatarStack } from '@/components/Avatar';
 import Button from '@/components/Button';
@@ -8,66 +9,79 @@ import DataTable from '@/components/DataTable';
 import EmptyState from '@/components/EmptyState';
 import FilterPills from '@/components/FilterPills';
 import { ProjectSquare } from '@/components/ProjectLabel';
+import Segmented from '@/components/Segmented';
 import StatusCell from '@/components/StatusCell';
 import TopBar from '@/components/TopBar';
+import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { plural } from '@/lib/text';
-import { formatHours, weekRange, workDate } from '@/lib/time';
+import { formatHours, workDate } from '@/lib/time';
+import { dashboard } from '@/modules/dashboard';
 import { projects } from '@/modules/projects';
 import { reports } from '@/modules/reports';
 import { settings } from '@/modules/settings';
+import RangeForm from './[id]/RangeForm';
 import NewProjectButton from './NewProjectButton';
 import { displayStatus } from './ProjectCard';
 import ProjectEditorProvider from './ProjectEditorProvider';
 import ProjectRowMenu from './ProjectRowMenu';
 import ProjectSearch from './ProjectSearch';
 import ProjectsPager from './ProjectsPager';
+import { HOURS_HEADERS, filterParams, projectsHref, rangeItems, readRange } from './projectsRange';
 import styles from './ManageProjectsView.module.css';
 
 const PAGE_SIZE = 100;
 const STATUSES = ['active', 'on_hold', 'completed'];
 const TAB_LABELS = { active: 'Active', on_hold: 'On hold', completed: 'Completed' };
 
-function hrefFor({ status, q, page }) {
-  const search = new URLSearchParams();
-  if (status !== 'active') search.set('status', status);
-  if (q) search.set('q', q);
-  if (page > 1) search.set('page', String(page));
-  const query = search.toString();
-  return query ? `/projects?${query}` : '/projects';
-}
-
 // "All time" starts before any report could exist, so one query covers every project.
 const ALL_TIME_FROM = '2000-01-01';
 
 /**
- * Submitted report minutes per project: this week (Monday to Sunday) and all time up to today.
- * The all-time total sits under the week, so a quiet Monday doesn't read as a project with no
- * hours. The table still renders if it fails.
- * @returns {Promise<{ week: Record<number, number>, total: Record<number, number> }>}
+ * Today at the company. If the settings can't be read the default time zone stands in, so the
+ * table still renders.
+ * @returns {Promise<string>} 'YYYY-MM-DD'
  */
-async function projectMinutes(userId) {
+async function companyToday(userId) {
   try {
     const { timezone } = await settings.getAll();
-    const today = workDate(timezone);
-    const week = weekRange(today);
-    const [thisWeek, total] = await Promise.all([
-      reports.getMinutesByProject({ from: week.from, to: week.to }),
-      reports.getMinutesByProject({ from: ALL_TIME_FROM, to: today }),
-    ]);
-    return { week: thisWeek ?? {}, total: total ?? {} };
+    return workDate(timezone);
   } catch (error) {
-    logger.warn({ err: error, userId }, 'projects: could not load project hours');
-    return { week: {}, total: {} };
+    logger.warn({ err: error, userId }, 'projects: could not load the time zone');
+    return workDate(env.DEFAULT_TIMEZONE);
   }
 }
 
-/** "1h 45m" this week, with the all-time total under it when it adds something. */
-function HoursCell({ week, total }) {
+/**
+ * Submitted report minutes per project: in the range on screen and all time up to today. The
+ * all-time total sits under the range, so a quiet Monday doesn't read as a project with no hours.
+ * The table still renders if it fails.
+ * @returns {Promise<{ inRange: Record<number, number>, total: Record<number, number> }>}
+ */
+async function projectMinutes(userId, period, today) {
+  try {
+    const allTime = () => reports.getMinutesByProject({ from: ALL_TIME_FROM, to: today });
+    if (period.key === 'all') {
+      const total = (await allTime()) ?? {};
+      return { inRange: total, total };
+    }
+    const [inRange, total] = await Promise.all([
+      reports.getMinutesByProject({ from: period.from, to: period.to }),
+      allTime(),
+    ]);
+    return { inRange: inRange ?? {}, total: total ?? {} };
+  } catch (error) {
+    logger.warn({ err: error, userId }, 'projects: could not load project hours');
+    return { inRange: {}, total: {} };
+  }
+}
+
+/** "1h 45m" in the range, with the all-time total under it when it adds something. */
+function HoursCell({ hours, total }) {
   return (
     <div className={styles.hoursCell}>
-      <span className={styles.hours}>{formatHours(week)}</span>
-      {total > 0 && total !== week ? (
+      <span className={styles.hours}>{formatHours(hours)}</span>
+      {total > 0 && total !== hours ? (
         <span className={styles.hoursTotal}>{formatHours(total)} total</span>
       ) : null}
     </div>
@@ -107,7 +121,7 @@ function Header({ full, short }) {
 // From 1024 to 1279 px the table must fit a 718-973 px card, so the columns' smallest widths are
 // kept low (see the CSS module): the urgent note and long client or manager names give way first,
 // Team shows 2 avatars, two headers shorten, and the status block never drops below its word.
-function columns({ user, minutes }) {
+function columns({ user, minutes, hoursHeader }) {
   return [
     {
       key: 'project',
@@ -168,12 +182,12 @@ function columns({ user, minutes }) {
     },
     {
       key: 'hours',
-      header: <Header full="Hours this week" short="This week" />,
-      label: 'Hours this week',
+      header: <Header full={hoursHeader.full} short={hoursHeader.short} />,
+      label: hoursHeader.full,
       width: '11.46%',
       render: (project) => (
         <HoursCell
-          week={Number(minutes.week[project.id] ?? 0)}
+          hours={Number(minutes.inRange[project.id] ?? 0)}
           total={Number(minutes.total[project.id] ?? 0)}
         />
       ),
@@ -204,12 +218,15 @@ function columns({ user, minutes }) {
 export default async function ManageProjectsView({ user, params }) {
   const q = typeof params?.q === 'string' ? params.q.trim().slice(0, 120) : '';
   const page = Math.max(1, Math.trunc(Number(params?.page)) || 1);
+  const today = await companyToday(user.id);
+  const { options, errors, input, showCustom } = readRange(params, 'week');
+  const period = dashboard.projectReportPeriod(options, { today, firstOn: ALL_TIME_FROM });
   const [counts, overall, managers, people, minutes] = await Promise.all([
     projects.countByStatus({ q }),
     q ? projects.countByStatus({}) : null,
     projects.listManagerOptions(user),
     projects.listPeopleOptions(),
-    projectMinutes(user.id),
+    projectMinutes(user.id, period, today),
   ]);
   const activeTotal = (overall ?? counts).active;
   // A search from the top bar opens the first tab that has a match.
@@ -224,6 +241,8 @@ export default async function ManageProjectsView({ user, params }) {
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
   });
+  // Every link here keeps the filters it doesn't change, and the range.
+  const link = (changes) => projectsHref({ status, q, range: period, ...changes });
 
   return (
     <ProjectEditorProvider
@@ -241,19 +260,37 @@ export default async function ManageProjectsView({ user, params }) {
           </>
         }
       />
-      <FilterPills
-        label="Project status"
-        value={status}
-        items={STATUSES.map((key) => ({
-          value: key,
-          label: `${TAB_LABELS[key]} (${counts[key]})`,
-          href: hrefFor({ status: key, q, page: 1 }),
-        }))}
-      />
+      <div className={styles.filters}>
+        <FilterPills
+          label="Project status"
+          value={status}
+          items={STATUSES.map((key) => ({
+            value: key,
+            label: `${TAB_LABELS[key]} (${counts[key]})`,
+            href: link({ status: key }),
+          }))}
+        />
+        <Segmented
+          label="Hours range"
+          items={rangeItems({ status, q, period, today })}
+          value={showCustom ? 'custom' : period.key}
+          className={styles.range}
+        />
+      </div>
+      {showCustom ? (
+        <RangeForm
+          action="/projects"
+          from={errors ? (input.from ?? '') : period.from}
+          to={errors ? (input.to ?? '') : period.to}
+          errors={errors}
+          max={today}
+          keep={filterParams({ status, q })}
+        />
+      ) : null}
       <Card padding="none" className={styles.tableCard}>
         <DataTable
           caption={`${TAB_LABELS[status]} projects`}
-          columns={columns({ user, minutes })}
+          columns={columns({ user, minutes, hoursHeader: HOURS_HEADERS[period.key] })}
           rows={rows}
           empty={
             q ? (
@@ -261,7 +298,7 @@ export default async function ManageProjectsView({ user, params }) {
                 title="No projects match your search"
                 body={`Nothing in ${TAB_LABELS[status].toLowerCase()} matches "${q}".`}
                 action={
-                  <Button variant="secondary" href={hrefFor({ status, q: '', page: 1 })}>
+                  <Button variant="secondary" href={link({ q: '' })}>
                     Clear search
                   </Button>
                 }
@@ -277,7 +314,7 @@ export default async function ManageProjectsView({ user, params }) {
                 title={`No ${TAB_LABELS[status].toLowerCase()} projects`}
                 body="Projects show here when their status changes."
                 action={
-                  <Button variant="secondary" href="/projects">
+                  <Button variant="secondary" href={link({ status: 'active', q: '' })}>
                     See active projects
                   </Button>
                 }
@@ -291,8 +328,8 @@ export default async function ManageProjectsView({ user, params }) {
           page={page}
           pageSize={PAGE_SIZE}
           total={total}
-          prevHref={page > 1 ? hrefFor({ status, q, page: page - 1 }) : null}
-          nextHref={page * PAGE_SIZE < total ? hrefFor({ status, q, page: page + 1 }) : null}
+          prevHref={page > 1 ? link({ page: page - 1 }) : null}
+          nextHref={page * PAGE_SIZE < total ? link({ page: page + 1 }) : null}
         />
       ) : null}
     </ProjectEditorProvider>

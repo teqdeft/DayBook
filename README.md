@@ -125,6 +125,9 @@ npm run test:e2e
   timers" keeps the timer note it came from (`report_tasks.timer_note`, migration 014), so a line
   reworded by Polish or by hand is no longer added again by the next Fill. Until
   `npm run migrate` has run, reports work as before and Fill matches by title only.
+- **Hours range on the projects table** (company request, CONTRACT 16): PMs and Admins can pick
+  This week, This month, All time or Custom on the Projects page, as inside a project. The hours
+  column follows it; every project stays listed.
 
 ## Slack setup (one Slack app per environment)
 
