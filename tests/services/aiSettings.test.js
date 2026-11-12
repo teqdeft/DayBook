@@ -29,6 +29,7 @@ const AI_KEYS = [
   'aiHrNotesEnabled',
   'aiHrNotesAt',
   'aiAskEnabled',
+  'aiProjectSummaryEnabled',
 ];
 
 let admin;
@@ -60,7 +61,7 @@ describe('Settings → AI form', () => {
     expect(SECTIONS.at(-1)).toEqual({ id: 'ai', label: 'AI' });
   });
 
-  it('shows the defaults: AI off, 200 a day, every feature on at 7:00 PM', () => {
+  it('shows the defaults: AI off, 200 a day, features on at 7:00 PM, project summaries off', () => {
     const form = toForm(saved);
     expect(pick(form)).toEqual({
       aiEnabled: false,
@@ -72,10 +73,23 @@ describe('Settings → AI form', () => {
       aiHrNotesEnabled: true,
       aiHrNotesAt: '7:00 PM',
       aiAskEnabled: true,
+      aiProjectSummaryEnabled: false,
     });
     const { values, errors } = toValues(form, saved);
     expect(errors).toEqual({});
     expect(changedKeys(values, saved)).toEqual({});
+  });
+
+  it('saves the project summaries switch', async () => {
+    const { values, errors } = toValues(edit({ aiProjectSummaryEnabled: true }), saved);
+    expect(errors).toEqual({});
+    const body = changedKeys(values, saved);
+    expect(body).toEqual({ aiProjectSummaryEnabled: true });
+    const after = await settings.update({ user: admin, values: body, ip: '203.0.113.9' });
+    expect(after.aiProjectSummaryEnabled).toBe(true);
+    const row = await db('settings').where({ key: 'ai_project_summary_enabled' }).first();
+    expect(parseJson(row.value)).toBe(true);
+    await settings.update({ user: admin, values: pick(saved) });
   });
 
   it('saves the switches, the limit and the times, sending only what changed', async () => {

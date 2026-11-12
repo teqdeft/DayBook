@@ -4,8 +4,9 @@
 // once (no Save button).
 //
 // Ankit Rana is the person: the demo leaves him checked in today with a draft report, so the
-// report offers "Submit and check out" until he turns it off, and no other spec uses him. The
-// e2e server has no Gemini key, so the AI section and the sparkles are not part of this spec.
+// report offers "Submit and check out" until he turns it off, and no other spec uses him. AI is
+// off on the e2e server (no key, and the demo's Settings switches are off), so the AI section and
+// the sparkles are not part of this spec.
 import { PEOPLE, expect, open, problemsOf, test } from './support/fixtures.js';
 
 const ANKIT = { email: 'ankit@company.com', name: 'Ankit Rana' };

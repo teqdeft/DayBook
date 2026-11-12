@@ -1,0 +1,225 @@
+/* "Files and notes" in an open phase, as the prototype: Add file and Add note beside the title, then
+   one row per file or note (icon, name, pages and date, Edit and Delete), the small text box under a
+   row, and the inline note row. The title, buttons and empty line come from PhaseSection.module.css. */
+.addButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Add file while it reads: like a loading button, still focusable so focus stays on it. */
+button.busy[aria-disabled='true'] {
+  opacity: 0.75;
+  cursor: progress;
+}
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2400ms;
+  }
+}
+
+.list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--track);
+}
+
+/* A file or note */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 4px 0;
+}
+
+.kindIcon {
+  flex: none;
+  color: var(--muted);
+}
+
+.rowText {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-label);
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.name:hover {
+  text-decoration: underline;
+}
+
+.name:focus-visible,
+.retry:focus-visible,
+.textBox:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.detail {
+  display: block;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+
+button.iconButton {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-cell);
+  color: var(--muted);
+}
+
+/* The text box under a row; a long text scrolls inside it. */
+.box {
+  margin: 0 0 10px 30px;
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+
+.textBox {
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pageText {
+  margin: 0;
+  white-space: pre-wrap;
+  tab-size: 4;
+  overflow-wrap: anywhere;
+}
+
+.boxNote {
+  margin: 0;
+  color: var(--muted);
+}
+
+.boxError {
+  margin: 0;
+  font-weight: 500;
+  color: var(--red-text);
+}
+
+.retry {
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-label);
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.retry:hover {
+  text-decoration: underline;
+}
+
+/* The line where a file's next page starts. */
+.pageBreak {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 8px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.pageBreak::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--line-strong);
+}
+
+/* The note row: title, text, then its buttons. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+}
+
+@media (min-width: 641px) {
+  .form .formField {
+    font-size: 14px;
+  }
+}
+
+.form .noteText {
+  min-height: 88px;
+  padding: 9px 12px;
+  line-height: 20px;
+}
+
+.formButtons {
+  display: flex;
+  gap: 8px;
+}
+
+button.formButton {
+  --btn-pad-x: 16px;
+  --btn-pad-extra: 0px;
+  font-size: 14px;
+}
+
+button.formButton + button.formButton {
+  --btn-pad-x: 14px;
+}
+
+.formError {
+  margin: 0;
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}

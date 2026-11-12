@@ -99,8 +99,8 @@
 .row {
   display: flex;
   align-items: center;
-  gap: 24px;
-  height: 54px;
+  gap: 16px;
+  height: 62px;
   padding: 0 20px;
   border-bottom: 1px solid var(--track);
 }
@@ -109,8 +109,14 @@
   border-bottom: 0;
 }
 
-.push {
-  margin-left: auto;
+/* The name and the client under it, 12 px from the square as on the table. */
+.rowTitle {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin-left: -4px;
 }
 
 /* As on the table: the range overhangs its row, which stays as tall as the pills. */

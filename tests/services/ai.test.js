@@ -64,12 +64,44 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('how long a request waits', () => {
+  it('is 30 s unless the feature asks for longer, and setTimeoutForTests still wins', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    await ai.generate({ feature: 'polish', prompt: 'Hello' });
+    expect(timeout).toHaveBeenLastCalledWith(30_000);
+    await ai.generate({ feature: 'polish', prompt: 'Hello', timeoutMs: 55_000 });
+    expect(timeout).toHaveBeenLastCalledWith(55_000);
+    ai.setTimeoutForTests(20);
+    await ai.generate({ feature: 'polish', prompt: 'Hello', timeoutMs: 55_000 });
+    expect(timeout).toHaveBeenLastCalledWith(20);
+  });
+
+  it('refuses a timeout that is not a positive number', async () => {
+    for (const timeoutMs of [0, -1, Number.NaN, '55000', null]) {
+      await expect(
+        ai.generate({ feature: 'polish', prompt: 'Hello', timeoutMs }),
+        String(timeoutMs),
+      ).rejects.toThrow(TypeError);
+    }
+    expect(requests).toHaveLength(0);
+  });
+});
+
 describe('isAvailable', () => {
   it('is on when the key is set, AI is on and the feature is on', async () => {
     for (const feature of ['polish', 'pm_summary', 'hr_notes', 'ask']) {
       expect(await ai.isAvailable(feature)).toBe(true);
     }
     expect(await ai.isAvailable('poetry')).toBe(false);
+  });
+
+  it('keeps project summaries off until their own switch is on', async () => {
+    await setSettings({ ai_project_summary_enabled: false });
+    expect(await ai.isAvailable('project_summary')).toBe(false);
+    await expectAppError(ai.generate({ feature: 'project_summary', prompt: 'Hello' }), 'AI_OFF');
+    await setSettings({ ai_project_summary_enabled: true });
+    expect(await ai.isAvailable('project_summary')).toBe(true);
+    await setSettings({ ai_project_summary_enabled: false });
   });
 
   it('follows the AI switch and each feature switch', async () => {

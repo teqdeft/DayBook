@@ -1,0 +1,12 @@
+var R=require("../../../../../chunks/[turbopack]_runtime.js")("server/app/api/projects/[id]/phase/route.js")
+R.c("server/chunks/src_modules_timers_index_01rh8te.js")
+R.c("server/chunks/src_modules_settings_index_0mnhtem.js")
+R.c("server/chunks/[root-of-the-server]__1b7zy8-._.js")
+R.c("server/chunks/_0s8fl53._.js")
+R.c("server/chunks/_149hxiy._.js")
+R.c("server/chunks/_0sawg01._.js")
+R.c("server/chunks/[root-of-the-server]__0p-lg8-._.js")
+R.c("server/chunks/[root-of-the-server]__1234bn5._.js")
+R.c("server/chunks/_next-internal_server_app_api_projects_[id]_phase_route_actions_1hyvyli.js")
+R.m(14361)
+module.exports=R.m(14361).exports

@@ -1,0 +1,2071 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Project management</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&amp;family=Schibsted+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#f5f6fa;}
+a{color:#3848d6;text-decoration:none}a:hover{color:#2733a8}
+button,input,textarea,select{font-family:inherit}
+textarea::placeholder,input::placeholder{color:#757575}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:none !important;box-shadow:0 0 0 2px #fff,0 0 0 4px #3848d6 !important}
+.db-primary:hover:not(:disabled){background:#2733a8 !important}
+.db-secondary:hover:not(:disabled){background:#f8f9fc !important}
+.db-ghost:hover:not(:disabled){background:#eef0f6 !important;color:#1b1e33 !important}
+.db-nav:hover{background:rgba(45,50,114,0.45) !important}
+.db-text-btn:hover:not(:disabled){text-decoration:underline}
+.db-input:hover:not(:disabled){border-color:#5b6178 !important}
+.db-input:focus{border-color:#3848d6 !important}
+.db-pill:not([aria-pressed="true"]):hover{background:#f8f9fc !important}
+.db-tab:hover{color:#1b1e33 !important}
+.db-tab:focus-visible{box-shadow:inset 0 0 0 2px #3848d6 !important}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#f5f6fa;color:#1b1e33;font-family:'Figtree',system-ui,sans-serif;font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;">
+<div style="display:flex;flex-wrap:wrap;align-items:stretch;min-height:100vh;background:#f5f6fa;">
+
+ <!-- Sidebar -->
+ <aside aria-label="Sidebar" style="flex:1 1 240px;box-sizing:border-box;background:#151833;color:#c9cce0;">
+  <div style="position:sticky;top:0;box-sizing:border-box;display:flex;flex-direction:column;min-height:clamp(0px,calc((100vw - 800px) * 100),100vh);padding:22px 14px;">
+   <div style="display:flex;align-items:center;gap:10px;height:32px;margin-left:8px;">
+    <svg aria-hidden="true" width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#3848d6"></rect><rect x="7.5" y="10.25" width="12.5" height="2.25" rx="1.125" fill="#fff" fill-opacity=".55"></rect><rect x="9" y="18.6" width="14" height="2" fill="#fff"></rect><circle cx="9" cy="19.6" r="2.9" fill="#fff"></circle><circle cx="23" cy="19.6" r="2.9" fill="#ffb020"></circle></svg>
+    <span style="font-family:'Schibsted Grotesk',sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.03em;line-height:1;color:#ffffff;">daybook</span>
+   </div>
+   <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;box-sizing:border-box;height:54px;margin-top:22px;padding:0 12px;border-radius:12px;background:#20244a;">
+    <span style="display:flex;flex-direction:column;min-width:0;">
+     <span style="font-size:12px;line-height:16px;color:#9ea2c4;">Workspace</span>
+     <span style="font-size:14px;font-weight:600;line-height:18px;color:#ffffff;">[Company name]</span>
+    </span>
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+   </div>
+   <nav aria-label="Main">
+    <ul style="list-style:none;margin:22px 0;padding:0;display:flex;flex-direction:column;gap:2px;">
+     <li><a href="#" aria-current="page" onClick="{{ goProjects }}" style="display:flex;align-items:center;gap:14px;height:42px;padding:0 12px;border-radius:10px;background:#2d3272;color:#ffffff;font-weight:600;font-size:15px;line-height:20px;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" overflow="visible"><g transform="translate(-.22 -.22)"><path d="M21 20a2 2 0 0 0 2-2V8.67a2 2 0 0 0-2-2h-9.8L9.5 4.45H5a2 2 0 0 0-2 2V18a2 2 0 0 0 2 2Z"></path></g></svg><span style="flex:1;">Projects</span></a></li>
+     <li><a href="#" class="db-nav" style="display:flex;align-items:center;gap:14px;height:42px;padding:0 12px;border-radius:10px;color:#c9cce0;font-size:15px;line-height:20px;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" overflow="visible"><g transform="translate(-.22 -.22)"><circle cx="9.6" cy="7.95" r="3.8"></circle><path d="M2.43 21.5a7.21 7.6 0 0 1 14.42 0M16.6 4.25a3.85 3.85 0 1 1 0 7.5M19.3 15.4c2.3.8 4.2 3 4.2 6.1"></path></g></svg><span style="flex:1;">Team</span></a></li>
+     <li><a href="#" class="db-nav" style="display:flex;align-items:center;gap:14px;height:42px;padding:0 12px;border-radius:10px;color:#c9cce0;font-size:15px;line-height:20px;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" overflow="visible"><g transform="translate(-.22 -.22)"><rect x="3" y="3.9" width="20" height="13.55" rx="2"></rect><path d="M13 17.45v3.75M8.75 21.2h8.5"></path></g></svg><span style="flex:1;">Screen time</span></a></li>
+     <li><a href="#" class="db-nav" style="display:flex;align-items:center;gap:14px;height:42px;padding:0 12px;border-radius:10px;color:#c9cce0;font-size:15px;line-height:20px;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" overflow="visible"><g transform="translate(-.22 -.22)"><rect x="3" y="4.22" width="20" height="17.78" rx="2"></rect><path d="M3 9.78h20M8.5 2.2v4M17.4 2.2v4"></path></g></svg><span style="flex:1;">Attendance</span></a></li>
+     <li><a href="#" class="db-nav" style="display:flex;align-items:center;gap:14px;height:42px;padding:0 12px;border-radius:10px;color:#c9cce0;font-size:15px;line-height:20px;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" overflow="visible"><g transform="translate(-.22 -.22)"><path d="M4.07 12 6.3 5.6q.25-.71 1-.71h11.4q.75 0 1 .71L21.85 12v5.95a2.5 2.5 0 0 1-2.5 2.5H6.57a2.5 2.5 0 0 1-2.5-2.5Z"></path><path d="M4.07 12H8.6l1.6 3.46h5.5L17.3 12h4.55"></path></g></svg><span style="flex:1;">Requests</span><span aria-label="3 waiting" style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;box-sizing:border-box;padding:0 6px;border-radius:999px;background:#ffb020;color:#3b2600;font-family:'Schibsted Grotesk',sans-serif;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;">3</span></a></li>
+     <li><a href="#" class="db-nav" style="display:flex;align-items:center;gap:14px;height:42px;padding:0 12px;border-radius:10px;color:#c9cce0;font-size:15px;line-height:20px;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" overflow="visible"><g transform="translate(-.22 -.22)"><path d="M11.02 2.81a1 1 0 0 1 1.96 0l1.05 5.56a2 2 0 0 0 1.6 1.6l5.55 1.05a1 1 0 0 1 0 1.96l-5.55 1.05a2 2 0 0 0-1.6 1.6l-1.05 5.55a1 1 0 0 1-1.96 0l-1.05-5.55a2 2 0 0 0-1.6-1.6l-5.55-1.05a1 1 0 0 1 0-1.96l5.55-1.05a2 2 0 0 0 1.6-1.6Z"></path><path d="M20 2v4M22 4h-4"></path><circle cx="4" cy="20" r="2"></circle></g></svg><span style="flex:1;">Ask Daybook</span></a></li>
+     <li><a href="#" class="db-nav" style="display:flex;align-items:center;gap:14px;height:42px;padding:0 12px;border-radius:10px;color:#c9cce0;font-size:15px;line-height:20px;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" overflow="visible"><g transform="translate(-.22 -.22)"><path d="M15 18h-5M18 14h-8"></path><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2"></path><rect x="10" y="6" width="8" height="4" rx="1"></rect></g></svg><span style="flex:1;">Summaries</span></a></li>
+     <li><a href="#" class="db-nav" style="display:flex;align-items:center;gap:14px;height:42px;padding:0 12px;border-radius:10px;color:#c9cce0;font-size:15px;line-height:20px;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" overflow="visible"><g transform="translate(-.22 -.22)"><path d="M10 15H6a4 4 0 0 0-4 4v2"></path><path d="m14.305 16.53.923-.382M15.228 13.852l-.923-.383M16.852 12.228l-.383-.923M16.852 17.772l-.383.924M19.148 12.228l.383-.923M19.53 18.696l-.382-.924M20.772 13.852l.924-.383M20.772 16.148l.924.383"></path><circle cx="18" cy="15" r="3"></circle><circle cx="9" cy="7" r="4"></circle></g></svg><span style="flex:1;">My settings</span></a></li>
+    </ul>
+   </nav>
+   <div style="margin-top:auto;padding-top:13px;border-top:1px solid #262a52;">
+    <div style="display:flex;align-items:center;gap:12px;padding:0 8px;">
+     <span aria-hidden="true" style="flex:none;width:38px;height:38px;border-radius:50%;background:#2d3272;color:#ffffff;font-size:13px;font-weight:600;line-height:1;display:inline-flex;align-items:center;justify-content:center;">RK</span>
+     <span style="display:flex;flex-direction:column;min-width:0;margin-top:3px;">
+      <span style="font-size:14px;font-weight:600;line-height:18px;color:#ffffff;">Riya Kapoor</span>
+      <span style="font-size:13px;line-height:18px;color:#9ea2c4;">Project manager</span>
+     </span>
+    </div>
+    <p style="margin:10px 0 0;padding:0 8px;font-size:12px;line-height:16px;color:#9ea2c4;">Daybook v1.06</p>
+   </div>
+  </div>
+ </aside>
+
+ <!-- Main -->
+ <main style="flex:999 1 560px;min-width:0;box-sizing:border-box;display:flex;flex-direction:column;padding:28px clamp(16px,2.25vw,32px);">
+ <div style="flex:1;display:flex;flex-direction:column;gap:22px;min-width:0;max-width:1760px;">
+
+  <!-- Screen A: Projects -->
+  <sc-if value="{{ isProjects }}" hint-placeholder-val="{{ true }}">
+   <div style="display:flex;flex-direction:column;gap:22px;min-width:0;">
+   <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px 24px;min-width:0;">
+    <div style="min-width:0;">
+     <h1 style="margin:0;position:relative;top:2px;font-family:'Schibsted Grotesk',sans-serif;font-size:clamp(24px,calc(24px + (100vw - 1023px) * 100),30px);font-weight:700;line-height:clamp(30px,calc(30px + (100vw - 1023px) * 100),36px);letter-spacing:-0.02em;color:#1b1e33;">Projects</h1>
+     <p style="margin:1px 0 0;position:relative;top:2px;font-size:15px;line-height:22px;color:#5b6178;">{{ list.subtitle }}</p>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;min-width:0;">
+     <div style="position:relative;width:240px;max-width:100%;">
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5b6178" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;top:13px;left:12px;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+      <input type="search" class="db-input" aria-label="Search by project or client" placeholder="Search projects" value="{{ list.search }}" onChange="{{ list.onSearch }}" style="display:block;width:100%;box-sizing:border-box;height:44px;padding:1px 12px 0 38px;background:#ffffff;border:1px solid #dcdfea;border-radius:10px;font-size:15px;line-height:20px;color:#1b1e33;">
+     </div>
+     <button type="button" class="db-primary" onClick="{{ list.newProject }}" style="height:44px;padding:2px 17px 0;border:1px solid transparent;border-radius:10px;background:#3848d6;color:#ffffff;font-size:15px;font-weight:600;line-height:1;cursor:pointer;">New project</button>
+    </div>
+   </header>
+
+   <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 16px;min-width:0;">
+   <div role="group" aria-label="Filter by status" style="display:flex;flex-wrap:wrap;gap:8px;">
+    <sc-for list="{{ list.pills }}" as="f" hint-placeholder-count="3">
+     <button type="button" class="db-pill" aria-pressed="{{ f.selected }}" onClick="{{ f.pick }}" style="display:inline-flex;align-items:center;height:36px;box-sizing:border-box;padding:0 13.5px;background:{{ f.bg }};border:1px solid {{ f.line }};border-radius:999px;font-size:13px;font-weight:{{ f.weight }};line-height:1;color:{{ f.color }};cursor:pointer;">{{ f.label }}</button>
+    </sc-for>
+   </div>
+   <div role="group" aria-label="Hours range" style="display:inline-flex;align-items:center;gap:2px;box-sizing:border-box;max-width:100%;height:40px;padding:3px;overflow-x:auto;background:#eef0f6;border-radius:10px;">
+    <sc-for list="{{ list.segs }}" as="g" hint-placeholder-count="4">
+     <button type="button" aria-pressed="{{ g.selected }}" onClick="{{ g.pick }}" style="flex:none;display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border:0;border-radius:8px;background:{{ g.bg }};font-size:13px;font-weight:{{ g.weight }};line-height:1;color:{{ g.color }};white-space:nowrap;cursor:pointer;">{{ g.label }}</button>
+    </sc-for>
+   </div>
+   </div>
+   <sc-if value="{{ list.customShow }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:flex-end;gap:10px 12px;">
+     <div>
+      <label for="list-from" style="display:block;margin-bottom:4px;font-size:13px;font-weight:600;line-height:18px;color:#3e4460;">From</label>
+      <input id="list-from" type="date" class="db-input" value="{{ list.from }}" onChange="{{ list.onFrom }}" style="display:block;box-sizing:border-box;height:40px;padding:1px 10px 0;background:#ffffff;border:1px solid #dcdfea;border-radius:10px;font-size:14px;line-height:20px;color:#1b1e33;">
+     </div>
+     <div>
+      <label for="list-to" style="display:block;margin-bottom:4px;font-size:13px;font-weight:600;line-height:18px;color:#3e4460;">To</label>
+      <input id="list-to" type="date" class="db-input" value="{{ list.to }}" onChange="{{ list.onTo }}" style="display:block;box-sizing:border-box;height:40px;padding:1px 10px 0;background:#ffffff;border:1px solid #dcdfea;border-radius:10px;font-size:14px;line-height:20px;color:#1b1e33;">
+     </div>
+     <button type="button" class="db-secondary" onClick="{{ list.show }}" style="height:40px;padding:0 16px;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:14px;font-weight:600;line-height:1;cursor:pointer;">Show</button>
+     <sc-if value="{{ list.errShow }}" hint-placeholder-val="{{ false }}"><div role="alert" style="flex:1 1 100%;font-size:13px;font-weight:500;line-height:18px;text-align:right;color:#9a1f28;">{{ list.err }}</div></sc-if>
+    </div>
+   </sc-if>
+
+   <section aria-label="Projects" style="min-width:0;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;overflow:hidden;">
+    <sc-if value="{{ list.hasRows }}" hint-placeholder-val="{{ true }}">
+     <div style="overflow-x:auto;">
+      <div role="table" aria-label="Projects" style="min-width:968px;">
+       <div role="row" style="display:grid;grid-template-columns:minmax(180px,1fr) 104px 150px 120px 92px 100px 110px;column-gap:12px;align-items:center;box-sizing:border-box;height:40px;padding:1px 20px 0;background:#f8f9fc;border-bottom:1px solid #eef0f6;font-size:13px;font-weight:600;line-height:16px;color:#5b6178;white-space:nowrap;">
+        <span role="columnheader">Project</span>
+        <span role="columnheader">Health</span>
+        <span role="columnheader">Phase</span>
+        <span role="columnheader">Progress</span>
+        <span role="columnheader">Deadline</span>
+        <span role="columnheader">Manager</span>
+        <span role="columnheader">{{ list.hoursHead }}</span>
+       </div>
+       <sc-for list="{{ list.rows }}" as="r" hint-placeholder-count="5">
+        <div role="row" style="display:grid;grid-template-columns:minmax(180px,1fr) 104px 150px 120px 92px 100px 110px;column-gap:12px;align-items:center;box-sizing:border-box;min-height:62px;padding:8px 20px;border-top:{{ r.line }};">
+         <div role="cell" style="display:flex;align-items:center;gap:12px;min-width:0;">
+          <span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:{{ r.sqBg }};color:{{ r.sqFg }};font-family:'Schibsted Grotesk',sans-serif;font-size:15px;font-weight:700;line-height:1;">{{ r.letter }}</span>
+          <span style="min-width:0;">
+           <button type="button" class="db-text-btn" onClick="{{ r.open }}" style="display:block;max-width:100%;padding:0;border:0;background:none;color:#1b1e33;font-size:15px;font-weight:500;line-height:19px;text-align:left;cursor:pointer;">{{ r.name }}</button>
+           <span style="display:block;font-size:13px;line-height:17px;color:#5b6178;">{{ r.client }}</span>
+          </span>
+         </div>
+         <div role="cell"><span style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:999px;background:{{ r.pillBg }};color:{{ r.pillFg }};font-size:12px;font-weight:600;line-height:1;white-space:nowrap;">{{ r.pill }}</span></div>
+         <div role="cell" style="font-size:14px;line-height:20px;color:{{ r.phaseColor }};">{{ r.phase }}</div>
+         <div role="cell" style="min-width:0;">
+          <sc-if value="{{ r.hasBar }}" hint-placeholder-val="{{ true }}">
+           <span style="display:flex;align-items:center;gap:8px;">
+            <span aria-hidden="true" style="flex:1;min-width:0;height:6px;border-radius:999px;background:#eef0f6;overflow:hidden;"><span style="display:block;width:{{ r.bar }};height:100%;border-radius:999px;background:#3848d6;"></span></span>
+            <span style="flex:none;min-width:32px;font-family:'Schibsted Grotesk',sans-serif;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;line-height:18px;text-align:right;color:#1b1e33;">{{ r.pct }}</span>
+           </span>
+          </sc-if>
+          <sc-if value="{{ r.noBar }}" hint-placeholder-val="{{ false }}"><span style="font-size:14px;line-height:20px;color:#5b6178;">No tasks yet</span></sc-if>
+         </div>
+         <div role="cell" style="font-size:14px;line-height:20px;white-space:nowrap;color:{{ r.dlColor }};">{{ r.deadline }}</div>
+         <div role="cell" style="font-size:14px;line-height:20px;color:#1b1e33;">{{ r.pm }}</div>
+         <div role="cell">
+          <div style="font-family:'Schibsted Grotesk',sans-serif;font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;line-height:20px;color:#1b1e33;">{{ r.hours }}</div>
+          <sc-if value="{{ r.totalShow }}" hint-placeholder-val="{{ true }}"><div style="font-size:13px;line-height:18px;color:#5b6178;white-space:nowrap;">{{ r.total }}</div></sc-if>
+         </div>
+        </div>
+       </sc-for>
+      </div>
+     </div>
+    </sc-if>
+    <sc-if value="{{ list.noRows }}" hint-placeholder-val="{{ false }}">
+     <div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:40px 24px;">
+      <div style="font-family:'Schibsted Grotesk',sans-serif;font-size:16px;font-weight:600;line-height:22px;color:#1b1e33;">No projects found.</div>
+      <button type="button" class="db-text-btn" onClick="{{ list.clearSearch }}" style="margin-top:6px;padding:0;border:0;background:none;color:#3848d6;font-size:14px;font-weight:600;line-height:20px;cursor:pointer;">Clear search</button>
+     </div>
+    </sc-if>
+   </section>
+   </div>
+  </sc-if>
+
+  <!-- Screen B: Project page -->
+  <sc-if value="{{ isProject }}" hint-placeholder-val="{{ false }}">
+   <div style="display:flex;flex-direction:column;gap:14px;min-width:0;">
+    <header style="min-width:0;">
+     <nav aria-label="Breadcrumb" style="display:flex;align-items:center;gap:6px;margin-bottom:1px;font-size:14px;font-weight:500;line-height:20px;">
+      <button type="button" class="db-text-btn" onClick="{{ goProjects }}" style="padding:0;border:0;background:none;color:#5b6178;font-size:14px;font-weight:500;line-height:20px;cursor:pointer;">Projects</button>
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5b6178" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+      <span aria-current="page" style="color:#1b1e33;">Acme booking app</span>
+     </nav>
+     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;">
+      <span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:9px;background:#e7e9fb;color:#26329a;font-family:'Schibsted Grotesk',sans-serif;font-size:15px;font-weight:700;line-height:1;">A</span>
+      <h1 style="margin:0;position:relative;top:2px;font-family:'Schibsted Grotesk',sans-serif;font-size:clamp(24px,calc(24px + (100vw - 1023px) * 100),30px);font-weight:700;line-height:clamp(30px,calc(30px + (100vw - 1023px) * 100),36px);letter-spacing:-0.02em;color:#1b1e33;overflow-wrap:anywhere;">Acme booking app</h1>
+      <span style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:999px;background:{{ health.pillBg }};color:{{ health.pillFg }};font-size:12px;font-weight:600;line-height:1;white-space:nowrap;">{{ health.pill }}</span>
+     </div>
+     <p style="margin:1px 0 0;position:relative;top:2px;font-size:15px;line-height:22px;color:#5b6178;">Acme Clinics &#183; PM: Riya Kapoor &#183; Active</p>
+    </header>
+
+    <nav aria-label="Project sections" style="display:flex;gap:4px;overflow-x:auto;box-shadow:inset 0 -1px 0 #e6e8f0;">
+     <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+      <button type="button" class="db-tab" aria-current="{{ t.current }}" onClick="{{ t.pick }}" style="flex:none;height:44px;padding:2px 14px 0;border:0;border-bottom:2px solid {{ t.line }};background:none;color:{{ t.color }};font-size:15px;font-weight:{{ t.weight }};line-height:1;cursor:pointer;">{{ t.label }}</button>
+     </sc-for>
+    </nav>
+
+    <!-- Overview: are we on track? -->
+    <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+     <div style="display:flex;flex-direction:column;gap:14px;min-width:0;">
+     <div role="status" style="display:flex;align-items:flex-start;gap:12px;padding:13px 18px;border-radius:12px;background:{{ health.bg }};">
+      <sc-if value="{{ health.warn }}" hint-placeholder-val="{{ true }}"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{ health.ink }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></sc-if>
+      <sc-if value="{{ health.good }}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{ health.ink }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px;"><circle cx="12" cy="12" r="10"></circle><path d="m16 9-5.5 5.5L8 12"></path></svg></sc-if>
+      <sc-if value="{{ health.plain }}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{ health.ink }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg></sc-if>
+      <div style="min-width:0;">
+       <div style="font-family:'Schibsted Grotesk',sans-serif;font-size:16px;font-weight:700;line-height:22px;color:{{ health.ink }};">{{ health.title }}</div>
+       <div style="font-size:14px;line-height:20px;color:#1b1e33;">{{ health.body }}</div>
+      </div>
+     </div>
+
+     <div style="display:flex;flex-wrap:wrap;gap:14px;min-width:0;">
+      <section aria-labelledby="c-progress" style="flex:1 1 220px;min-width:0;box-sizing:border-box;padding:16px 20px;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;">
+       <h2 id="c-progress" style="margin:0;font-family:'Schibsted Grotesk',sans-serif;font-size:18px;font-weight:600;line-height:22px;color:#1b1e33;">Progress</h2>
+       <div style="display:flex;flex-direction:column;align-items:center;margin-top:8px;">
+        <div style="position:relative;width:140px;height:140px;">
+         <svg role="img" aria-label="{{ donut.aria }}" width="140" height="140" viewBox="0 0 140 140">
+          <circle cx="70" cy="70" r="62" fill="none" stroke="#eef0f6" stroke-width="16"></circle>
+          <circle cx="70" cy="70" r="62" fill="none" stroke="#3848d6" stroke-width="16" stroke-dasharray="{{ donut.dash }}" transform="rotate(-90 70 70)"></circle>
+         </svg>
+         <div aria-hidden="true" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <span style="font-family:'Schibsted Grotesk',sans-serif;font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:34px;color:#1b1e33;">{{ donut.pct }}</span>
+          <span style="font-size:12px;line-height:16px;color:#5b6178;">of 100%</span>
+         </div>
+        </div>
+        <p style="margin:6px 0 0;font-size:14px;line-height:20px;color:#1b1e33;text-align:center;">{{ donut.text }}</p>
+       </div>
+      </section>
+
+      <section aria-labelledby="c-deadline" style="flex:1 1 220px;min-width:0;box-sizing:border-box;display:flex;flex-direction:column;padding:16px 20px;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;">
+       <h2 id="c-deadline" style="margin:0;font-family:'Schibsted Grotesk',sans-serif;font-size:18px;font-weight:600;line-height:22px;color:#1b1e33;">Deadline</h2>
+       <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;min-height:120px;">
+        <div style="font-family:'Schibsted Grotesk',sans-serif;font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:34px;color:{{ dlCard.color }};">{{ dlCard.date }}</div>
+        <sc-if value="{{ dlCard.leftShow }}" hint-placeholder-val="{{ true }}"><div style="margin-top:2px;font-size:14px;line-height:20px;color:#5b6178;">{{ dlCard.left }}</div></sc-if>
+        <button type="button" class="db-text-btn" onClick="{{ dlCard.open }}" style="margin-top:12px;padding:0;border:0;background:none;color:#3848d6;font-size:14px;font-weight:600;line-height:20px;cursor:pointer;">{{ dlCard.action }}</button>
+       </div>
+      </section>
+
+      <section aria-labelledby="c-phase" style="flex:2 1 440px;min-width:0;box-sizing:border-box;display:flex;flex-direction:column;padding:16px 20px;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;">
+       <h2 id="c-phase" style="margin:0;font-family:'Schibsted Grotesk',sans-serif;font-size:18px;font-weight:600;line-height:22px;color:#1b1e33;">Phase</h2>
+       <div style="margin-top:12px;overflow-x:auto;">
+        <ol aria-label="Phases" style="display:flex;box-sizing:border-box;min-width:400px;margin:0;padding:0 3px;list-style:none;">
+         <sc-for list="{{ steps }}" as="st" hint-placeholder-count="6">
+          <li aria-current="{{ st.aria }}" style="position:relative;flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;">
+           <span aria-hidden="true" style="position:absolute;top:12px;left:0;width:50%;height:2px;background:{{ st.lineL }};"></span>
+           <span aria-hidden="true" style="position:absolute;top:12px;left:50%;width:50%;height:2px;background:{{ st.lineR }};"></span>
+           <span aria-hidden="true" style="position:relative;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:26px;height:26px;border:2px solid {{ st.ring }};border-radius:50%;background:{{ st.fill }};">
+            <sc-if value="{{ st.isDone }}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+            <sc-if value="{{ st.isCurrent }}" hint-placeholder-val="{{ true }}"><span style="width:10px;height:10px;border-radius:50%;background:#3848d6;"></span></sc-if>
+           </span>
+           <span style="padding:0 3px;font-size:12px;font-weight:{{ st.weight }};line-height:16px;color:{{ st.color }};">{{ st.label }}</span>
+          </li>
+         </sc-for>
+        </ol>
+       </div>
+       <sc-if value="{{ aiLine.show }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;align-items:flex-start;gap:8px;margin-top:10px;padding:7px 12px;border-radius:10px;background:#eee7fa;color:#55289f;font-size:12px;line-height:18px;">
+         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px;"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path><path d="M20 2v4"></path><path d="M22 4h-4"></path><circle cx="4" cy="20" r="2"></circle></svg>
+         <span style="min-width:0;">AI suggests moving on: &#8220;Client approved the scope on the call&#8221; &#183; <span style="display:inline-block;max-width:100%;">{{ aiLine.source }}</span></span>
+        </div>
+       </sc-if>
+       <sc-if value="{{ moveBtn.show }}" hint-placeholder-val="{{ true }}">
+        <div style="margin-top:auto;padding-top:12px;">
+         <button type="button" class="db-primary" onClick="{{ moveBtn.open }}" style="height:44px;padding:2px 17px 0;border:1px solid transparent;border-radius:10px;background:#3848d6;color:#ffffff;font-size:15px;font-weight:600;line-height:1;cursor:pointer;">{{ moveBtn.label }}</button>
+        </div>
+       </sc-if>
+       <sc-if value="{{ moveBtn.last }}" hint-placeholder-val="{{ false }}"><p style="margin:12px 0 0;font-size:14px;line-height:20px;color:#5b6178;">Support is the last phase.</p></sc-if>
+      </section>
+     </div>
+
+     <div style="display:flex;flex-wrap:wrap;gap:14px;min-width:0;">
+      <section aria-labelledby="c-critical" style="flex:1 1 400px;min-width:0;box-sizing:border-box;display:flex;flex-direction:column;padding:16px 20px;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;">
+       <div style="display:flex;align-items:baseline;gap:10px;">
+        <h2 id="c-critical" style="margin:0;font-family:'Schibsted Grotesk',sans-serif;font-size:18px;font-weight:600;line-height:22px;color:#1b1e33;">Critical tasks</h2>
+        <span style="font-size:14px;line-height:20px;color:#5b6178;">{{ crit.count }}</span>
+       </div>
+       <sc-if value="{{ crit.none }}" hint-placeholder-val="{{ false }}"><p style="margin:12px 0 0;font-size:14px;line-height:20px;color:#5b6178;">No critical tasks open.</p></sc-if>
+       <ul aria-label="Critical tasks" style="margin:8px 0 0;padding:0;list-style:none;">
+        <sc-for list="{{ crit.rows }}" as="c" hint-placeholder-count="5">
+         <li style="display:flex;align-items:center;gap:12px;box-sizing:border-box;min-height:48px;padding:4px 0;border-top:1px solid #eef0f6;">
+          <label style="flex:none;display:flex;align-items:center;justify-content:center;width:36px;height:36px;margin:0 -9px;cursor:pointer;">
+           <input type="checkbox" aria-label="{{ c.tickLabel }}" checked="{{ c.done }}" onChange="{{ c.tick }}" style="flex:none;width:18px;height:18px;margin:0;accent-color:#3848d6;cursor:pointer;">
+          </label>
+          <span style="flex:1;min-width:0;">
+           <span style="display:block;font-size:14px;font-weight:600;line-height:20px;color:#1b1e33;">{{ c.title }}</span>
+           <span style="display:block;font-size:13px;line-height:18px;color:#5b6178;">{{ c.meta }}</span>
+          </span>
+          <span style="flex:none;display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;background:{{ c.dueBg }};color:{{ c.dueFg }};font-size:12px;font-weight:600;line-height:1;white-space:nowrap;">{{ c.due }}</span>
+         </li>
+        </sc-for>
+       </ul>
+       <div style="margin-top:auto;padding-top:8px;">
+        <button type="button" class="db-text-btn" onClick="{{ goPhases }}" style="padding:0;border:0;background:none;color:#3848d6;font-size:14px;font-weight:600;line-height:20px;cursor:pointer;">See all tasks</button>
+       </div>
+      </section>
+
+      <section aria-labelledby="c-ai" style="flex:1 1 400px;min-width:0;box-sizing:border-box;display:flex;flex-direction:column;padding:16px 20px;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;">
+       <div style="display:flex;align-items:center;gap:8px;">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7b45d6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path><path d="M20 2v4"></path><path d="M22 4h-4"></path><circle cx="4" cy="20" r="2"></circle></svg>
+        <h2 id="c-ai" style="margin:0;font-family:'Schibsted Grotesk',sans-serif;font-size:18px;font-weight:600;line-height:22px;color:#1b1e33;">AI summary</h2>
+        <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;background:#eee7fa;color:#55289f;font-size:12px;font-weight:600;line-height:1;">AI</span>
+       </div>
+
+       <sc-if value="{{ ai.empty }}" hint-placeholder-val="{{ false }}">
+        <p style="margin:12px 0 0;font-size:14px;line-height:20px;color:#5b6178;">Add a project PDF or meeting notes in a phase and AI writes a summary here.</p>
+        <div style="margin-top:12px;">
+         <button type="button" class="db-secondary" onClick="{{ goPhases }}" style="height:40px;padding:0 16px;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:15px;font-weight:600;line-height:1;cursor:pointer;">Go to phases</button>
+        </div>
+       </sc-if>
+
+       <sc-if value="{{ ai.has }}" hint-placeholder-val="{{ true }}">
+        <sc-if value="{{ ai.actionsShow }}" hint-placeholder-val="{{ true }}">
+         <div style="margin-top:10px;padding:10px 14px;border-radius:10px;background:#fff1d6;">
+          <div style="display:flex;align-items:center;gap:8px;">
+           <h3 style="margin:0;font-size:14px;font-weight:600;line-height:20px;color:#6b4500;">Action items</h3>
+           <span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;box-sizing:border-box;padding:0 6px;border-radius:999px;background:#ffb020;color:#3b2600;font-family:'Schibsted Grotesk',sans-serif;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;">{{ ai.actionCount }}</span>
+          </div>
+          <ul aria-label="Action items" style="margin:4px 0 0;padding:0;list-style:none;">
+           <sc-for list="{{ ai.actions }}" as="a" hint-placeholder-count="2">
+            <li style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px;min-height:38px;">
+             <span style="flex:1 1 220px;min-width:0;font-size:14px;line-height:20px;color:#1b1e33;"><span style="font-weight:600;">{{ a.who }}:</span> {{ a.text }} <span style="color:#6b4500;">&#183; {{ a.when }}</span></span>
+             <sc-if value="{{ a.canAdd }}" hint-placeholder-val="{{ true }}"><button type="button" class="db-secondary" onClick="{{ a.add }}" style="flex:none;height:32px;padding:1px 12px 0;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:14px;font-weight:600;line-height:1;cursor:pointer;">Add to tasks</button></sc-if>
+             <sc-if value="{{ a.added }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font-size:13px;line-height:18px;color:#6b4500;">Added</span></sc-if>
+            </li>
+           </sc-for>
+          </ul>
+         </div>
+        </sc-if>
+        <p style="margin:10px 0 0;font-size:14px;line-height:20px;color:#1b1e33;">{{ ai.overview }}</p>
+        <sc-if value="{{ ai.riskShow }}" hint-placeholder-val="{{ true }}"><p style="margin:4px 0 0;font-size:14px;line-height:20px;color:#1b1e33;">Risk: Payment provider not chosen yet</p></sc-if>
+        <sc-if value="{{ ai.fullShow }}" hint-placeholder-val="{{ true }}">
+         <div style="margin-top:6px;">
+          <button type="button" class="db-text-btn" aria-expanded="{{ ai.fullOpen }}" onClick="{{ ai.toggleFull }}" style="padding:0;border:0;background:none;color:#3848d6;font-size:14px;font-weight:600;line-height:20px;cursor:pointer;">{{ ai.fullLabel }}</button>
+         </div>
+        </sc-if>
+        <sc-if value="{{ ai.fullOpen }}" hint-placeholder-val="{{ false }}">
+         <sc-for list="{{ ai.groups }}" as="g" hint-placeholder-count="3">
+          <div style="margin-top:12px;">
+           <h3 style="margin:0;font-size:14px;font-weight:600;line-height:20px;color:#1b1e33;">{{ g.title }}</h3>
+           <ul style="margin:2px 0 0;padding:0;list-style:none;">
+            <sc-for list="{{ g.points }}" as="pt" hint-placeholder-count="2">
+             <li style="padding:2px 0;font-size:14px;line-height:20px;color:#1b1e33;">{{ pt.text }} <sc-if value="{{ pt.tagShow }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;background:#e6e8f0;color:#3e4460;font-size:12px;font-weight:600;line-height:1;white-space:nowrap;">Not in scope</span> </sc-if><span style="font-size:13px;color:#5b6178;">{{ pt.source }}</span></li>
+            </sc-for>
+           </ul>
+          </div>
+         </sc-for>
+        </sc-if>
+        <div style="margin-top:auto;padding-top:8px;">
+         <sc-if value="{{ ai.fresh }}" hint-placeholder-val="{{ true }}"><p style="margin:0;font-size:13px;line-height:18px;color:#5b6178;">{{ ai.footer }}</p></sc-if>
+         <sc-if value="{{ ai.stale }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:13px;line-height:18px;color:#5b6178;">
+           <span>Files or notes changed since this summary.</span>
+           <button type="button" class="db-secondary" onClick="{{ ai.update }}" style="height:32px;padding:1px 12px 0;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:14px;font-weight:600;line-height:1;cursor:pointer;">Update summary</button>
+          </div>
+         </sc-if>
+         <sc-if value="{{ ai.reading }}" hint-placeholder-val="{{ false }}"><p role="status" style="margin:0;font-size:13px;line-height:18px;color:#55289f;">Reading the files&#8230;</p></sc-if>
+        </div>
+       </sc-if>
+      </section>
+     </div>
+     </div>
+    </sc-if>
+
+    <!-- Phases: what has to be done, and by whom? -->
+    <sc-if value="{{ isPhases }}" hint-placeholder-val="{{ false }}">
+     <section aria-label="Phases" style="min-width:0;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;overflow:hidden;">
+      <sc-for list="{{ phaseRows }}" as="p" hint-placeholder-count="6">
+       <div style="border-top:{{ p.border }};">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;box-sizing:border-box;min-height:60px;padding:8px 20px;">
+         <h2 style="flex:1 1 320px;min-width:0;margin:0;font:inherit;">
+         <button type="button" aria-expanded="{{ p.open }}" onClick="{{ p.toggle }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;width:100%;min-height:44px;padding:0;border:0;background:none;text-align:left;cursor:pointer;">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5b6178" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:none;transform:{{ p.chev }};"><path d="m9 18 6-6-6-6"></path></svg>
+          <span style="font-family:'Schibsted Grotesk',sans-serif;font-size:15px;font-weight:700;line-height:20px;color:#1b1e33;">{{ p.label }}</span>
+          <sc-if value="{{ p.isCurrent }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;background:#e7e9fb;color:#26329a;font-size:12px;font-weight:600;line-height:1;">Current</span></sc-if>
+          <sc-if value="{{ p.isDone }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;background:#e1f3eb;color:#09633f;font-size:12px;font-weight:600;line-height:1;">Done</span></sc-if>
+          <span style="font-size:14px;line-height:20px;color:#5b6178;">{{ p.planned }}</span>
+          <sc-if value="{{ p.lateShow }}" hint-placeholder-val="{{ true }}"><span style="font-size:14px;font-weight:500;line-height:20px;color:{{ p.lateColor }};">{{ p.lateText }}</span></sc-if>
+         </button>
+         </h2>
+         <div style="display:flex;align-items:center;gap:14px;flex:none;">
+          <span style="font-size:14px;font-variant-numeric:tabular-nums;line-height:20px;color:#3e4460;">{{ p.count }}</span>
+          <sc-if value="{{ p.open }}" hint-placeholder-val="{{ true }}"><button type="button" class="db-secondary" onClick="{{ p.editDates }}" style="height:36px;padding:1px 12px 0;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:14px;font-weight:600;line-height:1;cursor:pointer;">Edit dates</button></sc-if>
+         </div>
+        </div>
+
+        <sc-if value="{{ p.open }}" hint-placeholder-val="{{ true }}">
+         <div style="padding:6px 20px 20px clamp(20px,3.4vw,48px);">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;">
+           <h3 style="margin:0;font-family:'Schibsted Grotesk',sans-serif;font-size:16px;font-weight:600;line-height:22px;color:#1b1e33;">Tasks</h3>
+           <button type="button" class="db-secondary" onClick="{{ p.addTask }}" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:1px 12px 0;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:14px;font-weight:600;line-height:1;cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>Add task</button>
+          </div>
+          <sc-if value="{{ p.tasksEmpty }}" hint-placeholder-val="{{ false }}"><p style="margin:8px 0 0;font-size:14px;line-height:20px;color:#5b6178;">{{ p.tasksEmptyText }}</p></sc-if>
+          <div style="margin:4px -4px -4px -9px;padding:4px 4px 4px 9px;overflow-x:auto;">
+           <div style="min-width:680px;">
+            <sc-if value="{{ p.headShow }}" hint-placeholder-val="{{ true }}">
+             <div aria-hidden="true" style="display:grid;grid-template-columns:minmax(200px,1fr) 150px 104px 56px 76px;column-gap:12px;align-items:center;height:34px;padding:0 0 0 30px;border-radius:8px;background:#f8f9fc;font-size:13px;font-weight:600;line-height:16px;color:#5b6178;">
+              <span>Task</span><span>Owner</span><span>Due</span><span>Priority</span><span></span>
+             </div>
+            </sc-if>
+            <ul aria-label="Tasks" style="margin:0;padding:0;list-style:none;">
+             <sc-for list="{{ p.rows }}" as="r" hint-placeholder-count="2">
+              <li style="border-top:{{ r.line }};">
+               <sc-if value="{{ r.isTask }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid;grid-template-columns:minmax(200px,1fr) 150px 104px 56px 76px;column-gap:12px;align-items:center;box-sizing:border-box;min-height:52px;padding:4px 0;">
+                 <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                  <label style="flex:none;display:flex;align-items:center;justify-content:center;width:36px;height:36px;margin:0 -9px;cursor:pointer;">
+                   <input type="checkbox" aria-label="{{ r.tickLabel }}" checked="{{ r.done }}" onChange="{{ r.tick }}" style="flex:none;width:18px;height:18px;margin:0;accent-color:#3848d6;cursor:pointer;">
+                  </label>
+                  <span style="min-width:0;font-size:14px;font-weight:500;line-height:20px;color:{{ r.titleColor }};text-decoration:{{ r.titleDeco }};">{{ r.title }}</span>
+                 </div>
+                 <span style="min-width:0;font-size:14px;line-height:20px;color:{{ r.ownerColor }};">{{ r.owner }}</span>
+                 <span style="justify-self:start;display:inline-flex;align-items:center;height:22px;padding:0 {{ r.duePad }};border-radius:999px;background:{{ r.dueBg }};color:{{ r.dueFg }};font-size:12px;font-weight:600;line-height:1;white-space:nowrap;">{{ r.due }}</span>
+                 <span style="justify-self:start;display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:26px;padding:0 8px;box-sizing:border-box;border-radius:6px;background:{{ r.priBg }};color:{{ r.priFg }};font-family:'Schibsted Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.01em;line-height:1;">{{ r.pri }}</span>
+                 <span style="display:flex;justify-content:flex-end;gap:2px;">
+                  <button type="button" class="db-ghost" aria-label="{{ r.editLabel }}" onClick="{{ r.edit }}" style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:0;border-radius:8px;background:transparent;color:#5b6178;cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg></button>
+                  <button type="button" class="db-ghost" aria-label="{{ r.removeLabel }}" onClick="{{ r.remove }}" style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:0;border-radius:8px;background:transparent;color:#5b6178;cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg></button>
+                 </span>
+                </div>
+               </sc-if>
+               <sc-if value="{{ r.isToggle }}" hint-placeholder-val="{{ false }}">
+                <button type="button" class="db-text-btn" aria-expanded="{{ r.toggleOpen }}" onClick="{{ r.toggleDone }}" style="display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0;border:0;background:none;color:#3e4460;font-size:14px;font-weight:600;line-height:20px;cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="transform:{{ r.toggleChev }};"><path d="m9 18 6-6-6-6"></path></svg>{{ r.toggleLabel }}</button>
+               </sc-if>
+               <sc-if value="{{ r.isForm }}" hint-placeholder-val="{{ false }}">
+                <div style="position:sticky;left:0;box-sizing:border-box;max-width:calc(100vw - 74px - clamp(0px,calc((100vw - 800px) * 100),240px));display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0;padding:10px 12px;border-radius:10px;background:#f8f9fc;">
+                 <input type="text" class="db-input" aria-label="Task title" placeholder="Task title" value="{{ tf.title }}" onChange="{{ tf.onTitle }}" style="flex:2 1 200px;min-width:0;box-sizing:border-box;height:40px;padding:1px 12px 0;background:#ffffff;border:1px solid {{ tf.line }};border-radius:10px;font-size:14px;line-height:20px;color:#1b1e33;">
+                 <select class="db-input" aria-label="Owner" value="{{ tf.owner }}" onChange="{{ tf.onOwner }}" style="flex:1 1 170px;min-width:0;box-sizing:border-box;height:40px;padding:0 10px;background:#ffffff;border:1px solid #dcdfea;border-radius:10px;font-size:14px;line-height:20px;color:#1b1e33;cursor:pointer;">
+                  <option value="Anyone on the project">Anyone on the project</option>
+                  <option value="Riya Kapoor">Riya Kapoor</option>
+                  <option value="Aman Gill">Aman Gill</option>
+                  <option value="Neha Arora">Neha Arora</option>
+                  <option value="Karan Mehta">Karan Mehta</option>
+                 </select>
+                 <input type="date" class="db-input" aria-label="Due date" value="{{ tf.due }}" onChange="{{ tf.onDue }}" style="flex:0 1 150px;min-width:0;box-sizing:border-box;height:40px;padding:1px 10px 0;background:#ffffff;border:1px solid #dcdfea;border-radius:10px;font-size:14px;line-height:20px;color:#1b1e33;">
+                 <select class="db-input" aria-label="Priority" value="{{ tf.pri }}" onChange="{{ tf.onPri }}" style="flex:0 1 116px;min-width:0;box-sizing:border-box;height:40px;padding:0 10px;background:#ffffff;border:1px solid #dcdfea;border-radius:10px;font-size:14px;line-height:20px;color:#1b1e33;cursor:pointer;">
+                  <option value="1">P1 critical</option>
+                  <option value="2">P2</option>
+                  <option value="3">P3</option>
+                 </select>
+                 <span style="display:flex;gap:8px;">
+                  <button type="button" class="db-primary" onClick="{{ tf.save }}" style="height:40px;padding:0 16px;border:1px solid transparent;border-radius:10px;background:#3848d6;color:#ffffff;font-size:14px;font-weight:600;line-height:1;cursor:pointer;">{{ tf.saveLabel }}</button>
+                  <button type="button" class="db-secondary" onClick="{{ tf.cancel }}" style="height:40px;padding:0 14px;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:14px;font-weight:600;line-height:1;cursor:pointer;">Cancel</button>
+                 </span>
+                 <sc-if value="{{ tf.errShow }}" hint-placeholder-val="{{ false }}"><div role="alert" style="flex:1 1 100%;font-size:13px;font-weight:500;line-height:18px;color:#9a1f28;">{{ tf.err }}</div></sc-if>
+                </div>
+               </sc-if>
+              </li>
+             </sc-for>
+            </ul>
+           </div>
+          </div>
+
+          <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;margin-top:22px;">
+           <h3 style="margin:0;font-family:'Schibsted Grotesk',sans-serif;font-size:16px;font-weight:600;line-height:22px;color:#1b1e33;">Files and notes</h3>
+           <span style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button type="button" class="db-secondary" onClick="{{ p.addFile }}" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:1px 12px 0;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:14px;font-weight:600;line-height:1;cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>Add file</button>
+            <button type="button" class="db-secondary" onClick="{{ p.addNote }}" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:1px 12px 0;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:14px;font-weight:600;line-height:1;cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>Add note</button>
+           </span>
+          </div>
+          <sc-if value="{{ p.docsEmpty }}" hint-placeholder-val="{{ false }}"><p style="margin:8px 0 0;font-size:14px;line-height:20px;color:#5b6178;">No files or notes yet.</p></sc-if>
+          <ul aria-label="Files and notes" style="margin:6px 0 0;padding:0;list-style:none;">
+           <sc-for list="{{ p.docs }}" as="d" hint-placeholder-count="2">
+            <li style="border-top:{{ d.line }};">
+             <sc-if value="{{ d.isRow }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:12px;box-sizing:border-box;min-height:52px;padding:4px 0;">
+               <sc-if value="{{ d.isFile }}" hint-placeholder-val="{{ true }}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5b6178" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg></sc-if>
+               <sc-if value="{{ d.isNote }}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5b6178" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"></path><path d="M15 3v4a2 2 0 0 0 2 2h4"></path></svg></sc-if>
+               <div style="flex:1;min-width:0;">
+                <button type="button" class="db-text-btn" aria-expanded="{{ d.expanded }}" onClick="{{ d.toggle }}" style="display:block;max-width:100%;padding:0;border:0;background:none;color:#1b1e33;font-size:14px;font-weight:600;line-height:20px;text-align:left;overflow-wrap:anywhere;cursor:pointer;">{{ d.name }}</button>
+                <span style="display:block;font-size:13px;line-height:18px;color:#5b6178;">{{ d.detail }}</span>
+               </div>
+               <span style="display:flex;flex:none;gap:2px;">
+                <sc-if value="{{ d.canEdit }}" hint-placeholder-val="{{ false }}"><button type="button" class="db-ghost" aria-label="{{ d.editLabel }}" onClick="{{ d.edit }}" style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:0;border-radius:8px;background:transparent;color:#5b6178;cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg></button></sc-if>
+                <button type="button" class="db-ghost" aria-label="{{ d.removeLabel }}" onClick="{{ d.remove }}" style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:0;border-radius:8px;background:transparent;color:#5b6178;cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg></button>
+               </span>
+              </div>
+              <sc-if value="{{ d.expanded }}" hint-placeholder-val="{{ false }}"><div style="margin:0 0 10px 30px;padding:10px 14px;border-radius:10px;background:#f8f9fc;font-size:14px;line-height:20px;color:#3e4460;white-space:pre-line;">{{ d.text }}</div></sc-if>
+             </sc-if>
+             <sc-if value="{{ d.isForm }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:8px;margin:6px 0;padding:10px 12px;border-radius:10px;background:#f8f9fc;">
+               <input type="text" class="db-input" aria-label="Note title" placeholder="Title" value="{{ nf.title }}" onChange="{{ nf.onTitle }}" style="display:block;width:100%;box-sizing:border-box;height:40px;padding:1px 12px 0;background:#ffffff;border:1px solid #dcdfea;border-radius:10px;font-size:14px;line-height:20px;color:#1b1e33;">
+               <textarea class="db-input" aria-label="Note text" placeholder="Text" rows="4" value="{{ nf.text }}" onChange="{{ nf.onText }}" style="display:block;width:100%;box-sizing:border-box;min-height:88px;padding:9px 12px;background:#ffffff;border:1px solid #dcdfea;border-radius:10px;font-size:14px;line-height:20px;color:#1b1e33;resize:vertical;"></textarea>
+               <sc-if value="{{ nf.errShow }}" hint-placeholder-val="{{ false }}"><div role="alert" style="font-size:13px;font-weight:500;line-height:18px;color:#9a1f28;">{{ nf.err }}</div></sc-if>
+               <span style="display:flex;gap:8px;">
+                <button type="button" class="db-primary" onClick="{{ nf.save }}" style="height:40px;padding:0 16px;border:1px solid transparent;border-radius:10px;background:#3848d6;color:#ffffff;font-size:14px;font-weight:600;line-height:1;cursor:pointer;">{{ nf.saveLabel }}</button>
+                <button type="button" class="db-secondary" onClick="{{ nf.cancel }}" style="height:40px;padding:0 14px;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:14px;font-weight:600;line-height:1;cursor:pointer;">Cancel</button>
+               </span>
+              </div>
+             </sc-if>
+            </li>
+           </sc-for>
+          </ul>
+
+          <sc-if value="{{ p.moveShow }}" hint-placeholder-val="{{ true }}">
+           <div style="margin-top:18px;">
+            <button type="button" class="db-primary" onClick="{{ p.move }}" style="height:44px;padding:2px 17px 0;border:1px solid transparent;border-radius:10px;background:#3848d6;color:#ffffff;font-size:15px;font-weight:600;line-height:1;cursor:pointer;">{{ p.moveLabel }}</button>
+           </div>
+          </sc-if>
+          <sc-if value="{{ p.makeShow }}" hint-placeholder-val="{{ false }}">
+           <div style="margin-top:18px;">
+            <button type="button" class="db-text-btn" onClick="{{ p.move }}" style="padding:0;border:0;background:none;color:#3848d6;font-size:14px;font-weight:600;line-height:20px;cursor:pointer;">Make this the current phase</button>
+           </div>
+          </sc-if>
+         </div>
+        </sc-if>
+       </div>
+      </sc-for>
+     </section>
+    </sc-if>
+
+    <!-- Timeline: plan vs actual -->
+    <sc-if value="{{ isTimeline }}" hint-placeholder-val="{{ false }}">
+     <section aria-label="Timeline" style="min-width:0;box-sizing:border-box;padding:20px 24px 22px;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;">
+      <p style="margin:0;font-size:15px;font-weight:600;line-height:22px;color:#1b1e33;">{{ tl.summary }}</p>
+      <ul aria-label="Legend" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:8px 0 0;padding:0;list-style:none;font-size:13px;line-height:18px;color:#5b6178;">
+       <li style="display:inline-flex;align-items:center;gap:6px;"><span aria-hidden="true" style="flex:none;width:14px;height:8px;box-sizing:border-box;border:1px solid #b8bff0;border-radius:4px;background:#e7e9fb;"></span>Planned</li>
+       <li style="display:inline-flex;align-items:center;gap:6px;"><span aria-hidden="true" style="flex:none;width:14px;height:8px;border-radius:4px;background:#3848d6;"></span>Actual</li>
+       <li style="display:inline-flex;align-items:center;gap:6px;"><span aria-hidden="true" style="flex:none;width:14px;height:8px;border-radius:4px;background:#d12f3a;"></span>Late</li>
+      </ul>
+      <div style="margin-top:14px;overflow-x:auto;">
+       <div style="position:relative;z-index:0;min-width:680px;">
+        <div aria-hidden="true" style="position:absolute;top:18px;bottom:0;left:clamp(128px,calc(128px + (100vw - 800px) * 100),220px);right:0;pointer-events:none;">
+         <sc-for list="{{ tl.weeks }}" as="w" hint-placeholder-count="15">
+          <span style="position:absolute;top:0;bottom:0;left:{{ w.left }};width:1px;background:#eef0f6;"></span>
+         </sc-for>
+        </div>
+        <div style="display:flex;">
+         <div style="flex:0 0 clamp(128px,calc(128px + (100vw - 800px) * 100),220px);position:sticky;left:0;z-index:4;background:#ffffff;"></div>
+         <div style="position:relative;flex:1 1 auto;min-width:0;height:86px;">
+          <sc-for list="{{ tl.months }}" as="m" hint-placeholder-count="4">
+           <span style="position:absolute;top:0;left:{{ m.left }};font-size:12px;font-weight:600;line-height:16px;color:#3e4460;white-space:nowrap;">{{ m.label }}</span>
+          </sc-for>
+          <sc-for list="{{ tl.weeks }}" as="w" hint-placeholder-count="15">
+           <span style="position:absolute;top:18px;left:{{ w.left }};padding-left:4px;font-family:'Schibsted Grotesk',sans-serif;font-size:12px;font-variant-numeric:tabular-nums;line-height:16px;color:#5b6178;white-space:nowrap;">{{ w.label }}</span>
+          </sc-for>
+          <span style="position:absolute;z-index:3;top:38px;left:{{ tl.todayX }};transform:translateX(-50%);display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;background:#1b1e33;color:#ffffff;font-size:12px;font-weight:600;line-height:1;white-space:nowrap;">{{ tl.todayLabel }}</span>
+          <sc-if value="{{ tl.dlShow }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;z-index:3;top:{{ tl.dlTop }};left:{{ tl.dlX }};transform:{{ tl.dlShift }};display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;background:#fbe3e4;color:#9a1f28;font-size:12px;font-weight:600;line-height:1;white-space:nowrap;">{{ tl.dlLabel }}</span></sc-if>
+          <sc-if value="{{ tl.expShow }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;z-index:3;top:63px;left:{{ tl.expX }};transform:{{ tl.expShift }};display:inline-flex;flex-direction:{{ tl.expDir }};align-items:center;gap:6px;height:20px;padding:0 4px;background:#ffffff;color:{{ tl.expInk }};font-size:12px;font-weight:600;line-height:1;white-space:nowrap;"><span aria-hidden="true" style="flex:none;width:9px;height:9px;background:{{ tl.expFill }};transform:rotate(45deg);"></span>{{ tl.expLabel }}</span></sc-if>
+         </div>
+        </div>
+        <sc-for list="{{ tl.rows }}" as="r" hint-placeholder-count="6">
+         <div style="display:flex;border-top:1px solid #eef0f6;">
+          <div style="flex:0 0 clamp(128px,calc(128px + (100vw - 800px) * 100),220px);position:sticky;left:0;z-index:4;background:#ffffff;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;min-height:56px;padding:3px 12px 3px 0;min-width:0;">
+           <span style="font-size:14px;font-weight:600;line-height:18px;color:#1b1e33;">{{ r.label }}</span>
+           <span style="font-size:12px;line-height:16px;color:#5b6178;">{{ r.planned }}</span>
+           <sc-if value="{{ r.lateShow }}" hint-placeholder-val="{{ true }}"><span style="font-size:12px;font-weight:500;line-height:16px;color:{{ r.lateColor }};">{{ r.lateText }}</span></sc-if>
+          </div>
+          <div aria-hidden="true" style="position:relative;flex:1 1 auto;min-width:0;min-height:56px;">
+           <sc-if value="{{ r.pShow }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;z-index:1;top:calc(50% - 14px);left:{{ r.pLeft }};width:{{ r.pWidth }};min-width:6px;height:12px;box-sizing:border-box;border:1px solid #b8bff0;border-radius:6px;background:#e7e9fb;"></span></sc-if>
+           <sc-if value="{{ r.blueShow }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;z-index:1;top:calc(50% + 2px);left:{{ r.blueLeft }};width:{{ r.blueWidth }};min-width:6px;height:12px;border-radius:{{ r.blueRadius }};background:#3848d6;"></span></sc-if>
+           <sc-if value="{{ r.redShow }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;z-index:1;top:calc(50% + 2px);left:{{ r.redLeft }};width:{{ r.redWidth }};height:12px;border-radius:{{ r.redRadius }};background:#d12f3a;"></span></sc-if>
+          </div>
+         </div>
+        </sc-for>
+        <div aria-hidden="true" style="position:absolute;z-index:2;top:50px;bottom:0;left:clamp(128px,calc(128px + (100vw - 800px) * 100),220px);right:0;pointer-events:none;">
+         <span style="position:absolute;top:0;bottom:0;left:{{ tl.todayX }};width:2px;margin-left:-1px;background:#1b1e33;"></span>
+         <sc-if value="{{ tl.dlShow }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;top:0;bottom:0;left:{{ tl.dlX }};width:0;margin-left:-1px;border-left:2px dashed #d12f3a;"></span></sc-if>
+         <sc-if value="{{ tl.expShow }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;top:22px;bottom:0;left:{{ tl.expX }};width:1px;background:{{ tl.expLine }};"></span></sc-if>
+        </div>
+       </div>
+      </div>
+     </section>
+    </sc-if>
+
+    <!-- Hours: who spent the time? -->
+    <sc-if value="{{ isHours }}" hint-placeholder-val="{{ false }}">
+     <div style="display:flex;flex-direction:column;gap:16px;min-width:0;">
+     <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:12px;min-width:0;">
+      <div role="group" aria-label="Range" style="display:inline-flex;align-items:center;gap:2px;box-sizing:border-box;max-width:100%;height:40px;padding:3px;overflow-x:auto;background:#eef0f6;border-radius:10px;">
+       <sc-for list="{{ hr.segs }}" as="g" hint-placeholder-count="4">
+        <button type="button" aria-pressed="{{ g.selected }}" onClick="{{ g.pick }}" style="flex:none;display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border:0;border-radius:8px;background:{{ g.bg }};font-size:13px;font-weight:{{ g.weight }};line-height:1;color:{{ g.color }};white-space:nowrap;cursor:pointer;">{{ g.label }}</button>
+       </sc-for>
+      </div>
+      <button type="button" class="db-secondary" onClick="{{ hr.download }}" style="height:44px;padding:2px 18px 0;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:15px;font-weight:600;line-height:1;cursor:pointer;">Download Excel</button>
+     </div>
+     <sc-if value="{{ hr.customShow }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:flex-end;gap:10px 12px;">
+       <div>
+        <label for="hr-from" style="display:block;margin-bottom:4px;font-size:13px;font-weight:600;line-height:18px;color:#3e4460;">From</label>
+        <input id="hr-from" type="date" class="db-input" value="{{ hr.from }}" onChange="{{ hr.onFrom }}" style="display:block;box-sizing:border-box;height:40px;padding:1px 10px 0;background:#ffffff;border:1px solid #dcdfea;border-radius:10px;font-size:14px;line-height:20px;color:#1b1e33;">
+       </div>
+       <div>
+        <label for="hr-to" style="display:block;margin-bottom:4px;font-size:13px;font-weight:600;line-height:18px;color:#3e4460;">To</label>
+        <input id="hr-to" type="date" class="db-input" value="{{ hr.to }}" onChange="{{ hr.onTo }}" style="display:block;box-sizing:border-box;height:40px;padding:1px 10px 0;background:#ffffff;border:1px solid #dcdfea;border-radius:10px;font-size:14px;line-height:20px;color:#1b1e33;">
+       </div>
+       <button type="button" class="db-secondary" onClick="{{ hr.show }}" style="height:40px;padding:0 16px;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:14px;font-weight:600;line-height:1;cursor:pointer;">Show</button>
+       <sc-if value="{{ hr.errShow }}" hint-placeholder-val="{{ false }}"><div role="alert" style="flex:1 1 100%;font-size:13px;font-weight:500;line-height:18px;text-align:right;color:#9a1f28;">{{ hr.err }}</div></sc-if>
+      </div>
+     </sc-if>
+     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:16px;">
+      <sc-for list="{{ hr.tiles }}" as="k" hint-placeholder-count="3">
+       <div style="display:flex;flex-direction:column;min-width:0;box-sizing:border-box;padding:18px 20px 17px;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;">
+        <div style="font-size:14px;font-weight:500;line-height:20px;color:#5b6178;white-space:nowrap;">{{ k.label }}</div>
+        <div style="display:flex;align-items:baseline;flex-wrap:wrap;column-gap:8.25px;margin-top:6px;">
+         <span style="font-family:'Schibsted Grotesk',sans-serif;font-variant-numeric:tabular-nums;font-size:32px;font-weight:700;line-height:36px;color:#1b1e33;">{{ k.value }}</span>
+         <span style="font-size:14px;line-height:20px;color:#5b6178;">{{ k.sub }}</span>
+        </div>
+       </div>
+      </sc-for>
+     </div>
+     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:18px;">
+      <section aria-labelledby="h-person" style="min-width:0;box-sizing:border-box;padding:20px 24px 22px;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;">
+       <h2 id="h-person" style="margin:0;font-family:'Schibsted Grotesk',sans-serif;font-size:18px;font-weight:600;line-height:22px;color:#1b1e33;">Hours by person</h2>
+       <div style="margin-top:1px;font-size:13px;line-height:18px;color:#5b6178;">{{ hr.personSub }}</div>
+       <ul style="display:flex;flex-direction:column;gap:14px;margin:16px 0 0;padding:0;list-style:none;">
+        <sc-for list="{{ hr.people }}" as="q" hint-placeholder-count="3">
+         <li style="display:grid;grid-template-columns:96px minmax(30px,1fr) 100px;column-gap:12px;align-items:center;font-size:14px;line-height:20px;color:#1b1e33;">
+          <span style="min-width:0;">{{ q.name }}</span>
+          <span aria-hidden="true" style="height:10px;border-radius:999px;background:#eef0f6;overflow:hidden;"><span style="display:block;width:{{ q.bar }};height:100%;border-radius:999px;background:#3848d6;"></span></span>
+          <span style="text-align:right;white-space:nowrap;"><span style="font-family:'Schibsted Grotesk',sans-serif;font-weight:600;font-variant-numeric:tabular-nums;">{{ q.value }}</span> <span style="font-size:13px;color:#5b6178;">{{ q.share }}</span></span>
+         </li>
+        </sc-for>
+       </ul>
+      </section>
+      <section aria-labelledby="h-time" style="min-width:0;box-sizing:border-box;padding:20px 24px 22px;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;">
+       <h2 id="h-time" style="margin:0;font-family:'Schibsted Grotesk',sans-serif;font-size:18px;font-weight:600;line-height:22px;color:#1b1e33;">Hours over time</h2>
+       <div style="margin-top:1px;font-size:13px;line-height:18px;color:#5b6178;">{{ hr.timeSub }}</div>
+       <ul style="display:flex;align-items:flex-end;gap:8px;margin:12px 0 0;padding:0;list-style:none;">
+        <sc-for list="{{ hr.bars }}" as="b" hint-placeholder-count="7">
+         <li style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;">
+          <span style="font-family:'Schibsted Grotesk',sans-serif;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;line-height:16px;color:#1b1e33;white-space:nowrap;">{{ b.value }}</span>
+          <span aria-hidden="true" style="width:100%;max-width:44px;height:{{ b.h }};margin-top:4px;border-radius:6px 6px 0 0;background:{{ b.fill }};"></span>
+          <span style="margin-top:6px;font-size:12px;line-height:16px;color:#5b6178;white-space:nowrap;">{{ b.label }}</span>
+         </li>
+        </sc-for>
+       </ul>
+      </section>
+     </div>
+     <section aria-labelledby="h-log" style="min-width:0;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;overflow:hidden;">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;min-height:54px;box-sizing:border-box;padding:15px 20px;border-bottom:1px solid #e6e8f0;">
+       <h2 id="h-log" style="margin:0;font-family:'Schibsted Grotesk',sans-serif;font-size:18px;font-weight:600;line-height:22px;color:#1b1e33;">Daily log</h2>
+       <span style="font-size:13px;color:#5b6178;">Newest first</span>
+      </div>
+      <div style="overflow-x:auto;">
+       <div role="table" aria-labelledby="h-log" style="min-width:560px;">
+        <div role="row" style="display:grid;grid-template-columns:90px 150px 90px minmax(160px,1fr);column-gap:12px;align-items:center;height:40px;padding:1px 20px 0;box-sizing:border-box;background:#f8f9fc;border-bottom:1px solid #eef0f6;font-size:13px;font-weight:600;line-height:16px;color:#5b6178;">
+         <span role="columnheader">Date</span><span role="columnheader">Person</span><span role="columnheader">Hours</span><span role="columnheader">Tasks</span>
+        </div>
+        <sc-for list="{{ hr.logs }}" as="l" hint-placeholder-count="3">
+         <div role="row" style="display:grid;grid-template-columns:90px 150px 90px minmax(160px,1fr);column-gap:12px;align-items:center;box-sizing:border-box;min-height:54px;padding:8px 20px;border-top:{{ l.line }};font-size:14px;line-height:20px;color:#1b1e33;">
+          <span role="cell">{{ l.date }}</span>
+          <span role="cell">{{ l.person }}</span>
+          <span role="cell" style="font-family:'Schibsted Grotesk',sans-serif;font-weight:600;font-variant-numeric:tabular-nums;">{{ l.hours }}</span>
+          <span role="cell">{{ l.task }}</span>
+         </div>
+        </sc-for>
+       </div>
+      </div>
+     </section>
+     </div>
+    </sc-if>
+   </div>
+  </sc-if>
+
+  <footer style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-top:auto;font-size:13px;line-height:18px;color:#5b6178;">
+   <span>Demo with sample data.</span>
+   <button type="button" class="db-text-btn" onClick="{{ reset }}" style="padding:0;border:0;background:none;color:#3848d6;font-size:13px;font-weight:600;line-height:18px;cursor:pointer;">Reset</button>
+  </footer>
+ </div>
+ </main>
+</div>
+
+<!-- Dialog: deadline -->
+<sc-if value="{{ dlgDeadline.show }}" hint-placeholder-val="{{ false }}">
+ <div style="position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:24px 16px;">
+  <div aria-hidden="true" style="position:absolute;inset:0;background:rgba(21,24,51,0.36);"></div>
+  <div role="dialog" aria-modal="true" aria-labelledby="d-dl" style="position:relative;display:flex;flex-direction:column;width:min(480px,100%);max-height:calc(100vh - 48px);box-sizing:border-box;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;box-shadow:0 24px 64px rgba(21,24,51,0.18);">
+   <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 24px 0;">
+    <h2 id="d-dl" style="margin:0;padding-top:5px;font-family:'Schibsted Grotesk',sans-serif;font-size:20px;font-weight:600;line-height:26px;color:#1b1e33;">{{ dlgDeadline.title }}</h2>
+    <button type="button" class="db-ghost" aria-label="Close" onClick="{{ closeDialog }}" onKeyDown="{{ onDialogKey }}" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:0;border-radius:8px;background:transparent;color:#1b1e33;cursor:pointer;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+   </div>
+   <div style="padding:14px 24px 4px;">
+    <label for="d-dl-date" style="display:block;margin-bottom:4px;font-size:13px;font-weight:600;line-height:18px;color:#3e4460;">Deadline</label>
+    <input id="d-dl-date" type="date" class="db-input" autoFocus="{{ dlgDeadline.show }}" value="{{ dlgDeadline.value }}" onChange="{{ dlgDeadline.onChange }}" onKeyDown="{{ onDialogKey }}" style="display:block;width:100%;box-sizing:border-box;height:44px;padding:1px 12px 0;background:#ffffff;border:1px solid #dcdfea;border-radius:10px;font-size:15px;line-height:20px;color:#1b1e33;">
+   </div>
+   <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px;margin-top:18px;padding:18px 24px;border-top:1px solid #e6e8f0;">
+    <button type="button" class="db-secondary" onClick="{{ closeDialog }}" onKeyDown="{{ onDialogKey }}" style="height:44px;padding:2px 18px 0;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:15px;font-weight:600;line-height:1;cursor:pointer;">Cancel</button>
+    <button type="button" class="db-primary" onClick="{{ dlgDeadline.save }}" onKeyDown="{{ onDialogKey }}" style="height:44px;padding:2px 17px 0;border:1px solid transparent;border-radius:10px;background:#3848d6;color:#ffffff;font-size:15px;font-weight:600;line-height:1;cursor:pointer;">Save</button>
+   </div>
+  </div>
+ </div>
+</sc-if>
+
+<!-- Dialog: edit dates -->
+<sc-if value="{{ dlgDates.show }}" hint-placeholder-val="{{ false }}">
+ <div style="position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:24px 16px;">
+  <div aria-hidden="true" style="position:absolute;inset:0;background:rgba(21,24,51,0.36);"></div>
+  <div role="dialog" aria-modal="true" aria-labelledby="d-dates" style="position:relative;display:flex;flex-direction:column;width:min(480px,100%);max-height:calc(100vh - 48px);box-sizing:border-box;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;box-shadow:0 24px 64px rgba(21,24,51,0.18);">
+   <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 24px 0;">
+    <h2 id="d-dates" style="margin:0;padding-top:5px;font-family:'Schibsted Grotesk',sans-serif;font-size:20px;font-weight:600;line-height:26px;color:#1b1e33;">{{ dlgDates.title }}</h2>
+    <button type="button" class="db-ghost" aria-label="Close" onClick="{{ closeDialog }}" onKeyDown="{{ onDialogKey }}" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:0;border-radius:8px;background:transparent;color:#1b1e33;cursor:pointer;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+   </div>
+   <div style="padding:14px 24px 4px;">
+    <div style="display:flex;flex-wrap:wrap;gap:12px;">
+     <div style="flex:1 1 180px;min-width:0;">
+      <label for="d-start" style="display:block;margin-bottom:4px;font-size:13px;font-weight:600;line-height:18px;color:#3e4460;">Start</label>
+      <input id="d-start" type="date" class="db-input" autoFocus="{{ dlgDates.show }}" value="{{ dlgDates.start }}" onChange="{{ dlgDates.onStart }}" onKeyDown="{{ onDialogKey }}" style="display:block;width:100%;box-sizing:border-box;height:44px;padding:1px 12px 0;background:#ffffff;border:1px solid {{ dlgDates.line }};border-radius:10px;font-size:15px;line-height:20px;color:#1b1e33;">
+     </div>
+     <div style="flex:1 1 180px;min-width:0;">
+      <label for="d-end" style="display:block;margin-bottom:4px;font-size:13px;font-weight:600;line-height:18px;color:#3e4460;">End</label>
+      <input id="d-end" type="date" class="db-input" value="{{ dlgDates.end }}" onChange="{{ dlgDates.onEnd }}" onKeyDown="{{ onDialogKey }}" style="display:block;width:100%;box-sizing:border-box;height:44px;padding:1px 12px 0;background:#ffffff;border:1px solid {{ dlgDates.line }};border-radius:10px;font-size:15px;line-height:20px;color:#1b1e33;">
+     </div>
+    </div>
+    <sc-if value="{{ dlgDates.errShow }}" hint-placeholder-val="{{ false }}"><div role="alert" style="margin-top:5px;font-size:13px;font-weight:500;line-height:18px;color:#9a1f28;">{{ dlgDates.err }}</div></sc-if>
+   </div>
+   <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px;margin-top:18px;padding:18px 24px;border-top:1px solid #e6e8f0;">
+    <button type="button" class="db-secondary" onClick="{{ closeDialog }}" onKeyDown="{{ onDialogKey }}" style="height:44px;padding:2px 18px 0;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:15px;font-weight:600;line-height:1;cursor:pointer;">Cancel</button>
+    <button type="button" class="db-primary" onClick="{{ dlgDates.save }}" onKeyDown="{{ onDialogKey }}" style="height:44px;padding:2px 17px 0;border:1px solid transparent;border-radius:10px;background:#3848d6;color:#ffffff;font-size:15px;font-weight:600;line-height:1;cursor:pointer;">Save</button>
+   </div>
+  </div>
+ </div>
+</sc-if>
+
+<!-- Dialog: move phase -->
+<sc-if value="{{ dlgMove.show }}" hint-placeholder-val="{{ false }}">
+ <div style="position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:24px 16px;">
+  <div aria-hidden="true" style="position:absolute;inset:0;background:rgba(21,24,51,0.36);"></div>
+  <div role="dialog" aria-modal="true" aria-labelledby="d-move" aria-describedby="d-move-body" style="position:relative;display:flex;flex-direction:column;width:min(480px,100%);max-height:calc(100vh - 48px);box-sizing:border-box;background:#ffffff;border:1px solid #e6e8f0;border-radius:16px;box-shadow:0 24px 64px rgba(21,24,51,0.18);">
+   <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 24px 0;">
+    <h2 id="d-move" style="margin:0;padding-top:5px;font-family:'Schibsted Grotesk',sans-serif;font-size:20px;font-weight:600;line-height:26px;color:#1b1e33;">{{ dlgMove.title }}</h2>
+    <button type="button" class="db-ghost" aria-label="Close" onClick="{{ closeDialog }}" onKeyDown="{{ onDialogKey }}" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:0;border-radius:8px;background:transparent;color:#1b1e33;cursor:pointer;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+   </div>
+   <div style="padding:10px 24px 4px;">
+    <p id="d-move-body" style="margin:0;font-size:15px;line-height:1.45;color:#5b6178;">{{ dlgMove.body }}</p>
+   </div>
+   <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px;margin-top:18px;padding:18px 24px;border-top:1px solid #e6e8f0;">
+    <button type="button" class="db-secondary" autoFocus="{{ dlgMove.show }}" onClick="{{ closeDialog }}" onKeyDown="{{ onDialogKey }}" style="height:44px;padding:2px 18px 0;border:1px solid #dcdfea;border-radius:10px;background:#ffffff;color:#1b1e33;font-size:15px;font-weight:600;line-height:1;cursor:pointer;">Cancel</button>
+    <button type="button" class="db-primary" onClick="{{ dlgMove.confirm }}" onKeyDown="{{ onDialogKey }}" style="height:44px;padding:2px 17px 0;border:1px solid transparent;border-radius:10px;background:#3848d6;color:#ffffff;font-size:15px;font-weight:600;line-height:1;cursor:pointer;">{{ dlgMove.okLabel }}</button>
+   </div>
+  </div>
+ </div>
+</sc-if>
+
+<!-- Toast -->
+<sc-if value="{{ toastShow }}" hint-placeholder-val="{{ false }}">
+ <div role="status" aria-live="polite" style="position:fixed;right:clamp(16px,2vw,24px);bottom:24px;z-index:70;display:flex;align-items:flex-start;gap:12px;width:min(360px,calc(100vw - 32px));box-sizing:border-box;padding:14px 12px 14px 16px;background:#ffffff;border:1px solid #e6e8f0;border-radius:12px;box-shadow:0 12px 32px rgba(21,24,51,0.14);">
+  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0c8a5b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px;"><circle cx="12" cy="12" r="10"></circle><path d="m16 9-5.5 5.5L8 12"></path></svg>
+  <div style="flex:1;min-width:0;font-size:15px;font-weight:600;line-height:22px;color:#1b1e33;">{{ toast }}</div>
+  <sc-if value="{{ undoShow }}" hint-placeholder-val="{{ false }}"><button type="button" class="db-text-btn" onClick="{{ undo }}" style="flex:none;height:28px;padding:0 4px;border:0;background:none;color:#3848d6;font-size:14px;font-weight:600;line-height:1;cursor:pointer;">Undo</button></sc-if>
+  <button type="button" class="db-ghost" aria-label="Close" onClick="{{ closeToast }}" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;border-radius:6px;background:transparent;color:#5b6178;cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+ </div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+constructor(...args) {
+  super(...args);
+  this.readTimer = null;
+  this.toastTimer = null;
+  this.seqN = 100;
+  this.state = this.initialState();
+}
+
+componentWillUnmount() {
+  this.clearTimers();
+}
+
+clearTimers() {
+  if (this.readTimer) clearTimeout(this.readTimer);
+  if (this.toastTimer) clearTimeout(this.toastTimer);
+  this.readTimer = null;
+  this.toastTimer = null;
+}
+
+// ---------- calendar maths on plain day numbers ----------
+dayNum(y, m, d) {
+  const yy = m <= 2 ? y - 1 : y;
+  const era = Math.floor(yy / 400);
+  const yoe = yy - era * 400;
+  const doy = Math.floor((153 * (m + (m > 2 ? -3 : 9)) + 2) / 5) + d - 1;
+  const doe = yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy;
+  return era * 146097 + doe - 719468;
+}
+
+civil(n) {
+  const z = n + 719468;
+  const era = Math.floor(z / 146097);
+  const doe = z - era * 146097;
+  const yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36524) - Math.floor(doe / 146096)) / 365);
+  const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
+  const mp = Math.floor((5 * doy + 2) / 153);
+  const d = doy - Math.floor((153 * mp + 2) / 5) + 1;
+  const m = mp < 10 ? mp + 3 : mp - 9;
+  return { y: yoe + era * 400 + (m <= 2 ? 1 : 0), m: m, d: d };
+}
+
+// Day 0 is Mon 5 Oct 2026, the first day of the timeline.
+base() { return this.dayNum(2026, 10, 5); }
+
+off(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+  if (!m) return null;
+  return this.dayNum(Number(m[1]), Number(m[2]), Number(m[3])) - this.base();
+}
+
+today() { return this.off("2026-10-30"); }
+todayIso() { return "2026-10-30"; }
+span() { return 105; }
+speed() { return 4; }
+
+mon(m) { return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]; }
+
+short(o) {
+  const c = this.civil(o + this.base());
+  return c.d + " " + this.mon(c.m) + (c.y !== 2026 ? " " + c.y : "");
+}
+
+long(o) {
+  const c = this.civil(o + this.base());
+  return c.d + " " + this.mon(c.m) + " " + c.y;
+}
+
+range(a, b) {
+  const ca = this.civil(a + this.base());
+  const cb = this.civil(b + this.base());
+  if (ca.y === cb.y && ca.m === cb.m) return ca.d + " to " + this.short(b);
+  if (ca.y === cb.y && ca.y === 2026) return this.short(a) + " to " + this.short(b);
+  return this.short(a) + " to " + this.long(b);
+}
+
+days(n) { return n === 1 ? "1 day" : n + " days"; }
+pctOf(o) { return (Math.max(0, Math.min(this.span(), o)) / this.span() * 100).toFixed(3) + "%"; }
+names(list) {
+  if (list.length < 2) return list.join("");
+  return list.slice(0, -1).join(", ") + " and " + list[list.length - 1];
+}
+timing(actual, planned) {
+  if (actual > planned) return this.days(actual - planned) + " late";
+  if (actual < planned) return this.days(planned - actual) + " early";
+  return "on time";
+}
+
+// ---------- sample data ----------
+phaseDefs() {
+  return [
+    { key: "req", label: "Requirement gathering" },
+    { key: "design", label: "Design" },
+    { key: "dev", label: "Development" },
+    { key: "test", label: "Testing" },
+    { key: "launch", label: "Launch" },
+    { key: "support", label: "Support" }
+  ];
+}
+
+initialPhases() {
+  const t = (id, title, owner, due, pri, done) => ({ id: id, title: title, owner: owner, due: due, pri: pri, done: done });
+  const R = "Riya Kapoor";
+  const A = "Aman Gill";
+  const N = "Neha Arora";
+  const K = "Karan Mehta";
+  return {
+    req: {
+      start: "2026-10-06", end: "2026-10-23", aStart: "2026-10-06", aEnd: "",
+      docs: [
+        { id: "f1", kind: "file", name: "SOW-Acme-v3.pdf", pages: 14, date: "2026-10-28", text: "Page 3: Patients can book, move or cancel a visit.\nPage 4: One calendar shared by every clinic.\nPage 5: SMS reminders are out of scope for phase one.\nPage 6: We share clickable wireframes once the scope is signed off.\nPage 9: Go-live on 15 December." },
+        { id: "n1", kind: "note", name: "Kickoff call notes", date: "2026-10-28", text: "Client approved the scope on the call.\nGo-live on 15 December.\nDesigns to be signed off by 20 November.\nPayment provider still to be decided.\nAcme to send logo files by Friday." }
+      ],
+      tasks: [
+        t("r1", "Scope signed off by Acme", R, "2026-10-30", 1, false),
+        t("r2", "Get the clinic list approved by Acme", R, "2026-10-28", 1, false),
+        t("r3", "Kickoff call with Acme", R, "2026-10-07", 2, true),
+        t("r4", "List the 12 clinics and their opening hours", A, "2026-10-09", 3, true),
+        t("r5", "Write the scope document", R, "2026-10-13", 2, true),
+        t("r6", "Agree on the booking rules", R, "2026-10-14", 2, true),
+        t("r7", "Collect staff roles", N, "2026-10-15", 3, true),
+        t("r8", "Share the scope with the team", R, "2026-10-16", 3, true),
+        t("r9", "Pick the tech stack", K, "2026-10-19", 2, true),
+        t("r10", "Set up the project board", A, "2026-10-20", 3, true),
+        t("r11", "Agree on the go-live date", R, "2026-10-21", 2, true),
+        t("r12", "Send the meeting notes to Acme", R, "2026-10-23", 3, true)
+      ]
+    },
+    design: {
+      start: "2026-10-26", end: "2026-11-20", aStart: "", aEnd: "", docs: [],
+      tasks: [
+        t("d1", "Choose the payment provider", R, "2026-11-06", 1, false),
+        t("d2", "Booking screens signed off", N, "2026-11-20", 1, false),
+        t("d3", "Plan the database tables", K, "2026-11-10", 2, false),
+        t("d4", "Design the booking screens", N, "2026-11-13", 2, false),
+        t("d5", "Design the staff calendar", N, "2026-11-17", 2, false),
+        t("d6", "Design the reminder emails", N, "2026-11-18", 3, false),
+        t("d7", "Mobile layouts for booking", N, "2026-11-19", 2, false),
+        t("d8", "Design review with Acme", R, "2026-11-19", 2, false),
+        t("d9", "Wireframes for the booking flow", N, "2026-10-27", 2, true),
+        t("d10", "Wireframes for the staff calendar", N, "2026-10-28", 2, true),
+        t("d11", "Pick the colours and fonts", N, "2026-10-28", 3, true),
+        t("d12", "Draw the clinic picker", N, "2026-10-29", 3, true),
+        t("d13", "Plan the sign-in screens", A, "2026-10-29", 3, true),
+        t("d14", "Map the booking steps", A, "2026-10-29", 2, true)
+      ]
+    },
+    dev: {
+      start: "2026-11-09", end: "2026-12-04", aStart: "", aEnd: "", docs: [],
+      tasks: [
+        t("v1", "Staff calendar API ready", K, "2026-11-27", 1, false),
+        t("v2", "Set up the servers", K, "2026-11-11", 2, false),
+        t("v3", "Patient sign-in", K, "2026-11-16", 2, false),
+        t("v4", "Clinic picker", A, "2026-11-18", 3, false),
+        t("v5", "Opening hours for the 12 clinics", K, "2026-11-19", 3, false),
+        t("v6", "Booking screens on web", A, "2026-11-20", 2, false),
+        t("v7", "Booking rules", K, "2026-11-23", 2, false),
+        t("v8", "Staff roles and sign-in", K, "2026-11-24", 3, false),
+        t("v9", "Booking screens on mobile", A, "2026-11-25", 2, false),
+        t("v10", "Move and cancel a visit", A, "2026-11-27", 2, false),
+        t("v11", "Reminder emails", K, "2026-11-30", 3, false),
+        t("v12", "Staff calendar screens", A, "2026-12-01", 2, false),
+        t("v13", "Payments", K, "2026-12-02", 2, false),
+        t("v14", "Error pages", A, "2026-12-03", 3, false),
+        t("v15", "Sample data for the clinics", K, "2026-12-03", 3, false),
+        t("v16", "Code review and clean-up", A, "2026-12-04", 3, false)
+      ]
+    },
+    test: {
+      start: "2026-11-30", end: "2026-12-10", aStart: "", aEnd: "", docs: [],
+      tasks: [
+        t("q1", "Client testing round 1", A, "2026-12-08", 1, false),
+        t("q2", "Write the test plan", A, "2026-11-30", 2, false),
+        t("q3", "Test on phones", A, "2026-12-04", 2, false),
+        t("q4", "Speed check", K, "2026-12-07", 3, false),
+        t("q5", "Fix what testing finds", K, "2026-12-09", 2, false),
+        t("q6", "Client testing round 2", A, "2026-12-10", 2, false)
+      ]
+    },
+    launch: {
+      start: "2026-12-14", end: "2026-12-15", aStart: "", aEnd: "", docs: [],
+      tasks: [
+        t("l1", "Train the clinic staff", R, "2026-12-14", 2, false),
+        t("l2", "Go live", K, "2026-12-15", 2, false)
+      ]
+    },
+    support: { start: "2026-12-16", end: "2027-01-15", aStart: "", aEnd: "", docs: [], tasks: [] }
+  };
+}
+
+otherProjects() {
+  const month = { "Medlink mobile": "168h 30m", "Green Valley portal": "204h", "Company website": "40h", "Internal tool": "24h 15m" };
+  const p = (name, client, status, kind, phase, pct, deadline, pm, week, total, bg, fg) => ({ name: name, client: client, status: status, kind: kind, phase: phase, pct: pct, deadline: deadline, pm: pm, week: week, month: month[name] || "0h", total: total, sqBg: bg, sqFg: fg });
+  const V = "Vikram Sethi";
+  const R = "Riya Kapoor";
+  return [
+    p("Medlink mobile", "Medlink", "active", "risk", "Testing", 81, "2026-11-12", V, "44h 30m", "402h 15m", "#ddf1f5", "#0d5f72"),
+    p("Green Valley portal", "Green Valley Clinic", "active", "on", "Development", 64, "2026-12-20", R, "52h", "310h", "#e1f3eb", "#09633f"),
+    p("Company website", "Internal", "active", "on", "Design", 25, "2027-01-30", V, "12h", "48h", "#fbe5ee", "#8e2350"),
+    p("Internal tool", "Internal", "active", "noplan", "Not set", null, "", R, "6h 15m", "96h", "#fdebdd", "#8a3f05"),
+    p("Payments revamp", "Acme Clinics", "hold", "hold", "Development", 40, "2027-02-28", V, "0h", "88h", "#e7e9fb", "#26329a"),
+    p("Riverside booking site", "Riverside Dental", "completed", "completed", "Support", 100, "2026-08-28", R, "0h", "212h", "#ddf1f5", "#0d5f72"),
+    p("Staff handbook app", "Internal", "completed", "completed", "Launch", 100, "2026-07-17", V, "0h", "96h 30m", "#fdebdd", "#8a3f05"),
+    p("Green Valley website", "Green Valley Clinic", "completed", "completed", "Support", 100, "2026-06-12", R, "0h", "180h", "#e1f3eb", "#09633f")
+  ];
+}
+
+sampleFiles() {
+  return [
+    { name: "Acme-brand-guide.pdf", pages: 8, text: "Page 1: Logo, colours and fonts for Acme Clinics.\nPage 4: How the logo may be used on the booking screens." },
+    { name: "Clinic-hours-list.pdf", pages: 3, text: "Page 1: Opening hours for all 12 clinics.\nPage 3: Public holidays when clinics are closed." },
+    { name: "Design-review-comments.pdf", pages: 5, text: "Page 1: Comments from the first design review with Acme.\nPage 5: Changes agreed for the booking flow." }
+  ];
+}
+
+actionItems() {
+  return [
+    { id: "ac1", from: "notes", who: "Client", text: "Send logo and brand files", when: "Friday", taskTitle: "Client: Send logo and brand files" },
+    { id: "ac2", from: "file", who: "Us", text: "Share the clickable wireframes", when: "No date given", taskTitle: "Share the clickable wireframes" }
+  ];
+}
+
+summaryGroups() {
+  return [
+    { title: "Scope", points: [
+      { from: "file", page: "page 3", text: "Patient booking on web and mobile" },
+      { from: "file", page: "page 4", text: "Staff calendar for all 12 clinics" },
+      { from: "file", page: "page 5", text: "SMS reminders", tag: true }
+    ] },
+    { title: "Deadlines", points: [
+      { from: "notes", text: "Designs ready: 20 November" },
+      { from: "file", page: "page 9", text: "Go-live: 15 December" }
+    ] },
+    { title: "Risks and open questions", points: [
+      { from: "notes", text: "Risk: Payment provider not chosen yet" },
+      { from: "notes", text: "Question: Waiting on logo and brand files from the client" }
+    ] }
+  ];
+}
+
+hoursData(range) {
+  const P = (a, b, c) => [{ name: "Neha Arora", value: a[0], mins: a[1] }, { name: "Karan Mehta", value: b[0], mins: b[1] }, { name: "Aman Gill", value: c[0], mins: c[1] }];
+  if (range === "month" || range === "all") {
+    return {
+      total: "124h 30m", mins: 7470,
+      people: P(["50h", 3000], ["44h 30m", 2670], ["30h", 1800]),
+      timeSub: "By week",
+      bars: [["5 Oct", "18h", 1080], ["12 Oct", "28h", 1680], ["19 Oct", "40h 10m", 2410], ["26 Oct", "38h 20m", 2300]]
+    };
+  }
+  return {
+    total: "38h 20m", mins: 2300,
+    people: P(["15h 30m", 930], ["13h 20m", 800], ["9h 30m", 570]),
+    timeSub: "By day",
+    bars: [["Mon", "8h", 480], ["Tue", "9h 20m", 560], ["Wed", "7h", 420], ["Thu", "8h", 480], ["Fri", "6h", 360], ["Sat", "0", 0], ["Sun", "0", 0]]
+  };
+}
+
+initialState() {
+  const phases = this.initialPhases();
+  return {
+    ready: true,
+    view: "projects",
+    tab: "overview",
+    listFilter: "active",
+    search: "",
+    current: "req",
+    deadline: "2026-12-15",
+    phases: phases,
+    open: { req: true },
+    doneShown: {},
+    taskForm: null,
+    noteForm: null,
+    docOpen: "",
+    fileN: 0,
+    aiSuggest: true,
+    sumSig: this.docSig(phases),
+    sumFile: true,
+    sumNotes: true,
+    fullOpen: false,
+    reading: false,
+    dialog: "",
+    dlDraft: "",
+    datesDraft: null,
+    moveDraft: null,
+    hrRange: "week",
+    hrFrom: "2026-10-26",
+    hrTo: "2026-10-30",
+    hrApplied: "26 to 30 Oct",
+    hrErr: "",
+    listRange: "week",
+    listFrom: "2026-10-26",
+    listTo: "2026-10-30",
+    listErr: "",
+    toast: "",
+    undo: null
+  };
+}
+
+// ---------- state helpers ----------
+cur() { return this.state && this.state.ready ? this.state : this.initialState(); }
+set(patch) { this.setState(Object.assign({}, this.cur(), patch)); }
+clone(x) { return JSON.parse(JSON.stringify(x)); }
+newId(prefix) { this.seqN = (this.seqN || 100) + 1; return prefix + this.seqN; }
+
+say(title) {
+  if (this.toastTimer) clearTimeout(this.toastTimer);
+  this.toastTimer = setTimeout(() => {
+    this.toastTimer = null;
+    this.set({ toast: "", undo: null });
+  }, 6000);
+  return title;
+}
+
+notify(title, extra) {
+  this.set(Object.assign({ toast: this.say(title), undo: null }, extra || {}));
+}
+
+closeToast() {
+  if (this.toastTimer) clearTimeout(this.toastTimer);
+  this.toastTimer = null;
+  this.set({ toast: "", undo: null });
+}
+
+// Every change to the project data goes through here, so Undo always reverts the last one.
+change(fn, extra, title, undoable) {
+  const s = this.cur();
+  const phases = this.clone(s.phases);
+  fn(phases);
+  this.set(Object.assign({ phases: phases, toast: title ? this.say(title) : "", undo: undoable ? s.phases : null }, extra || {}));
+}
+
+doUndo() {
+  const s = this.cur();
+  if (!s.undo) return;
+  if (this.toastTimer) clearTimeout(this.toastTimer);
+  this.toastTimer = null;
+  this.set({ phases: s.undo, undo: null, toast: "" });
+}
+
+reset() {
+  this.clearTimers();
+  this.seqN = 100;
+  this.setState(this.initialState());
+}
+
+order(key) { return this.phaseDefs().findIndex((p) => p.key === key); }
+labelOf(key) { return this.phaseDefs()[this.order(key)].label; }
+
+allDocs(phases) {
+  const out = [];
+  this.phaseDefs().forEach((p) => phases[p.key].docs.forEach((d) => out.push(d)));
+  return out;
+}
+
+docSig(phases) {
+  return this.allDocs(phases).map((d) => d.id + ":" + (d.rev || 0)).join(",");
+}
+
+allTasks(phases) {
+  const out = [];
+  this.phaseDefs().forEach((p) => phases[p.key].tasks.forEach((t) => out.push(t)));
+  return out;
+}
+
+// current, done, skipped or later
+statusOf(s, key) {
+  if (key === s.current) return "current";
+  if (this.order(key) > this.order(s.current)) return "later";
+  return s.phases[key].aEnd ? "done" : "skipped";
+}
+
+lateNote(st, ph) {
+  const T = this.today();
+  const ps = this.off(ph.start);
+  const pe = this.off(ph.end);
+  const as = this.off(ph.aStart);
+  const ae = this.off(ph.aEnd);
+  if (st === "current") {
+    if (T > pe) return { text: this.days(T - pe) + " late", color: "#9a1f28" };
+    if (as !== null && as > ps) return { text: "Started " + this.days(as - ps) + " late", color: "#6b4500" };
+    return null;
+  }
+  if (st === "done") return ae !== null && ae > pe ? { text: "Ended " + this.days(ae - pe) + " late", color: "#9a1f28" } : null;
+  if (st === "skipped") return { text: "Skipped", color: "#5b6178" };
+  if (T > ps) return { text: "Planned start was " + this.days(T - ps) + " ago", color: "#6b4500" };
+  return null;
+}
+
+dueOf(iso) {
+  const o = this.off(iso);
+  const T = this.today();
+  if (o === null) return { text: "No due date", bg: "#e6e8f0", fg: "#3e4460" };
+  if (o < T) return { text: this.days(T - o) + " late", bg: "#fbe3e4", fg: "#9a1f28" };
+  if (o === T) return { text: "Due today", bg: "#fff1d6", fg: "#6b4500" };
+  return { text: "Due " + this.short(o), bg: "#e6e8f0", fg: "#3e4460" };
+}
+
+dueKey(iso) {
+  const o = this.off(iso);
+  return o === null ? 99999 : o;
+}
+
+priLook(pri) {
+  if (pri === 1) return { bg: "#fbe3e4", fg: "#9a1f28" };
+  if (pri === 2) return { bg: "#fff1d6", fg: "#6b4500" };
+  return { bg: "#e6e8f0", fg: "#3e4460" };
+}
+
+// The maths: speed fixed at 4 tasks a week.
+forecast(s) {
+  const all = this.allTasks(s.phases);
+  const total = all.length;
+  const done = all.filter((t) => t.done).length;
+  const left = total - done;
+  const T = this.today();
+  const D = this.off(s.deadline);
+  const finish = T + Math.ceil(left / this.speed() * 7);
+  return {
+    total: total, done: done, left: left, T: T, D: D, finish: finish,
+    pct: total ? Math.round(done / total * 100) : 0,
+    late: D === null ? 0 : finish - D
+  };
+}
+
+healthOf(fc) {
+  const speedLine = "At the current speed (" + this.speed() + " tasks a week) the work ends around " + this.short(fc.finish) + ".";
+  if (fc.D === null) {
+    return this.lookOf("nodeadline", "#eef0f6", "#3e4460", "No deadline yet", "Add a deadline to see if the project is on track.");
+  }
+  if (fc.total === 0) {
+    return this.lookOf("noplan", "#eef0f6", "#3e4460", "No tasks yet", "Add tasks in a phase to see if the project is on track.");
+  }
+  if (fc.left === 0 || fc.late <= 0) {
+    const title = fc.left === 0 ? "On track: all tasks are done" : (fc.late < 0 ? "On track: will finish about " + this.days(-fc.late) + " early" : "On track: will finish on time");
+    const body = fc.left === 0 ? (fc.total === 1 ? "The only task is done." : "All " + fc.total + " tasks are done.") + " The deadline is " + this.short(fc.D) + "." : speedLine + " The deadline is " + this.short(fc.D) + ".";
+    return this.lookOf("on", "#e1f3eb", "#09633f", title, body);
+  }
+  const daysLeft = fc.D - fc.T;
+  let need = "";
+  if (daysLeft > 0) {
+    const needed = Math.max(this.speed() + 1, Math.round(fc.left / (daysLeft / 7)));
+    need = " To finish by " + this.short(fc.D) + ", the team needs about " + needed + " tasks a week.";
+  } else {
+    need = daysLeft === 0 ? " The deadline is today." : " The deadline was " + this.short(fc.D) + ".";
+  }
+  if (fc.late > 7) {
+    return this.lookOf("off", "#fbe3e4", "#9a1f28", "Off track: will miss the deadline by about " + this.days(fc.late), speedLine + need);
+  }
+  return this.lookOf("risk", "#fff1d6", "#6b4500", "At risk: may miss the deadline by about " + this.days(fc.late), speedLine + need);
+}
+
+lookOf(kind, bg, ink, title, body) {
+  const p = this.pillOf(kind);
+  return {
+    kind: kind, pill: p.text, pillBg: p.bg, pillFg: p.fg, bg: bg, ink: ink, title: title, body: body,
+    warn: kind === "off" || kind === "risk", good: kind === "on", plain: kind === "nodeadline" || kind === "noplan"
+  };
+}
+
+pillOf(kind) {
+  const map = {
+    off: ["Off track", "#fbe3e4", "#9a1f28", 0],
+    risk: ["At risk", "#fff1d6", "#6b4500", 1],
+    on: ["On track", "#e1f3eb", "#09633f", 2],
+    noplan: ["No plan yet", "#e6e8f0", "#3e4460", 3],
+    nodeadline: ["No deadline", "#e6e8f0", "#3e4460", 3],
+    hold: ["On hold", "#e6e8f0", "#3e4460", 3],
+    completed: ["Completed", "#e6e8f0", "#3e4460", 3]
+  };
+  return { text: map[kind][0], bg: map[kind][1], fg: map[kind][2], rank: map[kind][3] };
+}
+
+// ---------- actions: navigation ----------
+goProjects(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  this.set({ view: "projects" });
+}
+
+goTab(tab) { this.set({ tab: tab }); }
+
+goPhases() {
+  const s = this.cur();
+  this.set({ tab: "phases", open: Object.assign({}, s.open, { [s.current]: true }) });
+}
+
+demoOnly() { this.notify("This demo only has Acme booking app filled in."); }
+
+// ---------- actions: tasks ----------
+tick(key, id) {
+  const t = this.cur().phases[key].tasks.find((x) => x.id === id);
+  if (!t) return;
+  const nowDone = !t.done;
+  this.change((ph) => { ph[key].tasks.find((x) => x.id === id).done = nowDone; }, null, nowDone ? "Marked done." : "", nowDone);
+}
+
+openTaskForm(key, id) {
+  const s = this.cur();
+  const t = id ? s.phases[key].tasks.find((x) => x.id === id) : null;
+  this.set({
+    taskForm: t
+      ? { phase: key, id: id, title: t.title, owner: t.owner, due: t.due, pri: String(t.pri), err: "" }
+      : { phase: key, id: "", title: "", owner: "Anyone on the project", due: "", pri: "2", err: "" }
+  });
+}
+
+updTaskForm(patch) {
+  const s = this.cur();
+  if (s.taskForm) this.set({ taskForm: Object.assign({}, s.taskForm, patch) });
+}
+
+saveTask() {
+  const f = this.cur().taskForm;
+  if (!f) return;
+  const title = f.title.trim();
+  if (!title) { this.updTaskForm({ err: "Add a task title." }); return; }
+  this.change((ph) => {
+    if (f.id) {
+      const t = ph[f.phase].tasks.find((x) => x.id === f.id);
+      if (t) Object.assign(t, { title: title, owner: f.owner, due: f.due, pri: Number(f.pri) });
+    } else {
+      ph[f.phase].tasks.push({ id: this.newId("t"), title: title, owner: f.owner, due: f.due, pri: Number(f.pri), done: false });
+    }
+  }, { taskForm: null });
+}
+
+removeTask(key, id) {
+  this.change((ph) => { ph[key].tasks = ph[key].tasks.filter((x) => x.id !== id); }, null, "Task deleted.", true);
+}
+
+addAction(a) {
+  const s = this.cur();
+  this.change((ph) => {
+    ph[s.current].tasks.push({ id: this.newId("t"), from: a.id, title: a.taskTitle, owner: "Anyone on the project", due: "", pri: 2, done: false });
+  }, null, "Added to " + this.labelOf(s.current) + ".");
+}
+
+// ---------- actions: files and notes ----------
+addFile(key) {
+  const s = this.cur();
+  const list = this.sampleFiles();
+  const f = list[s.fileN % list.length];
+  this.change((ph) => {
+    ph[key].docs.push({ id: this.newId("f"), kind: "file", name: f.name, pages: f.pages, date: this.todayIso(), text: f.text });
+  }, { fileN: s.fileN + 1 }, f.name + " added.");
+}
+
+openNoteForm(key, id) {
+  const s = this.cur();
+  const n = id ? s.phases[key].docs.find((x) => x.id === id) : null;
+  this.set({
+    noteForm: n
+      ? { phase: key, id: id, title: n.name, text: n.text, err: "" }
+      : { phase: key, id: "", title: "", text: "", err: "" }
+  });
+}
+
+updNoteForm(patch) {
+  const s = this.cur();
+  if (s.noteForm) this.set({ noteForm: Object.assign({}, s.noteForm, patch) });
+}
+
+saveNote() {
+  const f = this.cur().noteForm;
+  if (!f) return;
+  const title = f.title.trim();
+  const text = f.text.trim();
+  if (!title || !text) { this.updNoteForm({ err: "Add a title and the note text." }); return; }
+  this.change((ph) => {
+    if (f.id) {
+      const n = ph[f.phase].docs.find((x) => x.id === f.id);
+      if (n) Object.assign(n, { name: title, text: text, rev: (n.rev || 0) + 1 });
+    } else {
+      ph[f.phase].docs.push({ id: this.newId("n"), kind: "note", name: title, date: this.todayIso(), text: text });
+    }
+  }, { noteForm: null });
+}
+
+removeDoc(key, id) {
+  const d = this.cur().phases[key].docs.find((x) => x.id === id);
+  if (!d) return;
+  this.change((ph) => { ph[key].docs = ph[key].docs.filter((x) => x.id !== id); }, { docOpen: "" }, d.kind === "file" ? "File deleted." : "Note deleted.", true);
+}
+
+// ---------- actions: AI summary ----------
+updateSummary() {
+  if (this.cur().reading) return;
+  if (this.readTimer) clearTimeout(this.readTimer);
+  this.set({ reading: true });
+  this.readTimer = setTimeout(() => {
+    this.readTimer = null;
+    const c = this.cur();
+    const docs = this.allDocs(c.phases);
+    const patch = {
+      reading: false,
+      sumSig: this.docSig(c.phases),
+      sumFile: docs.some((d) => d.id === "f1"),
+      sumNotes: docs.some((d) => d.id === "n1")
+    };
+    // Never replace a toast that still offers Undo, and never claim an update on an empty card.
+    if (c.undo || !docs.length) this.set(patch);
+    else this.notify("Summary updated.", patch);
+  }, 1200);
+}
+
+// ---------- actions: dialogs ----------
+closeDialog() { this.set({ dialog: "", datesDraft: null, moveDraft: null }); }
+
+openDeadline() {
+  const s = this.cur();
+  this.set({ dialog: "deadline", dlDraft: s.deadline });
+}
+
+saveDeadline() {
+  const s = this.cur();
+  this.notify(s.dlDraft ? "Deadline saved." : "Deadline removed.", { deadline: s.dlDraft, dialog: "" });
+}
+
+openDates(key) {
+  const ph = this.cur().phases[key];
+  this.set({ dialog: "dates", datesDraft: { key: key, start: ph.start, end: ph.end, err: "" } });
+}
+
+updDates(patch) {
+  const s = this.cur();
+  if (s.datesDraft) this.set({ datesDraft: Object.assign({}, s.datesDraft, patch, { err: "" }) });
+}
+
+saveDates() {
+  const s = this.cur();
+  const f = s.datesDraft;
+  if (!f) return;
+  const a = this.off(f.start);
+  const b = this.off(f.end);
+  if (a === null || b === null) { this.set({ datesDraft: Object.assign({}, f, { err: "Pick a start and an end date." }) }); return; }
+  if (b < a) { this.set({ datesDraft: Object.assign({}, f, { err: "The end can't be before the start." }) }); return; }
+  this.change((ph) => { ph[f.key].start = f.start; ph[f.key].end = f.end; }, { dialog: "", datesDraft: null }, "Dates saved.");
+}
+
+openMove(to) { this.set({ dialog: "move", moveDraft: { to: to } }); }
+
+moveCopy(s, to) {
+  const defs = this.phaseDefs();
+  const from = s.current;
+  const a = this.order(from);
+  const b = this.order(to);
+  const T = this.today();
+  if (b < a) {
+    const later = defs.slice(b + 1, a + 1).map((d) => d.label);
+    return {
+      title: "Go back to " + this.labelOf(to) + "?",
+      body: this.labelOf(to) + " opens again. " + this.names(later) + (later.length > 1 ? " go" : " goes") + " back to not started.",
+      okLabel: "Go back"
+    };
+  }
+  const skipped = defs.slice(a + 1, b).map((d) => d.label);
+  let body = this.labelOf(from) + " ends today, " + this.timing(T, this.off(s.phases[from].end)) + ". " +
+    this.labelOf(to) + " starts today, " + this.timing(T, this.off(s.phases[to].start)) + ".";
+  if (skipped.length) body += " " + this.names(skipped) + (skipped.length > 1 ? " are" : " is") + " skipped.";
+  return { title: "Move to " + this.labelOf(to) + "?", body: body, okLabel: "Move to " + this.labelOf(to) };
+}
+
+confirmMove() {
+  const s = this.cur();
+  const d = s.moveDraft;
+  if (!d) return;
+  const from = s.current;
+  const to = d.to;
+  const back = this.order(to) < this.order(from);
+  const today = this.todayIso();
+  this.change((ph) => {
+    if (back) {
+      this.phaseDefs().forEach((p, i) => {
+        if (i > this.order(to)) { ph[p.key].aStart = ""; ph[p.key].aEnd = ""; }
+      });
+      ph[to].aEnd = "";
+      if (!ph[to].aStart) ph[to].aStart = today;
+    } else {
+      ph[from].aEnd = today;
+      ph[to].aStart = today;
+      ph[to].aEnd = "";
+    }
+  }, { current: to, dialog: "", moveDraft: null, aiSuggest: false, open: { [to]: true }, taskForm: null, noteForm: null }, "Phase changed to " + this.labelOf(to) + ".");
+}
+
+// ---------- actions: hours ----------
+showCustom() {
+  const s = this.cur();
+  const a = this.off(s.hrFrom);
+  const b = this.off(s.hrTo);
+  if (a === null || b === null) { this.set({ hrErr: "Pick a from and a to date." }); return; }
+  if (b < a) { this.set({ hrErr: "The to date can't be before the from date." }); return; }
+  this.set({ hrErr: "", hrApplied: this.range(a, b) });
+}
+
+showListCustom() {
+  const s = this.cur();
+  const a = this.off(s.listFrom);
+  const b = this.off(s.listTo);
+  if (a === null || b === null) { this.set({ listErr: "Pick a from and a to date." }); return; }
+  if (b < a) { this.set({ listErr: "The to date can't be before the from date." }); return; }
+  this.set({ listErr: "" });
+}
+
+// ---------- view models ----------
+listVals(s, health, fc) {
+  const acme = {
+    name: "Acme booking app", client: "Acme Clinics", status: "active", kind: health.kind,
+    phase: this.labelOf(s.current), pct: fc.total ? fc.pct : null, deadline: s.deadline, pm: "Riya Kapoor",
+    week: "38h 20m", month: "124h 30m", total: "124h 30m", sqBg: "#e7e9fb", sqFg: "#26329a", isAcme: true
+  };
+  const all = [acme].concat(this.otherProjects());
+  const countOf = (st) => all.filter((p) => p.status === st).length;
+  const q = s.search.trim().toLowerCase();
+  const shown = all
+    .filter((p) => p.status === s.listFilter && (!q || (p.name + " " + p.client).toLowerCase().indexOf(q) >= 0))
+    .sort((a, b) => {
+      const r = this.pillOf(a.kind).rank - this.pillOf(b.kind).rank;
+      if (r) return r;
+      return this.dueKey(a.deadline) - this.dueKey(b.deadline);
+    });
+  const active = all.filter((p) => p.status === "active");
+  const nOff = active.filter((p) => p.kind === "off").length;
+  const nRisk = active.filter((p) => p.kind === "risk").length;
+  const bits = [];
+  if (nOff) bits.push(nOff + " off track");
+  if (nRisk) bits.push(nRisk + " at risk");
+  const pills = [["active", "Active"], ["hold", "On hold"], ["completed", "Completed"]].map((x) => {
+    const on = s.listFilter === x[0];
+    return {
+      label: x[1] + " (" + countOf(x[0]) + ")",
+      selected: on,
+      bg: on ? "#1b1e33" : "#ffffff",
+      line: on ? "#1b1e33" : "#dcdfea",
+      color: on ? "#ffffff" : "#1b1e33",
+      weight: on ? 600 : 500,
+      pick: () => this.set({ listFilter: x[0] })
+    };
+  });
+  // Custom uses the week's numbers in this demo, as on the Hours tab.
+  const hoursOf = (p) => (s.listRange === "all" ? p.total : s.listRange === "month" ? p.month : p.week);
+  const segLabels = { week: "This week", month: "This month", all: "All time", custom: "Custom" };
+  const segs = ["week", "month", "all", "custom"].map((k) => {
+    const on = s.listRange === k;
+    return {
+      label: segLabels[k],
+      selected: on,
+      bg: on ? "#ffffff" : "transparent",
+      color: on ? "#1b1e33" : "#5b6178",
+      weight: on ? 600 : 500,
+      pick: () => this.set({ listRange: k, listErr: "" })
+    };
+  });
+  const rows = shown.map((p, i) => {
+    const pill = this.pillOf(p.kind);
+    const dl = this.off(p.deadline);
+    const hasBar = p.pct !== null;
+    return {
+      name: p.name,
+      client: p.client,
+      letter: p.name.charAt(0),
+      sqBg: p.sqBg,
+      sqFg: p.sqFg,
+      line: i ? "1px solid #eef0f6" : "0",
+      pill: pill.text,
+      pillBg: pill.bg,
+      pillFg: pill.fg,
+      phase: p.phase,
+      phaseColor: p.phase === "Not set" ? "#5b6178" : "#1b1e33",
+      hasBar: hasBar,
+      noBar: !hasBar,
+      bar: (hasBar ? p.pct : 0) + "%",
+      pct: (hasBar ? p.pct : 0) + "%",
+      deadline: dl === null ? "No deadline" : this.long(dl),
+      dlColor: dl === null ? "#5b6178" : "#1b1e33",
+      pm: p.pm,
+      hours: hoursOf(p),
+      total: p.total + " total",
+      totalShow: hoursOf(p) !== p.total,
+      open: p.isAcme ? () => this.set({ view: "project", tab: "overview" }) : () => this.demoOnly()
+    };
+  });
+  return {
+    subtitle: countOf("active") + " active projects" + (bits.length ? ": " + bits.join(", ") : ""),
+    search: s.search,
+    onSearch: (e) => this.set({ search: e.target.value }),
+    clearSearch: () => this.set({ search: "" }),
+    newProject: () => this.demoOnly(),
+    segs: segs,
+    hoursHead: { week: "Hours this week", month: "Hours this month", all: "Total hours", custom: "Hours in range" }[s.listRange],
+    customShow: s.listRange === "custom",
+    from: s.listFrom,
+    to: s.listTo,
+    onFrom: (e) => this.set({ listFrom: e.target.value, listErr: "" }),
+    onTo: (e) => this.set({ listTo: e.target.value, listErr: "" }),
+    show: () => this.showListCustom(),
+    err: s.listErr,
+    errShow: !!s.listErr,
+    pills: pills,
+    rows: rows,
+    hasRows: rows.length > 0,
+    noRows: rows.length === 0
+  };
+}
+
+taskRow(t, key, line) {
+  const due = this.dueOf(t.due);
+  const look = this.priLook(t.pri);
+  const dueO = this.off(t.due);
+  return {
+    isTask: true, isToggle: false, isForm: false,
+    line: line,
+    toggleOpen: false, toggleLabel: "", toggleChev: "rotate(0deg)", toggleDone: () => {},
+    done: t.done,
+    title: t.title,
+    titleColor: t.done ? "#5b6178" : "#1b1e33",
+    titleDeco: t.done ? "line-through" : "none",
+    owner: t.owner,
+    ownerColor: t.owner === "Anyone on the project" ? "#3e4460" : "#1b1e33",
+    due: t.done ? (dueO === null ? "No due date" : this.short(dueO)) : due.text,
+    dueBg: t.done ? "transparent" : due.bg,
+    dueFg: t.done ? "#5b6178" : due.fg,
+    duePad: t.done ? "0" : "10px",
+    pri: "P" + t.pri,
+    priBg: look.bg,
+    priFg: look.fg,
+    editLabel: "Edit task: " + t.title,
+    removeLabel: "Delete task: " + t.title,
+    tickLabel: "Done: " + t.title,
+    tick: () => this.tick(key, t.id),
+    edit: () => this.openTaskForm(key, t.id),
+    remove: () => this.removeTask(key, t.id)
+  };
+}
+
+phaseVals(s, nextDef) {
+  const defs = this.phaseDefs();
+  return defs.map((d, i) => {
+    const ph = s.phases[d.key];
+    const st = this.statusOf(s, d.key);
+    const open = !!s.open[d.key];
+    const late = this.lateNote(st, ph);
+    const total = ph.tasks.length;
+    const doneList = ph.tasks.filter((t) => t.done);
+    const openList = ph.tasks.filter((t) => !t.done).sort((a, b) => (a.pri - b.pri) || (this.dueKey(a.due) - this.dueKey(b.due)));
+    const shown = !!s.doneShown[d.key];
+    const blank = this.taskRow({ id: "", title: "", owner: "", due: "", pri: 3, done: false }, d.key, "0");
+    const tForm = s.taskForm && s.taskForm.phase === d.key ? s.taskForm : null;
+    const rows = [];
+    const lineFor = () => (rows.length ? "1px solid #eef0f6" : "0");
+    const push = (t) => {
+      if (tForm && tForm.id === t.id) rows.push(Object.assign({}, blank, { isTask: false, isForm: true, line: lineFor() }));
+      else rows.push(this.taskRow(t, d.key, lineFor()));
+    };
+    if (tForm && !tForm.id) rows.push(Object.assign({}, blank, { isTask: false, isForm: true, line: "0" }));
+    openList.forEach(push);
+    if (doneList.length) {
+      rows.push(Object.assign({}, blank, {
+        isTask: false,
+        isToggle: true,
+        line: lineFor(),
+        toggleOpen: shown,
+        toggleChev: shown ? "rotate(90deg)" : "rotate(0deg)",
+        toggleLabel: shown ? "Hide done tasks" : "Show " + doneList.length + (doneList.length === 1 ? " done task" : " done tasks"),
+        toggleDone: () => {
+          const c = this.cur();
+          this.set({ doneShown: Object.assign({}, c.doneShown, { [d.key]: !c.doneShown[d.key] }) });
+        }
+      }));
+      if (shown) doneList.forEach(push);
+    }
+    const nForm = s.noteForm && s.noteForm.phase === d.key ? s.noteForm : null;
+    const docs = [];
+    const docLine = () => (docs.length ? "1px solid #eef0f6" : "0");
+    const blankDoc = {
+      isRow: false, isForm: true, isFile: false, isNote: false, line: "0", expanded: false, name: "", detail: "", text: "",
+      canEdit: false, editLabel: "", removeLabel: "", toggle: () => {}, edit: () => {}, remove: () => {}
+    };
+    if (nForm && !nForm.id) docs.push(Object.assign({}, blankDoc));
+    ph.docs.forEach((x) => {
+      if (nForm && nForm.id === x.id) { docs.push(Object.assign({}, blankDoc, { line: docLine() })); return; }
+      const when = this.short(this.off(x.date));
+      docs.push({
+        isRow: true,
+        isForm: false,
+        isFile: x.kind === "file",
+        isNote: x.kind === "note",
+        line: docLine(),
+        expanded: s.docOpen === x.id,
+        name: x.name,
+        detail: x.kind === "file" ? x.pages + " pages · " + when : "Note · " + when,
+        text: x.text,
+        canEdit: x.kind === "note",
+        editLabel: "Edit note: " + x.name,
+        removeLabel: (x.kind === "file" ? "Delete file: " : "Delete note: ") + x.name,
+        toggle: () => this.set({ docOpen: this.cur().docOpen === x.id ? "" : x.id }),
+        edit: () => this.openNoteForm(d.key, x.id),
+        remove: () => this.removeDoc(d.key, x.id)
+      });
+    });
+    const noOpenRows = !openList.length && !(tForm && !tForm.id);
+    return {
+      label: d.label,
+      border: i ? "1px solid #e6e8f0" : "0",
+      open: open,
+      chev: open ? "rotate(90deg)" : "rotate(0deg)",
+      toggle: () => {
+        const c = this.cur();
+        this.set({ open: Object.assign({}, c.open, { [d.key]: !c.open[d.key] }) });
+      },
+      isCurrent: st === "current",
+      isDone: st === "done",
+      planned: "Planned " + this.range(this.off(ph.start), this.off(ph.end)),
+      lateShow: !!late,
+      lateText: late ? late.text : "",
+      lateColor: late ? late.color : "#5b6178",
+      count: total ? doneList.length + " of " + total + (total === 1 ? " task" : " tasks") : "No tasks yet",
+      editDates: () => this.openDates(d.key),
+      addTask: () => this.openTaskForm(d.key, ""),
+      headShow: openList.length > 0 || (shown && doneList.length > 0),
+      tasksEmpty: noOpenRows,
+      tasksEmptyText: total ? "All tasks are done." : "No tasks yet.",
+      rows: rows,
+      addFile: () => this.addFile(d.key),
+      addNote: () => this.openNoteForm(d.key, ""),
+      docsEmpty: docs.length === 0,
+      docs: docs,
+      moveShow: st === "current" && !!nextDef,
+      moveLabel: nextDef ? "Move to " + nextDef.label : "",
+      makeShow: st !== "current",
+      move: st === "current" ? () => { if (nextDef) this.openMove(nextDef.key); } : () => this.openMove(d.key)
+    };
+  });
+}
+
+timelineVals(s, fc) {
+  const defs = this.phaseDefs();
+  const T = fc.T;
+  const SPAN = this.span();
+  const bits = [];
+  let behind = false;
+  const rows = defs.map((d) => {
+    const ph = s.phases[d.key];
+    const st = this.statusOf(s, d.key);
+    const late = this.lateNote(st, ph);
+    const ps = this.off(ph.start);
+    const pe = this.off(ph.end);
+    const as = this.off(ph.aStart);
+    const ae = this.off(ph.aEnd);
+    if (st === "done" && ae !== null && ae > pe) bits.push(d.label + " ended " + this.days(ae - pe) + " late");
+    if (st === "current") {
+      if (T > pe) { bits.push(d.label + " is " + this.days(T - pe) + " late"); behind = true; }
+      else if (as !== null && as > ps) bits.push(d.label + " started " + this.days(as - ps) + " late");
+    }
+    if (st === "later" && T > ps) { bits.push(d.label + " should have started " + this.days(T - ps) + " ago"); behind = true; }
+    const pEnd = pe + 1;
+    // Only the part of the planned bar inside the chart is drawn; the left column keeps the real dates.
+    const visStart = Math.max(0, ps);
+    const visEnd = Math.min(SPAN, pEnd);
+    const has = as !== null;
+    const aEnd = has ? (ae !== null ? ae + 1 : T + 1) : 0;
+    const blueEnd = Math.min(aEnd, pEnd);
+    const blueShow = has && as < pEnd;
+    const redShow = has && aEnd > pEnd;
+    const redStart = Math.max(as === null ? 0 : as, pEnd);
+    const ongoing = has && ae === null;
+    return {
+      label: d.label,
+      planned: this.range(ps, pe),
+      lateShow: !!late,
+      lateText: late ? late.text : "",
+      lateColor: late ? late.color : "#5b6178",
+      pShow: visEnd > visStart,
+      pLeft: this.pctOf(visStart),
+      pWidth: this.pctOf(Math.max(0, visEnd - visStart)),
+      blueShow: blueShow,
+      blueLeft: this.pctOf(has ? as : 0),
+      blueWidth: this.pctOf(blueShow ? blueEnd - as : 0),
+      blueRadius: redShow || ongoing ? "6px 0 0 6px" : "6px",
+      redShow: redShow,
+      redLeft: this.pctOf(redStart),
+      redWidth: this.pctOf(redShow ? aEnd - redStart : 0),
+      redRadius: blueShow ? "0 6px 6px 0" : "6px"
+    };
+  });
+  const weeks = [];
+  for (let w = 0; w < 15; w += 1) {
+    weeks.push({ left: this.pctOf(w * 7), label: String(this.civil(w * 7 + this.base()).d) });
+  }
+  const months = [
+    { label: "Oct 2026", left: this.pctOf(0) },
+    { label: "Nov", left: this.pctOf(this.off("2026-11-01")) },
+    { label: "Dec", left: this.pctOf(this.off("2026-12-01")) },
+    { label: "Jan 2027", left: this.pctOf(this.off("2027-01-01")) }
+  ];
+  const D = fc.D;
+  // Markers past the chart's edge stay pinned to it, and their labels carry the real date.
+  const dlShow = D !== null;
+  // A past deadline, or one close to today, takes the second row so it never covers the Today chip.
+  const dlNear = D !== null && D < T + 11;
+  const dlLeftward = D !== null && (D >= T + 35 || (D >= T && dlNear));
+  const expShow = D !== null && fc.finish !== D && fc.left > 0;
+  const early = D !== null && fc.finish < D;
+  const expLeftward = (fc.finish + 1) / SPAN > (early ? 0.34 : 0.69);
+  const summary = bits.length
+    ? bits.length + (bits.length === 1 ? " phase " : " phases ") + (behind ? "behind plan: " : "late so far: ") + bits.join(", ") + "."
+    : "No phases are late.";
+  return {
+    summary: summary,
+    weeks: weeks,
+    months: months,
+    rows: rows,
+    todayX: this.pctOf(T + 1),
+    todayLabel: "Today " + this.short(T),
+    dlShow: dlShow,
+    dlX: "min(" + this.pctOf((D === null ? 0 : D) + 1) + ",calc(100% - 2px))",
+    dlTop: dlNear ? "63px" : "38px",
+    dlShift: dlLeftward ? "translateX(calc(-100% + 1px))" : "translateX(-1px)",
+    dlLabel: D === null ? "" : "Deadline " + this.short(D),
+    expShow: expShow,
+    expX: "min(" + this.pctOf(fc.finish + 1) + ",calc(100% - 10px))",
+    expShift: expLeftward ? "translateX(calc(-100% + 9px))" : "translateX(-9px)",
+    expDir: expLeftward ? "row-reverse" : "row",
+    expLabel: "Expected finish " + this.short(fc.finish),
+    expInk: early ? "#09633f" : "#9a1f28",
+    expFill: early ? "#0c8a5b" : "#d12f3a",
+    expLine: early ? "#a9dcc6" : "#f2c5c8"
+  };
+}
+
+aiVals(s) {
+  const docs = this.allDocs(s.phases);
+  const nFiles = docs.filter((d) => d.kind === "file").length;
+  const nNotes = docs.length - nFiles;
+  const note = docs.find((d) => d.id === "n1");
+  const noteName = note ? note.name : "Kickoff call notes";
+  const has = docs.length > 0;
+  const changed = this.docSig(s.phases) !== s.sumSig;
+  const keep = (x) => (x.from === "file" ? s.sumFile : s.sumNotes);
+  const all = this.allTasks(s.phases);
+  const actions = this.actionItems().filter(keep).map((a) => {
+    const added = all.some((t) => t.from === a.id);
+    return {
+      who: a.who, text: a.text, when: a.when, added: added, canAdd: !added,
+      add: () => this.addAction(a)
+    };
+  });
+  const groups = this.summaryGroups().map((g) => ({
+    title: g.title,
+    points: g.points.filter(keep).map((p) => ({
+      text: p.text,
+      tagShow: !!p.tag,
+      source: p.from === "file" ? "SOW-Acme-v3.pdf, " + p.page : noteName
+    }))
+  })).filter((g) => g.points.length);
+  const parts = [];
+  if (nFiles) parts.push(nFiles + (nFiles === 1 ? " file" : " files"));
+  if (nNotes) parts.push(nNotes + (nNotes === 1 ? " note" : " notes"));
+  return {
+    empty: !has,
+    has: has,
+    actionsShow: actions.length > 0,
+    actionCount: actions.length,
+    actions: actions,
+    overview: "A booking app for Acme Clinics' 12 clinics: patients book visits online and staff manage one shared calendar.",
+    riskShow: s.sumNotes,
+    fullShow: groups.length > 0,
+    fullOpen: s.fullOpen && groups.length > 0,
+    fullLabel: s.fullOpen ? "Show less" : "Read full summary",
+    toggleFull: () => this.set({ fullOpen: !this.cur().fullOpen }),
+    groups: groups,
+    fresh: !changed && !s.reading,
+    stale: changed && !s.reading,
+    reading: s.reading,
+    footer: "From " + this.names(parts) + ". Written by AI, check anything important.",
+    update: () => this.updateSummary()
+  };
+}
+
+hoursVals(s) {
+  const data = this.hoursData(s.hrRange);
+  const labels = { week: "This week", month: "This month", all: "All time", custom: "Custom" };
+  const segs = ["week", "month", "all", "custom"].map((k) => {
+    const on = s.hrRange === k;
+    return {
+      label: labels[k],
+      selected: on,
+      bg: on ? "#ffffff" : "transparent",
+      color: on ? "#1b1e33" : "#5b6178",
+      weight: on ? 600 : 500,
+      pick: () => this.set({ hrRange: k, hrErr: "" })
+    };
+  });
+  const sub = { week: "this week", month: "this month", all: "since 6 Oct", custom: s.hrApplied }[s.hrRange];
+  const head = s.hrRange === "custom" ? s.hrApplied : labels[s.hrRange];
+  const maxBar = Math.max.apply(null, data.bars.map((b) => b[2]));
+  const maxP = Math.max.apply(null, data.people.map((p) => p.mins));
+  return {
+    segs: segs,
+    download: () => this.notify("Not in this demo."),
+    customShow: s.hrRange === "custom",
+    from: s.hrFrom,
+    to: s.hrTo,
+    onFrom: (e) => this.set({ hrFrom: e.target.value, hrErr: "" }),
+    onTo: (e) => this.set({ hrTo: e.target.value, hrErr: "" }),
+    show: () => this.showCustom(),
+    err: s.hrErr,
+    errShow: !!s.hrErr,
+    tiles: [
+      { label: "Hours logged", value: data.total, sub: sub },
+      { label: "People", value: "3", sub: "logged hours" },
+      { label: "Last update", value: "30 Oct", sub: "Neha Arora" }
+    ],
+    personSub: head + ", " + data.total + " in total",
+    timeSub: data.timeSub,
+    people: data.people.map((p) => ({
+      name: p.name,
+      value: p.value,
+      share: Math.round(p.mins / data.mins * 100) + "%",
+      bar: (p.mins / maxP * 100).toFixed(1) + "%"
+    })),
+    bars: data.bars.map((b) => ({
+      label: b[0],
+      value: b[1],
+      h: (b[2] ? Math.max(4, Math.round(b[2] / maxBar * 112)) : 2) + "px",
+      fill: b[2] ? "#3848d6" : "#dcdfea"
+    })),
+    logs: [
+      { date: "30 Oct", person: "Neha Arora", hours: "3h 30m", task: "Design the booking screens", line: "0" },
+      { date: "29 Oct", person: "Karan Mehta", hours: "4h", task: "Plan the database tables", line: "1px solid #eef0f6" },
+      { date: "28 Oct", person: "Aman Gill", hours: "3h", task: "Map the booking steps", line: "1px solid #eef0f6" }
+    ]
+  };
+}
+
+renderVals() {
+  const s = this.cur();
+  const defs = this.phaseDefs();
+  const fc = this.forecast(s);
+  const health = this.healthOf(fc);
+  const ci = this.order(s.current);
+  const nextDef = defs[ci + 1] || null;
+  const docs = this.allDocs(s.phases);
+  const note = docs.find((d) => d.id === "n1");
+
+  // Progress donut: r 62, from 12 o'clock
+  const circ = 2 * Math.PI * 62;
+  const ratio = fc.total ? fc.done / fc.total : 0;
+
+  // Deadline card
+  const dLeft = fc.D === null ? 0 : fc.D - fc.T;
+  let leftText = "";
+  if (fc.D !== null) {
+    if (dLeft > 0) leftText = this.days(dLeft) + " left";
+    else if (dLeft === 0) leftText = "Due today";
+    else leftText = this.days(-dLeft) + " ago";
+  }
+
+  // Stepper
+  const steps = defs.map((d, i) => {
+    const st = this.statusOf(s, d.key);
+    const isDone = st === "done";
+    const isCurrent = st === "current";
+    return {
+      label: d.label,
+      isDone: isDone,
+      isCurrent: isCurrent,
+      aria: isCurrent ? "step" : "false",
+      ring: isDone ? "#0c8a5b" : (isCurrent ? "#3848d6" : "#dcdfea"),
+      fill: isDone ? "#0c8a5b" : "#ffffff",
+      lineL: i === 0 ? "transparent" : (i <= ci ? "#0c8a5b" : "#dcdfea"),
+      lineR: i === defs.length - 1 ? "transparent" : (i < ci ? "#0c8a5b" : "#dcdfea"),
+      weight: isCurrent ? 600 : 400,
+      color: isCurrent ? "#1b1e33" : "#5b6178"
+    };
+  });
+
+  // Critical tasks: open P1, by due date
+  const openP1 = [];
+  defs.forEach((d) => s.phases[d.key].tasks.forEach((t) => {
+    if (t.pri === 1 && !t.done) openP1.push({ t: t, key: d.key, label: d.label });
+  }));
+  openP1.sort((a, b) => this.dueKey(a.t.due) - this.dueKey(b.t.due));
+  const crit = {
+    count: openP1.length + " open",
+    none: openP1.length === 0,
+    rows: openP1.slice(0, 5).map((x) => {
+      const due = this.dueOf(x.t.due);
+      return {
+        done: false,
+        title: x.t.title,
+        meta: x.label + " · " + x.t.owner,
+        tickLabel: "Done: " + x.t.title,
+        due: due.text,
+        dueBg: due.bg,
+        dueFg: due.fg,
+        tick: () => this.tick(x.key, x.t.id)
+      };
+    })
+  };
+
+  // Dialog view models (always present; the sc-if decides what shows)
+  const dates = s.datesDraft || { key: s.current, start: "", end: "", err: "" };
+  const md = s.moveDraft || { to: nextDef ? nextDef.key : defs[0].key };
+  const mc = md.to === s.current ? { title: "", body: "", okLabel: "" } : this.moveCopy(s, md.to);
+  const tfS = s.taskForm || { id: "", title: "", owner: "Anyone on the project", due: "", pri: "2", err: "" };
+  const nfS = s.noteForm || { id: "", title: "", text: "", err: "" };
+  const tabs = [["overview", "Overview"], ["phases", "Phases"], ["timeline", "Timeline"], ["hours", "Hours"]].map((x) => {
+    const on = s.tab === x[0];
+    return {
+      label: x[1],
+      current: on ? "page" : "false",
+      color: on ? "#1b1e33" : "#5b6178",
+      weight: on ? 600 : 500,
+      line: on ? "#3848d6" : "transparent",
+      pick: () => this.goTab(x[0])
+    };
+  });
+
+  const isProject = s.view === "project";
+  return {
+    isProjects: !isProject,
+    isProject: isProject,
+    isOverview: isProject && s.tab === "overview",
+    isPhases: isProject && s.tab === "phases",
+    isTimeline: isProject && s.tab === "timeline",
+    isHours: isProject && s.tab === "hours",
+    goProjects: (e) => this.goProjects(e),
+    goPhases: () => this.goPhases(),
+    reset: () => this.reset(),
+    list: this.listVals(s, health, fc),
+    tabs: tabs,
+    health: health,
+    donut: {
+      dash: (circ * ratio).toFixed(2) + " " + circ.toFixed(2),
+      pct: fc.pct + "%",
+      text: fc.done + " of " + fc.total + (fc.total === 1 ? " task done" : " tasks done"),
+      aria: fc.pct + "% done out of 100%, " + fc.done + " of " + fc.total + (fc.total === 1 ? " task" : " tasks")
+    },
+    dlCard: {
+      date: fc.D === null ? "No deadline" : this.long(fc.D),
+      color: fc.D === null ? "#5b6178" : "#1b1e33",
+      left: leftText,
+      leftShow: fc.D !== null,
+      action: fc.D === null ? "Add deadline" : "Change deadline",
+      open: () => this.openDeadline()
+    },
+    steps: steps,
+    aiLine: {
+      show: s.aiSuggest && s.current === "req" && !!note,
+      source: note ? note.name : ""
+    },
+    moveBtn: {
+      show: !!nextDef,
+      last: !nextDef,
+      label: nextDef ? "Move to " + nextDef.label : "",
+      open: () => { if (nextDef) this.openMove(nextDef.key); }
+    },
+    crit: crit,
+    ai: this.aiVals(s),
+    phaseRows: this.phaseVals(s, nextDef),
+    tf: {
+      title: tfS.title,
+      owner: tfS.owner,
+      due: tfS.due,
+      pri: tfS.pri,
+      err: tfS.err,
+      errShow: !!tfS.err,
+      line: tfS.err ? "#d12f3a" : "#dcdfea",
+      saveLabel: tfS.id ? "Save" : "Add",
+      onTitle: (e) => this.updTaskForm({ title: e.target.value, err: "" }),
+      onOwner: (e) => this.updTaskForm({ owner: e.target.value }),
+      onDue: (e) => this.updTaskForm({ due: e.target.value }),
+      onPri: (e) => this.updTaskForm({ pri: e.target.value }),
+      save: () => this.saveTask(),
+      cancel: () => this.set({ taskForm: null })
+    },
+    nf: {
+      title: nfS.title,
+      text: nfS.text,
+      err: nfS.err,
+      errShow: !!nfS.err,
+      saveLabel: nfS.id ? "Save" : "Add note",
+      onTitle: (e) => this.updNoteForm({ title: e.target.value, err: "" }),
+      onText: (e) => this.updNoteForm({ text: e.target.value, err: "" }),
+      save: () => this.saveNote(),
+      cancel: () => this.set({ noteForm: null })
+    },
+    tl: this.timelineVals(s, fc),
+    hr: this.hoursVals(s),
+    closeDialog: () => this.closeDialog(),
+    onDialogKey: (e) => { if (e.key === "Escape") this.closeDialog(); },
+    dlgDeadline: {
+      show: s.dialog === "deadline",
+      title: fc.D === null ? "Add deadline" : "Change deadline",
+      value: s.dlDraft,
+      onChange: (e) => this.set({ dlDraft: e.target.value }),
+      save: () => this.saveDeadline()
+    },
+    dlgDates: {
+      show: s.dialog === "dates",
+      title: this.labelOf(dates.key),
+      start: dates.start,
+      end: dates.end,
+      err: dates.err,
+      errShow: !!dates.err,
+      line: dates.err ? "#d12f3a" : "#dcdfea",
+      onStart: (e) => this.updDates({ start: e.target.value }),
+      onEnd: (e) => this.updDates({ end: e.target.value }),
+      save: () => this.saveDates()
+    },
+    dlgMove: {
+      show: s.dialog === "move",
+      title: mc.title,
+      body: mc.body,
+      okLabel: mc.okLabel,
+      confirm: () => this.confirmMove()
+    },
+    toast: s.toast,
+    toastShow: !!s.toast,
+    undoShow: !!s.undo,
+    undo: () => this.doUndo(),
+    closeToast: () => this.closeToast()
+  };
+}
+}
+</script>
+</body>
+</html>

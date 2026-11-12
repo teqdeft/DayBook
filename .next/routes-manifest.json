@@ -50,6 +50,22 @@
       "namedRegex": "^/api/activity/users/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/api/ai/projects/[id]/summary",
+      "regex": "^/api/ai/projects/([^/]+?)/summary(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/ai/projects/(?<nxtPid>[^/]+?)/summary(?:/)?$"
+    },
+    {
+      "page": "/api/ai/projects/[id]/summary/tasks",
+      "regex": "^/api/ai/projects/([^/]+?)/summary/tasks(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/ai/projects/(?<nxtPid>[^/]+?)/summary/tasks(?:/)?$"
+    },
+    {
       "page": "/api/attendance/[id]",
       "regex": "^/api/attendance/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -98,6 +114,14 @@
       "namedRegex": "^/api/office\\-networks/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/api/project-documents/[id]",
+      "regex": "^/api/project\\-documents/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/project\\-documents/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
       "page": "/api/project-requests/[id]/approve",
       "regex": "^/api/project\\-requests/([^/]+?)/approve(?:/)?$",
       "routeKeys": {
@@ -138,12 +162,45 @@
       "namedRegex": "^/api/projects/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/api/projects/[id]/deadline",
+      "regex": "^/api/projects/([^/]+?)/deadline(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/projects/(?<nxtPid>[^/]+?)/deadline(?:/)?$"
+    },
+    {
+      "page": "/api/projects/[id]/documents",
+      "regex": "^/api/projects/([^/]+?)/documents(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/projects/(?<nxtPid>[^/]+?)/documents(?:/)?$"
+    },
+    {
       "page": "/api/projects/[id]/members",
       "regex": "^/api/projects/([^/]+?)/members(?:/)?$",
       "routeKeys": {
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/api/projects/(?<nxtPid>[^/]+?)/members(?:/)?$"
+    },
+    {
+      "page": "/api/projects/[id]/phase",
+      "regex": "^/api/projects/([^/]+?)/phase(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/projects/(?<nxtPid>[^/]+?)/phase(?:/)?$"
+    },
+    {
+      "page": "/api/projects/[id]/phases/[phase]/dates",
+      "regex": "^/api/projects/([^/]+?)/phases/([^/]+?)/dates(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid",
+        "nxtPphase": "nxtPphase"
+      },
+      "namedRegex": "^/api/projects/(?<nxtPid>[^/]+?)/phases/(?<nxtPphase>[^/]+?)/dates(?:/)?$"
     },
     {
       "page": "/api/projects/[id]/report",

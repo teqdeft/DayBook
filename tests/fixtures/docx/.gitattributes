@@ -1,0 +1,3 @@
+# Zip offsets inside a .docx must survive Git on Windows: never convert line endings here.
+*.docx binary
+*.doc binary

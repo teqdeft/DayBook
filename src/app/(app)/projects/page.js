@@ -1,5 +1,6 @@
 // /projects: people see the projects they work on (artboard 04); PMs and Admin manage every
-// project (artboard 07).
+// project in the health table of the project management prototype (CONTRACT 22,
+// docs/design/project-management-prototype.dc.html).
 import { Suspense } from 'react';
 import { can } from '@/lib/permissions';
 import { requirePage } from '@/lib/session';

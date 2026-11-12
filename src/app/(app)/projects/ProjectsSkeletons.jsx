@@ -65,7 +65,7 @@ export function ManageProjectsSkeleton({ custom = false }) {
   return (
     <div className={styles.page} aria-busy="true">
       <span className="visually-hidden">Loading projects</span>
-      <TopBarSkeleton subtitle={150} actions={[240, 150]} />
+      <TopBarSkeleton subtitle={270} actions={[240, 150]} />
       <div className={styles.filters}>
         <PillsSkeleton widths={[94, 94, 122]} />
         <Skeleton width={340} height={40} radius={10} className={styles.range} />
@@ -78,11 +78,16 @@ export function ManageProjectsSkeleton({ custom = false }) {
         {[0, 1, 2, 3, 4, 5, 6, 7].map((index) => (
           <div key={index} className={styles.row}>
             <Skeleton width={34} height={34} radius={9} />
-            <Skeleton width="18%" height={15} />
-            <Skeleton width="12%" height={15} className={styles.hideSmall} />
-            <Skeleton width="12%" height={15} className={styles.hideSmall} />
-            <Skeleton width={64} height={30} radius={15} className={styles.hideSmall} />
-            <Skeleton width={110} height={34} radius={8} className={styles.push} />
+            <div className={styles.rowTitle}>
+              <Skeleton width="70%" height={15} />
+              <Skeleton width="45%" height={13} />
+            </div>
+            <Skeleton width={76} height={26} radius={13} />
+            <Skeleton width={110} height={15} className={styles.hideSmall} />
+            <Skeleton width={100} height={6} radius={3} className={styles.hideSmall} />
+            <Skeleton width={78} height={15} className={styles.hideSmall} />
+            <Skeleton width={72} height={15} className={styles.hideSmall} />
+            <Skeleton width={72} height={15} className={styles.hideSmall} />
           </div>
         ))}
       </Card>

@@ -1,0 +1,10 @@
+.done {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  font-size: var(--text-tag);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--muted);
+  white-space: nowrap;
+}

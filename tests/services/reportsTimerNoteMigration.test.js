@@ -73,7 +73,7 @@ beforeAll(async () => {
     ],
   });
   // The deploy ran before `npm run migrate`: no report code has asked for the column yet.
-  await db.migrate.down();
+  await db.migrate.down({ name: '014_report_task_timer_note.js' });
   expect(await timerNoteColumn()).toBe(false);
 });
 

@@ -174,7 +174,8 @@ export function setCacheTtlForTests(ms) {
  *   officeCheckinAnywhere: boolean, wfhRequiresApproval: boolean, autoCheckoutEnabled: boolean,
  *   autoCheckoutAt: string, aiEnabled: boolean, aiDailyLimit: number, aiPolishEnabled: boolean,
  *   aiPmSummaryEnabled: boolean, aiPmSummaryAt: string, aiSummarySlack: boolean,
- *   aiHrNotesEnabled: boolean, aiHrNotesAt: string, aiAskEnabled: boolean }>} (AI, CONTRACT 20) a fresh copy, safe to change; activityIdleMinutes is 1-120 and
+ *   aiHrNotesEnabled: boolean, aiHrNotesAt: string, aiAskEnabled: boolean,
+ *   aiProjectSummaryEnabled: boolean }>} (AI, CONTRACT 20 and 22) a fresh copy, safe to change; activityIdleMinutes is 1-120 and
  *   activityRetentionDays 7-3650 (screen time, CONTRACT 11); pushEnabled switches desktop
  *   notifications for everyone (CONTRACT 14); timers and breaks (CONTRACT 15):
  *   timerAwayMinutes 5-240, timerReminderMinutes 0-240 (0 = never), breakAllowanceMinutes 0-480

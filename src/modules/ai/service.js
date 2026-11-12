@@ -22,6 +22,7 @@ export {
   SUMMARY_KINDS,
 } from './summaries';
 export {
+  modelName,
   setTransportForTests,
   setApiKeyForTests,
   setTimeoutForTests,
@@ -34,6 +35,7 @@ const FEATURE_SWITCHES = Object.freeze({
   pm_summary: 'aiPmSummaryEnabled',
   hr_notes: 'aiHrNotesEnabled',
   ask: 'aiAskEnabled',
+  project_summary: 'aiProjectSummaryEnabled',
 });
 export const AI_FEATURES = Object.freeze(Object.keys(FEATURE_SWITCHES));
 const TOOL_NAME = /^[A-Za-z_][A-Za-z0-9_.-]{0,63}$/;
@@ -46,7 +48,7 @@ function availableWith(values, feature) {
 /**
  * Whether a feature can run now: GEMINI_API_KEY is set, Settings → AI is on and the feature's own
  * switch is on. Unknown features are never available.
- * @param {'polish' | 'pm_summary' | 'hr_notes' | 'ask'} feature
+ * @param {'polish' | 'pm_summary' | 'hr_notes' | 'ask' | 'project_summary'} feature
  * @returns {Promise<boolean>}
  */
 export async function isAvailable(feature) {
@@ -55,13 +57,16 @@ export async function isAvailable(feature) {
 }
 
 /** Programming mistakes in a generate() call (never shown to people). */
-function checkInput({ feature, model, prompt, json, tools, onToolCall }) {
+function checkInput({ feature, model, prompt, json, tools, onToolCall, timeoutMs }) {
   const problem = (text) => new TypeError(`ai.generate: ${text}`);
   if (!FEATURE_SWITCHES[feature]) throw problem(`unknown feature "${feature}"`);
   if (model !== 'fast' && model !== 'smart') throw problem('model must be "fast" or "smart"');
   if (typeof prompt !== 'string' || !prompt.trim()) throw problem('prompt is required');
   if (json !== undefined && (json === null || typeof json !== 'object')) {
     throw problem('json must be a JSON schema object');
+  }
+  if (timeoutMs !== undefined && !(Number.isFinite(timeoutMs) && timeoutMs > 0)) {
+    throw problem('timeoutMs must be a positive number');
   }
   if (tools === undefined) return;
   if (!Array.isArray(tools)) throw problem('tools must be an array');
@@ -75,11 +80,11 @@ function checkInput({ feature, model, prompt, json, tools, onToolCall }) {
 
 /**
  * Asks Gemini. Checks, in order: the feature is available (AI_OFF), the company's daily limit
- * (`aiDailyLimit` requests per company-time day) and the person's cap for polish (40) and ask
- * (30) (AI_LIMIT). Every HTTP request — each tool round too — writes one ai_usage row before it
- * is sent and counts towards the limits; the limits are checked under a lock that every process
- * shares, so requests at the same time can't overrun them. An answer that has started may finish
- * its tool rounds.
+ * (`aiDailyLimit` requests per company-time day) and the person's cap for polish (40), ask (30)
+ * and project_summary (15) (AI_LIMIT). Every HTTP request — each tool round too — writes one
+ * ai_usage row before it is sent and counts towards the limits; the limits are checked under a
+ * lock that every process shares, so requests at the same time can't overrun them. An answer that
+ * has started may finish its tool rounds.
  *
  * Every text sent (system, prompt, tool results) has emails, phone numbers, IPs and Slack ids
  * replaced by placeholders ("[email 1]"), which are put back in the answer and in tool arguments,
@@ -87,7 +92,7 @@ function checkInput({ feature, model, prompt, json, tools, onToolCall }) {
  * restoreNames() the answer.
  *
  * @param {{
- *   feature: 'polish' | 'pm_summary' | 'hr_notes' | 'ask',
+ *   feature: 'polish' | 'pm_summary' | 'hr_notes' | 'ask' | 'project_summary',
  *   userId?: number | null,
  *   model?: 'fast' | 'smart',
  *   system?: string,
@@ -95,7 +100,9 @@ function checkInput({ feature, model, prompt, json, tools, onToolCall }) {
  *   json?: object,
  *   tools?: Array<{ name: string, description: string, parameters?: object }>,
  *   onToolCall?: (name: string, args: object) => unknown | Promise<unknown>,
- * }} input userId = the person asking (null for the worker); model 'fast' = GEMINI_MODEL
+ *   timeoutMs?: number,
+ * }} input timeoutMs = how long each request waits (default 30 s, project summaries 55 s);
+ *   userId = the person asking (null for the worker); model 'fast' = GEMINI_MODEL
  *   (default), 'smart' = GEMINI_SMART_MODEL (thinking 'low'; when Gemini is busy or doesn't
  *   answer the first request in time, the question goes to the fast model instead, once — a new
  *   request that counts like any other); json = a JSON schema (type, properties, required,
@@ -108,7 +115,7 @@ function checkInput({ feature, model, prompt, json, tools, onToolCall }) {
  * @returns {Promise<{ text: string, data: any }>} text = the answer (the JSON text with `json`);
  *   data = the parsed JSON, or null without `json`
  * @throws AppError AI_OFF (409) | AI_LIMIT (429) | AI_BUSY (503: Gemini answered 429 or 503, no
- *   answer within 30 s, or the limits stayed locked by other requests for 5 s) |
+ *   answer in time, or the limits stayed locked by other requests for 5 s) |
  *   AI_ERROR (502: any other failure — HTTP error, network, blocked or empty answer, JSON that
  *   doesn't parse, a tool call after the 5th round)
  */
@@ -122,8 +129,9 @@ export async function generate(input) {
     json,
     tools,
     onToolCall,
+    timeoutMs,
   } = input ?? {};
-  checkInput({ feature, model, prompt, json, tools, onToolCall });
+  checkInput({ feature, model, prompt, json, tools, onToolCall, timeoutMs });
   const values = await settings.getAll();
   if (!availableWith(values, feature)) throw new AppError('AI_OFF');
   const run = (kind) =>
@@ -138,6 +146,7 @@ export async function generate(input) {
       json,
       tools: tools?.length ? tools : undefined,
       onToolCall,
+      timeoutMs,
     });
   try {
     return await run(model);

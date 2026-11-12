@@ -1,0 +1,197 @@
+/* The Phases tab, as the prototype: one card of accordion sections, a header row per phase and the
+   open phase's tasks, files and notes, and move button under it. */
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.readOnly {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.board {
+  overflow: hidden;
+}
+
+.section + .section {
+  border-top: 1px solid var(--line);
+}
+
+/* Header */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  min-height: 60px;
+  padding: 8px 20px;
+}
+
+.heading {
+  flex: 1 1 320px;
+  min-width: 0;
+  margin: 0;
+  font: inherit;
+}
+
+.toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-cell);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.chevron,
+.chevronOpen {
+  flex: none;
+  color: var(--muted);
+  transition: transform 120ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.label {
+  font-family: var(--font-heading-stack);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.dates {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.late {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.lateRed {
+  color: var(--red-text);
+}
+
+.lateMarigold {
+  color: var(--marigold-text);
+}
+
+.lateMuted {
+  color: var(--muted);
+}
+
+.side {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+}
+
+.count {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+
+/* The small buttons here are 36 px high with 14 px text: Edit dates, Add task (and Add file, Add
+   note). */
+button.smallButton {
+  --btn-pad-x: 12px;
+  --btn-pad-top: 1px;
+  --btn-pad-extra: 0px;
+  height: 36px;
+  gap: 6px;
+  font-size: 14px;
+}
+
+/* Body */
+.body {
+  padding: 6px 20px 20px clamp(20px, 3.4vw, 48px);
+}
+
+.subhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.subtitle {
+  margin: 0;
+  font-family: var(--font-heading-stack);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.note {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.files {
+  margin-top: 22px;
+}
+
+.move {
+  margin-top: 18px;
+}
+
+/* Edit dates dialog */
+.datesRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.dateField {
+  display: flex;
+  flex: 1 1 180px;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dateLabel {
+  margin-bottom: 4px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
+.dateError {
+  margin: 5px 0 0;
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}

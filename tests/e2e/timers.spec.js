@@ -11,8 +11,10 @@
 // "Deploying new features" twice and "Deploting new features" once): a line written by "Fill
 // report from timers" and then reworded still stands for its timer note, so the next Fill doesn't
 // add the note again. The line is reworded by hand here; Polish with AI's Use changes it the same
-// way, and the e2e server has no Gemini key. Rohit Verma is that person: the demo leaves him
-// checked in today with no report yet, and no other spec uses him. His time is 00:10-00:30.
+// way, and AI is off on the e2e server (project-plan.spec.js turns it on only for its own test,
+// and off again). Rohit Verma is that person: the demo leaves him checked in today with no report
+// yet, and no other spec uses him. He also has open priority tasks on internal-tool (the demo's
+// plan): a line links to one only when he picks it, so Fill never does. His time is 00:10-00:30.
 import { PEOPLE, expect, open, problemsOf, test, toasts } from './support/fixtures.js';
 
 const PROJECT = 'acme-seo';

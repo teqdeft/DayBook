@@ -1,14 +1,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: var(--block-gap);
-}
-
-.topbar {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
 }
 
 .heading {
@@ -24,9 +17,83 @@
   gap: 12px;
 }
 
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  height: 44px;
+  padding: 0 14px;
+  overflow: hidden;
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+
+/* Every tab */
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* Overview */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  min-width: 0;
+}
+
+.smallCard,
+.phaseCard,
+.wideCard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.smallCard {
+  flex: 1 1 220px;
+}
+
+.phaseCard {
+  flex: 2 1 440px;
+}
+
+.wideCard {
+  flex: 1 1 400px;
+}
+
+.centered {
+  align-self: center;
+}
+
+.steps {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+  overflow: hidden;
+}
+
+/* Timeline */
+.timelineRow {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 44px;
+}
+
+.timelineRow > span {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* Hours */
 .actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 12px;
   max-width: 100%;
 }
@@ -103,11 +170,6 @@
 }
 
 @media (max-width: 1023px) {
-  .topbar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
   .kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
@@ -116,6 +178,10 @@
   .charts {
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
+  }
+
+  .actions {
+    justify-content: flex-start;
   }
 }
 

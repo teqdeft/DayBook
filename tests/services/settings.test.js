@@ -69,6 +69,7 @@ describe('settings.getAll', () => {
       aiHrNotesEnabled: true,
       aiHrNotesAt: '19:00',
       aiAskEnabled: true,
+      aiProjectSummaryEnabled: false,
     });
   });
 

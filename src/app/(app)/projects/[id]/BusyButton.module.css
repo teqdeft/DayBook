@@ -1,0 +1,21 @@
+/* A button while it works: like a loading Button, but still focusable so focus stays on it. */
+button.busy[aria-disabled='true'] {
+  opacity: 0.75;
+  cursor: progress;
+}
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2400ms;
+  }
+}

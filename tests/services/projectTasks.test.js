@@ -231,7 +231,7 @@ describe('notifications and audit', () => {
       body: 'Ada Admin added it for anyone on the project.',
       link: '/today',
     });
-    expect(byUser[pm2.id].link).toBe(`/projects/${lyra.id}#priority`);
+    expect(byUser[pm2.id].link).toBe(`/projects/${lyra.id}?tab=phases`);
   });
 
   it('notifies on a new priority or assignee, not on a new title', async () => {

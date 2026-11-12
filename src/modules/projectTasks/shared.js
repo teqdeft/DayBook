@@ -50,6 +50,11 @@ export function toTask(row) {
     doneBy: row.doneBy ?? null,
     doneByName: row.doneByName ?? null,
   };
+  // Only the reads that ask for them have these (migration 015; repo.js, PLAN_COLUMNS).
+  if (row.phase !== undefined) {
+    task.phase = row.phase;
+    task.dueDate = row.dueDate;
+  }
   if (row.projectName !== undefined) {
     task.project = {
       id: row.projectId,
@@ -69,6 +74,8 @@ export function snapshot(task) {
     priority: task.priority,
     assigneeId: task.assigneeId,
     status: task.status,
+    phase: task.phase ?? null,
+    dueDate: task.dueDate ?? null,
   };
 }
 

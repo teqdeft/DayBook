@@ -163,7 +163,7 @@ describe('requests at the same time', () => {
 
 describe('per-person caps', () => {
   it('stops a person at 40 polish requests a day, not others', async () => {
-    expect(ai.PERSON_DAILY_CAPS).toEqual({ polish: 40, ask: 30 });
+    expect(ai.PERSON_DAILY_CAPS).toEqual({ polish: 40, ask: 30, project_summary: 15 });
     await usage({ count: 39, userId: alice.id, feature: 'polish' });
     await usage({ count: 5, userId: alice.id, feature: 'polish', at: '2026-10-25T10:00:00Z' });
     await ai.generate({ feature: 'polish', userId: alice.id, prompt: 'fortieth' });

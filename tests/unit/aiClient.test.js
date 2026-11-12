@@ -159,6 +159,32 @@ describe('sendRequest', () => {
     });
   });
 
+  describe('how long a request waits', () => {
+    const signalsFor = async (input) => {
+      const timeout = vi.spyOn(AbortSignal, 'timeout');
+      vi.stubGlobal('fetch', async () => new Response('{}', { status: 200 }));
+      await sendRequest({ model: 'm', body: {}, ...input });
+      const [ms] = timeout.mock.calls[0];
+      timeout.mockRestore();
+      return ms;
+    };
+
+    it('is 30 s, unless the request asks for longer', async () => {
+      expect(await signalsFor({})).toBe(30_000);
+      expect(await signalsFor({ timeoutMs: undefined })).toBe(30_000);
+      expect(await signalsFor({ timeoutMs: 55_000 })).toBe(55_000);
+    });
+
+    it('is whatever setTimeoutForTests says, for every request', async () => {
+      setTimeoutForTests(20);
+      expect(await signalsFor({})).toBe(20);
+      expect(await signalsFor({ timeoutMs: 55_000 })).toBe(20);
+      setTimeoutForTests(null);
+      expect(await signalsFor({ timeoutMs: 55_000 })).toBe(55_000);
+      expect(await signalsFor({})).toBe(30_000);
+    });
+  });
+
   it('gives up when the timeout passes', async () => {
     setTimeoutForTests(20);
     vi.stubGlobal(

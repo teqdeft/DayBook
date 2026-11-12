@@ -60,9 +60,10 @@ async function readableProject(viewer, projectId) {
  *   offset?: number }} args members of the project, PMs and Admin may read; limit is optional
  *   (all tasks without it), at most 100 when given
  * @returns {Promise<Array<{ id, projectId, title, details, priority, status, assigneeId,
- *   assignee: { id, name, initials, role, status, avatarUrl, isMember } | null, createdBy,
- *   createdByName, createdAt, updatedAt, doneAt, doneBy, doneByName,
- *   latestReport: { status, userId, userName, workDate } | null }>>}
+ *   assignee: { id, name, initials, role, status, avatarUrl, isMember } | null, phase, dueDate,
+ *   createdBy, createdByName, createdAt, updatedAt, doneAt, doneBy, doneByName,
+ *   latestReport: { status, userId, userName, workDate } | null }>>} phase and dueDate are null
+ *   when not set, and on every task before migration 015
  * @throws NOT_FOUND, FORBIDDEN
  */
 export async function listForProject({ viewer, projectId, status, limit, offset = 0 }) {
@@ -89,6 +90,31 @@ export async function pageForProject({ viewer, projectId, status, limit = 100, o
   const rows = await listForProject({ viewer, projectId, status, limit, offset });
   const total = await repo.countForProject({ projectId: toId(projectId), status });
   return { rows, total };
+}
+
+/**
+ * Task counts of several projects in one query, for the forecast (CONTRACT 22). No access check.
+ * It reads no column of migration 015, so it needs no fallback before it.
+ * @param {number[]} projectIds
+ * @param {{ weeks: Array<{ from: Date, to: Date }> }} options UTC bounds, newest first, `to` not
+ *   included: lastFullWeeks(today, timezone) from '@/modules/projectPlan/weeks'
+ * @returns {Promise<Record<number, { total: number, done: number, doneByWeek: number[] }>>} every
+ *   project asked for, with zeros when it has no tasks; doneByWeek in the order of `weeks`, by
+ *   done_at, so reopening a task takes it out
+ */
+export async function progressByProject(projectIds, { weeks = [] } = {}) {
+  const ids = [...new Set((projectIds ?? []).map(toId).filter(Boolean))];
+  const progress = {};
+  for (const id of ids) progress[id] = { total: 0, done: 0, doneByWeek: weeks.map(() => 0) };
+  if (ids.length === 0) return progress;
+  for (const row of await repo.progressByProject({ projectIds: ids, weeks })) {
+    progress[row.projectId] = {
+      total: Number(row.total),
+      done: Number(row.done),
+      doneByWeek: weeks.map((_, index) => Number(row[`week${index}`])),
+    };
+  }
+  return progress;
 }
 
 /**
@@ -190,8 +216,8 @@ export async function findByIds(ids, { trx, lock = false } = {}) {
 }
 
 /**
- * Who a task can be for (the Edit dialog's select): the project's active members who are
- * tracked (they write daily reports), by name.
+ * Who a task can be for (the Edit dialog's select): the project's active members who are tracked
+ * (they write daily reports) and its PM while active, by name.
  * @param {{ viewer: object, projectId: number }} args
  * @returns {Promise<Array<{ id, name, designation, role }>>}
  * @throws NOT_FOUND, FORBIDDEN
@@ -199,12 +225,17 @@ export async function findByIds(ids, { trx, lock = false } = {}) {
 export async function listAssigneeOptions({ viewer, projectId }) {
   const project = await readableProject(viewer, projectId);
   const members = await repo.listProjectMembers(project.id);
-  return members
-    .filter((member) => member.status === 'active' && member.tracksAttendance)
-    .map((member) => ({
-      id: member.id,
-      name: member.name,
-      designation: member.designation || null,
-      role: member.role,
+  const manager = await repo.findPerson(project.pmId);
+  const people = members.filter(
+    (member) => member.status === 'active' && member.tracksAttendance && member.id !== project.pmId,
+  );
+  if (manager?.status === 'active') people.push(manager);
+  return people
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((person) => ({
+      id: person.id,
+      name: person.name,
+      designation: person.designation || null,
+      role: person.role,
     }));
 }

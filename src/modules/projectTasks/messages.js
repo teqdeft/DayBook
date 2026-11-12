@@ -18,18 +18,20 @@ export function fit(text, max) {
 }
 
 /**
- * Who hears about a task: its assignee, or every active member when it is for anyone. The person
- * who made the change never notifies themselves.
+ * Who hears about a task: its assignee (the project's PM can be one without being a member), or
+ * every active member when it is for anyone. The person who made the change never notifies
+ * themselves.
  */
-function recipients({ task, members, actorId }) {
-  const active = members.filter((member) => member.status === 'active' && member.id !== actorId);
-  if (task.assigneeId) return active.filter((member) => member.id === task.assigneeId);
-  return active;
+function recipients({ task, members, manager, actorId }) {
+  const reachable = (person) => person.status === 'active' && person.id !== actorId;
+  if (!task.assigneeId) return members.filter(reachable);
+  const people = manager ? [...members, manager] : members;
+  return people.filter((person) => person.id === task.assigneeId && reachable(person));
 }
 
 /**
  * Sends one notification per link: people who can open the project page (PMs, Admin) go to its
- * Priority tasks card, everyone else to Today, where their priority tasks are listed.
+ * Phases tab, everyone else to Today, where their priority tasks are listed.
  */
 async function send({ people, projectId, type, title, body }, trx) {
   if (people.length === 0) return 0;
@@ -37,7 +39,7 @@ async function send({ people, projectId, type, title, body }, trx) {
   const others = people.filter((person) => !can(person, 'team.view'));
   let sent = 0;
   for (const [group, link] of [
-    [managers, `/projects/${projectId}#priority`],
+    [managers, `/projects/${projectId}?tab=phases`],
     [others, '/today'],
   ]) {
     if (group.length === 0) continue;
@@ -56,13 +58,13 @@ async function send({ people, projectId, type, title, body }, trx) {
 }
 
 /** `project_task.added`: "New P1 task on internal-tool: Fix login timeout". */
-export function sendAdded({ task, project, members, actor }, trx) {
+export function sendAdded({ task, project, members, manager, actor }, trx) {
   const lead = task.assigneeId
     ? `${actor.name} assigned it to you.`
     : `${actor.name} added it for anyone on the project.`;
   return send(
     {
-      people: recipients({ task, members, actorId: actor.id }),
+      people: recipients({ task, members, manager, actorId: actor.id }),
       projectId: project.id,
       type: 'project_task.added',
       title: `New ${PRIORITY_LABELS[task.priority]} task on ${project.name}: ${task.title}`,
@@ -95,11 +97,11 @@ function changedText({ before, task, project, actor }) {
 }
 
 /** `project_task.changed`, when the priority or the assignee of an open task changes. */
-export function sendChanged({ before, task, project, members, actor }, trx) {
+export function sendChanged({ before, task, project, members, manager, actor }, trx) {
   const { title, body } = changedText({ before, task, project, actor });
   return send(
     {
-      people: recipients({ task, members, actorId: actor.id }),
+      people: recipients({ task, members, manager, actorId: actor.id }),
       projectId: project.id,
       type: 'project_task.changed',
       title,

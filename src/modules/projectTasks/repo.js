@@ -1,7 +1,10 @@
 // Every Knex query of the projectTasks module. People, projects, members and report lines are read
 // with joins; other modules' data is changed only through their services.
 import { db } from '@/lib/db';
+import { guardPlanRead } from '@/modules/projectPlan/migrationGuard';
 
+// Today, the daily report's picker, My projects and timers read these. They must keep working on a
+// deploy that runs before migration 015, so phase and due_date are not in this list (PLAN_COLUMNS).
 const TASK_COLUMNS = [
   'pt.id',
   'pt.projectId',
@@ -24,11 +27,26 @@ const TASK_COLUMNS = [
   'pt.updatedAt',
 ];
 
-// Whether the assignee is still on the project's team (a removed member keeps their tasks).
+// Migration 015's columns, only for the reads that show them.
+const PLAN_COLUMNS = ['pt.phase', 'pt.dueDate'];
+
+const PERSON_COLUMNS = [
+  'u.id',
+  'u.name',
+  'u.role',
+  'u.status',
+  'u.designation',
+  'u.avatarUrl',
+  'u.tracksAttendance',
+];
+
+// Whether the assignee is still on the project's team, as a member or as its PM (a removed member
+// keeps their tasks).
 const ASSIGNEE_IS_MEMBER =
   'CASE WHEN pt.assignee_id IS NULL THEN 1 WHEN EXISTS (SELECT 1 FROM project_members m ' +
-  'WHERE m.project_id = pt.project_id AND m.user_id = pt.assignee_id) THEN 1 ELSE 0 END ' +
-  'AS assignee_is_member';
+  'WHERE m.project_id = pt.project_id AND m.user_id = pt.assignee_id) THEN 1 ' +
+  'WHEN EXISTS (SELECT 1 FROM projects pm WHERE pm.id = pt.project_id ' +
+  'AND pm.pm_id = pt.assignee_id) THEN 1 ELSE 0 END AS assignee_is_member';
 
 // P1, P2, P3 (the enum's order), then oldest first.
 const ORDER = [
@@ -44,6 +62,14 @@ function taskQuery(trx) {
     .leftJoin('users as du', 'du.id', 'pt.doneBy')
     .select(TASK_COLUMNS)
     .select(trx.raw(ASSIGNEE_IS_MEMBER));
+}
+
+/** The query's rows with their phase and due date; both null before migration 015. */
+function withPlanColumns(query) {
+  return guardPlanRead(
+    () => query.clone().select(PLAN_COLUMNS),
+    async () => (await query).map((row) => ({ ...row, phase: null, dueDate: null })),
+  );
 }
 
 /** Open tasks on active projects the user is a member of, for them or for anyone. */
@@ -67,16 +93,47 @@ export function findById(id, trx = db) {
   return taskQuery(trx).where('pt.id', id).first();
 }
 
-/** Locks one project_tasks row for the rest of the transaction. */
-export function lockById(id, trx) {
-  return trx('projectTasks').where({ id }).forUpdate().first();
+/** One task with its phase and due date, for the writes. */
+export async function findWithPlan(id, trx = db) {
+  const rows = await withPlanColumns(taskQuery(trx).where('pt.id', id).limit(1));
+  return rows[0];
 }
 
-/** A project's tasks, optionally one status, P1 first then oldest. */
+/** Locks one project_tasks row for the rest of the transaction. */
+export function lockById(id, trx) {
+  return trx('projectTasks').where({ id }).forUpdate().first('id', 'projectId');
+}
+
+/** A project's tasks with their phase and due date, optionally one status, P1 first then oldest. */
 export function listForProject({ projectId, status, limit, offset = 0 }, trx = db) {
   const query = taskQuery(trx).where('pt.projectId', projectId).orderBy(ORDER);
   if (status) query.where('pt.status', status);
   if (limit) query.limit(limit).offset(offset);
+  return withPlanColumns(query);
+}
+
+/**
+ * Task counts per project in one query: all, done, and done inside each window (by done_at; a
+ * reopened task has none). Projects without tasks are left out.
+ * @param {{ projectIds: number[], weeks: Array<{ from: Date, to: Date }> }} input
+ * @returns {Promise<Array<{ projectId, total, done, week0, week1, week2 }>>} one weekN per window
+ */
+export function progressByProject({ projectIds, weeks }, trx = db) {
+  const query = trx('projectTasks')
+    .whereIn('projectId', projectIds)
+    .groupBy('projectId')
+    .select('projectId')
+    .count({ total: '*' })
+    .select(trx.raw("SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done"));
+  weeks.forEach(({ from, to }, index) => {
+    query.select(
+      trx.raw(
+        "SUM(CASE WHEN status = 'done' AND done_at >= ? AND done_at < ? THEN 1 ELSE 0 END) " +
+          `AS week${index}`,
+        [from, to],
+      ),
+    );
+  });
   return query;
 }
 
@@ -194,19 +251,16 @@ export function listProjectMembers(projectId, trx = db) {
   return trx('projectMembers as m')
     .join('users as u', 'u.id', 'm.userId')
     .where('m.projectId', projectId)
-    .select(
-      'u.id',
-      'u.name',
-      'u.role',
-      'u.status',
-      'u.designation',
-      'u.avatarUrl',
-      'u.tracksAttendance',
-    )
+    .select(PERSON_COLUMNS)
     .orderBy([
       { column: 'u.name', order: 'asc' },
       { column: 'u.id', order: 'asc' },
     ]);
+}
+
+/** One person, with the same columns as listProjectMembers (a project's PM). */
+export function findPerson(id, trx = db) {
+  return trx('users as u').where('u.id', id).first(PERSON_COLUMNS);
 }
 
 /** True when the person has a member row on the project. */

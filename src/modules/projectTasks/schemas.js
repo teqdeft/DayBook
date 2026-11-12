@@ -1,6 +1,7 @@
 // Input schemas for the priority task endpoints (CONTRACT 13). Every string length is checked
 // here: the local MariaDB silently truncates long strings, production MySQL rejects them.
 import { z } from 'zod';
+import { planDate, taskPhase } from '@/modules/projectPlan/schemas';
 
 /** Highest first. */
 export const PRIORITIES = ['p1', 'p2', 'p3'];
@@ -47,6 +48,9 @@ const assigneeId = z.preprocess(
   idValue('Pick someone on the project, or anyone.').nullable(),
 );
 
+/** A 'YYYY-MM-DD' date; null (or "") means no due date. */
+const dueDate = planDate('Pick a real due date, or leave it empty.');
+
 /** POST /api/projects/:id/tasks */
 export const projectTaskCreateSchema = z.object(
   {
@@ -54,13 +58,18 @@ export const projectTaskCreateSchema = z.object(
     details: details.optional().default(null),
     priority: priority.default('p2'),
     assigneeId: assigneeId.optional().default(null),
+    phase: taskPhase.optional().default(null),
+    dueDate: dueDate.optional().default(null),
   },
   { error: BODY_MESSAGE },
 );
 
 /** PATCH /api/project-tasks/:id — only the fields sent change. */
 export const projectTaskUpdateSchema = z
-  .object({ title, details, priority, assigneeId }, { error: BODY_MESSAGE })
+  .object(
+    { title, details, priority, assigneeId, phase: taskPhase, dueDate },
+    { error: BODY_MESSAGE },
+  )
   .partial()
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: 'Nothing to change.',

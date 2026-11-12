@@ -15,4 +15,14 @@ describe('Settings → AI copy', () => {
     expect(source).toContain(`${PERSON_DAILY_CAPS.polish} a day per person.`);
     expect(source).not.toMatch(/\b20 a day per person/);
   });
+
+  it('has the project summaries row, shown with the other feature rows', () => {
+    const source = readFileSync(AI_SECTION, 'utf8');
+    expect(source).toContain('name="aiProjectSummaryEnabled"');
+    expect(source).toContain('label="Project summaries"');
+    expect(source).toContain(
+      `help="PMs can write a short summary from a project's files and notes with Gemini."`,
+    );
+    expect(source.indexOf('{on ? (')).toBeLessThan(source.indexOf('aiProjectSummaryEnabled'));
+  });
 });

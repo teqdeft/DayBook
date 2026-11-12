@@ -8,14 +8,16 @@ import Segmented from '@/components/Segmented';
 import styles from './HoursCard.module.css';
 
 /**
- * Bars for real projects (key 'p<id>' from hoursBars) open the project report for the same week
- * or month, so its hours match the bar; pending project requests and the "N more projects" row
- * have no page of their own.
+ * Bars for real projects (key 'p<id>' from hoursBars) open the project's Hours tab for the same
+ * week or month, so its hours match the bar; pending project requests and the "N more projects"
+ * row have no page of their own.
  */
 function withReportLinks(bars, range) {
   return bars.map((bar) => {
     const match = /^p(\d+)$/.exec(String(bar.key ?? ''));
-    return match && !bar.href ? { ...bar, href: `/projects/${match[1]}?range=${range}` } : bar;
+    return match && !bar.href
+      ? { ...bar, href: `/projects/${match[1]}?tab=hours&range=${range}` }
+      : bar;
   });
 }
 
