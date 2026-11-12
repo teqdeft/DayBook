@@ -1,6 +1,7 @@
 // Read-only lookups in the demo data, for the few things a spec needs to know before it opens a
-// screen (which locked report to ask about, which day has a missing check-out). Everything the
-// specs check is read from the screens, not from here.
+// screen (which locked report to ask about, which day has a missing check-out, a project's id),
+// and one thing no screen shows: whether the server asked the AI. Everything else the specs check
+// is read from the screens, not from here.
 import knex from 'knex';
 import { buildKnexConfig } from '../../../knexfile.js';
 
@@ -61,4 +62,24 @@ export async function missingCheckoutDay(email) {
     .first('a.workDate');
   if (!row) throw new Error(`The demo data has no missing check-out for ${email}.`);
   return row.workDate;
+}
+
+/**
+ * A project's id by its name.
+ * @param {string} name
+ * @returns {Promise<number>}
+ */
+export async function projectIdByName(name) {
+  const row = await db()('projects').where({ name }).first('id');
+  if (!row) throw new Error(`The demo data has no project ${name}.`);
+  return row.id;
+}
+
+/**
+ * How many AI requests the server has made: each one writes an ai_usage row (CONTRACT 20).
+ * @returns {Promise<number>}
+ */
+export async function aiRequestCount() {
+  const row = await db()('aiUsage').count({ total: '*' }).first();
+  return Number(row?.total ?? 0);
 }

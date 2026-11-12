@@ -1,15 +1,15 @@
 // The one place that talks to Gemini: one REST generateContent request per call, with the API key
-// in a header and a 30 s timeout. No SDK. Tests swap the network for a fake transport with
-// setTransportForTests() (or stub global fetch), and never reach Google.
+// in a header and a 30 s timeout (a feature may ask for longer). No SDK. Tests swap the network for
+// a fake transport with setTransportForTests() (or stub global fetch), and never reach Google.
 import { env } from '@/lib/env';
 
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-/** Each Gemini request gives up after this long (CONTRACT 20). */
+/** Each Gemini request gives up after this long, unless the feature asks otherwise (CONTRACT 20). */
 export const REQUEST_TIMEOUT_MS = 30_000;
 
 let testTransport = null;
 let testApiKey; // undefined = env (or a placeholder while a test transport is set)
-let timeoutMs = REQUEST_TIMEOUT_MS;
+let testTimeoutMs = null; // wins over everything, so a timeout test never waits a feature's 55 s
 
 /**
  * @typedef {{ url: string, model: string, headers: Record<string, string>, body: object,
@@ -32,9 +32,9 @@ export function setApiKeyForTests(key) {
   testApiKey = key;
 }
 
-/** Tests only: the request timeout in ms; null restores 30 s. */
+/** Tests only: the request timeout in ms, for every request; null goes back to the normal ones. */
 export function setTimeoutForTests(ms) {
-  timeoutMs = ms ?? REQUEST_TIMEOUT_MS;
+  testTimeoutMs = ms ?? null;
 }
 
 /** The Gemini API key in use ('' when AI can't run). */
@@ -83,18 +83,19 @@ async function fetchTransport({ url, headers, body, signal }) {
 
 /**
  * Sends one generateContent request.
- * @param {{ model: string, body: object }} input model = the Gemini model name
+ * @param {{ model: string, body: object, timeoutMs?: number }} input model = the Gemini model name;
+ *   timeoutMs = how long to wait (default 30 s)
  * @returns {Promise<{ status: number, data: any }>}
- * @throws the transport's error (network failure, or a TimeoutError after 30 s)
+ * @throws the transport's error (network failure, or a TimeoutError when the time is up)
  */
-export function sendRequest({ model, body }) {
+export function sendRequest({ model, body, timeoutMs = REQUEST_TIMEOUT_MS }) {
   const transport = testTransport ?? fetchTransport;
   return transport({
     url: `${BASE_URL}/${encodeURIComponent(model)}:generateContent`,
     model,
     headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey() },
     body,
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: AbortSignal.timeout(testTimeoutMs ?? timeoutMs),
   });
 }
 

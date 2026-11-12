@@ -281,7 +281,9 @@ returns empty data, so every page renders. Owners replace the stub completely.
 
 Later sections add: activity → `activity/*` (11), dashboards → `projects/[id]/report*` (12),
 projects → `projects/[id]/tasks`, `project-tasks/*` (13), system → `push/subscriptions` (14),
-timers → `timers/*` and attendance → `attendance/break/start`, `attendance/break/end` (15).
+timers → `timers/*` and attendance → `attendance/break/start`, `attendance/break/end` (15),
+projects → `projects/[id]/phase`, `deadline`, `phases/[phase]/dates`, `documents`,
+`project-documents/*` and ai → `ai/projects/[id]/summary*` (22).
 
 Downloads ("Download Excel" buttons) — each screen uses an endpoint its viewers are allowed to call:
 Team dashboard and Employee detail → `GET /api/exports/hours?from=&to=&userId=` (`export.hours`,
@@ -393,6 +395,7 @@ faded? }], height }` (Today's "This week" and Overview's stacked "Attendance thi
 | dashboards   | `(app)/team/**`, `(app)/overview/**`                                                                                                                                     |
 | ai           | `(app)/summaries/**`, `(app)/ask/**`, `api/ai/**` (CONTRACT 20)                                                                                                          |
 | preferences  | `(app)/my-settings/**`, `api/me/preferences/**`, `src/modules/preferences/**` (CONTRACT 21)                                                                              |
+| projects     | `src/modules/projectPlan/**`, `src/modules/projectSummaries/**`, `db/migrations/015_project_plan.js`, `(app)/projects/[id]/**` (CONTRACT 22)                             |
 
 Every page starts with `const user = await requirePage('<permission>')`, renders `<TopBar ... />`
 then its blocks, has a loading skeleton (`loading.js`) and empty states. Page permissions:
@@ -1316,3 +1319,116 @@ added the original note again as a new line. Fill twice with a polish in between
 
 - `tests/e2e/my-settings.spec.js` signs in as Ankit Rana (ankit@company.com): the evening demo
   leaves Vishal checked out with a submitted report, so only Ankit shows "Submit and check out".
+
+## 22. Project management: phases, plan, tasks and AI summary (company request, Daybook 1.07)
+
+**Design:** `docs/design/project-management-prototype.dc.html`, the clickable prototype the owner approved. Its look, layout and copy bind every screen below (its numbers are sample data, and its "speed is 4" is a demo shortcut). Open it in a text editor: the markup and the `renderVals()` logic are readable. Where real data needs a state the prototype doesn't draw, this section says what to show. Build with Daybook's real components and tokens (`Card`, `TopBar`, `Button`, `Dialog`, `Segmented`, `FilterPills`, `DataTable`, `PriorityTag`, `Toast`), never raw hex in CSS modules. **The UI says "AI", never "Gemini"** (Settings → AI excepted). No consent checkbox, no phase history screen, no note on a phase move.
+
+### Words
+
+- **Project phase** (fixed list, in order): `requirement_gathering` "Requirement gathering", `design` "Design", `development` "Development", `testing` "Testing", `launch` "Launch", `support` "Support". No phase yet = `null` = "Not set". Phase is separate from status (Active, On hold, Completed): it blocks nothing, and neither changes the other.
+- **Task** = the existing priority task (CONTRACT 13), now with an optional phase and due date. There is one task list. **Critical** = an open P1.
+- **Health** = the worked-out state of a project, see Forecast.
+
+### Data (migration `015_project_plan.js`, portable to MySQL 8.4; every length is also checked in zod)
+
+- `project_plans`: `project_id` PK FK CASCADE, `current_phase` VARCHAR(24) NULL, `deadline` DATE NULL, `updated_by` FK users NULL, timestamps. No row = Not set and no deadline.
+- `project_phase_plans`: PK (`project_id`, `phase`), FK CASCADE, `phase` VARCHAR(24), `planned_start`, `planned_end`, `actual_start`, `actual_end` DATE NULL, `updated_by`, timestamps. No row = no dates.
+- `project_tasks` gets `phase` VARCHAR(24) NULL and `due_date` DATE NULL, and INDEX(`project_id`, `status`, `done_at`). Existing tasks stay `NULL`.
+- `project_documents`: `id`, `project_id` FK CASCADE, `phase` VARCHAR(24) NOT NULL, `kind` ENUM('file','note'), `title` VARCHAR(200), `body` MEDIUMTEXT (a file's pages are separated by `\f`), `pages` INT NULL, `pages_total` INT NULL, `char_count` INT, `created_by`, `updated_by`, timestamps, INDEX(`project_id`, `phase`). **The text is stored; the file never is.**
+- `project_summaries`: `project_id` PK FK CASCADE, `body` JSON (no column default), `source_key` CHAR(64), `truncated` BOOLEAN, `dropped_count` INT, `model` VARCHAR(60) NULL, `created_by`, `updated_by`, timestamps.
+- Settings key `aiProjectSummaryEnabled` (boolean, default false) in `db/seeds/03_settings.js`, the settings schema and `settingsValues.js`.
+
+**Deploy before migrate:** Today, the daily report and every other existing screen keep working without the migration, because their queries don't read the new columns (`TASK_COLUMNS` readers that need them go through new functions or a separate select). `/projects` and `/projects/[id]` catch errno 1146 and 1054 in the plan reads, log one warning, and show every project as Not set with "No plan yet"; writes to the new tables answer a clear error.
+
+### Modules
+
+- `@/modules/projectPlan` (`repo`, `service`, `schemas`, `index`, tables `project_plans`, `project_phase_plans`), plus pure browser-safe files other code may import directly:
+  - `src/modules/projectPlan/phases.js`: `PROJECT_PHASES` `[{ key, label }]`, `phaseLabel(key)`, `phaseIndex(key)`, `nextPhase(key)` (from `null` it is the first; after `support` it is `null`).
+  - `src/modules/projectPlan/forecast.js`: `forecastProject(input)`, see Forecast. No I/O.
+  - `getPlan(projectId)` → `{ currentPhase, deadline, phases: [{ key, label, plannedStart, plannedEnd, actualStart, actualEnd }] }` (always 6 phases, in order).
+  - `listPlans(projectIds)` → `{ [projectId]: { currentPhase, deadline } }`, one query.
+  - `movePhase({ user, projectId, phase, from?, ip })`, `setDeadline({ user, projectId, deadline, ip })`, `setPhaseDates({ user, projectId, phase, plannedStart, plannedEnd, ip })`: `assertCanManage`, a transaction that locks the plan row, `audit.log` in it (`project.phase`, `project.deadline`, `project.phase_dates`: ids and values only). End before start: "The end date can't be before the start date." `from` is the phase the page showed (null for Not set): when the locked row's phase differs and isn't already `phase`, the move is refused with CONFLICT (409) "The phase changed. Reload the page.", so a page left open can't turn a move forward into a move back. Without `from` nothing is checked.
+  - **Actual dates** (company time zone), as in the prototype's `confirmMove`. Forward: the old phase's `actual_end` = today, the new phase's `actual_start` = today and `actual_end` = null; phases jumped over stay empty (shown as "Skipped"). Back: later phases lose both actual dates, the target's `actual_end` = null, and its `actual_start` = today only when empty. Moving to the current phase is a no-op.
+- `@/modules/projectTasks` (extended): create and update take `phase` (one of the list, or null) and `dueDate` (`YYYY-MM-DD` or null); `listForProject` returns them. The project's PM may now be an assignee, next to active members. `progressByProject(projectIds, { weeks })` → `{ [projectId]: { total, done, doneByWeek: [n, n, n] } }` in one query (`weeks` = `{ from, to }` UTC bounds of the last 3 full Monday to Sunday weeks in the company time zone, newest first). `doneByWeek` counts by `done_at`, so reopening a task takes it out. Existing notification and audit behaviour stays.
+- `@/modules/projectSummaries` (`repo`, `service`, `schemas`, `prompt.js`, `checks.js`, `index`, tables `project_documents`, `project_summaries`). **Everything here is only for people who can manage the project**: reads return NOT_FOUND to anyone else, on the server, so nothing reaches another PM's browser.
+  - `listDocuments({ user, projectId })` (no `body`), `getDocument({ user, id })` (with `body`), `addDocument`, `updateDocument` (notes only: title and text), `removeDocument`. Limits: title 1 to 200, text 1 to 200,000 characters, 40 documents per project ("This project has too many files and notes. Delete some first.").
+  - `getSummary({ user, projectId })` → `{ body, stale, truncated, updatedAt, updatedByName, sources: { files, notes } }` or null. `stale` = `source_key` differs from the sha256 of the current documents' ids and `updated_at`.
+  - `writeSummary({ user, projectId })`, `addActionAsTask({ user, projectId, actionKey })`.
+- `@/modules/ai`: feature `project_summary` (`aiProjectSummaryEnabled`), `PERSON_DAILY_CAPS.project_summary` 15, and `generate()` takes an optional `timeoutMs` (55,000 for this feature; everyone else keeps 30 s). The company's existing daily limit applies. Nothing new in Settings except the one row: "Project summaries", help "PMs can write a short summary from a project's files and notes with Gemini.", shown like the other feature rows in `AiSection.jsx`.
+
+### API
+
+| Route                                                                             | Permission                    | Notes                                                                |
+| --------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------- |
+| `PUT /api/projects/[id]/phase` `{ phase, from? }`                                 | `project.manage`, own project | returns the plan; 409 when `from` is out of date                     |
+| `PUT /api/projects/[id]/deadline` `{ deadline }`                                  | same                          | `null` clears it                                                     |
+| `PUT /api/projects/[id]/phases/[phase]/dates` `{ plannedStart, plannedEnd }`      | same                          | both nullable                                                        |
+| `POST /api/projects/[id]/documents`, `PATCH`/`DELETE /api/project-documents/[id]` | same                          | body `{ phase, kind, title, text, pages?, pagesTotal? }`             |
+| `GET /api/project-documents/[id]`                                                 | `signed_in`                   | the service answers NOT_FOUND to anyone who can't manage the project |
+| `POST /api/ai/projects/[id]/summary`                                              | `project.manage`, own project | 4 a minute per person; writes or updates the summary                 |
+| `POST /api/ai/projects/[id]/summary/tasks` `{ actionKey }`                        | `project.manage`, own project | adds a P2 task to the current phase, once                            |
+| existing `projects/[id]/tasks`, `project-tasks/*`                                 | unchanged                     | now take `phase`, `dueDate`                                          |
+
+Non-managers get FORBIDDEN on writes. Document and AI routes refuse a raw body over 1 MB with 413 before parsing, like `src/app/api/me/preferences/route.js`.
+
+### Forecast (pure, `forecastProject`)
+
+Input: `{ status, total, done, doneByWeek, deadline, today, createdOn }`. Output: `{ kind, pill, title, body, pct, done, total, left, finishOn, daysLate, daysLeft, speed, needed }`. First match wins:
+
+| `kind`       | When                      | `pill`          | `title`                                                             | `body`                                                                                                                       |
+| ------------ | ------------------------- | --------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `completed`  | status completed          | Completed       | Completed                                                           | This project is completed.                                                                                                   |
+| `hold`       | status on hold            | On hold         | On hold                                                             | This project is on hold.                                                                                                     |
+| `noplan`     | no tasks                  | No plan yet     | No plan yet                                                         | Add tasks to the phases to see if the project is on track.                                                                   |
+| `nodeadline` | no deadline               | No deadline     | No deadline yet                                                     | Add a deadline to see if the project is on track.                                                                            |
+| `on`         | no tasks left             | On track        | On track: all tasks are done                                        | All 50 tasks are done. The deadline is 15 Dec.                                                                               |
+| `off`        | deadline before today     | Off track       | Off track: the deadline passed 5 days ago                           | 12 tasks are still open.                                                                                                     |
+| `nodata`     | speed is 0                | Not enough data | Not enough data yet                                                 | Daybook works out the speed from tasks marked done in the last 3 full weeks.                                                 |
+| `off`        | more than 7 days late     | Off track       | Off track: will miss the deadline by about 14 days                  | At the current speed (4 tasks a week) the work ends around 29 Dec. To finish by 15 Dec, the team needs about 5 tasks a week. |
+| `risk`       | 1 to 7 days late          | At risk         | At risk: may miss the deadline by about 3 days                      | same sentence                                                                                                                |
+| `on`         | on or before the deadline | On track        | On track: will finish about 5 days early (or "will finish on time") | At the current speed (4 tasks a week) the work ends around 10 Dec. The deadline is 15 Dec.                                   |
+
+- **Speed**: `weeksCounted` = whole weeks between `createdOn` and this Monday, at most 3. Speed = the newest `weeksCounted` of `doneByWeek` ÷ `weeksCounted`; `weeksCounted` 0 means speed 0. Today never counts, so ticking a task doesn't change the speed. Whole numbers read "4 tasks a week" and "1 task a week", others "about 3.5 tasks a week".
+- `finishOn` = today + `ceil(left ÷ speed × 7)` days. `daysLate` = `finishOn` − deadline. `daysLeft` = deadline − today, `needed` = `max(round(left ÷ (daysLeft ÷ 7)), floor(speed) + 1)` ("about 5 tasks a week"; when `daysLeft` is 0 the second sentence is left out).
+- `pct` = `round(done ÷ total × 100)`, 0 with no tasks.
+- Pills use Daybook's soft tags: Off track red, At risk marigold, On track green, the rest neutral. The list sorts by: off, risk, on, nodata, nodeadline, noplan, hold, completed; then nearest deadline; then name.
+
+### Projects list (`ManageProjectsView`; PM and Admin only)
+
+As the prototype: subtitle "5 active projects: 1 off track, 1 at risk" (the counts only on the Active tab, without a search), search, New project, status pills, the hours range, then the columns Project (square, name, client under it), Health, Phase, Progress (thin bar + %, or "No tasks yet"), Deadline ("15 Dec 2026", or muted "No deadline"), Manager, Hours (as today, following the range), and the existing row menu at the end. Team and Status columns go. An urgent project gets a small marigold "Urgent" tag beside its name, with the note as its `title`. The range keeps working (CONTRACT 16). The row menu's "Priority tasks" becomes "Phases and tasks", linking to `?tab=phases`. No N+1: one `listPlans`, one `progressByProject`. A failure of either still renders the table, as "No plan yet".
+
+### Project page (`/projects/[id]`, `team.view`)
+
+Breadcrumb, square, name and health pill, subtitle "Acme Clinics · PM: Riya Kapoor · Active" (with the urgent note as today). Tabs are links with `?tab=overview|phases|timeline|hours`, `aria-current`, default `overview`; a URL with `range`, `from` or `to` and no tab opens Hours, so old links keep working. Only the chosen tab loads its data.
+
+- **Overview**: health box, then Progress (donut), Deadline (with "Change deadline" or "Add deadline" and its one-field dialog) and Phase (stepper, AI line, button named after the next phase: "Move to Design"; from Not set "Start Requirement gathering"; no button after Support), then Critical tasks (open P1s by due date, tasks without a date last, max 5, checkbox, "See all tasks") and AI summary.
+- **Phases**: as the prototype, one accordion section per phase, the current one open (with Not set, the first). A section "No phase yet" comes last, only when tasks without a phase exist; it has no dates, files, Move or Edit dates. Task rows keep what the card shows today: `details` as a muted line, the away label, and the latest reported status ("Neha, yesterday: In progress"), which helps the PM decide to tick a task. Only the PM and Admin tick; reports never close a task. The add and edit row sets title, owner, due date and priority; `details` is left alone on edit.
+- **Timeline**: as the prototype, from a pure `timelineLayout.js`. The chart runs from the Monday before the earliest date (planned, actual or today) to the Sunday after the latest (planned, actual, deadline, expected finish or today), at least 8 weeks. Empty state when no phase has planned dates: "No planned dates yet. Add dates to each phase in the Phases tab." with a button going there. Summary line copy as in the prototype, built from real late phases, left out when nothing is late. The actual bar turns red only after a planned end (a planned start alone makes nothing late), a month name near the right edge stays inside the chart, and a range on one day reads "11 Nov" here as on Phases (`planFormat.dateRange`).
+- **Hours**: today's report exactly (range, Download Excel, KPIs, charts, people, tasks, daily log), with the Priority tasks card gone and `tab=hours` kept on its range links and form (`keep`).
+- **Another PM** (`team.view`, can't manage): sees health, progress, deadline, stepper, critical tasks, phases with tasks and dates, the timeline and hours, with no ticks, Add, Edit, Move, Change deadline or AI line. In place of the AI summary: nothing, and Critical tasks takes the width. In Phases: the muted "Only Riya Kapoor and Admins can edit phases." on top, and "Files and notes are only for Riya Kapoor and Admins." in each open section.
+- **Undo**: Delete hides the row at once with a toast and Undo for 6 s (`useToastSlot`, as the bell's Undo). The `DELETE` is sent when the toast ends, on unmount, or on `pagehide` with `keepalive`. Undo cancels it. A failed delete brings the row back with an error toast. Every sent delete refreshes the page once it is done, also after the board unmounted (the tab shown next was loaded before the delete went out). Ticking a task: the prototype's "Marked done." with Undo, which reopens it.
+- Notification links to `#priority` become `?tab=phases`; `HoursCard` links gain `tab=hours`.
+- **Shared client parts** (in `src/app/(app)/projects/[id]/`): `MovePhaseButton` `{ projectId, currentPhase, targetPhase, plan, today, children | label, variant, size, className }` (sends `{ phase: targetPhase, from: currentPhase }`); `BusyButton` `{ busy, onClick, …Button props }`, a button that keeps keyboard focus while it works (`aria-disabled`, never `disabled`), for the AI card's buttons; `TaskCheck` `{ taskId, title, done, className }`, whose Undo toast lives in `TaskUndoProvider` (mounted by `ProjectView` around every tab, so the toast outlives a row that leaves the list); `DueTag` `{ dueDate, today, done, className }`; `UndoToast` `{ pending, onUndo, onEnd, onLeave?, duration? }` with `UNDO_MS` 6000; `planFormat.js` for dates and phase copy.
+
+### Files and notes
+
+- **+ Add file**: a real file picker, PDF, Word `.docx`, `.txt` or `.md` (`accept` lists the extensions and their MIME types). Every file is read **in the browser**; the server never opens a file, because of the host's memory limits, and only the text is sent. Limits for every type: 20 MB, 200,000 characters. Wrong type: "Pick a PDF, Word (.docx), .txt or .md file."
+- **PDF**: `pdfjs-dist` (dynamic import, loaded only on click, legacy build, `isEvalSupported: false`, `getDocument` and `getTextContent` only, never the viewer, annotation layer or scripting). Pages join with `\f`. Also the first 100 pages; when cut, the toast says "Read the first 100 of 140 pages." Errors in a toast: no text "No readable text. Is it a scan? Paste the key parts as a note."; password "Remove the password or paste the text as a note."; broken "This file isn't a PDF Daybook can read." While reading: "Reading page 12 of 14…" on the button. `pdfjs-dist` is a **devDependency** pinned to **5.5.207** (it is bundled by the build in GitHub Actions; the server installs nothing new): 5.6.83 up to 6.2.107 carry advisory GHSA-hq66-cqwq-w95j, and the fixed versions need Node 22.13, which CI and the host don't run.
+- **Word `.docx`** (owner's request, 11 Nov): no new dependency. A `.docx` is a zip: Daybook reads its central directory, inflates `word/document.xml` with the browser's own `DecompressionStream('deflate-raw')` (stored entries too), and takes the text in document order: each paragraph a line, `w:tab` a tab, `w:br` and `w:cr` a line break, table cells joined by a tab and each row a line, XML entities decoded; headers, footers, comments, footnotes and deleted text (`w:del`) are left out. A `.docx` has no pages: `pages` and `pagesTotal` stay null, like a `.txt`, and its summary source is just the file name. While reading: "Reading…". An unzipped `document.xml` over 50 MB stops with the broken error. So a small hostile file can't freeze the tab, tables nested more than 8 deep are read as words of the deepest cell, and reading stops once there is more text than the 200,000 characters kept. Errors: a password-protected `.docx` (an OLE file, starting `D0 CF 11 E0`) "Remove the password or paste the text as a note."; an old Word `.doc` "This is an old Word file. Save it as .docx or PDF first."; a broken zip or no `word/document.xml` "This file isn't a Word file Daybook can read."; no text "This file has no text."
+- The name opens the text in a small box, fetched on click. Notes: title and text, inline, as in the prototype.
+
+### AI summary
+
+Card states: **no documents** (empty text + "Go to phases"); **documents, no summary** ("1 file and 1 note are ready." + **Write summary**); **summary** (prototype; footer "From 1 file and 1 note. Written by AI, check anything important."); **stale** (footer "Files or notes changed since this summary." + **Update summary**); **off** (no key or switch off: "AI summary is off. An Admin can turn it on in Settings → AI.", an existing summary stays readable and can't be updated). Working: the button reads "Reading the files…"; then a toast "Summary written." or "Summary updated."; errors toast the API's message and change nothing. `truncated` adds "Only the first 50,000 characters were read." to the footer.
+
+- **Prompt** (`prompt.js`, model `fast`, JSON output): project name, client, current phase, today, the phase list, then the documents, newest first, up to **50,000 characters in total**, as `D1…Dn` inside random letters-only markers, clearly marked as data whose instructions are never to be followed. English; quotes stay in the document's language; no budgets, rates or personal details.
+- **Answer**: `overview` (≤ 400 characters), `scope[≤5] { text, notInScope, doc, quote }`, `deadlines[≤5] { text, dateAsWritten, doc, quote }`, `risks[≤5] { text, kind: 'risk'|'question', doc, quote }`, `actions[≤5] { owner: 'client'|'us'|'unclear', text, dueAsWritten, doc, quote }`, `nextPhase { phase, doc, quote }` (phase may be null), all strings length-capped.
+- **Checks** (`checks.js`): every point's `quote` must be found in that document's text as sent (normalise both: NFKC, strip U+200B to U+200D and U+00AD, join words hyphenated across lines, collapse spaces, unify quote marks, case-fold), or the point is dropped and counted, silently on screen. The page comes from Daybook's own search for the quote between `\f`s, never from the AI: "SOW-Acme-v3.pdf, page 3"; a quote over page breaks, blank pages included, is on the page it starts on; a note is just its title. Stored text keeps contact details masked. `nextPhase` needs a found quote too.
+- **AI line** shows only when `nextPhase.phase` is the current phase's next phase and the project isn't Completed. It never moves anything: only the PM's click does.
+- **Actions**: each stored item has a stable `key` (a hash of its normalised owner and text) and `taskId`. `addActionAsTask` locks the row, finds the item by key (gone: 409 "The summary changed. Reload the page."), creates one P2 task titled with its text in the current phase with no due date, and stores `taskId`; the button becomes "Added". A rewrite keeps `taskId` for an item with the same key.
+- **Privacy**: logs and audit rows never hold document or summary text. Ask Daybook never reads these tables. Text is sent through the module's existing scrubbing, a file page by page so that no mask (a footer phone number, a name split over pages) swallows a `\f`; the PM's and team's names go as tokens and come back through `restoreNames`.
+
+### Tests and version
+
+Unit: `forecastProject` (every row above, the rounding, weeks at a young project's start), `timelineLayout`, `phases`, `checks`. Services (fake AI transport only; **the real Gemini API is never called**): plan moves in both directions and at the same time, dates, deadline, tasks with phase and due date, `progressByProject`, documents, limits, summary (happy path, invented quote dropped, injected instruction in a document changes nothing, stale, truncated, add action once), permissions (another PM: NOT_FOUND on reads, FORBIDDEN on writes; the page has no summary text), migration missing. E2E: `tests/e2e/project-plan.spec.js` runs the list, tabs, Move, deadline, add, tick, delete and Undo, a real PDF and a real `.docx` fixture read in the browser, and the other PM's view, with `/api/ai/**` stubbed in the browser. `APP_VERSION` '1.07'.

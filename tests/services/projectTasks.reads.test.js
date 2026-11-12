@@ -287,8 +287,8 @@ describe('findOpenForPicker and findById', () => {
     expect(await projectTasks.findById('x')).toBeNull();
   });
 
-  it('lists tracked active members as assignee options', async () => {
+  it('lists tracked active members and the PM as assignee options', async () => {
     const options = await projectTasks.listAssigneeOptions({ viewer: pm, projectId: lyra.id });
-    expect(options.map((option) => option.name)).toEqual(['Alice Dev', 'Bob Dev']);
+    expect(options.map((option) => option.name)).toEqual(['Alice Dev', 'Bob Dev', 'Paul Manager']);
   });
 });

@@ -1,5 +1,6 @@
 // Fills the development database with the people, projects, attendance, reports and requests shown
-// on the design canvas, so every screen looks like its artboard.
+// on the design canvas, so every screen looks like its artboard, plus three project plans (an off
+// track, an at risk and an on track project, projectPlans.js) for the project management screens.
 //
 //   npm run seed:demo                 evening state (the dashboards, 6:52 PM on the canvas)
 //   npm run seed:demo -- --midday     Vishal still checked in with a draft report (01 and 02)
@@ -8,6 +9,7 @@
 // demo data. Safe to run again at any time; it refuses to run in production.
 import { db, parseJson, toJson } from '@/lib/db';
 import { env } from '@/lib/env';
+import { workDate } from '@/lib/time';
 import { seed as seedDepartments } from '../seeds/01_departments.js';
 import { seed as seedClients } from '../seeds/02_clients.js';
 import { seed as seedSettings } from '../seeds/03_settings.js';
@@ -27,6 +29,7 @@ import {
 } from './extras.js';
 import { checkDesignNumbers } from './checks.js';
 import { PEOPLE } from './people.js';
+import { buildProjectPlanRows } from './projectPlanRows.js';
 import { COMPLETED_PROJECTS, PROJECTS } from './projects.js';
 import {
   buildPriorityNotifications,
@@ -132,11 +135,16 @@ async function insertDemo(trx, { settings, anchor, days, midday, slackChannel })
   // Priority tasks go in before the report lines that link to them.
   const priorityTasks = buildPriorityTasks({ when, dateOf, users, projects });
   const linkedLines = linkReportLines(rows, priorityTasks);
-  await insertMany(
-    trx,
-    'projectTasks',
+  // Three projects get a plan; it files some priority tasks into phases, so it goes in first.
+  const planRows = buildProjectPlanRows(
+    { tz, today: workDate(tz), anchor: days[0], users, projects },
     priorityTasks.map(({ row }) => row),
   );
+  await insertMany(trx, 'projectTasks', [
+    ...priorityTasks.map(({ row }) => row),
+    ...planRows.tasks,
+  ]);
+  await insertProjectPlans(trx, planRows);
   await insertMany(trx, 'attendance', rows.attendance);
   await insertMany(trx, 'dailyReports', rows.reports);
   await insertMany(trx, 'reportEntries', rows.entries);
@@ -164,9 +172,19 @@ async function insertDemo(trx, { settings, anchor, days, midday, slackChannel })
     projects: projects.size,
     ...countRows(rows),
     activitySegments: activitySegments.length,
-    projectTasks: priorityTasks.length,
+    projectTasks: priorityTasks.length + planRows.tasks.length,
     linkedReportLines: linkedLines,
+    projectPlans: planRows.plans.length,
+    projectDocuments: planRows.documents.length,
   };
+}
+
+/** The plans, their phases' dates, the files and notes and the summaries (CONTRACT 22). */
+async function insertProjectPlans(trx, planRows) {
+  await insertMany(trx, 'projectPlans', planRows.plans);
+  await insertMany(trx, 'projectPhasePlans', planRows.phases);
+  await insertMany(trx, 'projectDocuments', planRows.documents);
+  await insertMany(trx, 'projectSummaries', planRows.summaries);
 }
 
 function countRows(rows) {

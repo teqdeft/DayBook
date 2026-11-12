@@ -83,6 +83,7 @@ export const KEYS = Object.freeze([
   'aiHrNotesEnabled',
   'aiHrNotesAt',
   'aiAskEnabled',
+  'aiProjectSummaryEnabled',
 ]);
 
 /** Saved settings -> what the fields show (clocks as "9:30 AM"). */

@@ -1,0 +1,263 @@
+/* The task list of an open phase, as the prototype: a grid (Task, Owner, Due, Priority and the
+   buttons) that scrolls sideways when the card is narrower, and the add and edit row inside it. At
+   660 px (the prototype has 680) it still fits the card at 1024 wide, where the page keeps wider
+   gutters than the prototype. With the header inset 30 px for the boxes, Task keeps 196 px. */
+
+/* The negative margin gives the boxes' 36 px targets and the focus rings room inside the scroll. It
+   is also the container the add and edit row measures, so the row always fits on screen. */
+.scroll {
+  container-type: inline-size;
+  margin: 4px -4px -4px -9px;
+  padding: 4px 4px 4px 9px;
+  overflow-x: auto;
+}
+
+.grid {
+  --task-columns: minmax(196px, 1fr) 150px 104px 56px 76px;
+  min-width: 660px;
+}
+
+/* Another PM: no boxes and no buttons. */
+.readOnly {
+  --task-columns: minmax(200px, 1fr) 150px 104px 56px;
+  min-width: 600px;
+}
+
+.head {
+  display: grid;
+  grid-template-columns: var(--task-columns);
+  column-gap: 12px;
+  align-items: center;
+  height: 34px;
+  padding: 0 0 0 30px;
+  border-radius: var(--radius-cell);
+  background: var(--surface-muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.readOnly .head {
+  padding-left: 0;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--track);
+}
+
+/* A task */
+.row {
+  display: grid;
+  grid-template-columns: var(--task-columns);
+  column-gap: 12px;
+  align-items: center;
+  min-height: 52px;
+  padding: 4px 0;
+}
+
+.taskCell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.taskText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.titleDone {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.details,
+.latest {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.details {
+  white-space: pre-line;
+}
+
+.folded {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.blocked {
+  color: var(--red-text);
+}
+
+.more {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.owner {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.ownerName {
+  color: var(--ink);
+}
+
+.anyone {
+  color: var(--ink-2);
+}
+
+.away {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.cell {
+  display: flex;
+  justify-self: start;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+button.iconButton {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-cell);
+  color: var(--muted);
+}
+
+/* Show 3 done tasks */
+.doneToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-cell);
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.doneToggle:focus-visible,
+.more:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.chevron,
+.chevronOpen {
+  flex: none;
+  transition: transform 120ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+/* The add and edit row: it stays at the left of the scroll and as wide as what shows of it. */
+.form {
+  position: sticky;
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 100cqi;
+  margin: 6px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+}
+
+.titleField {
+  flex: 2 1 200px;
+}
+
+.ownerField {
+  flex: 1 1 170px;
+}
+
+.dueField {
+  flex: 0 1 150px;
+}
+
+.priorityField {
+  flex: 0 1 116px;
+}
+
+@media (min-width: 641px) {
+  .form .formField {
+    font-size: 14px;
+  }
+}
+
+.formButtons {
+  display: flex;
+  gap: 8px;
+}
+
+button.formButton {
+  --btn-pad-x: 16px;
+  --btn-pad-extra: 0px;
+  font-size: 14px;
+}
+
+button.formButton + button.formButton {
+  --btn-pad-x: 14px;
+}
+
+.formError {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}

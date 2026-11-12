@@ -102,6 +102,38 @@ describe('redactContacts', () => {
   });
 });
 
+describe('long text (a project document, CONTRACT 22)', () => {
+  const SIZE = 200_000;
+
+  it('scrubs a long run of letters with no @ quickly, and text with no spaces', () => {
+    for (const text of [
+      'x'.repeat(SIZE),
+      `${'x'.repeat(SIZE)}\u{1F600} tail`,
+      `${'.'.repeat(SIZE)} tail`,
+      `${'ग'.repeat(SIZE)} tail`,
+      `${'a1'.repeat(SIZE / 2)} tail`,
+      'U'.repeat(SIZE),
+      '1 '.repeat(SIZE / 2),
+      `${'a:'.repeat(SIZE / 2)}`,
+    ]) {
+      const started = performance.now();
+      redactContacts(text);
+      expect(performance.now() - started, text.slice(0, 8)).toBeLessThan(3000);
+    }
+  });
+
+  it('still finds an address in the middle of it', () => {
+    const text = `${'x '.repeat(SIZE / 2)}ravi@acme.com ${'y '.repeat(SIZE / 2)}`;
+    const scrubbed = redactContacts(text);
+    expect(scrubbed).not.toContain('ravi@acme.com');
+    expect(scrubbed).toContain('[email]');
+  });
+
+  it('masks the end of a local part past the 64 characters an address can have', () => {
+    expect(redactContacts(`${'x'.repeat(70)}@acme.com`)).not.toContain('@acme.com');
+  });
+});
+
 describe('createRedactor', () => {
   it('numbers each detail, reuses the number and puts the details back', () => {
     const redactor = createRedactor();

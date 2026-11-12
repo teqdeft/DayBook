@@ -1,0 +1,355 @@
+/* The Timeline tab, as the prototype. Left positions and widths come from timelineLayout.js as
+   percentages of the chart, the part right of the sticky name column. */
+.card {
+  --card-pad: 20px 24px 22px;
+  --name-column: 220px;
+}
+
+.summary {
+  margin-bottom: 8px;
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.key {
+  flex: none;
+  width: 14px;
+  height: 8px;
+  border-radius: 4px;
+}
+
+.keyPlanned {
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--surface));
+  background: var(--primary-soft);
+}
+
+.keyActual {
+  background: var(--primary);
+}
+
+.keyLate {
+  background: var(--red);
+}
+
+.scroll {
+  margin-top: 14px;
+  overflow-x: auto;
+}
+
+.chart {
+  position: relative;
+  z-index: 0;
+}
+
+.gridLines {
+  position: absolute;
+  top: 18px;
+  right: 0;
+  bottom: 0;
+  left: var(--name-column);
+  pointer-events: none;
+}
+
+.gridLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--track);
+}
+
+.row {
+  display: flex;
+}
+
+.phaseRow {
+  border-top: 1px solid var(--track);
+}
+
+/* Stays in view while the chart scrolls sideways. */
+.labelCell {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  flex: 0 0 var(--name-column);
+  background: var(--surface);
+}
+
+.phaseCell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 56px;
+  padding: 3px 12px 3px 0;
+}
+
+.phaseName {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink);
+}
+
+.phaseDates {
+  font-size: var(--text-tag);
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.phaseLate {
+  font-size: var(--text-tag);
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.lateRed {
+  color: var(--red-text);
+}
+
+.lateMarigold {
+  color: var(--marigold-text);
+}
+
+.lateMuted {
+  color: var(--muted);
+}
+
+.headerTrack {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.month {
+  position: absolute;
+  top: 0;
+  font-size: var(--text-tag);
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.week {
+  position: absolute;
+  top: 18px;
+  padding-left: 4px;
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-tag);
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.todayChip,
+.deadlineChip {
+  position: absolute;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: var(--text-tag);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.todayChip {
+  top: 38px;
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.alignStart {
+  transform: translateX(-1px);
+}
+
+.alignCenter {
+  transform: translateX(-50%);
+}
+
+.alignEnd {
+  transform: translateX(calc(-100% + 1px));
+}
+
+.deadlineChip {
+  background: var(--red-soft);
+  color: var(--red-text);
+  transform: translateX(-1px);
+}
+
+.deadlineLeftward {
+  transform: translateX(calc(-100% + 1px));
+}
+
+.expectedChip {
+  position: absolute;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 4px;
+  background: var(--surface);
+  font-size: var(--text-tag);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateX(-9px);
+}
+
+.expectedLeftward {
+  flex-direction: row-reverse;
+  transform: translateX(calc(-100% + 9px));
+}
+
+.expectedEarly {
+  color: var(--green-text);
+}
+
+.expectedLate {
+  color: var(--red-text);
+}
+
+.diamond {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  transform: rotate(45deg);
+}
+
+.expectedEarly .diamond {
+  background: var(--green);
+}
+
+.expectedLate .diamond {
+  background: var(--red);
+}
+
+.barTrack {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 56px;
+}
+
+.barPlanned,
+.barActual,
+.barLate {
+  position: absolute;
+  z-index: 1;
+  height: 12px;
+}
+
+.barPlanned {
+  top: calc(50% - 14px);
+  box-sizing: border-box;
+  min-width: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--surface));
+  border-radius: 6px;
+  background: var(--primary-soft);
+}
+
+.barActual {
+  top: calc(50% + 2px);
+  min-width: 6px;
+  border-radius: 6px;
+  background: var(--primary);
+}
+
+.barActualOpen {
+  border-radius: 6px 0 0 6px;
+}
+
+.barLate {
+  top: calc(50% + 2px);
+  border-radius: 6px;
+  background: var(--red);
+}
+
+.barLateJoined {
+  border-radius: 0 6px 6px 0;
+}
+
+/* The lines run from under the Today label to the bottom, over the bars. */
+.markerLines {
+  position: absolute;
+  top: 50px;
+  right: 0;
+  bottom: 0;
+  left: var(--name-column);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.todayLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+}
+
+.deadlineLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  margin-left: -1px;
+  border-left: 2px dashed var(--red);
+}
+
+.expectedLineEarly,
+.expectedLineLate {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+}
+
+.expectedLineEarly {
+  background: color-mix(in srgb, var(--green) 35%, var(--surface));
+}
+
+.expectedLineLate {
+  background: color-mix(in srgb, var(--red) 28%, var(--surface));
+}
+
+@media (max-width: 800px) {
+  .card {
+    --name-column: 128px;
+  }
+}
+
+@media (max-width: 639px) {
+  .card {
+    --card-pad: 16px;
+  }
+}

@@ -57,12 +57,22 @@ function parseJsonAnswer(text) {
  * When Gemini was busy on the first request of a conversation, the error has
  * `firstRequestBusy: true` (generate() may then try another model).
  */
-async function request({ feature, userId, model, values, check, body, json, toolsAllowed }) {
+async function request({
+  feature,
+  userId,
+  model,
+  values,
+  check,
+  body,
+  json,
+  toolsAllowed,
+  timeoutMs,
+}) {
   const usageId = await reserveUsage({ feature, userId, model, values, check });
   let outcome;
   let tokens = {};
   try {
-    const answer = await sendRequest({ model, body });
+    const answer = await sendRequest({ model, body, timeoutMs });
     const reply = readResponse(answer?.data);
     tokens = { inputTokens: reply.inputTokens, outputTokens: reply.outputTokens };
     outcome = judge(answer ?? {}, reply, { json, toolsAllowed });
@@ -131,8 +141,8 @@ async function answerCalls(calls, { tools, onToolCall, redactor }) {
  * the system text, prompt and tool results go out as placeholders and come back in the answer.
  * @param {{ feature: string, userId: number | null, model: string, thinkingLevel?: string,
  *   values: object, system?: string, prompt: string, json?: object, tools?: object[],
- *   onToolCall?: Function }} input model = the Gemini model name; values = settings.getAll()
- *   (for the limits)
+ *   onToolCall?: Function, timeoutMs?: number }} input model = the Gemini model name; values =
+ *   settings.getAll() (for the limits); timeoutMs = how long each request waits (default 30 s)
  * @returns {Promise<{ text: string, data: any }>}
  * @throws AppError AI_LIMIT | AI_BUSY | AI_ERROR
  */
@@ -147,6 +157,7 @@ export async function converse({
   json,
   tools,
   onToolCall,
+  timeoutMs,
 }) {
   const hasTools = Boolean(tools?.length);
   const redactor = createRedactor();
@@ -171,6 +182,7 @@ export async function converse({
       body,
       json,
       toolsAllowed,
+      timeoutMs,
     });
     if (reply.calls.length === 0) {
       return redactor.restore({ text: reply.text, data: json ? reply.data : null });

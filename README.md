@@ -34,7 +34,10 @@ Generate `SESSION_SECRET` with
 
 `npm run seed:demo` **wipes the database** and fills it with the people, projects, attendance and
 reports from the design canvas (`npm run seed:demo -- --midday` gives the midday state of the
-Today and Daily report artboards). It refuses to run in production.
+Today and Daily report artboards). It refuses to run in production. It also gives three projects
+a plan for the project management screens: acme-store is off track (with a file, a note and an AI
+summary written by hand, no AI asked), internal-tool is at risk and iwilltillimwell is on track;
+the other projects have none (`db/demo/projectPlans.js`).
 
 Without Slack credentials, set `DEV_LOGIN_ENABLED=true` in `.env.local`: the sign-in page then shows
 a "Development sign-in" list. It never exists when `NODE_ENV=production`. Demo accounts:
@@ -59,7 +62,9 @@ file migrates it fresh.
 
 Playwright drives the real screens in the installed Google Chrome (no browser download): check in,
 write and submit a report and the PM sees it; a report edit request approved; an HR attendance
-correction; and every main screen per role with no console errors. The specs are in `tests/e2e/`.
+correction; project management (the projects list, a project's tabs, tasks with Undo, a real PDF
+and Word file read in the browser, a note, the deadline and a phase move, and another PM's view);
+and every main screen per role with no console errors. The specs are in `tests/e2e/`.
 
 ```bash
 # Local: reuse the dev server that is already running (no second `next dev` is started)
@@ -79,6 +84,11 @@ npm run test:e2e
   with no dev server running. CI needs `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` and
   `SESSION_SECRET` in the environment (no `.env.local` there).
 - Tests run one at a time (`workers: 1`) because they share the demo data.
+- `project-plan.spec.js` answers every `/api/ai/**` request in the browser, so the server never
+  calls Google. Its AI summary test needs the server to have a key: start the run with any value,
+  for example `GEMINI_API_KEY=e2e-dummy-not-a-key npm run test:e2e` (never a real key, and never in
+  a file); the test turns Project summaries on for itself and off again. Without a key it is
+  skipped.
   `npx playwright show-trace test-results/<test>/trace.zip` opens the trace of a failed test.
 
 ## Changes from the build guide
@@ -109,7 +119,7 @@ npm run test:e2e
   projects table shows each project's all-time hours under "Hours this week".
 - **AI with Gemini, version label, notification center** (CONTRACT 20): see
   [AI with Gemini](#ai-with-gemini) below. The sidebar and sign-in page show the version, now
-  "Daybook v1.06" (`src/config/version.js`, raised with each release). In the bell, clicking a
+  "Daybook v1.07" (`src/config/version.js`, raised with each release). In the bell, clicking a
   notification marks it read; each one can be marked unread or deleted (swipe left on touch
   screens, with Undo), and the bell swings gently while there are unread ones.
 - **My settings** (company request, CONTRACT 21): every person has a **My settings** page (last
@@ -128,6 +138,18 @@ npm run test:e2e
 - **Hours range on the projects table** (company request, CONTRACT 16): PMs and Admins can pick
   This week, This month, All time or Custom on the Projects page, as inside a project. The hours
   column follows it; every project stays listed.
+- **Project management** (company request, CONTRACT 22, Daybook 1.07): each project has a phase
+  (Requirement gathering, Design, Development, Testing, Launch, Support), a deadline and planned
+  dates per phase, and its priority tasks become the project's task list, each with a phase and a
+  due date. From the tasks done in the last 3 full weeks Daybook works out whether the project is
+  Off track, At risk or On track. The Projects list shows the health, phase, progress and deadline;
+  the project page has tabs: Overview (health, progress, deadline, phase, critical tasks and the
+  AI summary), Phases (the tasks, files and notes of each phase), Timeline and Hours (the project
+  report as before). PMs add files (PDF, Word .docx, .txt or .md) and notes to a phase, and an AI
+  summary can be written from them (see [AI with Gemini](#ai-with-gemini)). Only the project's PM
+  and Admins change the plan or see its files, notes and summary; other PMs see the plan read only.
+  Stored by migration 015; until `npm run migrate` has run, the screens work without phases or
+  deadlines, and plans, files and notes can't be saved.
 
 ## Slack setup (one Slack app per environment)
 
@@ -209,11 +231,13 @@ push services (`fcm.googleapis.com` for Chrome, `*.notify.windows.com` for Edge)
 
 ## AI with Gemini
 
-Five features use Google Gemini: **Polish with AI** (the top-bar button for every task, a
+Six features use Google Gemini: **Polish with AI** (the top-bar button for every task, a
 sparkle on each task line for one task, and polishing after **Fill report from timers**; each
 person can turn these off in My settings), a **daily summary for PMs** at 7 PM (bell + Slack
-DM), **weekly HR notes** on the week's last working day, and **Ask Daybook** (Admin, PMs, HR;
-each sees only what their screens show). Saved summaries are under **Summaries**.
+DM), **weekly HR notes** on the week's last working day, **Ask Daybook** (Admin, PMs, HR;
+each sees only what their screens show) and **Project summaries** (on a project's Overview, from
+its files and notes; the project page says "AI", never "Gemini"). Saved summaries are under
+**Summaries**.
 
 1. Create a key at [Google AI Studio](https://aistudio.google.com) → **Get API key** → **Create
    API key**. Keep it private (never in chat, Slack, email or git).
@@ -230,8 +254,9 @@ each sees only what their screens show). Saved summaries are under **Summaries**
 
 3. Admin: **Settings → AI → Use AI (Gemini)**, choose the features and the daily limit (200
    requests for the whole company by default), **Save changes**. Each person also has their own
-   daily caps: 40 polish requests (each sparkle press is one) and 30 Ask Daybook questions. With
-   many people polishing line by line, raise the company limit to match.
+   daily caps: 40 polish requests (each sparkle press is one), 30 Ask Daybook questions and 15
+   project summaries. With many people polishing line by line, raise the company limit to match.
+   **Project summaries** starts off; turn it on only with the key on a paid plan (see below).
 
 Privacy: people's names go to Gemini as "Person 1", "Person 2" in summaries and HR notes; emails,
 phone numbers, IPs and Slack ids are never sent (Ask Daybook sends the names its answers need,
@@ -240,6 +265,16 @@ free tier Google may use the data to improve its models. Without a key, or with 
 Daybook looks and works as before. The worker needs outbound HTTPS to
 `generativelanguage.googleapis.com`.
 
+Project files and notes: a PM adds a **PDF, Word .docx, .txt or .md** file (up to 20 MB; the
+first 100 pages and 200,000 characters are kept) or types a note. The file is read in the PM's
+browser and **only its text is stored; the file itself never is**. A scanned PDF has no text to
+read: paste the key parts as a note instead (an old Word .doc must be saved as .docx or PDF
+first). When a PM writes a summary, up to 50,000 characters of that text **go to Google**, with
+contact details masked and people's names as tokens. Client documents are often confidential, so
+keep the Gemini key on a **paid plan** (on the free tier Google may use the data to improve its
+models) before an Admin turns on **Settings → AI → Project summaries**. Logs and audit rows never
+hold the text of files and notes, and Ask Daybook never reads it.
+
 ## Deployment notes
 
 - Run behind Caddy or Nginx with HTTPS and `TRUST_PROXY=true`, so the client IP (used for Office
@@ -247,6 +282,10 @@ Daybook looks and works as before. The worker needs outbound HTTPS to
 - Set `WORKER_CRON_ENABLED=false` on any extra web servers so jobs run once.
 - Deploy after 7 PM: `npm run migrate`, then restart `web` and `worker`. `/api/health` checks the
   database for uptime monitoring.
+- Daybook 1.07 (project management): run `npm run migrate` before the restart (migration 015 adds
+  the plan, files and summary tables). There is nothing new to install on the server: the PDF
+  reader (`pdfjs-dist`, a dev dependency) is bundled into the build. **Project summaries** in
+  Settings → AI starts off.
 
 ## Deploying on cPanel (Setup Node.js App)
 
@@ -313,7 +352,9 @@ and `daybook.yourcompany.com` with your address.
 
 **Updating** (after 7 PM): push to `main` and wait for the green "Build for cPanel" run on GitHub;
 then in Terminal (after the `source` command): `cd ~/daybook && git pull`, `npm ci --omit=dev`,
-`NODE_ENV=production npm run migrate`, and press Restart in Setup Node.js App.
+`NODE_ENV=production npm run migrate`, and press Restart in Setup Node.js App. For 1.07 the
+migrate step must come before Restart (it adds the project plan tables); nothing new is installed
+on the server, and Settings → AI → Project summaries starts off.
 
 **Checking** — `NODE_ENV=production npm run doctor` (after the `source` command, in `~/daybook`)
 shows whether the worker cron is running, whether Slack works and who gets desktop notifications;

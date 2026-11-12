@@ -152,6 +152,7 @@ export const settingsUpdateSchema = z
     aiHrNotesEnabled: z.boolean({ error: 'Choose on or off.' }),
     aiHrNotesAt: clock('the HR notes time'),
     aiAskEnabled: z.boolean({ error: 'Choose on or off.' }),
+    aiProjectSummaryEnabled: z.boolean({ error: 'Choose on or off.' }), // CONTRACT section 22
     // Project timers and breaks (CONTRACT section 15)
     timersMode: z.enum(TIMER_MODES, { error: 'Choose off, optional or required.' }),
     timerAwayMinutes: wholeNumber({

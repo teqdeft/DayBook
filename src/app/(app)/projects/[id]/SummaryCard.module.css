@@ -1,0 +1,189 @@
+/* The AI summary card, as the prototype. */
+.card {
+  display: flex;
+  flex: 1 1 400px;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spark {
+  flex: none;
+  color: var(--violet-on-surface);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.note {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.cta {
+  margin-top: 12px;
+}
+
+.actions {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--marigold-soft);
+}
+
+.actionsHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.actionsTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--marigold-text);
+}
+
+span.actionsCount {
+  font-family: var(--font-heading-stack);
+  font-weight: 700;
+}
+
+.actionList {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-height: 38px;
+}
+
+.actionText {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.actionWho {
+  font-weight: 600;
+}
+
+.actionWhen {
+  color: var(--marigold-text);
+}
+
+.actionAdded {
+  flex: none;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--marigold-text);
+}
+
+/* The small buttons in this card are 32 px high with 14 px text. */
+button.smallButton {
+  --btn-pad-x: 12px;
+  --btn-pad-top: 1px;
+  --btn-pad-extra: 0px;
+  height: 32px;
+  font-size: 14px;
+}
+
+.text {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.risk {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.toggle {
+  margin-top: 6px;
+}
+
+.group {
+  margin-top: 12px;
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.points {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.point {
+  padding: 2px 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+span.notInScope {
+  height: 20px;
+}
+
+.source {
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.footerText {
+  margin: 0;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.staleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}

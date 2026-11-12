@@ -70,8 +70,10 @@ export function restoreNames(value, names) {
 
 // ---------- contact details ----------
 
-// Letters, marks and digits of any script, so "rené@exemple.fr" is an email too.
-const EMAIL = /[\p{L}\p{M}\p{N}_.%+-]+@[\p{L}\p{M}\p{N}-]+(?:\.[\p{L}\p{M}\p{N}-]+)+/gu;
+// Letters, marks and digits of any script, so "rené@exemple.fr" is an email too. The part before
+// the @ has a limit (an address has at most 64 there) because this also scans whole documents: with
+// a plain "+", a long run of letters with no @ takes minutes (CONTRACT 22).
+const EMAIL = /[\p{L}\p{M}\p{N}_.%+-]{1,64}@[\p{L}\p{M}\p{N}-]+(?:\.[\p{L}\p{M}\p{N}-]+)+/gu;
 const IPV4 =
   /(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?![\d.])/g;
 // Candidates only; isIpv6() keeps clock times like 10:30:00 out.

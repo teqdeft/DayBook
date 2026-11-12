@@ -46,6 +46,8 @@ export const DEFAULT_SETTINGS = {
   ai_hr_notes_enabled: true, // weekly, on the last working day of the week
   ai_hr_notes_at: '19:00',
   ai_ask_enabled: true,
+  // Project management (company request, CONTRACT 22)
+  ai_project_summary_enabled: false, // PMs write a summary from a project's files and notes
 };
 
 export async function seed(knex) {

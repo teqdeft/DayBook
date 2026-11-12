@@ -1,9 +1,9 @@
 'use client';
 // Settings → AI (CONTRACT 20): Google Gemini for Polish my tasks, the daily summary for PMs, the
-// weekly HR notes and Ask Daybook. "Use AI (Gemini)" can only be turned on when the server has
-// GEMINI_API_KEY (the page gets a boolean, never the key). While AI is on: today's requests and
-// the company's daily limit, and each feature's switch, with its time for the scheduled ones.
-// Saved with "Save changes".
+// weekly HR notes, Ask Daybook and project summaries (CONTRACT 22). "Use AI (Gemini)" can only be
+// turned on when the server has GEMINI_API_KEY (the page gets a boolean, never the key). While AI
+// is on: today's requests and the company's daily limit, and each feature's switch, with its time
+// for the scheduled ones. Saved with "Save changes".
 import StatusCell from '@/components/StatusCell';
 import Toggle from '@/components/Toggle';
 import ClockField from './ClockField';
@@ -147,6 +147,11 @@ export default function AiSection({ configured, usage }) {
               name="aiAskEnabled"
               label="Ask Daybook"
               help="Admins, PMs and HR ask questions about the data they can see. Up to 30 AI requests a day per person; one question can take several."
+            />
+            <FeatureToggle
+              name="aiProjectSummaryEnabled"
+              label="Project summaries"
+              help="PMs can write a short summary from a project's files and notes with Gemini."
             />
           </>
         ) : null}

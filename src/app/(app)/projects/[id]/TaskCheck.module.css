@@ -1,0 +1,21 @@
+/* A 36 px target around the 18 px box; the negative margin keeps the box where the row's text lines
+   up. */
+.hit {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0 -9px;
+  cursor: pointer;
+}
+
+.box {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}

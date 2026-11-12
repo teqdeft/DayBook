@@ -1,33 +1,26 @@
-// PM and Admin view of /projects (artboard 07): search, status tabs, the hours range and the
-// projects table with the New project / Edit drawer. PMs see every project but manage only their
-// own.
-import Link from 'next/link';
-import { AvatarStack } from '@/components/Avatar';
-import Button from '@/components/Button';
+// PM and Admin view of /projects (CONTRACT 22): search, status tabs, the hours range and the projects
+// table with each project's health, phase, progress and deadline, and the New project / Edit drawer.
+// PMs see every project but manage only their own.
 import Card from '@/components/Card';
 import DataTable from '@/components/DataTable';
-import EmptyState from '@/components/EmptyState';
 import FilterPills from '@/components/FilterPills';
-import { ProjectSquare } from '@/components/ProjectLabel';
 import Segmented from '@/components/Segmented';
-import StatusCell from '@/components/StatusCell';
 import TopBar from '@/components/TopBar';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
-import { plural } from '@/lib/text';
-import { formatHours, workDate } from '@/lib/time';
+import { workDate } from '@/lib/time';
 import { dashboard } from '@/modules/dashboard';
 import { projects } from '@/modules/projects';
 import { reports } from '@/modules/reports';
 import { settings } from '@/modules/settings';
 import RangeForm from './[id]/RangeForm';
 import NewProjectButton from './NewProjectButton';
-import { displayStatus } from './ProjectCard';
 import ProjectEditorProvider from './ProjectEditorProvider';
-import ProjectRowMenu from './ProjectRowMenu';
 import ProjectSearch from './ProjectSearch';
 import ProjectsPager from './ProjectsPager';
+import { projectsSubtitle, withHealth } from './projectsHealth';
 import { HOURS_HEADERS, filterParams, projectsHref, rangeItems, readRange } from './projectsRange';
+import { ProjectsEmpty, projectColumns } from './projectsTable';
 import styles from './ManageProjectsView.module.css';
 
 const PAGE_SIZE = 100;
@@ -38,17 +31,17 @@ const TAB_LABELS = { active: 'Active', on_hold: 'On hold', completed: 'Completed
 const ALL_TIME_FROM = '2000-01-01';
 
 /**
- * Today at the company. If the settings can't be read the default time zone stands in, so the
- * table still renders.
- * @returns {Promise<string>} 'YYYY-MM-DD'
+ * Today at the company and its time zone. If the settings can't be read the default time zone stands
+ * in, so the table still renders.
+ * @returns {Promise<{ today: string, timezone: string }>} today is 'YYYY-MM-DD'
  */
-async function companyToday(userId) {
+async function companyClock(userId) {
   try {
     const { timezone } = await settings.getAll();
-    return workDate(timezone);
+    return { today: workDate(timezone), timezone };
   } catch (error) {
     logger.warn({ err: error, userId }, 'projects: could not load the time zone');
-    return workDate(env.DEFAULT_TIMEZONE);
+    return { today: workDate(env.DEFAULT_TIMEZONE), timezone: env.DEFAULT_TIMEZONE };
   }
 }
 
@@ -76,190 +69,11 @@ async function projectMinutes(userId, period, today) {
   }
 }
 
-/** "1h 45m" in the range, with the all-time total under it when it adds something. */
-function HoursCell({ hours, total }) {
-  return (
-    <div className={styles.hoursCell}>
-      <span className={styles.hours}>{formatHours(hours)}</span>
-      {total > 0 && total !== hours ? (
-        <span className={styles.hoursTotal}>{formatHours(total)} total</span>
-      ) : null}
-    </div>
-  );
-}
-
-/** The data a row menu needs to edit the project (plain, serialisable). */
-function editable(project) {
-  return {
-    id: project.id,
-    name: project.name,
-    clientName: project.clientName,
-    pmId: project.pmId,
-    pmName: project.pmName,
-    status: project.status,
-    color: project.color,
-    isUrgent: project.isUrgent,
-    urgentNote: project.urgentNote,
-    members: project.members,
-  };
-}
-
-/** A header that shortens to `short` on narrow tables; screen readers always hear `full`. */
-function Header({ full, short }) {
+/** The status tabs and the hours range, with the custom range's form under them when it's open. */
+function ProjectFilters({ status, q, counts, period, today, range, link }) {
+  const { errors, input, showCustom } = range;
   return (
     <>
-      <span className={styles.headFull}>{full}</span>
-      <span className={styles.headShort} aria-hidden="true">
-        {short}
-      </span>
-    </>
-  );
-}
-
-// Widths from artboard 07 at 1440 px (table 1134 px). Team and the row menu get their smallest
-// content width (4 avatars and "+N"; the menu button) so the other columns keep the canvas widths.
-// From 1024 to 1279 px the table must fit a 718-973 px card, so the columns' smallest widths are
-// kept low (see the CSS module): the urgent note and long client or manager names give way first,
-// Team shows 2 avatars, two headers shorten, and the status block never drops below its word.
-function columns({ user, minutes, hoursHeader }) {
-  return [
-    {
-      key: 'project',
-      header: 'Project',
-      width: '27.75%',
-      render: (project) => (
-        <div className={styles.project}>
-          <ProjectSquare project={project} size={34} className={styles.square} />
-          <div className={styles.projectText}>
-            <Link href={`/projects/${project.id}`} className={styles.projectName}>
-              {project.name}
-            </Link>
-            {project.isUrgent && project.urgentNote ? (
-              <span className={styles.urgentNote} title={project.urgentNote}>
-                {project.urgentNote}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'client',
-      header: 'Client',
-      width: '14.52%',
-      render: (project) => <span className={styles.text}>{project.clientName}</span>,
-    },
-    {
-      key: 'pm',
-      header: <Header full="Project manager" short="Manager" />,
-      label: 'Project manager',
-      width: '15.7%',
-      render: (project) => <span className={styles.text}>{project.pmName ?? '—'}</span>,
-    },
-    {
-      key: 'team',
-      header: 'Team',
-      width: '13.29%',
-      render: (project) =>
-        project.members.length > 0 ? (
-          <>
-            <AvatarStack
-              users={project.members}
-              max={4}
-              size={30}
-              className={`${styles.team} ${styles.teamFull}`}
-            />
-            <AvatarStack
-              users={project.members}
-              max={2}
-              size={30}
-              className={`${styles.team} ${styles.teamShort}`}
-            />
-          </>
-        ) : (
-          <span className={styles.muted}>No one yet</span>
-        ),
-    },
-    {
-      key: 'hours',
-      header: <Header full={hoursHeader.full} short={hoursHeader.short} />,
-      label: hoursHeader.full,
-      width: '11.46%',
-      render: (project) => (
-        <HoursCell
-          hours={Number(minutes.inRange[project.id] ?? 0)}
-          total={Number(minutes.total[project.id] ?? 0)}
-        />
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      width: '11.64%',
-      render: (project) => (
-        <div className={styles.status}>
-          <StatusCell status={displayStatus(project)} />
-        </div>
-      ),
-    },
-    {
-      key: 'menu',
-      header: <span className="visually-hidden">Actions</span>,
-      label: 'Actions',
-      width: '5.64%',
-      align: 'right',
-      className: styles.menuCell,
-      render: (project) =>
-        projects.canManage(user, project) ? <ProjectRowMenu project={editable(project)} /> : null,
-    },
-  ];
-}
-
-export default async function ManageProjectsView({ user, params }) {
-  const q = typeof params?.q === 'string' ? params.q.trim().slice(0, 120) : '';
-  const page = Math.max(1, Math.trunc(Number(params?.page)) || 1);
-  const today = await companyToday(user.id);
-  const { options, errors, input, showCustom } = readRange(params, 'week');
-  const period = dashboard.projectReportPeriod(options, { today, firstOn: ALL_TIME_FROM });
-  const [counts, overall, managers, people, minutes] = await Promise.all([
-    projects.countByStatus({ q }),
-    q ? projects.countByStatus({}) : null,
-    projects.listManagerOptions(user),
-    projects.listPeopleOptions(),
-    projectMinutes(user.id, period, today),
-  ]);
-  const activeTotal = (overall ?? counts).active;
-  // A search from the top bar opens the first tab that has a match.
-  const status = STATUSES.includes(params?.status)
-    ? params.status
-    : q && counts.active === 0
-      ? (STATUSES.find((key) => counts[key] > 0) ?? 'active')
-      : 'active';
-  const { rows, total } = await projects.list({
-    status,
-    q,
-    limit: PAGE_SIZE,
-    offset: (page - 1) * PAGE_SIZE,
-  });
-  // Every link here keeps the filters it doesn't change, and the range.
-  const link = (changes) => projectsHref({ status, q, range: period, ...changes });
-
-  return (
-    <ProjectEditorProvider
-      managers={managers}
-      people={people}
-      viewer={{ id: user.id, isAdmin: user.role === 'admin' }}
-    >
-      <TopBar
-        title="Projects"
-        subtitle={`${activeTotal} active ${plural(activeTotal, 'project')}`}
-        actions={
-          <>
-            <ProjectSearch initialQuery={q} className={styles.search} />
-            <NewProjectButton />
-          </>
-        }
-      />
       <div className={styles.filters}>
         <FilterPills
           label="Project status"
@@ -287,40 +101,74 @@ export default async function ManageProjectsView({ user, params }) {
           keep={filterParams({ status, q })}
         />
       ) : null}
+    </>
+  );
+}
+
+export default async function ManageProjectsView({ user, params }) {
+  const q = typeof params?.q === 'string' ? params.q.trim().slice(0, 120) : '';
+  const page = Math.max(1, Math.trunc(Number(params?.page)) || 1);
+  const { today, timezone } = await companyClock(user.id);
+  const range = readRange(params, 'week');
+  const period = dashboard.projectReportPeriod(range.options, { today, firstOn: ALL_TIME_FROM });
+  const [counts, overall, managers, people, minutes] = await Promise.all([
+    projects.countByStatus({ q }),
+    q ? projects.countByStatus({}) : null,
+    projects.listManagerOptions(user),
+    projects.listPeopleOptions(),
+    projectMinutes(user.id, period, today),
+  ]);
+  const activeTotal = (overall ?? counts).active;
+  // A search from the top bar opens the first tab that has a match.
+  const status = STATUSES.includes(params?.status)
+    ? params.status
+    : q && counts.active === 0
+      ? (STATUSES.find((key) => counts[key] > 0) ?? 'active')
+      : 'active';
+  const { rows: listed, total } = await projects.list({
+    status,
+    q,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+  });
+  const rows = await withHealth(listed, { today, timezone, userId: user.id });
+  // The subtitle's counts need every active project, so not on a search or another tab, and not when
+  // the tab has more than one page.
+  const countable = status === 'active' && !q && total <= PAGE_SIZE;
+  // Every link here keeps the filters it doesn't change, and the range.
+  const link = (changes) => projectsHref({ status, q, range: period, ...changes });
+
+  return (
+    <ProjectEditorProvider
+      managers={managers}
+      people={people}
+      viewer={{ id: user.id, isAdmin: user.role === 'admin' }}
+    >
+      <TopBar
+        title="Projects"
+        subtitle={projectsSubtitle(activeTotal, countable ? rows : [])}
+        actions={
+          <>
+            <ProjectSearch initialQuery={q} className={styles.search} />
+            <NewProjectButton />
+          </>
+        }
+      />
+      <ProjectFilters
+        status={status}
+        q={q}
+        counts={counts}
+        period={period}
+        today={today}
+        range={range}
+        link={link}
+      />
       <Card padding="none" className={styles.tableCard}>
         <DataTable
           caption={`${TAB_LABELS[status]} projects`}
-          columns={columns({ user, minutes, hoursHeader: HOURS_HEADERS[period.key] })}
+          columns={projectColumns({ user, minutes, hoursHeader: HOURS_HEADERS[period.key] })}
           rows={rows}
-          empty={
-            q ? (
-              <EmptyState
-                title="No projects match your search"
-                body={`Nothing in ${TAB_LABELS[status].toLowerCase()} matches "${q}".`}
-                action={
-                  <Button variant="secondary" href={link({ q: '' })}>
-                    Clear search
-                  </Button>
-                }
-              />
-            ) : status === 'active' ? (
-              <EmptyState
-                title="No active projects yet"
-                body="Create the first project so people can log hours to it."
-                action={<NewProjectButton />}
-              />
-            ) : (
-              <EmptyState
-                title={`No ${TAB_LABELS[status].toLowerCase()} projects`}
-                body="Projects show here when their status changes."
-                action={
-                  <Button variant="secondary" href={link({ status: 'active', q: '' })}>
-                    See active projects
-                  </Button>
-                }
-              />
-            )
-          }
+          empty={<ProjectsEmpty status={status} tab={TAB_LABELS[status]} q={q} link={link} />}
         />
       </Card>
       {total > PAGE_SIZE ? (
