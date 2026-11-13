@@ -1,4 +1,6 @@
 // Clients and projects from the canvas (04, 05, 07, 11). Colours were sampled from the labels.
+// greenleaf-shop, whose row no artboard shows, has the yellow preset added in 1.08 (CONTRACT 23),
+// so a demo database shows it (on the Projects list, and in the reports of its members).
 //
 // Totals on Projects (07): 12 active, 2 on hold, 18 completed. Vishal (04) is a member of
 // 6 active or on-hold projects and 9 completed ones. Member order follows the avatar order on the
@@ -56,7 +58,7 @@ export const PROJECTS = [
   // 07 shows Neha Gupta (HR) as the PM of Hiring. We keep the canvas; see the seed notes.
   project('hiring', 'Hiring', 'Internal', 'neha', 'pink', ['neha', 'anjali']),
   project('studio', 'studio-site', 'Internal', 'pm', 'violet', ['vishal', 'priya']),
-  project('greenleaf', 'greenleaf-shop', 'Greenleaf Foods', 'pm2', 'green', [
+  project('greenleaf', 'greenleaf-shop', 'Greenleaf Foods', 'pm2', 'yellow', [
     'pooja',
     'kavya',
     'divya',

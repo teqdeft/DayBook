@@ -1,3 +1,4 @@
+import { isCustomColor } from '@/lib/projectColors';
 import styles from './ProgressBar.module.css';
 
 // Tones and project colours -> CSS variables (bars, legend squares).
@@ -11,14 +12,19 @@ const COLOR_VARS = {
   teal: 'var(--label-teal)',
   orange: 'var(--label-orange)',
   pink: 'var(--label-pink)',
+  yellow: 'var(--label-yellow)',
   ink: 'var(--ink)',
   navy: 'var(--navy)',
   grey: 'var(--line-strong)',
 };
 
-/** CSS colour for a tone ('green') or a project colour ('orange'); unknown values fall back to primary. */
+/**
+ * CSS colour for a tone ('green') or a project colour ('orange', or a custom '#rrggbb', checked
+ * again here: CONTRACT 23); unknown values fall back to primary.
+ */
 export function toneColor(color) {
-  return COLOR_VARS[color] ?? COLOR_VARS.primary;
+  if (isCustomColor(color)) return color;
+  return Object.hasOwn(COLOR_VARS, color) ? COLOR_VARS[color] : COLOR_VARS.primary;
 }
 
 function clamp(value) {

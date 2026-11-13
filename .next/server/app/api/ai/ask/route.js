@@ -1,5 +1,5 @@
 var R=require("../../../../chunks/[turbopack]_runtime.js")("server/app/api/ai/ask/route.js")
-R.c("server/chunks/[root-of-the-server]__0e-oi32._.js")
+R.c("server/chunks/[root-of-the-server]__0-9fush._.js")
 R.c("server/chunks/src_modules_settings_index_0mnhtem.js")
 R.c("server/chunks/_0tpjqiz._.js")
 R.c("server/chunks/src_modules_ai_index_16-mn02.js")

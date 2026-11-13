@@ -8,10 +8,12 @@ import TopBar from '@/components/TopBar';
 import { can } from '@/lib/permissions';
 import { logger } from '@/lib/logger';
 import { workDate } from '@/lib/time';
+import { attendance } from '@/modules/attendance';
 import { projects } from '@/modules/projects';
 import { reports } from '@/modules/reports';
 import { settings } from '@/modules/settings';
 import ProjectEditorProvider from '../projects/ProjectEditorProvider';
+import AttendanceFixes from './AttendanceFixes';
 import RecentlyHandled from './RecentlyHandled';
 import RequestCard from './RequestCard';
 import styles from './page.module.css';
@@ -55,7 +57,11 @@ function emptyCopy(type) {
 export default async function RequestsView({ user, params }) {
   const type = FILTERS.includes(params?.type) ? params.type : 'all';
   const handlesEdits = can(user, 'report.approve_edit');
-  const [config, edits, projectRequests, handledEdits, handledProjects, managers, people] =
+  // Attendance fixes are handled on Attendance; this screen only says how many wait (CONTRACT 23).
+  const countFixes = can(user, 'attendance.correct')
+    ? safely(attendance.countPendingCorrections({ viewer: user }), 0, 'requests: fixes', user.id)
+    : 0;
+  const [config, edits, projectRequests, handledEdits, handledProjects, managers, people, fixes] =
     await Promise.all([
       settings.getAll(),
       handlesEdits
@@ -73,6 +79,7 @@ export default async function RequestsView({ user, params }) {
       projects.listHandledRequestsFor(user, { limit: 10 }),
       projects.listManagerOptions(user),
       projects.listPeopleOptions(),
+      countFixes,
     ]);
   const needsMoveTargets = projectRequests.some((request) => request.hasEntries);
   const moveTargets = needsMoveTargets
@@ -112,19 +119,22 @@ export default async function RequestsView({ user, params }) {
         subtitle={total > 0 ? `${total} waiting for you` : 'Nothing waiting for you'}
         bell
       />
-      <FilterPills
-        label="Request type"
-        value={type}
-        items={[
-          { value: 'all', label: `All (${total})`, href: filterHref('all') },
-          { value: 'edits', label: `Report edits (${edits.length})`, href: filterHref('edits') },
-          {
-            value: 'projects',
-            label: `New projects (${projectRequests.length})`,
-            href: filterHref('projects'),
-          },
-        ]}
-      />
+      <div className={styles.filters}>
+        <FilterPills
+          label="Request type"
+          value={type}
+          items={[
+            { value: 'all', label: `All (${total})`, href: filterHref('all') },
+            { value: 'edits', label: `Report edits (${edits.length})`, href: filterHref('edits') },
+            {
+              value: 'projects',
+              label: `New projects (${projectRequests.length})`,
+              href: filterHref('projects'),
+            },
+          ]}
+        />
+        <AttendanceFixes viewer={user} count={fixes} />
+      </div>
       <div className={styles.layout}>
         <section className={styles.list} aria-label="Waiting for you">
           {shown.length > 0 ? (

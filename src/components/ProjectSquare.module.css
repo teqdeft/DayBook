@@ -39,3 +39,14 @@
   --square-bg: var(--label-pink-bg);
   --square-text: var(--label-pink-text);
 }
+
+.yellow {
+  --square-bg: var(--label-yellow-bg);
+  --square-text: var(--label-yellow-text);
+}
+
+/* A custom colour (CONTRACT 23): --project comes from the inline style. */
+.custom {
+  --square-bg: color-mix(in srgb, var(--project) 16%, var(--surface));
+  --square-text: color-mix(in srgb, var(--project) 35%, var(--ink));
+}

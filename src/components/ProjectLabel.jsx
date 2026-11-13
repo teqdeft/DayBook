@@ -1,4 +1,5 @@
 import { ChevronDown } from 'lucide-react';
+import { projectColorStyle } from '@/lib/projectColors';
 import { projectColor } from './ProjectSquare';
 import styles from './ProjectLabel.module.css';
 
@@ -8,7 +9,8 @@ const SIZE_CLASS = { sm: styles.sm, md: styles.md, lg: styles.lg };
 
 /**
  * Project name on a soft background in the project's colour (26 px, 6 px radius). `lg` with
- * as="button" and `chevron` is the Daily report's project picker.
+ * as="button" and `chevron` is the Daily report's project picker. A custom colour arrives as
+ * --project, merged with the caller's `style`.
  */
 export default function ProjectLabel({
   project,
@@ -16,6 +18,7 @@ export default function ProjectLabel({
   as = 'span',
   chevron = false,
   className,
+  style,
   children,
   ...rest
 }) {
@@ -26,7 +29,12 @@ export default function ProjectLabel({
     .join(' ');
   const buttonProps = Tag === 'button' ? { type: 'button' } : {};
   return (
-    <Tag className={classes} {...buttonProps} {...rest}>
+    <Tag
+      className={classes}
+      style={{ ...projectColorStyle(project?.color), ...style }}
+      {...buttonProps}
+      {...rest}
+    >
       <span className={styles.name}>{children ?? project?.name}</span>
       {chevron ? (
         <ChevronDown className={styles.chevron} size={14} strokeWidth={1.8} aria-hidden="true" />

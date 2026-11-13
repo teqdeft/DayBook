@@ -37,7 +37,8 @@ reports from the design canvas (`npm run seed:demo -- --midday` gives the midday
 Today and Daily report artboards). It refuses to run in production. It also gives three projects
 a plan for the project management screens: acme-store is off track (with a file, a note and an AI
 summary written by hand, no AI asked), internal-tool is at risk and iwilltillimwell is on track;
-the other projects have none (`db/demo/projectPlans.js`).
+the other projects have none (`db/demo/projectPlans.js`). greenleaf-shop has the yellow colour
+label.
 
 Without Slack credentials, set `DEV_LOGIN_ENABLED=true` in `.env.local`: the sign-in page then shows
 a "Development sign-in" list. It never exists when `NODE_ENV=production`. Demo accounts:
@@ -64,7 +65,9 @@ Playwright drives the real screens in the installed Google Chrome (no browser do
 write and submit a report and the PM sees it; a report edit request approved; an HR attendance
 correction; project management (the projects list, a project's tabs, tasks with Undo, a real PDF
 and Word file read in the browser, a note, the deadline and a phase move, and another PM's view);
-and every main screen per role with no console errors. The specs are in `tests/e2e/`.
+the Pending requests card and project colours (yellow, More colours, Escape in its panel, a colour
+too light to see); and every main screen per role with no console errors. The specs are in
+`tests/e2e/`.
 
 ```bash
 # Local: reuse the dev server that is already running (no second `next dev` is started)
@@ -84,11 +87,11 @@ npm run test:e2e
   with no dev server running. CI needs `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` and
   `SESSION_SECRET` in the environment (no `.env.local` there).
 - Tests run one at a time (`workers: 1`) because they share the demo data.
-- `project-plan.spec.js` answers every `/api/ai/**` request in the browser, so the server never
-  calls Google. Its AI summary test needs the server to have a key: start the run with any value,
-  for example `GEMINI_API_KEY=e2e-dummy-not-a-key npm run test:e2e` (never a real key, and never in
-  a file); the test turns Project summaries on for itself and off again. Without a key it is
-  skipped.
+- `project-plan.spec.js` and `colors.spec.js` answer every `/api/ai/**` request in the browser, so
+  the server never calls Google. The project-plan AI summary test needs the server to have a key:
+  start the run with any value, for example `GEMINI_API_KEY=e2e-dummy-not-a-key npm run test:e2e`
+  (never a real key, and never in a file); the test turns Project summaries on for itself and off
+  again. Without a key it is skipped.
   `npx playwright show-trace test-results/<test>/trace.zip` opens the trace of a failed test.
 
 ## Changes from the build guide
@@ -119,7 +122,7 @@ npm run test:e2e
   projects table shows each project's all-time hours under "Hours this week".
 - **AI with Gemini, version label, notification center** (CONTRACT 20): see
   [AI with Gemini](#ai-with-gemini) below. The sidebar and sign-in page show the version, now
-  "Daybook v1.07" (`src/config/version.js`, raised with each release). In the bell, clicking a
+  "Daybook v1.08" (`src/config/version.js`, raised with each release). In the bell, clicking a
   notification marks it read; each one can be marked unread or deleted (swipe left on touch
   screens, with Undo), and the bell swings gently while there are unread ones.
 - **My settings** (company request, CONTRACT 21): every person has a **My settings** page (last
@@ -150,6 +153,16 @@ npm run test:e2e
   and Admins change the plan or see its files, notes and summary; other PMs see the plan read only.
   Stored by migration 015; until `npm run migrate` has run, the screens work without phases or
   deadlines, and plans, files and notes can't be saved.
+- **Pending requests card and project colours** (company request, CONTRACT 23, Daybook 1.08): on
+  the Company overview, the **Pending requests** card is a link. It counts what waits for the
+  person looking (report edits and new projects they may handle, and attendance fixes for those
+  who correct attendance), says what that is ("2 edits, 1 new project, 1 fix" or "Nothing
+  waiting") and opens Requests, or Attendance when only fixes wait. Requests says how many
+  attendance fixes wait, with a link to Attendance. Projects get a **yellow** colour label, and a
+  **More colours** button after the seven colours opens eight more and **Any colour** (the
+  browser's colour picker); a colour too light or too dark to see in one of the themes is refused.
+  Stored by migration 016; until `npm run migrate` has run, the first six colours keep working and
+  yellow or a custom colour is refused with a clear message.
 
 ## Slack setup (one Slack app per environment)
 
@@ -286,6 +299,10 @@ hold the text of files and notes, and Ask Daybook never reads it.
   the plan, files and summary tables). There is nothing new to install on the server: the PDF
   reader (`pdfjs-dist`, a dev dependency) is bundled into the build. **Project summaries** in
   Settings → AI starts off.
+- Daybook 1.08 (Pending requests card, project colours): run `npm run migrate` before the restart
+  (migration 016 changes `projects.color` so it can hold yellow and custom colours; until it runs,
+  the first six colours keep working and yellow or a custom colour is refused with a clear
+  message). There is nothing new to install.
 
 ## Deploying on cPanel (Setup Node.js App)
 
@@ -318,12 +335,15 @@ and `daybook.yourcompany.com` with your address.
    ```bash
    source /home/cpuser/nodevenv/daybook/20/bin/activate && cd /home/cpuser/daybook
    npm ci --omit=dev
-   NODE_ENV=production npm run migrate
-   NODE_ENV=production npm run seed
+   NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:latest
+   NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js seed:run
    ```
 
-   Don't run `npm run build` on the server; the `deploy` branch already contains the build. Never
-   run `npm run seed:demo` on the live database.
+   The two database lines do what `npm run migrate` and `npm run seed` do, each as one lean Node
+   process like the worker cron in step 8 (no npm, small thread pools): through npm, the host's
+   process and thread limits can stop them with only `Aborted`. Don't run `npm run build` on the
+   server; the `deploy` branch already contains the build. Never run `npm run seed:demo` on the
+   live database.
 
 7. **Start** — back in Setup Node.js App press **Restart**, then open
    `https://daybook.yourcompany.com`: the sign-in page appears; `/api/health` answers
@@ -351,10 +371,22 @@ and `daybook.yourcompany.com` with your address.
     emails.
 
 **Updating** (after 7 PM): push to `main` and wait for the green "Build for cPanel" run on GitHub;
-then in Terminal (after the `source` command): `cd ~/daybook && git pull`, `npm ci --omit=dev`,
-`NODE_ENV=production npm run migrate`, and press Restart in Setup Node.js App. For 1.07 the
-migrate step must come before Restart (it adds the project plan tables); nothing new is installed
-on the server, and Settings → AI → Project summaries starts off.
+then in Terminal (after the `source` command):
+
+```bash
+cd ~/daybook && git pull
+npm ci --omit=dev
+NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:latest
+```
+
+and press Restart in Setup Node.js App. The last line does what `npm run migrate` does, as one
+lean Node process like the worker cron: run through npm on the host, it can stop with only
+`Aborted`. It ends with "Batch … run" or "Already up to date". If it says the
+migration table is already locked (a run was stopped part way), run the same line once with
+`migrate:unlock` in place of `migrate:latest`, then the line again. For 1.07 the migrate step must
+come before Restart (it adds the project plan tables); nothing new is installed on the server, and
+Settings → AI → Project summaries starts off. For 1.08 too: migrate before Restart (migration 016
+changes the project colour column), nothing new to install.
 
 **Checking** — `NODE_ENV=production npm run doctor` (after the `source` command, in `~/daybook`)
 shows whether the worker cron is running, whether Slack works and who gets desktop notifications;

@@ -1,5 +1,7 @@
 // Company overview (artboard 11, Admin): five numbers, hours by project, attendance this week,
 // "Needs attention", team by department and urgent projects.
+import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import Card, { CardHeader } from '@/components/Card';
@@ -32,11 +34,22 @@ const WEEK_LEGEND = [
   { key: 'missing', label: 'Not checked in', color: 'red' },
 ];
 
+// A card with `href` ("Pending requests", CONTRACT 23) is a link: the whole card, with a chevron.
+const linkProps = (href) =>
+  href
+    ? {
+        as: Link,
+        href,
+        className: styles.kpiLink,
+        trailing: <ChevronRight size={18} strokeWidth={1.8} className={styles.kpiChevron} />,
+      }
+    : {};
+
 export default async function OverviewPage({ searchParams }) {
-  await requirePage('overview.view');
+  const user = await requirePage('overview.view');
   const query = await searchParams;
   const range = overviewQuerySchema.safeParse({ range: first(query.range) }).data?.range ?? 'week';
-  const overview = await dashboard.getOverview({ range });
+  const overview = await dashboard.getOverview({ viewer: user, range });
   const { hours, attendanceWeek, urgent } = overview;
 
   return (
@@ -59,6 +72,7 @@ export default async function OverviewPage({ searchParams }) {
             footer={kpi.footer}
             percent={kpi.percent}
             color={kpi.color}
+            {...linkProps(kpi.href)}
           />
         ))}
       </section>

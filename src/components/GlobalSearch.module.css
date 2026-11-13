@@ -92,29 +92,24 @@
   background: var(--surface-muted);
 }
 
-.avatar,
-.square {
+.avatar {
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary-text);
   font-size: 12px;
   font-weight: 600;
 }
 
-.avatar {
-  border-radius: 50%;
-  background: var(--primary-soft);
-  color: var(--primary-text);
-}
-
-.square {
-  border-radius: 8px;
-  color: var(--on-fill);
-  font-family: var(--font-heading-stack);
-  font-size: 14px;
+/* ProjectSquare at 32 px (8 px radius, 14 px letter) in the project's soft colours; the option
+   class makes the weight win over ProjectSquare's whatever order the stylesheets load in. */
+.option .square {
+  font-weight: 600;
 }
 
 .optionText {

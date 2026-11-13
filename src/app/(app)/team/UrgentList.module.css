@@ -45,6 +45,15 @@
   color: var(--label-pink-text);
 }
 
+.yellow {
+  color: var(--label-yellow-text);
+}
+
+/* A custom colour (CONTRACT 23): --project comes from the inline style. */
+.custom {
+  color: color-mix(in srgb, var(--project) 35%, var(--ink));
+}
+
 .note {
   margin-top: 4px;
   font-size: var(--text-body);

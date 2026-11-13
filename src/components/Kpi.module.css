@@ -18,6 +18,24 @@
   text-overflow: ellipsis;
 }
 
+/* A trailing element (the Overview's chevron) sits at the top right, level with the label,
+   which keeps clear of it. */
+.withTrailing {
+  position: relative;
+}
+
+.withTrailing .label {
+  padding-right: 22px;
+}
+
+.trailing {
+  position: absolute;
+  top: 18px;
+  right: 16px;
+  display: inline-flex;
+  color: var(--muted);
+}
+
 .valueRow {
   display: flex;
   align-items: baseline;

@@ -414,24 +414,51 @@ export async function countProjects() {
 }
 
 /**
- * Pending report edit, project and attendance correction requests, plus how many of each were
- * created since `since` (a Date) and already handled.
+ * Report edit, project and attendance correction requests created since `since` (a Date) and
+ * already handled, in the scope the viewer sees them while pending (the "Pending requests" bar).
+ * Parts that are not asked for count as 0.
+ * @param {Date} since
+ * @param {{ edits: false | 'all' | number, projects: boolean, corrections: boolean,
+ *   selfId?: number, withAdmins?: boolean }} scope as countNavBadges: `edits` false, 'all'
+ *   (Admin) or the PM's user id; `selfId`: the viewer, whose own edit requests never count;
+ *   `withAdmins: false` leaves out Admins' correction requests
+ * @returns {Promise<{ editsHandled: number, projectsHandled: number, correctionsHandled: number }>}
  */
-export async function countRequests(since) {
-  const pending = (table) => db(table).count('*').where('status', 'pending');
-  const handled = (table) =>
-    db(table).count('*').whereNot('status', 'pending').where('createdAt', '>=', since);
+export async function countHandledRequests(
+  since,
+  { edits, projects, corrections, selfId, withAdmins = true },
+) {
+  const zero = db.raw('0');
+  const handled = (table, alias) =>
+    db(`${table} as ${alias}`)
+      .count('*')
+      .whereNot(`${alias}.status`, 'pending')
+      .where(`${alias}.createdAt`, '>=', since);
+  const usersWhere = (where) => db('users').select('id').where(where);
+  const editsQuery =
+    edits === false
+      ? zero
+      : handled('reportEditRequests', 'r').modify((q) => {
+          if (selfId) q.whereNot('r.requestedBy', selfId);
+          if (edits !== 'all') q.whereIn('r.requestedBy', usersWhere({ reportsToId: edits }));
+        });
+  const correctionsQuery = corrections
+    ? handled('attendanceCorrections', 'c').modify((q) => {
+        if (!withAdmins) q.whereNotIn('c.userId', usersWhere({ role: 'admin' }));
+      })
+    : zero;
   const row = await db
     .select({
-      edits: pending('reportEditRequests'),
-      projects: pending('projectRequests'),
-      corrections: pending('attendanceCorrections'),
-      editsHandled: handled('reportEditRequests'),
-      projectsHandled: handled('projectRequests'),
-      correctionsHandled: handled('attendanceCorrections'),
+      editsHandled: editsQuery,
+      projectsHandled: projects ? handled('projectRequests', 'p') : zero,
+      correctionsHandled: correctionsQuery,
     })
     .first();
-  return Object.fromEntries(Object.entries(row ?? {}).map(([key, value]) => [key, Number(value)]));
+  return {
+    editsHandled: Number(row?.editsHandled ?? 0),
+    projectsHandled: Number(row?.projectsHandled ?? 0),
+    correctionsHandled: Number(row?.correctionsHandled ?? 0),
+  };
 }
 
 /** Check-outs the midnight job marked missing and nobody fixed yet, per day, newest first. */

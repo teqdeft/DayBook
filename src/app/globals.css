@@ -64,6 +64,10 @@
   --label-pink-bg: light-dark(#fbe5ee, #3d1a2b);
   --label-pink-text: light-dark(#8e2350, #ffa3c4);
   --label-pink: #d6457a;
+  /* hue 51 (its soft colours 56), kept apart from marigold's 39 that means Urgent and Pending */
+  --label-yellow-bg: light-dark(#f6f2c0, #32310f);
+  --label-yellow-text: light-dark(#565000, #e5da69);
+  --label-yellow: #d4b300;
 
   /* urgent card */
   --urgent-bg: light-dark(#fff7e4, #2e2412);
@@ -173,6 +177,8 @@
     --label-teal-text: #0d5f72;
     --label-pink-bg: #fbe5ee;
     --label-pink-text: #8e2350;
+    --label-yellow-bg: #f6f2c0;
+    --label-yellow-text: #565000;
     --urgent-bg: #fff7e4;
     --urgent-line: #f8e2b0;
     --on-primary: #ffffff;

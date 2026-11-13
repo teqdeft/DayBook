@@ -1,7 +1,10 @@
 // Every Knex query of the projects module. Names of people and clients are read with joins; other
 // modules' data is changed only through their services.
 import { db } from '@/lib/db';
+import { validationError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { compactName } from '@/lib/text';
+import { now } from '@/lib/time';
 import { escapeLike } from './shared';
 
 const PROJECT_COLUMNS = [
@@ -178,12 +181,58 @@ export function listAllNames(trx = db) {
   return trx('projects').select('id', 'name', 'status');
 }
 
+// ---------- the colour column (CONTRACT 23) ----------
+
+// Before migration 016, projects.color is an ENUM of these six. Yellow and custom colours don't fit,
+// and a host without a strict sql_mode would store '' with only a warning, so they are refused first.
+const ENUM_COLORS = new Set(['blue', 'green', 'violet', 'orange', 'teal', 'pink']);
+const COLOR_RECHECK_MS = 60_000;
+const OLD_COLUMN_MESSAGE =
+  'This colour needs the latest database update. Pick one of the first six for now.';
+
+let colorColumn = null; // { text: boolean, checkedAt: number }
+
+/**
+ * Whether projects.color holds any colour (migration 016 has run). Once it does, the answer is
+ * kept for the life of the process; while it is still the ENUM it is asked again after 60 s, so a
+ * `npm run migrate` takes effect without a restart.
+ * @returns {Promise<boolean>}
+ */
+export async function colorColumnIsText(trx = db) {
+  const at = now().valueOf();
+  if (colorColumn && (colorColumn.text || at - colorColumn.checkedAt < COLOR_RECHECK_MS)) {
+    return colorColumn.text;
+  }
+  const [rows] = await trx.raw(
+    'SELECT DATA_TYPE AS type FROM information_schema.columns ' +
+      "WHERE table_schema = DATABASE() AND table_name = 'projects' AND column_name = 'color'",
+  );
+  const text = String(rows[0]?.type ?? '').toLowerCase() !== 'enum';
+  if (!text && !colorColumn) {
+    logger.warn(
+      'projects.color is the old ENUM (run npm run migrate); yellow and custom colours are refused',
+    );
+  }
+  colorColumn = { text, checkedAt: at };
+  return text;
+}
+
+/** Throws VALIDATION_FAILED (fields.color) for a colour the column can't hold yet. */
+async function assertColorFits(color, trx) {
+  if (color === undefined || ENUM_COLORS.has(color) || (await colorColumnIsText(trx))) return;
+  throw validationError({ color: OLD_COLUMN_MESSAGE }, OLD_COLUMN_MESSAGE);
+}
+
+/** @throws VALIDATION_FAILED before writing a colour the column can't hold yet (see above) */
 export async function insertProject(row, trx) {
+  await assertColorFits(row.color, trx);
   const [id] = await trx('projects').insert(row);
   return id;
 }
 
-export function updateProject(id, changes, trx) {
+/** @throws VALIDATION_FAILED before writing a colour the column can't hold yet (see above) */
+export async function updateProject(id, changes, trx) {
+  await assertColorFits(changes.color, trx);
   return trx('projects').where({ id }).update(changes);
 }
 

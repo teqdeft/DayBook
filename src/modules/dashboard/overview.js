@@ -12,8 +12,13 @@ import {
   monthRange,
   weekRange,
 } from '@/lib/time';
+import { can } from '@/lib/permissions';
 import { plural } from '@/lib/text';
+import { attendance } from '@/modules/attendance';
+import { projects } from '@/modules/projects';
+import { reports } from '@/modules/reports';
 import * as repo from './repo';
+import { requestsKpi } from './requestsCard';
 import {
   checkedInKpi,
   hoursBars,
@@ -28,6 +33,8 @@ import {
   totalMinutes,
   urgentItems,
 } from './shared';
+
+export { requestsHref, requestsKpi, requestsSub } from './requestsCard';
 
 // Department bar colours in department order (the canvas: Development blue, SEO violet, Delivery
 // teal, HR pink, Sales green, Leadership navy); later departments reuse them.
@@ -55,19 +62,32 @@ function hoursKpi({ weekMinutes, summary, ctx }) {
 }
 
 /**
- * "Pending requests": report edits, project requests and attendance fixes waiting for a
- * decision. The bar is the share of this month's requests still waiting.
+ * The requests waiting for this viewer, counted as /requests and /attendance list them (never
+ * their own report edit request), each kind only when the viewer may handle it, plus those
+ * created since `since` and already handled, in the same scope (the card's bar).
+ * @returns {Promise<{ edits, projects, corrections, editsHandled, projectsHandled,
+ *   correctionsHandled }>} numbers
  */
-function requestsKpi(counts) {
-  const pending = counts.edits + counts.projects + counts.corrections;
-  const handled = counts.editsHandled + counts.projectsHandled + counts.correctionsHandled;
+async function requestCounts(viewer, since) {
+  const corrections = can(viewer, 'attendance.correct');
+  const edits = can(viewer, 'report.approve_edit') && (viewer.role === 'admin' ? 'all' : viewer.id);
+  const [pendingEdits, pendingProjects, pendingCorrections, handled] = await Promise.all([
+    reports.countPendingEditRequestsFor(viewer),
+    projects.countPendingRequestsFor(viewer),
+    corrections ? attendance.countPendingCorrections({ viewer }) : 0,
+    repo.countHandledRequests(since, {
+      edits,
+      projects: can(viewer, 'project_request.handle'),
+      corrections,
+      selfId: viewer?.id,
+      withAdmins: viewer?.role === 'admin',
+    }),
+  ]);
   return {
-    key: 'requests',
-    label: 'Pending requests',
-    value: String(pending),
-    sub: 'edits, projects, fixes',
-    percent: percent(pending, pending + handled),
-    color: 'violet',
+    edits: pendingEdits,
+    projects: pendingProjects,
+    corrections: pendingCorrections,
+    ...handled,
   };
 }
 
@@ -193,22 +213,24 @@ function departmentBars(rows, ids) {
 
 /**
  * Everything on the Company overview.
- * @param {{ range?: 'week'|'month' }} [options] range of the "Hours by project" card
- * @returns {Promise<object>} { date, subtitle, summary, kpis, hours, attendanceWeek,
+ * @param {{ viewer: object, range?: 'week'|'month' }} options viewer: the signed-in person
+ *   ("Pending requests" and "Needs attention" count what waits for them, as /requests and
+ *   /attendance list it); range: of the "Hours by project" card
+ * @returns {Promise<object>} { date, subtitle, summary, kpis, pending, hours, attendanceWeek,
  *   needsAttention, departments, urgent }
  */
-export async function getOverview({ range = 'week' } = {}) {
+export async function getOverview({ viewer, range = 'week' } = {}) {
   const ctx = await loadContext();
   const week = periodFor('week', ctx.today);
   const card = periodFor(range, ctx.today);
   const monthStart = localToUtc(monthRange(monthOf(ctx.today)).from, '00:00', ctx.tz).toDate();
-  const [people, weekRows, cardRows, projects, requests, missing, byDay, departments, ids, urgent] =
+  const [people, weekRows, cardRows, active, requests, missing, byDay, departments, ids, urgent] =
     await Promise.all([
       repo.listTrackedPeopleDay(ctx.today),
       repo.hoursByProject(week),
       card.key === 'week' ? null : repo.hoursByProject(card),
       repo.countProjects(),
-      repo.countRequests(monthStart),
+      requestCounts(viewer, monthStart),
       repo.countMissingCheckouts(),
       repo.countAttendanceByDay(week.from, weekRange(ctx.today).to),
       repo.countPeopleByDepartment(),
@@ -230,12 +252,12 @@ export async function getOverview({ range = 'week' } = {}) {
       {
         key: 'projects',
         label: 'Active projects',
-        value: String(projects.active),
-        sub: `${projects.urgent} marked urgent`,
-        percent: percent(projects.urgent, projects.active),
+        value: String(active.active),
+        sub: `${active.urgent} marked urgent`,
+        percent: percent(active.urgent, active.active),
         color: 'marigold',
       },
-      requestsKpi(requests),
+      requestsKpi(requests, viewer),
     ],
     pending: requests,
     hours: {

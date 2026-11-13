@@ -5,6 +5,7 @@ import { useCallback, useId, useRef, useState } from 'react';
 import { ChevronDown, Plus } from 'lucide-react';
 import ProjectLabel from '@/components/ProjectLabel';
 import Tag from '@/components/Tag';
+import { isCustomColor, projectColorKey } from '@/lib/projectColors';
 import HoursField from './HoursField';
 import ProjectPicker from './ProjectPicker';
 import TaskLine from './TaskLine';
@@ -17,10 +18,16 @@ import styles from './ProjectCard.module.css';
 
 const NO_SUGGESTIONS = [];
 
-const COLORS = new Set(['blue', 'green', 'violet', 'orange', 'teal', 'pink']);
+// A custom colour mixes like ProjectLabel's .custom class (CONTRACT 23).
+const CUSTOM_VARS = {
+  '--project-strong': 'var(--project)',
+  '--project-text': 'color-mix(in srgb, var(--project) 35%, var(--ink))',
+};
 
-function colorVars(color) {
-  const name = COLORS.has(color) ? color : 'blue';
+/** The card's colour variables; a custom colour is checked again, anything unknown is blue. */
+export function colorVars(color) {
+  if (isCustomColor(color)) return { ...CUSTOM_VARS, '--project': color };
+  const name = projectColorKey(color);
   return {
     '--project-strong': `var(--label-${name})`,
     '--project-text': `var(--label-${name}-text)`,

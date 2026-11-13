@@ -6,6 +6,8 @@ import { localToUtc, setNowForTests } from '@/lib/time';
 import { attendance } from '@/modules/attendance';
 import { dashboard } from '@/modules/dashboard';
 import { hoursBars } from '@/modules/dashboard/shared';
+import { projects as projectService } from '@/modules/projects';
+import { reports } from '@/modules/reports';
 import { settings } from '@/modules/settings';
 import { createUser, resetDatabase, setSettings } from '../helpers/db.js';
 import {
@@ -343,7 +345,7 @@ describe('getTeamToday (section 7.10)', () => {
         team.summary.notCheckedIn,
       ]);
 
-      const overview = await dashboard.getOverview();
+      const overview = await dashboard.getOverview({ viewer: people.admin });
       expect(overview.kpis[0].sub).toBe('of 6 people');
       const today = overview.attendanceWeek.days.find((d) => d.date === TODAY);
       expect(today.segments.find((s) => s.label === 'Not checked in').value).toBe(
@@ -362,7 +364,7 @@ describe('getTeamToday (section 7.10)', () => {
       const { summary } = await dashboard.getTeamToday();
       expect(summary).toMatchObject({ tracked: 7, checkedIn: 6, notCheckedIn: 1 });
       expect((await attendance.getDaySummary(TODAY)).tracked).toBe(7);
-      const { attendanceWeek } = await dashboard.getOverview();
+      const { attendanceWeek } = await dashboard.getOverview({ viewer: people.admin });
       const today = attendanceWeek.days.find((d) => d.date === TODAY);
       expect(today.segments.map((s) => s.value)).toEqual([4, 2, 1]);
     } finally {
@@ -443,18 +445,78 @@ describe('hours by project (section 7.10)', () => {
 
 describe('getOverview', () => {
   it('builds the five number cards', async () => {
-    const { kpis } = await dashboard.getOverview();
+    const { kpis } = await dashboard.getOverview({ viewer: people.admin });
     expect(kpis.map((k) => [k.label, k.value, k.sub ?? k.footer])).toEqual([
       ['In today', '5', 'of 6 people'],
       ['Reports submitted', '3', 'of 5, due 6:30'],
       ['Hours this week', '27h 30m', 'Monday to today'],
       ['Active projects', '2', '1 marked urgent'],
-      ['Pending requests', '6', 'edits, projects, fixes'],
+      ['Pending requests', '6', '3 edits, 1 new project, 2 fixes'],
+    ]);
+    // Only "Pending requests" is a link.
+    expect(kpis.filter((k) => k.href).map((k) => [k.key, k.href])).toEqual([
+      ['requests', '/requests'],
     ]);
   });
 
+  it("counts the requests as /requests lists them for the Admin, never the Admin's own", async () => {
+    const own = await createEditRequest(people.admin, '2026-09-24');
+    try {
+      const { kpis, pending } = await dashboard.getOverview({ viewer: people.admin });
+      const listed = {
+        edits: (await reports.listPendingEditRequestsFor(people.admin)).length,
+        projects: (await projectService.listPendingRequestsFor(people.admin)).length,
+        corrections: (await attendance.listCorrections({ viewer: people.admin })).total,
+      };
+      expect(listed).toEqual({ edits: 3, projects: 1, corrections: 2 });
+      expect(pending).toMatchObject(listed);
+      expect(kpis.at(-1)).toMatchObject({ value: '6', sub: '3 edits, 1 new project, 2 fixes' });
+    } finally {
+      await db('reportEditRequests').where({ id: own }).del();
+    }
+  });
+
+  it('counts for each viewer what they handle, linking where it is handled', async () => {
+    const card = async (viewer) => (await dashboard.getOverview({ viewer })).kpis.at(-1);
+    // Pat handles the edit requests of Ava, Ben and Dev, and every project request.
+    expect(await card(people.pm)).toMatchObject({
+      value: '2',
+      sub: '1 edit, 1 new project',
+      href: '/requests',
+    });
+    // HR handles attendance fixes only, on Attendance.
+    expect(await card(people.hr)).toMatchObject({
+      value: '2',
+      sub: '2 fixes',
+      href: '/attendance',
+    });
+    expect(await card(people.e1)).toMatchObject({ value: '0', sub: 'Nothing waiting' });
+    expect(await card(people.e1)).not.toHaveProperty('href');
+  });
+
+  it("fills the bar with what was handled this month in the viewer's scope", async () => {
+    const decided = (date) => ({
+      status: 'approved',
+      createdAt: localToUtc(date, '10:00', TZ).toDate(),
+    });
+    const before = (await dashboard.getOverview({ viewer: people.admin })).pending;
+    const ids = [
+      await createEditRequest(people.e4, '2026-09-21', decided('2026-09-22')),
+      await createEditRequest(people.e4, '2026-08-20', decided('2026-08-21')), // last month
+      await createEditRequest(people.admin, '2026-09-21', decided('2026-09-22')), // their own
+    ];
+    try {
+      const { pending, kpis } = await dashboard.getOverview({ viewer: people.admin });
+      expect(pending.editsHandled).toBe(before.editsHandled + 1);
+      const handled = pending.editsHandled + pending.projectsHandled + pending.correctionsHandled;
+      expect(kpis.at(-1).percent).toBe(Math.round((6 / (6 + handled)) * 1000) / 10);
+    } finally {
+      await db('reportEditRequests').whereIn('id', ids).del();
+    }
+  });
+
   it('lists what needs attention, each with its screen', async () => {
-    const { needsAttention } = await dashboard.getOverview();
+    const { needsAttention } = await dashboard.getOverview({ viewer: people.admin });
     expect(needsAttention.map((item) => [item.status, item.text, item.href])).toEqual([
       ['missing', '2 reports not submitted yet', '/team?filter=missing'],
       ['pending', '3 report edit requests', '/requests'],
@@ -465,7 +527,7 @@ describe('getOverview', () => {
   });
 
   it('stacks attendance per working day; days to come stay empty', async () => {
-    const { attendanceWeek } = await dashboard.getOverview();
+    const { attendanceWeek } = await dashboard.getOverview({ viewer: people.admin });
     const values = attendanceWeek.days.map((day) => day.segments.map((s) => s.value));
     // Monday: Finn had not joined yet, so 5 people were expected.
     expect(values).toEqual([[2, 1, 2], [1, 1, 4], [3, 2, 1], [], []]);
@@ -487,7 +549,7 @@ describe('getOverview', () => {
   });
 
   it('counts active people per department, largest first, with fixed colours', async () => {
-    const { departments } = await dashboard.getOverview();
+    const { departments } = await dashboard.getOverview({ viewer: people.admin });
     expect(departments.map((d) => [d.label, d.value, d.color])).toEqual([
       ['Development', 4, 'blue'],
       ['SEO', 2, 'violet'],
@@ -499,7 +561,7 @@ describe('getOverview', () => {
   });
 
   it('shows urgent projects with who marked them, and the month range on request', async () => {
-    const overview = await dashboard.getOverview({ range: 'month' });
+    const overview = await dashboard.getOverview({ viewer: people.admin, range: 'month' });
     expect(overview.urgent.map((u) => u.meta)).toEqual(['Marked 11:05 by Pat Manager']);
     expect(overview.hours).toMatchObject({ range: 'month', from: '2026-09-01' });
     expect(overview.hours.bars[0]).toMatchObject({ label: 'alpha', value: 880 });
