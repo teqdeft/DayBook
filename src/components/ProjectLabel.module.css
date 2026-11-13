@@ -85,3 +85,14 @@ button.label:hover {
   --label-bg: var(--label-pink-bg);
   --label-text: var(--label-pink-text);
 }
+
+.yellow {
+  --label-bg: var(--label-yellow-bg);
+  --label-text: var(--label-yellow-text);
+}
+
+/* A custom colour (CONTRACT 23): --project comes from the inline style. */
+.custom {
+  --label-bg: color-mix(in srgb, var(--project) 16%, var(--surface));
+  --label-text: color-mix(in srgb, var(--project) 35%, var(--ink));
+}

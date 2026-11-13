@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { api } from '@/lib/apiClient';
 import { initials } from '@/lib/text';
-import { resolveColor } from './chartColors';
+import ProjectSquare from './ProjectSquare';
 import { personHref } from './searchScope';
 import styles from './GlobalSearch.module.css';
 
@@ -187,13 +187,7 @@ export default function GlobalSearch({
                     {option.initials}
                   </span>
                 ) : (
-                  <span
-                    className={styles.square}
-                    style={{ background: option.color }}
-                    aria-hidden="true"
-                  >
-                    {option.letter}
-                  </span>
+                  <ProjectSquare project={option.project} size={32} className={styles.square} />
                 )}
                 <span className={styles.optionText}>
                   <span className={styles.optionTitle}>{option.title}</span>
@@ -246,10 +240,8 @@ function toOptions({ people, projects, scope }) {
     kind: 'project',
     title: project.name,
     subtitle: project.clientName ?? '',
-    letter: String(project.name ?? '?')
-      .charAt(0)
-      .toUpperCase(),
-    color: resolveColor(project.color, 'blue'),
+    // The letter on the soft background with the text colour (CONTRACT 23), like the project list.
+    project: { name: project.name, color: project.color },
     href: `/projects?q=${encodeURIComponent(project.name)}`,
   }));
   return [...personOptions, ...projectOptions];

@@ -1,5 +1,7 @@
 // Maps colour names used by charts (tones and project label colours) to CSS variables.
-// Project colours: blue, green, violet, orange, teal, pink (the strong "bar and square" colour).
+// Project colours: blue, green, violet, orange, teal, pink, yellow (the strong "bar and square"
+// colour), or a custom '#rrggbb' (CONTRACT 23), which is checked again before it is used.
+import { isCustomColor } from '@/lib/projectColors';
 
 const COLORS = {
   primary: 'var(--primary)',
@@ -9,6 +11,7 @@ const COLORS = {
   orange: 'var(--label-orange)',
   teal: 'var(--label-teal)',
   pink: 'var(--label-pink)',
+  yellow: 'var(--label-yellow)',
   red: 'var(--red)',
   marigold: 'var(--marigold)',
   navy: 'var(--navy)',
@@ -22,14 +25,23 @@ const COLORS = {
   missing: 'var(--red)',
 };
 
+// A plain `var(--token)`, nothing after it.
+const TOKEN = /^var\(--[a-z0-9-]+\)$/;
+
+/** The value in `map` for a known name, else null (never one of Object's own properties). */
+function lookup(map, name) {
+  return typeof name === 'string' && Object.hasOwn(map, name) ? map[name] : null;
+}
+
 /**
- * A CSS colour value for a chart colour name. `var(--token)` values pass through unchanged.
+ * A CSS colour value for a chart colour name. `var(--token)` values and custom project colours
+ * pass through unchanged; anything else unknown gets the fallback.
  * @param {string | undefined} color
  * @param {string} [fallback]
  */
 export function resolveColor(color, fallback = 'primary') {
-  if (typeof color === 'string' && color.startsWith('var(--')) return color;
-  return COLORS[color] ?? COLORS[fallback] ?? COLORS.primary;
+  if (typeof color === 'string' && (TOKEN.test(color) || isCustomColor(color))) return color;
+  return lookup(COLORS, color) ?? lookup(COLORS, fallback) ?? COLORS.primary;
 }
 
 // The same tones as text on a card surface. Light mode uses the strong tone itself (as the canvas
@@ -48,6 +60,7 @@ const TEXT_COLORS = {
   orange: 'var(--label-orange-text)',
   teal: 'var(--label-teal-text)',
   pink: 'var(--label-pink-text)',
+  yellow: 'var(--label-yellow-text)',
   ink: 'var(--ink)',
   muted: 'var(--muted)',
 };
@@ -57,8 +70,8 @@ const TEXT_COLORS = {
  * @param {string | undefined} color
  */
 export function resolveTextColor(color) {
-  if (typeof color === 'string' && color.startsWith('var(--')) return color;
-  return TEXT_COLORS[color] ?? TEXT_COLORS.primary;
+  if (typeof color === 'string' && TOKEN.test(color)) return color;
+  return lookup(TEXT_COLORS, color) ?? TEXT_COLORS.primary;
 }
 
 /** Clamps a number to 0..1. */

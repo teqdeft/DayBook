@@ -120,6 +120,15 @@
   background: var(--label-pink);
 }
 
+.yellow {
+  background: var(--label-yellow);
+}
+
+/* A custom colour (CONTRACT 23): --project comes from the inline style. */
+.custom {
+  background: var(--project);
+}
+
 .none {
   background: var(--line-strong);
 }

@@ -313,7 +313,10 @@ loading?, fullWidth?, ...buttonProps }`. 44 px high (40 compact), 10 px radius, 
 | 'dark' | 'dashed' | 'muted', padding: 'default' | 'none' | 'compact' }`; CardHeader
   `{ title, subtitle?, actions?, divider?: boolean }` (18 px semibold title).
 - `Kpi` — `{ label, value, sub?, footer?, percent?: 0-100, color: 'primary' | 'green' | 'marigold' |
-'violet' | 'red' | 'teal' }` (number card with an 8 px bar).
+'violet' | 'red' | 'teal', trailing?: element, as?, href? }` (number card with an 8 px bar).
+  `trailing` sits at the top right, level with the label (the label gets right padding); `as` and
+  `href` pass through, so `<Kpi as={Link} href="/requests" ...>` makes the whole card the link
+  (CONTRACT 23).
 - `StatTile` — `{ value, label }` (the grey boxes in Today's "Your day").
 - `StatusCell` from `@/components/StatusCell` — `{ status, label?, size: 'cell' | 'pill' = 'cell',
 chevron?: boolean, as?: 'div' | 'button', ...rest }`. Status → fill: green (done, submitted,
@@ -329,13 +332,20 @@ chevron?: boolean, as?: 'div' | 'button', ...rest }`. Status → fill: green (do
 size: 'sm' | 'md', children }` — soft pills ("Today", "WFH", "Late 38m", "Carried over",
   "Report edit", role labels; `ink` = solid navy "Admin").
 - `ProjectLabel` — `{ project: { name, color }, size: 'sm' | 'md' | 'lg', as?, chevron?, ...rest }`
-  (26 px, 6 px radius, soft background + dark text of the project colour). `ProjectSquare` —
-  `{ project, size = 40 }` (the letter square).
+  (26 px, 6 px radius, soft background + dark text of the project colour; its own colour style is
+  merged with the caller's `style`). `ProjectSquare` — `{ project, size = 40 }` (the letter square).
+  A project `color` is a preset (`blue`, `green`, `violet`, `orange`, `teal`, `pink`, `yellow`) or a
+  custom lowercase `#rrggbb`, shown through `--project` (`projectColorStyle` in
+  `@/lib/projectColors`); anything else shows blue (CONTRACT 23).
 - `Avatar` — `{ user: { name, initials?, avatarUrl?, role?, status? }, size = 34, tone? }`; tone
   defaults to `avatarTone(user)`; tones: blue, violet, green, teal, orange, red, pink, navy, ink,
   grey. `AvatarStack` — `{ users, max = 4, size = 30 }`.
-- `ProgressBar` — `{ percent, color, height = 8 }` (colour = a tone or a project colour).
-- `Legend` — `{ items: [{ label, color, value? }], layout: 'list' | 'inline' }`.
+- `ProgressBar` — `{ percent, color, height = 8 }` (colour = a tone or a project colour, a custom
+  `#rrggbb` included).
+- `Legend` — `{ items: [{ label, color, value? }], layout: 'list' | 'inline' }`. Its colours, and
+  those of `DayBar`, `HBarList`, `WeekBars` and `Donut`, go through `resolveColor`
+  (`chartColors.js`): a tone, a project preset, a `var(--token)` or a custom `#rrggbb`; anything
+  else gets the fallback.
 - `Field` — `{ label, htmlFor, help?, error?, children }`; `Input`, `Select` (`{ options: [{ value,
 label }] }` or children), `Textarea` — 44 px, 10 px radius, 1 px `--line-strong`; pass `error` for
   the red state. `Toggle` (client) — `{ checked, onChange, label?, help?, disabled?, name? }`.
@@ -396,6 +406,11 @@ faded? }], height }` (Today's "This week" and Overview's stacked "Attendance thi
 | ai           | `(app)/summaries/**`, `(app)/ask/**`, `api/ai/**` (CONTRACT 20)                                                                                                          |
 | preferences  | `(app)/my-settings/**`, `api/me/preferences/**`, `src/modules/preferences/**` (CONTRACT 21)                                                                              |
 | projects     | `src/modules/projectPlan/**`, `src/modules/projectSummaries/**`, `db/migrations/015_project_plan.js`, `(app)/projects/[id]/**` (CONTRACT 22)                             |
+| orchestrator | `db/migrations/016_project_color.js`, `src/lib/projectColors.js`, `src/app/globals.css` (yellow tokens), `src/config/version.js` (CONTRACT 23)                           |
+| dashboards   | `src/modules/dashboard/overview.js`, `src/modules/dashboard/requestsCard.js`, `(app)/overview/**`, `(app)/team/UrgentList.jsx` (+ css) (CONTRACT 23)                     |
+| projects     | `src/modules/projects/{schemas,repo}.js`, `(app)/projects/ColorSwatches.jsx` (+ css) and `ProjectDrawer.jsx`, `(app)/requests/AttendanceFixes.jsx` (CONTRACT 23)         |
+| reports      | `(app)/report/ProjectCard.jsx` (`colorVars`), `(app)/report/ProjectPicker.jsx` (+ css) (CONTRACT 23)                                                                     |
+| ui-kit       | `src/components/{Kpi,ProjectSquare,ProjectLabel,ProgressBar,chartColors,GlobalSearch}` (+ css) (CONTRACT 23)                                                             |
 
 Every page starts with `const user = await requirePage('<permission>')`, renders `<TopBar ... />`
 then its blocks, has a loading skeleton (`loading.js`) and empty states. Page permissions:
@@ -1432,3 +1447,57 @@ Card states: **no documents** (empty text + "Go to phases"); **documents, no sum
 ### Tests and version
 
 Unit: `forecastProject` (every row above, the rounding, weeks at a young project's start), `timelineLayout`, `phases`, `checks`. Services (fake AI transport only; **the real Gemini API is never called**): plan moves in both directions and at the same time, dates, deadline, tasks with phase and due date, `progressByProject`, documents, limits, summary (happy path, invented quote dropped, injected instruction in a document changes nothing, stale, truncated, add action once), permissions (another PM: NOT_FOUND on reads, FORBIDDEN on writes; the page has no summary text), migration missing. E2E: `tests/e2e/project-plan.spec.js` runs the list, tabs, Move, deadline, add, tick, delete and Undo, a real PDF and a real `.docx` fixture read in the browser, and the other PM's view, with `/api/ai/**` stubbed in the browser. `APP_VERSION` '1.07'.
+
+## 23. Pending requests card and project colours (company request, Daybook 1.08)
+
+Two small asks from the owner, shipped first (the to-do and unfinished-task suggestions follow in 1.09 as section 24):
+
+1. On the Company overview, the "Pending requests" card opens the requests.
+2. Projects get a yellow colour label, and a small button that opens more colours, including any colour.
+
+**Design:** `docs/design/todo-and-colours-prototype.html` (the approved copy of the design session's `prototype-standalone.html`; it runs on its own, it does not load the 1.07 prototype's `support.js`). Screens "Company overview" and "Colour label". Its look, layout and copy bind these screens; names and numbers are sample data; its top bar of screen buttons is a demo control, not Daybook UI. Build with Daybook's real components and tokens, never raw hex in CSS modules (the stored custom colour is the one exception, see below).
+
+### Data (migration `016_project_color.js`, portable to MySQL 8.4)
+
+- `projects.color`: `ENUM(...)` → `VARCHAR(7) NOT NULL DEFAULT 'blue'` (`ALTER TABLE ... MODIFY`, as in `011_auto_checkout.js`; existing values kept). Holds a preset (`blue, green, violet, orange, teal, pink, yellow`) or a lowercase `#rrggbb`. `down` sets every other value to `'blue'` and restores the six-value ENUM (custom colours are lost).
+
+**Deploy before migrate:** every screen keeps working; reads don't change. The projects repo checks the column type once per process, like `reports/repo.hasTimerNote` (`information_schema.columns`, cached), and **before writing** a yellow or custom colour on the old ENUM throws `VALIDATION_FAILED` with `fields.color` "This colour needs the latest database update. Pick one of the first six for now." (So it never relies on strict mode: `knexfile.js` doesn't set `sql_mode`, and a non-strict host would store '' with only a warning.) It works once migrated, with no restart (the cache is refreshed when the check said ENUM and 60 seconds have passed).
+
+**Migrating on the host:** `npm run migrate` printed only `Aborted` on the cPanel host (its process and thread limits). `migrate` and `seed` in `package.json` now start Node lean, like `worker:cron`, `doctor` and `reset` (`node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js ...`), and README's cPanel steps run that line without npm and with `UV_THREADPOOL_SIZE=2` (`tests/unit/hostScripts.test.js`).
+
+### Request 1: the Pending requests card is a link
+
+- **Counts follow the viewer.** `getOverview({ viewer, ... })` takes the viewer and counts with `reports.countPendingEditRequestsFor(viewer)` and `projects.countPendingRequestsFor(viewer)` (CONTRACT §6), plus `attendance.countPendingCorrections({ viewer })` when the viewer has `attendance.correct` (0 otherwise), instead of the company-wide `countRequests` (which also counted the Admin's own edit requests that `/requests` hides). So the card's number and the page agree.
+- `requestsKpi(counts, viewer)` (`src/modules/dashboard/requestsCard.js`, pure, with `requestsSub` and `requestsHref`; `overview.js` re-exports all three) adds `href`: `'/attendance'` when `edits + projects` is 0 and `corrections` is above 0 (fixes are handled there), otherwise `'/requests'` (also at 0, so the card behaves the same every time). The `href` is set only when `can(viewer, 'project_request.handle')` (for `/requests`) or `can(viewer, 'attendance.correct')` (for `/attendance`); otherwise the card is not a link.
+- **Sub text** counts what is waiting, leaving out zeros, joined with ", ": "2 edits, 1 new project, 1 fix", "1 edit", "3 fixes", "2 new projects". At 0: "Nothing waiting". It may wrap under the number, like "Monday to today".
+- **Kpi gets one prop** (ui-kit): `trailing` (an element shown at the top right, level with the label; the label gets right padding when it is set). CONTRACT §8's Kpi line lists `as`, `href` (passed through) and `trailing`.
+- `overview/page.js` renders a KPI with `href` as `<Kpi as={Link} href={kpi.href} className={styles.kpiLink} trailing={<ChevronRight size={18} strokeWidth={1.8} />} ...>`. `.kpiLink`: `color: inherit; transition: border-color 120ms`; the chevron is `--muted`. At rest only the chevron is new (artboard 11 otherwise unchanged). Hover: border `--line-dashed`, chevron `--ink`, no underline (`a:hover` in `globals.css` underlines, so set `text-decoration: none`). Focus: the global ring (the `<a>` is the card, so the ring follows its radius). The accessible name is the card's text ("Pending requests 4 2 edits, 1 new project, 1 fix").
+- **Requests page** (projects, `RequestsView.jsx` renders `AttendanceFixes.jsx`): when the viewer has `attendance.correct` and corrections are pending, a muted line under the pills: "1 attendance fix is waiting on Attendance." with "Open attendance" as a text link (plural "3 attendance fixes are waiting on Attendance."). No "Back" link: the Admin's sidebar has Overview. The Admin's sidebar has no Requests item, so nothing is highlighted on `/requests`; that is accepted.
+
+### Request 2: yellow and more colours
+
+- **Yellow preset** (hue 51°, its soft colours 56°, kept apart from marigold's 39° that means Urgent and Pending): `--label-yellow: #d4b300`, `--label-yellow-bg: light-dark(#f6f2c0, #32310f)`, `--label-yellow-text: light-dark(#565000, #e5da69)`, with the light values in the `@supports not` block (`themeFallback.test.js`). Text on its background 7.2:1 light, 9.2:1 dark; on `--urgent-bg` 7.7 / 10.6. The strong colour is 2.05:1 on white (marigold, already used for bars, is 1.83) and 7.9:1 on the dark surface. Label "Yellow".
+- **Shared helper** `src/lib/projectColors.js` (pure, browser-safe; orchestrator file): `PROJECT_COLORS` (the seven presets), `MORE_COLORS` (`[{ key, label, hex }]`, below), `isPresetColor`, `isCustomColor(value)` (`/^#[0-9a-f]{6}$/`), `normalizeColor(value)` (trim and lowercase; nothing else), `colorProblem(hex)` → `null | 'light' | 'dark'` (contrast below 1.5:1 against `#ffffff` is light, against `#1a1e3a` is dark), `projectColorStyle(color)` → `{}` for a preset or anything invalid, `{ '--project': hex }` for a valid custom one. Every copy of the colour list (`projects/schemas.js`, `ProjectSquare.jsx`, `ColorSwatches.jsx`, `report/ProjectCard.jsx`) imports it instead.
+- **More colours** (`MORE_COLORS`, 8, each checked in both themes, none close to a preset or a status colour): Coral `#e8603c`, Brown `#9a5b2e`, Olive `#7d8a12`, Lime `#4f9d1a`, Sky `#2f86d6`, Plum `#9c3fb8`, Magenta `#c0399a`, Slate `#5d6b85`. Stored as hex (custom colours), so the list can change later without a migration.
+- **Validation** (`src/modules/projects/schemas.js`): `color` is a preset or a custom hex after `normalizeColor`; otherwise "Pick a colour label." A custom colour with a `colorProblem`: 'light' "This colour is too light to see. Pick a darker one."; 'dark' "This colour is too dark to see in the dark theme. Pick a lighter one." Create still defaults to `'blue'`. Audit as today (`project.update` with the new value).
+- **How a custom colour shows**: one `.custom` class next to the preset classes in `ProjectSquare`, `ProjectLabel`, `ColorSwatches`, `report/ProjectPicker`, `team/UrgentList` and `GlobalSearch`, reading `--project` from the inline style: background `color-mix(in srgb, var(--project) 16%, var(--surface))`, text `color-mix(in srgb, var(--project) 35%, var(--ink))`, strong (bars, dots, swatches, the report card chevron) `var(--project)`. Squares keep the soft background with the text colour, as presets do. It follows light and dark by itself. For every colour `colorProblem` accepts, text stays at least 6:1 on its background and on the surface in both themes and on the light `--urgent-bg`, and at least 5.9:1 on the dark `--urgent-bg` (a few deep blues dip under 6; the lowest is `#0000d3` at 5.97:1). The eight More colours are at least 6:1 everywhere, and nothing comes near 4.5:1 (`projectColors.test.js`). `ProjectLabel` merges its own `style` with the caller's. **GlobalSearch** moves its project letter to the soft background with the text colour (white on yellow is 2.1:1).
+- **Safe at render** (the database is never trusted for CSS): `projectColorStyle`, `resolveColor` (`chartColors.js`), `toneColor` (`ProgressBar.jsx`) and `report/ProjectCard.colorVars` re-check `isCustomColor` and fall back to the preset (or `{}`) otherwise; style objects only, never a CSS string built from the value. `GlobalSearch.jsx` stops passing `option.color` straight into `style`.
+- **Drawer** (`ProjectDrawer.jsx`, "Colour label"): one row: Blue, Green, Violet, Orange, Teal, Pink, Yellow (native radios as today), then a 40 px "More colours" button: a 32 px dashed circle (`box-sizing: border-box`, as in the prototype; 1.5 px border and Palette icon `--muted`, 4.6:1) with `aria-label` "More colours", `aria-expanded`, `aria-controls` the panel. When the project's colour is not a preset, the button is filled with that colour and carries the selected ring, and its name is "More colours, custom colour chosen". The wrapper becomes `role="group"` with `aria-labelledby` the label; the radios keep one `name`. The row wraps on narrow screens (`flex-wrap` is already on).
+- **The panel opens inline** under the row, inside the drawer body (it scrolls with the body, so nothing can be clipped; no popover, no bottom sheet): muted 13 px "More colours", the 8 swatches (same 32 px dots in 40 px boxes, buttons named after the colour, `aria-pressed`, the chosen one ringed; they wrap at 375 px), then "Any colour" (secondary, compact, Pipette icon) wrapping a native `<input type="color">` (value: the current custom colour, or `#2f86d6`). A swatch applies at once. The colour input applies on `change`; a colour with a `colorProblem` is not applied and its message shows in the field's error line (the server checks again). The panel stays open until the button is clicked again or a swatch is picked. **Escape** while focus is in the panel closes the panel only and puts focus back on the button: the panel's `onKeyDown` stops the event and prevents its default. The `Drawer` is a portal on `document.body`, and React handles a portal's events on its container, so the stopped Escape never reaches `useModal`'s document listener (`useModal.js:74,99`); that listener also skips a prevented key, which covers the panel outside a portal (where React's root, `document`, would share the node). Each call alone keeps the drawer open in the app; keep both. Escape elsewhere in the drawer closes the drawer as today. **Focus** on a dot is always the primary ring (2 px `--surface` gap, 2 px `--primary`), on the checked radio, the pressed swatch and the custom-filled More button too, where it replaces the colour ring (as in the prototype).
+- The project's colour shows everywhere it does today (list square, labels, bars, urgent list, picker). Exports, Slack and AI use no colour.
+
+### Files and owners
+
+| Owner        | Files                                                                                                                                                                                                                              |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| orchestrator | `db/migrations/016_project_color.js`, `src/lib/projectColors.js`, `src/app/globals.css` (yellow tokens and fallback), `src/config/version.js`, this section                                                                        |
+| dashboards   | `src/modules/dashboard/overview.js` (viewer counts), `src/modules/dashboard/requestsCard.js` (`href`, sub), `(app)/overview/page.js` (+ css), `team/UrgentList` (+ css)                                                            |
+| projects     | `src/modules/projects/{schemas,repo}.js` (column check), `(app)/projects/ColorSwatches.jsx` (+ css, the panel), `ProjectDrawer.jsx`, `(app)/requests/RequestsView.jsx` and `AttendanceFixes.jsx` (+ `page.module.css`, fixes line) |
+| reports      | `report/ProjectCard.jsx` (`colorVars`), `report/ProjectPicker.jsx` (+ css `.yellow`, `.custom`)                                                                                                                                    |
+| ui-kit       | `src/components/{Kpi,ProjectSquare,ProjectLabel,ProgressBar,chartColors,GlobalSearch}` (+ css), CONTRACT §8 lines                                                                                                                  |
+
+### Tests and version
+
+Unit: `projectColors` (normalise, presets, every `MORE_COLORS` passes, too light, too dark, `projectColorStyle` ignores bad values), the KPI sub ("1 new project", "Nothing waiting") and `href` (corrections only goes to `/attendance`, no permission gives no `href`). Services (`DB_NAME=daybook_test_<n>`): colours (yellow, palette hex, too light, too dark, invalid, uppercase hex is lowercased; before the migration a yellow or hex is refused with the message and nothing is written, also with a non-strict `sql_mode`); the overview count leaves out the Admin's own pending edit request. `themeFallback.test.js` covers the new tokens. E2E (`tests/e2e/colors.spec.js`): the Admin clicks Pending requests and lands on `/requests`; a PM picks Yellow, then Plum from More colours, presses Escape in the panel and the drawer stays open, saves, and sees the label on the list. `APP_VERSION` '1.08'.
+
+Also update CONTRACT §8 (`Kpi` `as`/`href`/`trailing`; colour props accept a custom hex) and §9 (the owner rows above).

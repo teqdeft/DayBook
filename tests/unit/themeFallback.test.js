@@ -40,4 +40,14 @@ describe('globals.css without light-dark()', () => {
     expect(themed.size).toBeGreaterThan(40);
     expect(Object.fromEntries(fallbackTokens())).toEqual(Object.fromEntries(themed));
   });
+
+  it('covers the yellow project colour (CONTRACT 23)', () => {
+    const fallback = fallbackTokens();
+    expect(themedTokens().get('--label-yellow-bg')).toBe('#f6f2c0');
+    expect(fallback.get('--label-yellow-bg')).toBe('#f6f2c0');
+    expect(fallback.get('--label-yellow-text')).toBe('#565000');
+    // The strong colour is the same in both themes, like the other label colours.
+    expect(css).toMatch(/^ {2}--label-yellow: #d4b300;$/m);
+    expect(fallback.has('--label-yellow')).toBe(false);
+  });
 });

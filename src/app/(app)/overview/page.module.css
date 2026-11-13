@@ -6,6 +6,30 @@
   align-items: start;
 }
 
+/* "Pending requests" is a link (CONTRACT 23). At rest only its chevron is new; on hover the border
+   darkens and the chevron moves, without the global link underline. The focus ring is the global
+   one, on the card's own radius. */
+.kpiLink {
+  color: inherit;
+  transition: border-color 120ms ease;
+}
+
+.kpiLink:hover {
+  border-color: var(--line-dashed);
+  text-decoration: none;
+}
+
+.kpiChevron {
+  transition:
+    transform 120ms ease,
+    color 120ms ease;
+}
+
+.kpiLink:hover .kpiChevron {
+  color: var(--ink);
+  transform: translateX(2px);
+}
+
 .rowCharts {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);

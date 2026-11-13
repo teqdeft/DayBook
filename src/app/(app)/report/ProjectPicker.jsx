@@ -7,6 +7,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Plus, Search, Trash2 } from 'lucide-react';
 import Tag from '@/components/Tag';
+import { projectColorKey, projectColorStyle } from '@/lib/projectColors';
 import { compactName } from '@/lib/text';
 import styles from './ProjectPicker.module.css';
 
@@ -187,7 +188,8 @@ export default function ProjectPicker({
                     onClick={() => pick(item)}
                   >
                     <span
-                      className={`${styles.swatch} ${styles[item.color] ?? styles.none}`}
+                      className={`${styles.swatch} ${styles[projectColorKey(item.color, 'none')]}`}
+                      style={projectColorStyle(item.color)}
                       aria-hidden="true"
                     />
                     <span className={styles.name}>{item.name}</span>

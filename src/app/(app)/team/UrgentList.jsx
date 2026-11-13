@@ -1,7 +1,7 @@
 // Urgent projects as marigold boxes: project name in its colour, the urgent note, and when it
 // was marked ("Urgent now" on the Team dashboard, "Urgent projects" on the Company overview).
 // Server-safe.
-import { projectColor } from '@/components/ProjectLabel';
+import { projectColorKey, projectColorStyle } from '@/lib/projectColors';
 import styles from './UrgentList.module.css';
 
 /**
@@ -14,7 +14,12 @@ export default function UrgentList({ items = [], empty = null, className = '' })
     <ul className={`${styles.list} ${className}`}>
       {items.map((item) => (
         <li key={item.id} className={styles.item}>
-          <p className={`${styles.project} ${styles[projectColor(item.color)]}`}>{item.name}</p>
+          <p
+            className={`${styles.project} ${styles[projectColorKey(item.color)]}`}
+            style={projectColorStyle(item.color)}
+          >
+            {item.name}
+          </p>
           <p className={styles.note}>{item.note}</p>
           <p className={styles.meta}>{item.meta}</p>
         </li>

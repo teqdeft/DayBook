@@ -254,20 +254,17 @@ export default function ProjectDrawer({
             </p>
           ) : null}
         </div>
-        <div className={styles.group} role="radiogroup" aria-labelledby="project-color-label">
+        {/* A group, not a radiogroup: "More colours" sits with the radios (CONTRACT 23). */}
+        <div className={styles.group} role="group" aria-labelledby="project-color-label">
           <p id="project-color-label" className={styles.groupLabel}>
             Colour label
           </p>
           <ColorSwatches
             value={values.color}
             onChange={(color) => set('color', color)}
+            error={errors.color}
             className={styles.swatches}
           />
-          {errors.color ? (
-            <p className={styles.error} role="alert">
-              {errors.color}
-            </p>
-          ) : null}
         </div>
         <div className={styles.urgent}>
           <Toggle

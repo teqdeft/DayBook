@@ -124,7 +124,7 @@ describe('report time on the Team board', () => {
 
   it('says "due" on the Company overview until the report time', async () => {
     setNowForTests('2026-09-30T08:30:00Z');
-    const early = (await dashboard.getOverview()).needsAttention[0];
+    const early = (await dashboard.getOverview({ viewer: people.ceo })).needsAttention[0];
     expect(early).toEqual({
       key: 'reports',
       status: 'pending',
@@ -132,7 +132,7 @@ describe('report time on the Team board', () => {
       href: '/team',
     });
     setNowForTests(NOW);
-    const late = (await dashboard.getOverview()).needsAttention[0];
+    const late = (await dashboard.getOverview({ viewer: people.ceo })).needsAttention[0];
     expect([late.status, late.text, late.href]).toEqual([
       'missing',
       '3 reports not submitted yet',

@@ -1,10 +1,17 @@
 // Input schemas for the projects endpoints. Every string length is checked here: the local
 // MariaDB silently truncates long strings, production MySQL rejects them.
 import { z } from 'zod';
+import {
+  COLOR_PROBLEM_MESSAGES,
+  DEFAULT_PROJECT_COLOR,
+  colorProblem,
+  isCustomColor,
+  isPresetColor,
+  normalizeColor,
+} from '@/lib/projectColors';
 import { compactName } from '@/lib/text';
 
 export const PROJECT_STATUSES = ['active', 'on_hold', 'completed'];
-export const PROJECT_COLORS = ['blue', 'green', 'violet', 'orange', 'teal', 'pink'];
 export const REQUEST_STATUSES = ['pending', 'approved', 'declined'];
 
 const BODY_MESSAGE = 'Send the fields as a JSON object.';
@@ -39,6 +46,24 @@ const urgentNote = z
   .trim()
   .max(200, 'Keep the urgent note to 200 characters or fewer.');
 
+const COLOR_MESSAGE = 'Pick a colour label.';
+
+/**
+ * A preset name or a custom '#rrggbb' (CONTRACT 23), trimmed and lowercased first. A custom colour
+ * must be visible on the light and the dark surface.
+ */
+const projectColor = z
+  .string({ error: COLOR_MESSAGE })
+  .transform(normalizeColor)
+  .superRefine((value, ctx) => {
+    if (!isPresetColor(value) && !isCustomColor(value)) {
+      ctx.addIssue({ code: 'custom', message: COLOR_MESSAGE });
+      return;
+    }
+    const problem = colorProblem(value);
+    if (problem) ctx.addIssue({ code: 'custom', message: COLOR_PROBLEM_MESSAGES[problem] });
+  });
+
 const memberIds = z
   .array(id('Pick people from the list.'), { error: 'Pick people from the list.' })
   .max(500, 'A project can have at most 500 members.')
@@ -50,7 +75,7 @@ const projectFields = {
   pmId: id('Pick a project manager.'),
   memberIds,
   status: z.enum(PROJECT_STATUSES, { error: 'Pick a status.' }),
-  color: z.enum(PROJECT_COLORS, { error: 'Pick a colour label.' }),
+  color: projectColor,
   isUrgent: z.boolean({ error: 'Choose on or off.' }),
   urgentNote: urgentNote.nullish(),
 };
@@ -84,7 +109,7 @@ export const projectCreateSchema = z
       ...projectFields,
       memberIds: memberIds.default([]),
       status: z.enum(['active', 'on_hold'], { error: 'Pick a status.' }).default('active'),
-      color: projectFields.color.default('blue'),
+      color: projectFields.color.default(DEFAULT_PROJECT_COLOR),
       isUrgent: projectFields.isUrgent.default(false),
     },
     { error: BODY_MESSAGE },
