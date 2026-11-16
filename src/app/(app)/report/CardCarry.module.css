@@ -1,0 +1,32 @@
+/* The suggestion box between a card's Task / Status header and its lines, and the planned note
+   under the card's head (CONTRACT 24 prototype). */
+.wrap {
+  padding: 20px 20px 10px;
+  border-bottom: 1px solid var(--track);
+}
+
+.planned {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -4px;
+  padding: 0 20px 12px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.planned svg {
+  flex: none;
+}
+
+@media (max-width: 640px) {
+  .wrap {
+    padding: 16px 16px 10px;
+  }
+
+  .planned {
+    margin-top: 0;
+    padding: 0 16px 12px;
+  }
+}

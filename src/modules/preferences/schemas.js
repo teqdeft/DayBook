@@ -33,7 +33,7 @@ export const PREFERENCE_FIELDS = Object.freeze({
   newTaskStatus: z.enum(NEW_TASK_STATUSES, {
     error: 'New tasks must start as In progress or Done.',
   }),
-  carryOver: onOff('Bring unfinished tasks into my next report'),
+  carryOver: onOff('Suggest my unfinished tasks'),
   slackPreview: onOff('Show the Slack preview'),
   polishButton: onOff('Polish with AI button'),
   polishLines: onOff('Polish on each task line'),

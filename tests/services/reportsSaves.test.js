@@ -26,6 +26,20 @@ vi.mock('@/modules/projects', async () => ({
 vi.mock('@/modules/attendance', async () => ({
   attendance: (await import('./reportsTestKit.js')).fakeAttendance,
 }));
+// A hook that runs inside a save's transaction right after it share-locked its project requests
+// (confirmRequests reads them there, CONTRACT 24).
+const requestLock = vi.hoisted(() => ({ after: null }));
+vi.mock('@/modules/reports/repo', async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    async shareLockProjectRequests(ids, trx) {
+      const rows = await original.shareLockProjectRequests(ids, trx);
+      await requestLock.after?.();
+      return rows;
+    },
+  };
+});
 
 // Tuesday 29 September 2026, 9:30 AM in Asia/Kolkata.
 const TUESDAY_MORNING = '2026-09-29T04:00:00Z';
@@ -268,26 +282,18 @@ describe('a project request handled while the save runs', () => {
     const request = await createProjectRequest(people.person, { name: 'zeta-site' });
     const zeta = await createProject(people.pm);
     const draft = await reports.openForDate({ user });
-    const realFind = fakeProjects.findPendingRequestForUser;
-    let calls = 0;
     let decision = null;
     let decidedDuringSave = null;
-    vi.spyOn(fakeProjects, 'findPendingRequestForUser').mockImplementation(
-      async (requestId, userId) => {
-        const found = await realFind(requestId, userId);
-        calls += 1;
-        if (calls === 2) {
-          // Inside the save's transaction, after it locked the request: the PM approves now.
-          let done = false;
-          decision = approveRequest(request, zeta).then(() => {
-            done = true;
-          });
-          await new Promise((resolve) => setTimeout(resolve, 300));
-          decidedDuringSave = done;
-        }
-        return found;
-      },
-    );
+    requestLock.after = async () => {
+      requestLock.after = null;
+      // Inside the save's transaction, after it locked the request: the PM approves now.
+      let done = false;
+      decision = approveRequest(request, zeta).then(() => {
+        done = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      decidedDuringSave = done;
+    };
 
     const saved = await save(draft.id, [
       { projectRequestId: request.id, hours: 2, tasks: [task('Zeta outline')] },

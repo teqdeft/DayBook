@@ -1,7 +1,9 @@
-// Team board cells that show live status (CONTRACT 15). No hooks: rendered by TeamBoard.
+// Team board cells that show live status (CONTRACT 15) and today's to-do (CONTRACT 24). No hooks:
+// rendered by TeamBoard.
 import ProjectLabel from '@/components/ProjectLabel';
 import Tag from '@/components/Tag';
 import { formatTimeAmPm } from '@/lib/time';
+import TodoPopover from './TodoPopover';
 import styles from './TeamBoard.module.css';
 
 /**
@@ -34,44 +36,50 @@ export function CheckInCell({ row, tz }) {
   );
 }
 
-// What "Projects today" says before there is a submitted report to take projects from.
-const NO_REPORT_TEXT = {
-  missing: 'No report yet',
-  due: 'No report yet',
-  draft: 'Not submitted yet',
-};
-
 /**
- * The projects on today's submitted report. While a timer runs, a "Now" tag and that project
- * come first (once: it isn't repeated from the report); hover shows the timer's note.
- * @param {{ row: { projects: { name: string, color: string }[], report: string,
- *   workingOn?: { name: string, color: string|null, note: string|null } | null } }} props
+ * "Projects today" (CONTRACT 15 and 24). Before submit only the running timer's project shows
+ * (green "Now" and its label; hover shows the timer's note), so planned projects never read as
+ * worked; after submit the submitted projects with hours follow it (the timer's project isn't
+ * repeated). Under them the to-do button "To-do: 2 of 5 done" with its popover, or muted
+ * "No to-do yet" for someone checked in whose report isn't submitted and has no lines.
+ * @param {{ row: { name: string, href: string, projects: { name: string, color: string }[],
+ *   workingOn?: { name: string, color: string|null, note: string|null } | null,
+ *   todo?: object | null, noTodo?: boolean } }} props
  */
 export function ProjectsCell({ row }) {
   const current = row.workingOn ?? null;
   const others = current
     ? row.projects.filter((project) => project.name !== current.name)
     : row.projects;
-  if (!current && others.length === 0) {
-    const text = NO_REPORT_TEXT[row.report];
-    return text ? <span className={styles.muted}>{text}</span> : null;
-  }
+  const labels =
+    current || others.length ? (
+      <span className={styles.labels}>
+        {current ? (
+          <span
+            className={styles.now}
+            title={current.note ? `Now on ${current.name}: ${current.note}` : undefined}
+          >
+            <Tag tone="green" padX={8} dot>
+              Now
+            </Tag>
+            <ProjectLabel project={current} />
+          </span>
+        ) : null}
+        {others.map((project) => (
+          <ProjectLabel key={project.name} project={project} />
+        ))}
+      </span>
+    ) : null;
+  const todo = row.todo ? (
+    <TodoPopover todo={row.todo} person={{ name: row.name, href: row.href }} />
+  ) : row.noTodo ? (
+    <span className={styles.noTodo}>No to-do yet</span>
+  ) : null;
+  if (!labels && !todo) return null;
   return (
-    <span className={styles.labels}>
-      {current ? (
-        <span
-          className={styles.now}
-          title={current.note ? `Now on ${current.name}: ${current.note}` : undefined}
-        >
-          <Tag tone="green" padX={8} dot>
-            Now
-          </Tag>
-          <ProjectLabel project={current} />
-        </span>
-      ) : null}
-      {others.map((project) => (
-        <ProjectLabel key={project.name} project={project} />
-      ))}
+    <span className={styles.projects}>
+      {labels}
+      {todo}
     </span>
   );
 }

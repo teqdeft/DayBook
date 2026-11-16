@@ -1,7 +1,17 @@
 import { z } from 'zod';
 
-/** What a slack_outbox row can hold. 'message' is a plain post to a channel. */
-export const OUTBOX_KINDS = ['report_post', 'report_update', 'dm', 'message'];
+/**
+ * What a slack_outbox row can hold. 'message' is a plain post to a channel; 'todo_post' and
+ * 'todo_update' are a person's to-do (CONTRACT 24, related_type 'todo', related_id the report id).
+ */
+export const OUTBOX_KINDS = [
+  'report_post',
+  'report_update',
+  'dm',
+  'message',
+  'todo_post',
+  'todo_update',
+];
 
 /** slack.enqueue() input (services only; there is no endpoint that queues messages). */
 export const enqueueSchema = z

@@ -167,7 +167,7 @@ describe("Admins' attendance is for Admins only", () => {
       expect(team.summary).toMatchObject({ tracked: 4, checkedIn: 3, wfh: 1, notCheckedIn: 1 });
       expect(team.summary.late.count).toBe(2);
       expect(team.attendance.segments.map((segment) => segment.value)).toEqual([2, 1, 1]);
-      expect(team.counts).toEqual({ everyone: 4, missing: 2, late: 2 });
+      expect(team.counts).toEqual({ everyone: 4, missing: 2, late: 2, noTodo: 2 });
       expect(team.kpis.map((kpi) => kpi.sub)).toEqual([
         'of 4 people',
         'of 3 checked in',
@@ -186,7 +186,7 @@ describe("Admins' attendance is for Admins only", () => {
         report: 'missing',
       });
       expect(team.summary).toMatchObject({ tracked: 5, checkedIn: 4, wfh: 2 });
-      expect(team.counts).toEqual({ everyone: 5, missing: 3, late: 3 });
+      expect(team.counts).toEqual({ everyone: 5, missing: 3, late: 3, noTodo: 3 });
       // (97 + 150 + 20) / 3 = 89 minutes
       expect(team.kpis.find((kpi) => kpi.key === 'late').sub).toBe('average 1h 29m');
     }

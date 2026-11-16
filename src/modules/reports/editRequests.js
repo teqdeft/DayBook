@@ -21,7 +21,7 @@ import { settings } from '@/modules/settings';
 import { slack } from '@/modules/slack';
 import { escapeSlackText } from '@/modules/slack/format';
 import { users } from '@/modules/users';
-import { insertDraft, planCarryOver } from './drafts';
+import { insertDraft } from './drafts';
 import * as repo from './repo';
 import { isEditable } from './view';
 
@@ -212,8 +212,8 @@ async function tellRequester({ request, type, title, body, linkPath, dm }, trx) 
 }
 
 /**
- * Approves an edit request: the report opens for 24 hours (unlocked_until), created as a draft
- * (with carry-over) when the day has no report yet. The requester is notified.
+ * Approves an edit request: the report opens for 24 hours (unlocked_until), created as an empty
+ * draft when the day has no report yet (no copied lines, CONTRACT 24). The requester is notified.
  * @param {{ user: object, requestId: number, ip?: string | null }} input
  * @returns {Promise<object>} the handled request (editRequestView)
  * @throws NOT_FOUND, FORBIDDEN, REQUEST_ALREADY_HANDLED
@@ -223,8 +223,6 @@ export async function approveEditRequest({ user, requestId, ip = null }) {
   const current = await settings.getAll();
   const tz = current.timezone;
   const until = now().add(UNLOCK_HOURS, 'hour').toDate();
-  const existing = await repo.findByUserAndDate(request.requestedBy, request.workDate);
-  const plan = existing ? [] : await planCarryOver(request.requestedBy, request.workDate);
   const dayLabel = formatDayShort(request.workDate);
   const untilText = `${formatTimeAmPm(until, tz)} on ${formatDayShort(workDate(tz, until))}`;
   const reportPath = `/report?date=${request.workDate}`;
@@ -237,7 +235,7 @@ export async function approveEditRequest({ user, requestId, ip = null }) {
       await repo.updateReport(reportId, { unlockedUntil: until, updatedAt: at }, trx);
     } else {
       const locksAt = locksAtFor(request.workDate, current.reportLock, tz);
-      const draft = { userId: request.requestedBy, workDate: request.workDate, locksAt, plan };
+      const draft = { userId: request.requestedBy, workDate: request.workDate, locksAt };
       reportId = await insertDraft({ ...draft, unlockedUntil: until }, trx);
     }
     await repo.updateEditRequest(

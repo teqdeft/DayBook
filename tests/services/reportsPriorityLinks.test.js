@@ -1,5 +1,6 @@
 // Priority task links on daily-report task lines (CONTRACT section 13): which links a save
-// accepts, carry-over, the revision snapshot, the report view and the Slack text.
+// accepts, lines carried from a suggestion (CONTRACT 24), the revision snapshot, the report view
+// and the Slack text.
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, parseJson } from '@/lib/db';
 import { setNowForTests } from '@/lib/time';
@@ -341,8 +342,8 @@ describe('linking a task line', () => {
   });
 });
 
-describe('carry-over, submit and the version', () => {
-  it("carries the link to the next day's draft, even after the task is marked done", async () => {
+describe('carried lines, submit and the version', () => {
+  it('a line added from a suggestion keeps the link, even after the task is marked done', async () => {
     const login = await priorityTask(internal, { priority: 'p3' });
     const monday = await insertReport(people.person, MONDAY, {
       entries: [
@@ -359,7 +360,24 @@ describe('carry-over, submit and the version', () => {
     await db('reportTasks').where({ id: monday.taskIds[0] }).update({ projectTaskId: login.id });
     await db('projectTasks').where({ id: login.id }).update({ status: 'done', doneAt: new Date() });
 
-    const view = await reports.openForDate({ user });
+    // The draft starts empty (CONTRACT 24); both open lines are added from the suggestions,
+    // sent without the link (the suggestion doesn't know it): the line copies it.
+    const draft = await reports.openForDate({ user });
+    expect(draft.entries).toEqual([]);
+    const view = await save(draft.id, [
+      {
+        projectId: internal.id,
+        hours: 0,
+        tasks: [
+          {
+            title: 'Fix login timeout',
+            status: 'in_progress',
+            carriedFromTaskId: monday.taskIds[0],
+          },
+          { title: 'Unlinked', status: 'blocked', carriedFromTaskId: monday.taskIds[1] },
+        ],
+      },
+    ]);
 
     expect(view.entries[0].tasks).toEqual([
       expect.objectContaining({

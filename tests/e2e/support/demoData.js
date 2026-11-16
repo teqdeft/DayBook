@@ -1,5 +1,6 @@
 // Read-only lookups in the demo data, for the few things a spec needs to know before it opens a
-// screen (which locked report to ask about, which day has a missing check-out, a project's id),
+// screen (which locked report to ask about, which day has a missing check-out, a project's or a
+// person's id),
 // and one thing no screen shows: whether the server asked the AI. Everything else the specs check
 // is read from the screens, not from here.
 import knex from 'knex';
@@ -82,4 +83,15 @@ export async function projectIdByName(name) {
 export async function aiRequestCount() {
   const row = await db()('aiUsage').count({ total: '*' }).first();
   return Number(row?.total ?? 0);
+}
+
+/**
+ * A person's id by their email.
+ * @param {string} email
+ * @returns {Promise<number>}
+ */
+export async function userIdByEmail(email) {
+  const row = await db()('users').where({ email }).first('id');
+  if (!row) throw new Error(`The demo data has no person ${email}.`);
+  return row.id;
 }

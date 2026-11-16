@@ -2,7 +2,8 @@
 // "Report history" on the Employee detailed view: one row per day, newest first. Opening a day
 // shows its tasks and its edit history (every submit, who made it, when and why). The latest few
 // days show first; "Show N more days" reveals the rest of the range. A day the auto check-out
-// closed says "Auto" next to its Out time (CONTRACT 19).
+// closed says "Auto" next to its Out time (CONTRACT 19). A line the person closed from the
+// suggestions says so under its title, "Marked done on Thu, 12 Nov" (CONTRACT 24).
 import { Fragment, useState } from 'react';
 import ProjectLabel from '@/components/ProjectLabel';
 import StatusCell from '@/components/StatusCell';
@@ -25,7 +26,8 @@ const COLUMNS = [
 
 /**
  * @param {{ rows: object[], emptyText?: string }} props rows from dashboard.getEmployeeDetail().history
- *   (`checkoutStatus` is the day's attendance checkout status, 'auto' after an auto check-out)
+ *   (`checkoutStatus` is the day's attendance checkout status, 'auto' after an auto check-out;
+ *   each entry's tasks carry `closedNote`, "Marked not needed on Thu, 12 Nov" or null)
  */
 export default function ReportHistory({ rows, emptyText = 'No working days in this range yet.' }) {
   const [open, setOpen] = useState(() => new Set());
@@ -169,7 +171,12 @@ function DayDetail({ row }) {
                   <span className={styles.taskProject}>
                     {index === 0 ? <ProjectLabel project={entry.project} /> : null}
                   </span>
-                  <span className={styles.taskTitle}>{task.title}</span>
+                  <span className={styles.taskTitle}>
+                    {task.title}
+                    {task.closedNote ? (
+                      <span className={styles.closedNote}>{task.closedNote}</span>
+                    ) : null}
+                  </span>
                   <span className={styles.taskHours}>{index === 0 ? entry.hours : ''}</span>
                   <StatusCell
                     status={task.status}

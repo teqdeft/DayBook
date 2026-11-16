@@ -44,6 +44,8 @@ describe('settings.getAll', () => {
       slackEnabled: true,
       slackReportChannelId: null,
       slackReportChannelName: null,
+      slackTodoChannelId: null,
+      slackTodoChannelName: null,
       slackPostReports: true,
       slackRemind: true,
       slackUrgentNotify: true,
@@ -218,6 +220,63 @@ describe('settings.update', () => {
       settings.update({ user: admin, values: { reportLock: 'next_day_24:00' } }),
       'VALIDATION_FAILED',
     );
+  });
+
+  it('saves and reads the to-do channel (CONTRACT 24), null by default and apart from reports', async () => {
+    await setSettings({ slack_report_channel_id: 'C0REPORTS', slack_report_channel_name: 'daily' });
+    const before = await settings.getAll();
+    expect(before).toMatchObject({ slackTodoChannelId: null, slackTodoChannelName: null });
+
+    const saved = await settings.update({
+      user: admin,
+      values: { slackTodoChannelId: 'C0TODO', slackTodoChannelName: '#morning-todo' },
+    });
+    expect(saved).toMatchObject({
+      slackTodoChannelId: 'C0TODO',
+      slackTodoChannelName: 'morning-todo',
+      slackReportChannelId: 'C0REPORTS',
+      slackReportChannelName: 'daily',
+    });
+    const row = await db('settings').where({ key: 'slack_todo_channel_id' }).first();
+    expect(parseJson(row.value)).toBe('C0TODO');
+    expect(row.updatedBy).toBe(admin.id);
+
+    // "Don't post to-dos" saves null for both; the report channel stays as it was.
+    const cleared = await settings.update({
+      user: admin,
+      values: { slackTodoChannelId: '', slackTodoChannelName: null },
+    });
+    expect(cleared).toMatchObject({
+      slackTodoChannelId: null,
+      slackTodoChannelName: null,
+      slackReportChannelId: 'C0REPORTS',
+    });
+    await expectAppError(
+      settings.update({ user: admin, values: { slackTodoChannelId: 'C'.repeat(41) } }),
+      'VALIDATION_FAILED',
+    );
+    await setSettings({ slack_report_channel_id: null, slack_report_channel_name: null });
+  });
+
+  it('reads missing to-do channel rows as null, and adds the row on the first save', async () => {
+    // The live server never runs seeds: a database seeded before 1.09 has no such rows.
+    await db('settings')
+      .whereIn('key', ['slack_todo_channel_id', 'slack_todo_channel_name'])
+      .delete();
+    expect(await settings.getAll()).toMatchObject({
+      slackTodoChannelId: null,
+      slackTodoChannelName: null,
+    });
+    const saved = await settings.update({
+      user: admin,
+      values: { slackTodoChannelId: 'C0TODO', slackTodoChannelName: 'morning-todo' },
+    });
+    expect(saved.slackTodoChannelId).toBe('C0TODO');
+    const keys = await db('settings')
+      .whereIn('key', ['slack_todo_channel_id', 'slack_todo_channel_name'])
+      .pluck('key');
+    expect(keys.sort()).toEqual(['slack_todo_channel_id', 'slack_todo_channel_name']);
+    await setSettings({ slack_todo_channel_id: null, slack_todo_channel_name: null });
   });
 });
 

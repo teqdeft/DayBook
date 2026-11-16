@@ -3,7 +3,8 @@
 // the person's projects, then every other active project by search, then their pending project
 // requests ("Waiting for approval"). "Request a project" and "Remove from report" sit below.
 // Today's timer card uses it too (CONTRACT 15) with allowRequests={false}: real projects only, no
-// requests and no "Request a project".
+// requests and no "Request a project". With showOpenCounts (the report and Today's to-do, CONTRACT
+// 24) a project with unfinished tasks from past reports says so: muted "2 still open".
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Plus, Search, Trash2 } from 'lucide-react';
 import Tag from '@/components/Tag';
@@ -43,15 +44,26 @@ function buildSections(picker, query, allowRequests) {
 }
 
 const NOTHING_USED = new Set();
+const NO_COUNTS = {};
+
+/** The muted note beside an option: why it can't be picked, its open tasks, or a request's wait. */
+function optionNote({ taken, usedLabel, open, isRequest }) {
+  if (taken) return usedLabel;
+  if (open > 0) return `${open} still open`;
+  return isRequest ? 'Waiting for approval' : null;
+}
 
 /**
  * @param {{ picker: { urgent: object[], mine: object[], others: object[], requests: object[] },
  *   used?: Set<string>, current?: string | null, onPick: (pick: object) => void,
  *   onClose: (options?: { focusAnchor?: boolean }) => void, onRequestProject?: () => void,
  *   onRemove?: () => void, anchorRef: { current: HTMLElement | null }, className?: string,
- *   allowRequests?: boolean, usedLabel?: string, ariaLabel?: string }} props
+ *   allowRequests?: boolean, usedLabel?: string, ariaLabel?: string,
+ *   openCounts?: Record<string, number>, showOpenCounts?: boolean }} props
  *   allowRequests: false hides pending requests and "Request a project"; usedLabel: the note on
- *   a project that can't be picked again; ariaLabel: the popup's name
+ *   a project that can't be picked again; ariaLabel: the popup's name; openCounts: unfinished
+ *   tasks per project key ('p12', 'r4'), shown as "2 still open" only with showOpenCounts (off in
+ *   the timer form)
  */
 export default function ProjectPicker({
   picker,
@@ -66,6 +78,8 @@ export default function ProjectPicker({
   allowRequests = true,
   usedLabel = 'In this report',
   ariaLabel = 'Pick a project',
+  openCounts = NO_COUNTS,
+  showOpenCounts = false,
 }) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -176,6 +190,12 @@ export default function ProjectPicker({
                 const key = optionKey(item);
                 const taken = used.has(key);
                 const isActive = activeItem && optionKey(activeItem) === key;
+                const note = optionNote({
+                  taken,
+                  usedLabel,
+                  open: showOpenCounts ? Number(openCounts[key]) || 0 : 0,
+                  isRequest: Boolean(item.requestId),
+                });
                 return (
                   <div
                     key={key}
@@ -193,14 +213,11 @@ export default function ProjectPicker({
                       aria-hidden="true"
                     />
                     <span className={styles.name}>{item.name}</span>
-                    {taken ? <span className={styles.note}>{usedLabel}</span> : null}
+                    {note ? <span className={styles.note}>{note}</span> : null}
                     {!taken && item.isUrgent ? (
                       <Tag tone="marigold" solid>
                         Urgent
                       </Tag>
-                    ) : null}
-                    {!taken && item.requestId ? (
-                      <span className={styles.note}>Waiting for approval</span>
                     ) : null}
                   </div>
                 );

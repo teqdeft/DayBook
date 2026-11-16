@@ -98,6 +98,38 @@
       "namedRegex": "^/api/attendance\\-corrections/(?<nxtPid>[^/]+?)/reject(?:/)?$"
     },
     {
+      "page": "/api/me/carry-suggestions/[taskId]/close",
+      "regex": "^/api/me/carry\\-suggestions/([^/]+?)/close(?:/)?$",
+      "routeKeys": {
+        "nxtPtaskId": "nxtPtaskId"
+      },
+      "namedRegex": "^/api/me/carry\\-suggestions/(?<nxtPtaskId>[^/]+?)/close(?:/)?$"
+    },
+    {
+      "page": "/api/me/todo/lines/[id]",
+      "regex": "^/api/me/todo/lines/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/me/todo/lines/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/me/todo/lines/[id]/timer",
+      "regex": "^/api/me/todo/lines/([^/]+?)/timer(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/me/todo/lines/(?<nxtPid>[^/]+?)/timer(?:/)?$"
+    },
+    {
+      "page": "/api/me/todo/projects/[entryId]",
+      "regex": "^/api/me/todo/projects/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPentryId": "nxtPentryId"
+      },
+      "namedRegex": "^/api/me/todo/projects/(?<nxtPentryId>[^/]+?)(?:/)?$"
+    },
+    {
       "page": "/api/notifications/[id]",
       "regex": "^/api/notifications/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -553,6 +585,30 @@
       "regex": "^/api/me/preferences(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/me/preferences(?:/)?$"
+    },
+    {
+      "page": "/api/me/todo",
+      "regex": "^/api/me/todo(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/me/todo(?:/)?$"
+    },
+    {
+      "page": "/api/me/todo/lines",
+      "regex": "^/api/me/todo/lines(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/me/todo/lines(?:/)?$"
+    },
+    {
+      "page": "/api/me/todo/lines/bulk",
+      "regex": "^/api/me/todo/lines/bulk(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/me/todo/lines/bulk(?:/)?$"
+    },
+    {
+      "page": "/api/me/todo/slack",
+      "regex": "^/api/me/todo/slack(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/me/todo/slack(?:/)?$"
     },
     {
       "page": "/api/notifications",

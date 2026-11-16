@@ -103,7 +103,8 @@ function taskRows(day) {
   const entries = day.report?.entries ?? [];
   return entries.flatMap((entry) => {
     const project = { name: entry.projectName, color: entry.projectColor };
-    const hours = formatHours(entry.minutes);
+    // A planned project (0 minutes, CONTRACT 24) shows its open tasks but no hours.
+    const hours = entry.minutes > 0 ? formatHours(entry.minutes) : null;
     const tasks = entry.tasks.filter((task) => task.title.trim());
     if (tasks.length === 0) {
       return [{ key: `e${entry.id}`, project, hours, title: null, status: null }];
@@ -135,11 +136,14 @@ export function dayRows(log) {
       times: timesText(day, log.timezone),
       present: day.attendance ? formatDuration(day.presentMinutes) : null,
       logged: logged ? formatHours(report.totalMinutes) : null,
-      projects: (report?.entries ?? []).map((entry) => ({
-        key: entry.projectId ? `p${entry.projectId}` : `r${entry.projectRequestId}`,
-        name: entry.projectName,
-        color: entry.projectColor,
-      })),
+      // Only the projects worked on: a planned one (0 minutes) doesn't read as worked.
+      projects: (report?.entries ?? [])
+        .filter((entry) => entry.minutes > 0)
+        .map((entry) => ({
+          key: entry.projectId ? `p${entry.projectId}` : `r${entry.projectRequestId}`,
+          name: entry.projectName,
+          color: entry.projectColor,
+        })),
       ...(LOG_STATUS[day.status] ?? LOG_STATUS.missing),
       tasks: taskRows(day),
       ...panelFooter(day, context),

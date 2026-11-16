@@ -1,7 +1,8 @@
 // "Timer lines remember their note" (CONTRACT 21, fix found testing 1.06), on the server: a task
 // line's `timerNote` (report_tasks.timer_note, migration 014) is saved by autosave and submit,
 // returned by the report view, kept while the page sends it back, changed or cleared when it sends
-// something else, and copied by carry-over. Slack and the revision snapshot don't carry it.
+// something else, and copied to a line carried from a suggestion (CONTRACT 24). Slack and the
+// revision snapshot don't carry it.
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, parseJson } from '@/lib/db';
 import { setNowForTests } from '@/lib/time';
@@ -209,8 +210,8 @@ describe('a task line keeps the timer note it was filled from', () => {
   });
 });
 
-describe('carry-over', () => {
-  it('copies the timer note to the carried line', async () => {
+describe('carried lines', () => {
+  it('copy the timer note from the task they were added from', async () => {
     const monday = await insertReport(people.person, MONDAY, {
       entries: [
         {
@@ -227,7 +228,23 @@ describe('carry-over', () => {
     await db('reportTasks').where({ id: monday.taskIds[0] }).update({ timerNote: TYPO });
     await db('reportTasks').where({ id: monday.taskIds[2] }).update({ timerNote: 'Standup' });
 
-    const draft = await reports.openForDate({ user });
+    // The draft starts empty (CONTRACT 24); the two open lines are added from the suggestions.
+    const opened = await reports.openForDate({ user });
+    const draft = await reports.saveReport({
+      user,
+      reportId: opened.id,
+      baseVersion: opened.version,
+      entries: input([
+        {
+          projectId: internal.id,
+          minutes: 0,
+          tasks: [
+            { title: FIXED, status: 'in_progress', carriedFromTaskId: monday.taskIds[0] },
+            { title: 'Code review', status: 'blocked', carriedFromTaskId: monday.taskIds[1] },
+          ],
+        },
+      ]),
+    });
     expect(draft.entries[0].tasks).toMatchObject([
       { title: FIXED, timerNote: TYPO, carriedFromTaskId: monday.taskIds[0] },
       { title: 'Code review', timerNote: null, carriedFromTaskId: monday.taskIds[1] },

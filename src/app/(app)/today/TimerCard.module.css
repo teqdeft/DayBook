@@ -178,8 +178,56 @@
 }
 
 .noteField {
+  position: relative;
   flex: 1 1 200px;
   min-width: 0;
+}
+
+/* The picked project's to-do lines under the note (CONTRACT 24), in the report's suggestion look. */
+.offers {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  width: min(460px, 100%);
+  padding: 0 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--navy) 16%, transparent);
+}
+
+.offersHead {
+  padding: 10px 14px 4px;
+  font-size: var(--text-tag);
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.offers ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.offer {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  margin: 0 6px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.offer:hover,
+.offerActive {
+  background: var(--surface-muted);
 }
 
 .formButtons {

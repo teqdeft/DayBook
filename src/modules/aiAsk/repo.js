@@ -48,7 +48,8 @@ export function listPeople() {
 
 /**
  * The people on some projects: members, and anyone who logged hours on them in a submitted
- * report (someone removed from a project still worked on it).
+ * report (someone removed from a project still worked on it). A planned project (0 minutes,
+ * CONTRACT 24) logged no hours.
  * @param {number[]} projectIds
  * @returns {Promise<number[]>} user ids
  */
@@ -58,6 +59,7 @@ export async function listProjectPeopleIds(projectIds) {
     .join('dailyReports as r', 'r.id', 'e.reportId')
     .whereIn('e.projectId', projectIds)
     .where('r.status', 'submitted')
+    .where('e.minutes', '>', 0)
     .select('r.userId');
   const rows = await db('projectMembers')
     .whereIn('projectId', projectIds)
@@ -66,13 +68,17 @@ export async function listProjectPeopleIds(projectIds) {
   return [...new Set(rows.map((row) => Number(row.userId)))];
 }
 
-/** Submitted report entries in a date range, kept to the scope. */
+/**
+ * Submitted report entries in a date range with time logged, kept to the scope. A planned project
+ * (0 minutes, CONTRACT 24) wasn't worked on: it adds no person, day or task line.
+ */
 function submittedEntries({ from, to, projectIds, userIds, withRequests }) {
   return db('reportEntries as e')
     .join('dailyReports as r', 'r.id', 'e.reportId')
     .leftJoin('projects as p', 'p.id', 'e.projectId')
     .leftJoin('projectRequests as pr', 'pr.id', 'e.projectRequestId')
     .where('r.status', 'submitted')
+    .where('e.minutes', '>', 0)
     .whereBetween('r.workDate', [from, to])
     .modify((query) => {
       // A project-scoped viewer (a PM) sees real projects only, never requested ones.

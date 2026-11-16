@@ -58,11 +58,14 @@ function detailRows(entries, tasks, withoutReport) {
   );
 }
 
-/** Submitted hours per person and project, people A to Z, their biggest project first. */
+/**
+ * Submitted hours per person and project, people A to Z, their biggest project first. A planned
+ * project (0 minutes, CONTRACT 24) wasn't worked on, so it gets no summary row.
+ */
 function summaryRows(entries) {
   const totals = new Map();
   for (const row of entries) {
-    if (row.status !== 'submitted' || !row.entryId) continue;
+    if (row.status !== 'submitted' || !row.entryId || !(Number(row.minutes) > 0)) continue;
     const project = row.projectName ?? `${row.requestName} (requested)`;
     const key = `${row.userId}|${project}`;
     const current = totals.get(key) ?? {

@@ -86,8 +86,8 @@ function ReportSection() {
       />
       <ToggleRow
         name="carryOver"
-        label="Bring unfinished tasks into my next report"
-        help="Tasks still in progress or blocked in your last report start your next one."
+        label="Suggest my unfinished tasks"
+        help="When you pick a project, its unfinished tasks from past reports show up."
       />
       <ToggleRow
         name="slackPreview"

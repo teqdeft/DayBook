@@ -111,6 +111,11 @@ export const settingsUpdateSchema = z
     slackReportChannelName: nullableText(80, 'Channel name is too long.').transform((value) =>
       value ? value.replace(/^#/, '') || null : null,
     ),
+    // Today's to-do (CONTRACT 24): its own channel; null = to-dos are not posted
+    slackTodoChannelId: nullableText(40, 'Pick a channel from the list.'),
+    slackTodoChannelName: nullableText(80, 'Channel name is too long.').transform((value) =>
+      value ? value.replace(/^#/, '') || null : null,
+    ),
     slackPostReports: z.boolean({ error: 'Choose on or off.' }),
     slackRemind: z.boolean({ error: 'Choose on or off.' }),
     slackUrgentNotify: z.boolean({ error: 'Choose on or off.' }),

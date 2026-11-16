@@ -15,6 +15,9 @@ export const DEFAULT_SETTINGS = {
   slack_enabled: true,
   slack_report_channel_id: null, // null until Admin picks a channel
   slack_report_channel_name: null,
+  // Today's to-do (CONTRACT 24): their own channel; null = to-dos are not posted
+  slack_todo_channel_id: null,
+  slack_todo_channel_name: null,
   slack_post_reports: true,
   slack_remind: true,
   slack_urgent_notify: true,

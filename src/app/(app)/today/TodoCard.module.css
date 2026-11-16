@@ -1,0 +1,239 @@
+/* Today's to-do (CONTRACT 24, the prototype's "Today" screen): a header with the count and the
+   buttons, the empty state, then the groups (TodoGroup.module.css), the dashed "Add project" and
+   the reminder line. */
+.card {
+  min-width: 0;
+}
+
+/* Header */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 16px 20px 15px;
+  border-bottom: 1px solid var(--line);
+}
+
+.headLocked {
+  border-bottom: 0;
+}
+
+.headText {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.cardTitle {
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.count {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.subtitle {
+  margin-top: 3px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 10px;
+}
+
+/* 40 px buttons with 14 px text, as in the prototype (two classes, so they win over the size). */
+.actions .headButton {
+  --btn-pad-x: 14px;
+  --btn-pad-top: 2px;
+  font-size: 14px;
+}
+
+.posted {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.posted svg {
+  flex: none;
+  color: var(--green);
+}
+
+.failed {
+  font-weight: 500;
+  color: var(--red-text);
+}
+
+.failed svg {
+  color: currentColor;
+}
+
+/* Empty: centred like EmptyState, with two buttons */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px 20px 28px;
+  text-align: center;
+}
+
+.emptyIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary-text);
+}
+
+.emptyTitle {
+  margin-top: 12px;
+  font-family: var(--font-heading-stack);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.emptyBody {
+  max-width: 420px;
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.emptyButtons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+/* The "Add project" button and its picker, which opens under it. */
+.pickAnchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.pickerCentered {
+  left: 50%;
+  text-align: left;
+  transform: translateX(-50%);
+}
+
+/* Footer: the dashed "Add project" and the reminder line */
+.footer {
+  padding: 10px 20px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.addWrap {
+  position: relative;
+}
+
+.addProject {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 48px;
+  margin-top: 6px;
+  padding: 1px 16px 0;
+  border: 1px dashed var(--line-dashed);
+  border-radius: var(--radius-tile);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.addProject svg {
+  flex: none;
+  margin-top: -2px;
+}
+
+.addProject:hover {
+  border-color: var(--muted);
+  color: var(--ink);
+}
+
+.reminder {
+  margin-top: 12px;
+  font-size: var(--text-small);
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.empty .reminder {
+  margin-top: 16px;
+}
+
+.reminderButton {
+  margin-left: 10px;
+  line-height: 20px;
+}
+
+/* Below 1024 px the header's buttons go under the title. */
+@media (max-width: 1023px) {
+  .headText {
+    flex-basis: 100%;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+}
+
+/* Phones: the buttons share one full-width row and "Posted at" takes its own line. */
+@media (max-width: 640px) {
+  .head,
+  .footer {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .actions .headButton {
+    flex: 1 1 0;
+  }
+
+  .posted {
+    flex-basis: 100%;
+  }
+}

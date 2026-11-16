@@ -1,0 +1,12 @@
+var R=require("../../../../../chunks/[turbopack]_runtime.js")("server/app/api/me/todo/slack/route.js")
+R.c("server/chunks/src_modules_0udca7v._.js")
+R.c("server/chunks/src_modules_settings_index_0mnhtem.js")
+R.c("server/chunks/[root-of-the-server]__1b7zy8-._.js")
+R.c("server/chunks/_0s8fl53._.js")
+R.c("server/chunks/_1rajwye._.js")
+R.c("server/chunks/[root-of-the-server]__1234bn5._.js")
+R.c("server/chunks/[root-of-the-server]__07cm6s2._.js")
+R.c("server/chunks/_0myqkrb._.js")
+R.c("server/chunks/_next-internal_server_app_api_me_todo_slack_route_actions_0qqa1uw.js")
+R.m(12390)
+module.exports=R.m(12390).exports

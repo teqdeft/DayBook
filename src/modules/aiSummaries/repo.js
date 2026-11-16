@@ -21,6 +21,7 @@ export async function listActiveProjectsOf(pmIds) {
 /**
  * Every task line of the reports submitted on one day for these projects (an entry without
  * tasks gives one row with taskId null), with the writer and the linked priority task's priority.
+ * A planned project (0 minutes, CONTRACT 24) wasn't worked on that day, so it is left out.
  * @param {string} date 'YYYY-MM-DD'
  * @param {number[]} projectIds
  * @returns {Promise<Array<{ entryId: number, projectId: number, minutes: number, userId: number,
@@ -35,6 +36,7 @@ export async function listSubmittedLines(date, projectIds) {
     .leftJoin('reportTasks as t', 't.entryId', 'e.id')
     .leftJoin('projectTasks as pt', 'pt.id', 't.projectTaskId')
     .where({ 'r.workDate': date, 'r.status': 'submitted' })
+    .where('e.minutes', '>', 0)
     .whereIn('e.projectId', projectIds)
     .select(
       'e.id as entryId',

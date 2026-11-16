@@ -1,0 +1,3 @@
+{
+  "/api/me/carry-suggestions/[taskId]/close/route": "app/api/me/carry-suggestions/[taskId]/close/route.js"
+}

@@ -1,6 +1,6 @@
 // The person's own settings on the daily report (CONTRACT 21, reportPreferences.js): the subset
 // the page passes, which submit buttons the top bar shows, the polish switches, and the status
-// of task lines added by hand (lines from timers and carried lines keep theirs).
+// of task lines added by hand (lines from timers and lines carried from a suggestion keep theirs).
 import { describe, expect, it } from 'vitest';
 import {
   REPORT_PREFERENCE_DEFAULTS,
@@ -161,7 +161,7 @@ describe('new task status', () => {
     expect(rows[0].tasks[0].key).toBe(card.tasks[0].key);
   });
 
-  it('carried lines keep their status', () => {
+  it('carried lines (added from a suggestion, CONTRACT 24) keep their status', () => {
     const view = {
       entries: [
         {

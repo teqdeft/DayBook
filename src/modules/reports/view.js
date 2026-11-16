@@ -3,23 +3,28 @@ import { createHash } from 'node:crypto';
 import { dayjs, now } from '@/lib/time';
 import * as repo from './repo';
 
-/** A task line's part of the version; the priority link only when there is one. */
+/**
+ * A task line's part of the version; the priority link and the timer note only when there is
+ * one. The note counts since Play on Today writes it (CONTRACT 24): a report tab opened before
+ * Play would otherwise save the line without it and undo that write.
+ */
 function taskVersion(task) {
   const line = [Number(task.id), task.title, task.status];
-  return task.projectTaskId ? [...line, Number(task.projectTaskId)] : line;
+  const linked = task.projectTaskId ? [...line, Number(task.projectTaskId)] : line;
+  return task.timerNote ? [...linked, { note: task.timerNote }] : linked;
 }
 
 /**
  * A fingerprint of everything a save overwrites: the status and every entry and task (ids,
- * project, minutes, title, status, priority task link) in order. The report page sends back the
- * version it last loaded or saved, so a save from a tab that missed a change made elsewhere
- * (another tab or device, or a PM moving entries off a project request) is refused instead of
- * undoing it. A line without a link hashes as it did before links existed, so pages opened
- * before them keep saving.
+ * project, minutes, title, status, priority task link, timer note) in order. The report page
+ * sends back the version it last loaded or saved, so a save from a tab that missed a change made
+ * elsewhere (another tab or device, Play on Today, or a PM moving entries off a project request)
+ * is refused instead of undoing it. A line without a link or a note hashes as it did before they
+ * existed, so pages opened before them keep saving.
  * @param {string} status
  * @param {Array<{ id: number, projectId?: number|null, projectRequestId?: number|null,
  *   minutes: number, tasks: Array<{ id: number, title: string, status: string,
- *   projectTaskId?: number|null }> }>} entries
+ *   projectTaskId?: number|null, timerNote?: string|null }> }>} entries
  * @returns {string}
  */
 export function contentVersion(status, entries) {

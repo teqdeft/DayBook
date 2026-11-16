@@ -1,6 +1,6 @@
 'use client';
-// Slack settings: the connection (connect / disconnect act right away), the report channel and
-// the four Slack switches (saved with "Save changes").
+// Slack settings: the connection (connect / disconnect act right away), the report channel, the
+// to-do channel (CONTRACT 24) and the four Slack switches (saved with "Save changes").
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/Button';
@@ -56,13 +56,23 @@ function useChannels(configured) {
   return state;
 }
 
-function channelOptions(channels, form) {
+const TODO_CHANNEL_HELP =
+  "Pick the channel for people's morning to-do. Until one is picked, the Post to Slack button stays hidden. Add the Daybook app to the channel first.";
+
+/** The bot's channels as options, plus the saved one when the bot is no longer in it. */
+function channelOptions(channels, savedId, savedName) {
   const options = channels.map((channel) => ({ value: channel.id, label: `#${channel.name}` }));
-  const savedId = form.slackReportChannelId;
   if (savedId && !options.some((option) => option.value === savedId)) {
-    options.unshift({ value: savedId, label: `#${form.slackReportChannelName ?? savedId}` });
+    options.unshift({ value: savedId, label: `#${savedName ?? savedId}` });
   }
-  return [...options, { value: '', label: "Don't post reports" }];
+  return options;
+}
+
+/** A channel picker's change: the id and the name without "#", or null for "don't post". */
+function pickChannel(event) {
+  const id = event.target.value || null;
+  const name = id ? event.target.selectedOptions[0].textContent.replace(/^#/, '') : null;
+  return { id, name };
 }
 
 function ConnectionBox({ connection, onDisconnect, onConnect, busy }) {
@@ -167,12 +177,35 @@ export default function SlackSection({ connection }) {
         <Select
           id="settings-channel"
           value={form.slackReportChannelId ?? ''}
-          options={channelOptions(channels, form)}
+          options={[
+            ...channelOptions(channels, form.slackReportChannelId, form.slackReportChannelName),
+            { value: '', label: "Don't post reports" },
+          ]}
           onChange={(event) => {
-            const option = event.target.selectedOptions[0];
-            const id = event.target.value || null;
+            const { id, name } = pickChannel(event);
             setField('slackReportChannelId', id);
-            setField('slackReportChannelName', id ? option.textContent.replace(/^#/, '') : null);
+            setField('slackReportChannelName', name);
+          }}
+        />
+      </FormField>
+      <FormField
+        label="Post to-dos to"
+        htmlFor="settings-slackTodoChannelId"
+        help={errors.slackTodoChannelId ? undefined : TODO_CHANNEL_HELP}
+        error={errors.slackTodoChannelId ?? errors.slackTodoChannelName}
+        className={styles.channel}
+      >
+        <Select
+          id="settings-slackTodoChannelId"
+          value={form.slackTodoChannelId ?? ''}
+          options={[
+            { value: '', label: "Don't post to-dos" },
+            ...channelOptions(channels, form.slackTodoChannelId, form.slackTodoChannelName),
+          ]}
+          onChange={(event) => {
+            const { id, name } = pickChannel(event);
+            setField('slackTodoChannelId', id);
+            setField('slackTodoChannelName', name);
           }}
         />
       </FormField>

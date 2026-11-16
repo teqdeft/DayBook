@@ -1,6 +1,7 @@
 // Fills the development database with the people, projects, attendance, reports and requests shown
 // on the design canvas, so every screen looks like its artboard, plus three project plans (an off
-// track, an at risk and an on track project, projectPlans.js) for the project management screens.
+// track, an at risk and an on track project, projectPlans.js) for the project management screens,
+// and a to-do with unfinished tasks to suggest (todo.js) for Today's to-do.
 //
 //   npm run seed:demo                 evening state (the dashboards, 6:52 PM on the canvas)
 //   npm run seed:demo -- --midday     Vishal still checked in with a draft report (01 and 02)
@@ -18,6 +19,7 @@ import { anchorDate, at, dateAtOffset, workingDaysBack } from './calendar.js';
 import { insertClients, insertPeople, insertProjects } from './base.js';
 import { planAllDays } from './plan.js';
 import { assignTasks } from './tasks.js';
+import { addTodoLines } from './todo.js';
 import { buildRows } from './rows.js';
 import { buildActivitySegments } from './activity.js';
 import {
@@ -43,6 +45,12 @@ const DEMO_SETTINGS = {
   slack_report_channel_id: 'C0DAILYREP',
   slack_report_channel_name: 'daily-reports',
 };
+const SLACK_CHANNEL_KEYS = [
+  'slack_report_channel_id',
+  'slack_report_channel_name',
+  'slack_todo_channel_id',
+  'slack_todo_channel_name',
+];
 
 function refuseUnsafeDatabase() {
   const name = String(env.DB_NAME);
@@ -71,25 +79,27 @@ async function wipe() {
 
 /**
  * A real Slack channel picked in Settings survives a demo reset; the demo placeholder only fills
- * the slot when nothing real was saved (so re-seeding never breaks a connected Slack).
+ * the report channel's slot when nothing real was saved (so re-seeding never breaks a connected
+ * Slack). The to-do channel (CONTRACT 24) has no placeholder: one picked in Settings is kept.
  */
 async function readSavedSlackChannel() {
+  const kept = {};
   try {
-    const rows = await db('settings')
-      .whereIn('key', ['slack_report_channel_id', 'slack_report_channel_name'])
-      .select('key', 'value');
+    const rows = await db('settings').whereIn('key', SLACK_CHANNEL_KEYS).select('key', 'value');
     const saved = Object.fromEntries(rows.map((row) => [row.key, parseJson(row.value)]));
     const id = saved.slack_report_channel_id;
     if (id && id !== DEMO_SETTINGS.slack_report_channel_id) {
-      return {
-        slack_report_channel_id: id,
-        slack_report_channel_name: saved.slack_report_channel_name ?? null,
-      };
+      kept.slack_report_channel_id = id;
+      kept.slack_report_channel_name = saved.slack_report_channel_name ?? null;
+    }
+    if (saved.slack_todo_channel_id) {
+      kept.slack_todo_channel_id = saved.slack_todo_channel_id;
+      kept.slack_todo_channel_name = saved.slack_todo_channel_name ?? null;
     }
   } catch {
     // A fresh database has no settings table yet.
   }
-  return null;
+  return kept;
 }
 
 async function runBaseSeeds() {
@@ -118,7 +128,7 @@ async function insertDemo(trx, { settings, anchor, days, midday, slackChannel })
   const { tz, workingDays } = settings;
   const dateOf = (offset) => days[offset] ?? dateAtOffset(anchor, offset, workingDays);
   const when = (offset, clock) => at(dateOf(offset), clock, tz);
-  for (const [key, value] of Object.entries(slackChannel ?? DEMO_SETTINGS)) {
+  for (const [key, value] of Object.entries({ ...DEMO_SETTINGS, ...slackChannel })) {
     await trx('settings')
       .where({ key })
       .update({ value: toJson(value) });
@@ -131,6 +141,7 @@ async function insertDemo(trx, { settings, anchor, days, midday, slackChannel })
   const planCtx = { days, lateAfter: settings.lateAfter, midday, projects };
   const plans = planAllDays(planCtx);
   assignTasks(plans);
+  addTodoLines(plans);
   const { rows, index } = buildRows(plans, { ...settings, days, users, projects });
   // Priority tasks go in before the report lines that link to them.
   const priorityTasks = buildPriorityTasks({ when, dateOf, users, projects });

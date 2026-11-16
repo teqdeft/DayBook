@@ -1,9 +1,10 @@
-// Daily report (artboard 02). Opening the page creates the day's draft with carry-over; the editor
-// autosaves one second after the last change. /report?date=YYYY-MM-DD opens another day, which is
-// read-only once locked, with "Request an edit". With AI on (CONTRACT 20) an editable report also
-// gets "Polish with AI" and a sparkle on each task line (PolishProvider). The person's own
-// settings (My settings, CONTRACT 21) pick the submit buttons, the status of new task lines, the
-// Slack preview and the polish switches (data.preferences).
+// Daily report (artboard 02). Opening the page creates the day's draft (empty since CONTRACT 24:
+// unfinished tasks are suggested per project, data.carrySuggestions); the editor autosaves one
+// second after the last change. /report?date=YYYY-MM-DD opens another day, which is read-only
+// once locked, with "Request an edit". With AI on (CONTRACT 20) an editable report also gets
+// "Polish with AI" and a sparkle on each task line (PolishProvider). The person's own settings
+// (My settings, CONTRACT 21) pick the submit buttons, the status of new task lines, the Slack
+// preview and the polish switches (data.preferences).
 import Button from '@/components/Button';
 import EmptyState from '@/components/EmptyState';
 import TopBar from '@/components/TopBar';
@@ -117,6 +118,17 @@ async function prioritySuggestions(user, report, picker) {
 }
 
 /**
+ * The person's unfinished tasks from past reports (CONTRACT 24), shown when a card's project is
+ * picked: { [projectKey]: [{ taskId, title, status, workDate, dayLabel }] }, empty while carry
+ * forward is off. Only for the person's own report while it can change; the report still opens
+ * when they can't be read.
+ */
+async function carrySuggestionsFor(user, report) {
+  if (!report.editable || !report.id || Number(report.userId) !== Number(user.id)) return {};
+  return reports.listCarrySuggestions({ userId: user.id, date: report.workDate }).catch(() => ({}));
+}
+
+/**
  * Whether the report offers "Polish with AI" (CONTRACT 20): GEMINI_API_KEY is set, Settings → AI
  * has AI and Polish my tasks on, and the report can change. False when it can't be checked.
  */
@@ -183,20 +195,24 @@ export default async function ReportPage({ searchParams }) {
     attendance.getForUserOnDate(user.id, day),
   ]);
   const at = now();
-  const [suggestions, timersData, workedMinutes, aiPolish, prefs] = await Promise.all([
-    prioritySuggestions(user, report, picker),
-    // "From your timers" and required mode (CONTRACT 15); the report still opens without it.
-    reports.timersForReport({ user, report }).catch(() => null),
-    workedFor(row, user.id, day, at, tz),
-    polishAvailable(report),
-    reportSettings(user),
-  ]);
+  const [suggestions, carrySuggestions, timersData, workedMinutes, aiPolish, prefs] =
+    await Promise.all([
+      prioritySuggestions(user, report, picker),
+      carrySuggestionsFor(user, report),
+      // "From your timers" and required mode (CONTRACT 15); the report still opens without it.
+      reports.timersForReport({ user, report }).catch(() => null),
+      workedFor(row, user.id, day, at, tz),
+      polishAvailable(report),
+      reportSettings(user),
+    ]);
   const back = backLink({ user, day, today });
   const isToday = day === today;
   const data = {
     report,
     picker,
     suggestions,
+    // "Still open from past reports" when a project is picked (CONTRACT 24).
+    carrySuggestions,
     tz,
     isToday,
     // "Submit and check out" (ReportActions) while the person is still checked in today.

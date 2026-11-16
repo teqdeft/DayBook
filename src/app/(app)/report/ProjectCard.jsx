@@ -1,16 +1,20 @@
 'use client';
 // One project in the daily report: collapse chevron, project picker, Urgent / Waiting for approval
-// / Carried over label, hours, and the task lines (TaskLine.jsx) with their status select.
+// / Carried over label, hours, and the task lines (TaskLine.jsx) with their status select. Since
+// CONTRACT 24 also the project's unfinished tasks from past reports (CardCarry.jsx) and, for a
+// planned project (0 minutes, no Done line), "Not worked on today" under the head.
 import { useCallback, useId, useRef, useState } from 'react';
 import { ChevronDown, Plus } from 'lucide-react';
 import ProjectLabel from '@/components/ProjectLabel';
 import Tag from '@/components/Tag';
 import { isCustomColor, projectColorKey } from '@/lib/projectColors';
+import CardSuggestions, { PlannedNote } from './CardCarry';
 import HoursField from './HoursField';
 import ProjectPicker from './ProjectPicker';
 import TaskLine from './TaskLine';
 import { useReport } from './ReportProvider';
 import { parseHours } from './reportHours';
+import { showsPlannedNote } from './reportPlanned';
 import { preferencesOf } from './reportPreferences';
 import { newTask, projectKey, unlinkTasks } from './reportState';
 import { timerHoursFor } from './reportTimers';
@@ -76,7 +80,7 @@ export default function ProjectCard({
   disabled = false,
   hoursFromTimers = false,
 }) {
-  const { data, errors, readOnly, change, updateEntry, timers } = useReport();
+  const { data, errors, readOnly, change, updateEntry, timers, carry } = useReport();
   const [picking, setPicking] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const labelRef = useRef(null);
@@ -86,6 +90,8 @@ export default function ProjectCard({
   const entryErrors = errors.entries[entry.key] ?? {};
   const localHours = parseHours(entry.hours);
   const hoursError = entryErrors.hours ?? localHours.error;
+  // A planned project may go in at 0 hours (CONTRACT 24): a note, not an error.
+  const planned = !hoursError && showsPlannedNote(entry);
   const current = projectKey(entry);
   const otherKeys = new Set([...used].filter((key) => key !== current));
   // A collapsed card opens again when the server finds a problem in its tasks, so it shows.
@@ -208,6 +214,8 @@ export default function ProjectCard({
               onPick={pickProject}
               onClose={closePicker}
               onRemove={removeProject}
+              openCounts={carry.counts}
+              showOpenCounts
               onRequestProject={() => {
                 // Back on the project label first, so the dialog returns focus there.
                 labelRef.current?.focus();
@@ -250,12 +258,14 @@ export default function ProjectCard({
           ) : null}
         </div>
       ) : null}
+      {planned ? <PlannedNote /> : null}
       {showTasks ? (
         <div id={`${id}-tasks`} className={styles.tasks}>
           <div className={styles.thead} aria-hidden="true">
             <span>Task</span>
             <span className={styles.statusHead}>Status</span>
           </div>
+          <CardSuggestions entry={entry} focusRequestRef={focusRequestRef} disabled={disabled} />
           <ul className={styles.rows}>
             {entry.tasks.map((task, index) => (
               <TaskLine

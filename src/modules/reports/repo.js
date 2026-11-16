@@ -45,6 +45,16 @@ export function updateReport(id, changes, trx = db) {
   return trx('dailyReports').where({ id }).update(changes);
 }
 
+/**
+ * The to-do message columns of a report (CONTRACT 24, migration 017). Never part of
+ * REPORT_COLUMNS, so findById, save and submit keep working before the migration.
+ */
+export function findTodoPost(id, trx = db) {
+  return trx('dailyReports')
+    .where({ id })
+    .first('todoPostedAt', 'todoSlackChannelId', 'todoSlackTs', 'todoPostHash');
+}
+
 /** A person's reports between two dates (inclusive), newest first. */
 export function listByUserRange(userId, from, to, trx = db) {
   return trx('dailyReports')
@@ -200,7 +210,8 @@ export function lockEntries(reportId, trx) {
 
 /**
  * The task rows of the given entries in their order, locked until the transaction ends (without
- * `timerNote` before migration 014, see hasTimerNote).
+ * `timerNote` before migration 014, see hasTimerNote). `carriedFromTaskId` says whether a line
+ * already continues an open task (a to-do rename never links it again, CONTRACT 24).
  */
 export async function lockTasks(entryIds, trx) {
   if (entryIds.length === 0) return [];
@@ -213,14 +224,26 @@ export async function lockTasks(entryIds, trx) {
       { column: 'id', order: 'asc' },
     ])
     .forUpdate()
-    .select('id', 'entryId', 'title', 'status', 'projectTaskId', ...timerNote, 'sortOrder');
+    .select(
+      'id',
+      'entryId',
+      'title',
+      'status',
+      'projectTaskId',
+      'carriedFromTaskId',
+      ...timerNote,
+      'sortOrder',
+    );
 }
 
 /**
- * Takes a shared lock on project request rows (in id order) until the transaction ends; reads
- * nothing from them. Approving or declining a request locks its row first (projects module), so
- * while a report save holds this lock the request can't be handled, and a save that waited for
- * a decision sees it. Whether a request is still pending is asked of the projects service.
+ * Takes a shared lock on project request rows (in id order) until the transaction ends and reads
+ * who asked and whether they are still pending (a locking read sees the latest decision).
+ * Approving or declining a request locks its row first (projects module), so while a report save
+ * holds this lock the request can't be handled, and a save that waited for a decision sees it.
+ * Read here, on the save's own connection, so the check takes no second pool connection while the
+ * report row is locked (CONTRACT 24).
+ * @returns {Promise<Array<{ id: number, status: string, requestedBy: number }>>}
  */
 export function shareLockProjectRequests(ids, trx) {
   if (ids.length === 0) return Promise.resolve([]);
@@ -231,7 +254,7 @@ export function shareLockProjectRequests(ids, trx) {
     )
     .orderBy('id')
     .forShare()
-    .select('id');
+    .select('id', 'status', 'requestedBy');
 }
 
 export async function insertEntry(row, trx = db) {
@@ -262,40 +285,6 @@ export function deleteTasks(ids, trx = db) {
   return trx('reportTasks').whereIn('id', ids).delete();
 }
 
-/**
- * Every task of a person's reports (draft or submitted) between two dates, with its report day
- * and project, newest day first.
- */
-export function listTasksInRange(userId, from, to, trx = db) {
-  return trx('reportTasks as t')
-    .join('reportEntries as e', 'e.id', 't.entryId')
-    .join('dailyReports as d', 'd.id', 'e.reportId')
-    .leftJoin('projects as p', 'p.id', 'e.projectId')
-    .leftJoin('projectRequests as r', 'r.id', 'e.projectRequestId')
-    .where('d.userId', userId)
-    .whereBetween('d.workDate', [from, to])
-    .orderBy([
-      { column: 'd.workDate', order: 'desc' },
-      { column: 'e.sortOrder', order: 'asc' },
-      { column: 't.sortOrder', order: 'asc' },
-      { column: 't.id', order: 'asc' },
-    ])
-    .select(
-      't.id as taskId',
-      't.title',
-      't.status',
-      't.firstReportedOn',
-      't.carriedFromTaskId',
-      'd.workDate',
-      'd.status as reportStatus',
-      'e.projectId',
-      'e.projectRequestId',
-      'p.name as projectName',
-      'p.color as projectColor',
-      'r.name as requestName',
-    );
-}
-
 /** The task lines of a report that are linked to a priority task: [{ id, projectTaskId }]. */
 export function listTaskLinks(reportId, trx = db) {
   return trx('reportTasks as t')
@@ -319,12 +308,16 @@ export function listPriorityLinks(projectId, from, to, trx = db) {
     .select('t.id', 't.projectTaskId', 'pt.priority', 'pt.title');
 }
 
-/** Minutes per project from submitted reports in a date range (optionally one person). */
+/**
+ * Minutes per project from submitted reports in a date range (optionally one person). A planned
+ * project (0 minutes, CONTRACT 24) wasn't worked on, so a project with only those is left out.
+ */
 export function minutesByProject({ from, to, userId }, trx = db) {
   const query = trx('reportEntries as e')
     .join('dailyReports as d', 'd.id', 'e.reportId')
     .join('projects as p', 'p.id', 'e.projectId')
     .where('d.status', 'submitted')
+    .where('e.minutes', '>', 0)
     .whereBetween('d.workDate', [from, to])
     .groupBy('e.projectId', 'p.name', 'p.color')
     .select('e.projectId', 'p.name', 'p.color')
@@ -333,12 +326,16 @@ export function minutesByProject({ from, to, userId }, trx = db) {
   return query;
 }
 
-/** The latest submitted report day per project for a person. */
+/**
+ * The latest submitted report day per project for a person, counting days the project was worked
+ * on (a planned project at 0 minutes isn't an update, CONTRACT 24).
+ */
 export function lastReportDateByProject(userId, trx = db) {
   return trx('reportEntries as e')
     .join('dailyReports as d', 'd.id', 'e.reportId')
     .where('d.userId', userId)
     .where('d.status', 'submitted')
+    .where('e.minutes', '>', 0)
     .whereNotNull('e.projectId')
     .groupBy('e.projectId')
     .select('e.projectId')

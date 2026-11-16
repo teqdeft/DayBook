@@ -101,6 +101,14 @@
   border-bottom: 1px solid var(--line);
 }
 
+/* Today's to-do (CONTRACT 24): a project label and two lines */
+.todoBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 20px 16px;
+}
+
 .tableRow {
   display: flex;
   align-items: center;

@@ -171,6 +171,14 @@
   overflow-wrap: anywhere;
 }
 
+/* "Marked done on Thu, 12 Nov" under a line closed from the suggestions (CONTRACT 24) */
+.closedNote {
+  display: block;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
 .taskHours {
   font-weight: 600;
   text-align: right;

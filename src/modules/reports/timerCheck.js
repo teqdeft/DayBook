@@ -7,6 +7,7 @@ import { formatDuration, workDate } from '@/lib/time';
 import { settings } from '@/modules/settings';
 import { timers } from '@/modules/timers';
 import { getOwnReport } from './drafts';
+import { isPlannedEntry } from './planned';
 import { isEditable } from './view';
 
 const NO_TIMER_TIME = 'No timer time on this project today. Remove it or add time on Today.';
@@ -25,9 +26,11 @@ const timerMinutesOf = (project) => Math.round(Number(project.roundedMinutes) ||
  * The required-mode rules on a report's entries (pure): every project entry's minutes are within
  * TIMER_TOLERANCE_MINUTES of the project's timer minutes (`entries.N.hours`), and every project
  * timed for longer than that is in the report (`total`, the biggest missing one). Entries for
- * project requests (no project yet) are exempt. Messages read as hours and minutes ("2h 5m").
+ * project requests (no project yet) are exempt, and so is a planned project with no timer time
+ * (0 minutes, no Done line: CONTRACT 24, planned.js). Messages read as hours and minutes ("2h 5m").
  * @param {Array<{ projectId?: number | null, projectRequestId?: number | null,
- *   minutes: number }>} entries in the order sent (field keys follow it)
+ *   minutes: number, tasks?: Array<{ title?: string, status: string }> }>} entries in the order
+ *   sent (field keys follow it)
  * @param {{ projects: Array<{ projectId: number, projectName: string,
  *   roundedMinutes: number }> }} summary timers.getDaySummary() (roundedMinutes: whole minutes),
  *   biggest project first
@@ -49,8 +52,9 @@ export function timerProblems(entries, summary) {
     const timerMinutes = timed.get(projectId) ?? 0;
     const key = `entries.${i}.hours`;
     const off = Math.abs((Number(entry.minutes) || 0) - timerMinutes);
-    if (timerMinutes <= 0) fields[key] = NO_TIMER_TIME;
-    else if (off > TIMER_TOLERANCE_MINUTES) {
+    if (timerMinutes <= 0) {
+      if (!isPlannedEntry(entry)) fields[key] = NO_TIMER_TIME;
+    } else if (off > TIMER_TOLERANCE_MINUTES) {
       fields[key] = `Hours come from your timers (${formatDuration(timerMinutes)}).`;
     }
   });

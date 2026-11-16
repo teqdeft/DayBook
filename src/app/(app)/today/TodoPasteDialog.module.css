@@ -1,0 +1,144 @@
+/* "Paste your to-do" (CONTRACT 24 prototype): the list, its help, then the live preview. */
+.label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
+textarea.textarea {
+  min-height: 150px;
+  line-height: 22px;
+}
+
+.help {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.preview {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.summary {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+/* One heading: a box with a line, red while it needs a project */
+.group {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-tile);
+  background: var(--surface);
+}
+
+.groupBad {
+  border-color: var(--red);
+}
+
+.groupHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-height: 36px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.note,
+.noteRed {
+  min-width: 0;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.noteRed {
+  color: var(--red-text);
+}
+
+.groupHead .change {
+  min-height: 36px;
+  padding: 0 4px;
+}
+
+/* A 36 px Select with 14 px text (two classes, so they win over the control's size). */
+.groupHead .select {
+  width: auto;
+  max-width: 100%;
+  height: 36px;
+  padding-top: 1px;
+  padding-left: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.lines {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.lineMuted {
+  color: var(--muted);
+}
+
+.bullet {
+  flex: none;
+  color: var(--muted);
+}
+
+.lineText {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.struck {
+  text-decoration: line-through;
+}
+
+.lineText .tag {
+  height: 20px;
+  margin-left: 8px;
+  padding: 0 7px;
+  font-size: 11px;
+  vertical-align: 1px;
+}
+
+.notes {
+  margin-top: 10px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  textarea.textarea {
+    font-size: 16px;
+  }
+}

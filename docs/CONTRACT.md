@@ -229,9 +229,6 @@ checkInIp, checkOutIp, note, lateMinutes, isWorkingDay, checkoutStatus, source }
 
 - `getDayStatus(userId, workDate)` → `{ reportId, status: 'none' | 'draft' | 'submitted', totalMinutes }`.
 - `getSubmittedMinutesByDay(userId, from, to)` → `{ 'YYYY-MM-DD': minutes }`.
-- `listRecentTasks(userId, from, to)` → latest version of each task (carry-over chains collapsed),
-  newest first: `[{ taskId, title, status, projectId, projectName, projectColor, workDate,
-firstReportedOn }]`.
 - `hasEntriesForProjectRequest(projectRequestId)` → boolean;
   `moveProjectRequestEntries({ projectRequestId, projectId }, trx)` → count moved.
 - `listPendingEditRequestsFor(user)` → `[{ id, workDate, reason, createdAt, requester:
@@ -283,7 +280,8 @@ Later sections add: activity → `activity/*` (11), dashboards → `projects/[id
 projects → `projects/[id]/tasks`, `project-tasks/*` (13), system → `push/subscriptions` (14),
 timers → `timers/*` and attendance → `attendance/break/start`, `attendance/break/end` (15),
 projects → `projects/[id]/phase`, `deadline`, `phases/[phase]/dates`, `documents`,
-`project-documents/*` and ai → `ai/projects/[id]/summary*` (22).
+`project-documents/*` and ai → `ai/projects/[id]/summary*` (22), reports → `me/todo/**`,
+`me/carry-suggestions/**` (24).
 
 Downloads ("Download Excel" buttons) — each screen uses an endpoint its viewers are allowed to call:
 Team dashboard and Employee detail → `GET /api/exports/hours?from=&to=&userId=` (`export.hours`,
@@ -411,6 +409,19 @@ faded? }], height }` (Today's "This week" and Overview's stacked "Attendance thi
 | projects     | `src/modules/projects/{schemas,repo}.js`, `(app)/projects/ColorSwatches.jsx` (+ css) and `ProjectDrawer.jsx`, `(app)/requests/AttendanceFixes.jsx` (CONTRACT 23)         |
 | reports      | `(app)/report/ProjectCard.jsx` (`colorVars`), `(app)/report/ProjectPicker.jsx` (+ css) (CONTRACT 23)                                                                     |
 | ui-kit       | `src/components/{Kpi,ProjectSquare,ProjectLabel,ProgressBar,chartColors,GlobalSearch}` (+ css) (CONTRACT 23)                                                             |
+| orchestrator | `db/migrations/017_todo.js`, `db/seeds/03_settings.js`, `src/config/version.js`, `db/demo/todo.js`, `tests/e2e/todo.spec.js` (CONTRACT 24)                               |
+| reports      | `src/modules/reports/{todo,todoRead,todoAdd,todoEdit,todoTimer,todoSlack,todoWrite,todoView,todoRepo}.js`, `api/me/todo/**`, `api/me/carry-suggestions/**` (CONTRACT 24) |
+| reports      | `src/modules/reports/{suggestions,carry,carryRepo,planned,todoText}.js` (+ `schemas`, `drafts`, `save`, `submit`, `timerCheck`, `repo`) (CONTRACT 24)                    |
+| reports      | `src/modules/reports/{writeTx,todoSchemas}.js` (the line-writing transaction, the to-do schemas) (CONTRACT 24)                                                           |
+| reports      | `(app)/report/{CarrySuggestions,SuggestionRows,StillOpenDialog,CardCarry,StillOpenReminder}.jsx` (+ css), `useSuggestionClose.jsx` (CONTRACT 24)                         |
+| reports      | `(app)/report/{useCarrySuggestions,reportCarry,reportPlanned}.js`, `ProjectCard.jsx`, `ProjectPicker.jsx` (+ css), `ReportEditor.jsx` (CONTRACT 24)                      |
+| attendance   | `(app)/today/{TodoProvider,TodoCard,TodoHeader,TodoGroup,TodoLine,TodoAddInput,TodoPasteDialog,TimerNoteField,TimerNow}.jsx` (+ css) (CONTRACT 24)                       |
+| attendance   | `(app)/today/{useTodoState,todoModel,todoPaste,todayTodo,todayData}.js`, `page.js`, `TodayCards.jsx`, `PriorityCard.jsx`, `TimerStartForm.jsx` (CONTRACT 24)             |
+| attendance   | `(app)/today/{todoSync,todoActions,useTodoSync,useSendBeforeLeave}.js` (the to-do's state, its writes, leaving with a delete waiting) (CONTRACT 24)                      |
+| dashboards   | `src/modules/dashboard/{todo,todoRepo,todoColumns}.js` (+ `team`, `employee`, `repo`), `(app)/team/{TodoPopover,TodoList}.jsx` (+ css) (CONTRACT 24)                     |
+| system       | `src/modules/slack/{todo,todoDelivery,enqueue}.js` (+ `format`, `service`, `outbox`, `schemas`, `repo`), `src/modules/settings/schemas.js` (CONTRACT 24)                 |
+| people-admin | `(app)/settings/SlackSection.jsx` ("Post to-dos to"), `settingsValues.js` (CONTRACT 24)                                                                                  |
+| preferences  | `(app)/my-settings/MySettingsSections.jsx`, `src/modules/preferences/schemas.js` (the `carryOver` label) (CONTRACT 24)                                                   |
 
 Every page starts with `const user = await requirePage('<permission>')`, renders `<TopBar ... />`
 then its blocks, has a loading skeleton (`loading.js`) and empty states. Page permissions:
@@ -1148,17 +1159,17 @@ themselves only. Company rules stay in Settings (Admin).
   created on the first change.
 - Keys, values and defaults (`PREFERENCE_DEFAULTS`, frozen):
 
-  | Key                 | Values                           | Default         | Used by                    |
-  | ------------------- | -------------------------------- | --------------- | -------------------------- |
-  | `submitButtons`     | `'both'` `'checkout'` `'submit'` | `'both'`        | report top bar             |
-  | `newTaskStatus`     | `'in_progress'` `'done'`         | `'in_progress'` | report editor              |
-  | `carryOver`         | boolean                          | `true`          | new report drafts (server) |
-  | `slackPreview`      | boolean                          | `true`          | report page                |
-  | `polishButton`      | boolean                          | `true`          | report top bar             |
-  | `polishLines`       | boolean                          | `true`          | report task lines          |
-  | `polishAfterTimers` | boolean                          | `true`          | Fill report from timers    |
-  | `bellRing`          | boolean                          | `true`          | notification bell          |
-  | `theme`             | `'system'` `'light'` `'dark'`    | `'system'`      | whole app                  |
+  | Key                 | Values                           | Default         | Used by                   |
+  | ------------------- | -------------------------------- | --------------- | ------------------------- |
+  | `submitButtons`     | `'both'` `'checkout'` `'submit'` | `'both'`        | report top bar            |
+  | `newTaskStatus`     | `'in_progress'` `'done'`         | `'in_progress'` | report editor             |
+  | `carryOver`         | boolean                          | `true`          | suggestions (CONTRACT 24) |
+  | `slackPreview`      | boolean                          | `true`          | report page               |
+  | `polishButton`      | boolean                          | `true`          | report top bar            |
+  | `polishLines`       | boolean                          | `true`          | report task lines         |
+  | `polishAfterTimers` | boolean                          | `true`          | Fill report from timers   |
+  | `bellRing`          | boolean                          | `true`          | notification bell         |
+  | `theme`             | `'system'` `'light'` `'dark'`    | `'system'`      | whole app                 |
 
 - `preferences.getFor(userId)` → every key (stored values over the defaults; an unknown key or a
   stored value that is no longer valid is ignored). A missing table (MySQL errno 1146, a deploy
@@ -1200,8 +1211,8 @@ themselves only. Company rules stay in Settings (Admin).
        is submitted."
      - "New tasks start as" (Segmented: In progress · Done). Help: "For tasks you add yourself.
        Tasks from your timers start as In progress."
-     - "Bring unfinished tasks into my next report" (Toggle). Help: "Tasks still in progress or
-       blocked in your last report start your next one."
+     - "Suggest my unfinished tasks" (Toggle; CONTRACT 24). Help: "When you pick a project, its
+       unfinished tasks from past reports show up."
      - "Show the Slack preview" (Toggle). Help: "Beside your report, what will post to Slack."
   2. **AI** (people who write reports, while `ai.isAvailable('polish')`):
      - "Polish with AI button" (Toggle). Help: "At the top of your report, for every task at once."
@@ -1226,8 +1237,10 @@ themselves only. Company rules stay in Settings (Admin).
 - **New tasks start as**: lines added by hand (Add task, Enter at the end of a line, the empty line
   of a newly added project) get this status; lines written by Fill report from timers and carried
   lines keep theirs.
-- **Carry-over off**: a new draft (opening the report, or an approved edit request creating a
-  missing day) starts without carried lines. Existing drafts are not changed.
+- **Carry-over off** (since Daybook 1.09, CONTRACT 24: carry forward suggests, it no longer
+  copies): no new draft starts with carried lines whatever the setting. While it is on, picking a
+  project on Today or in the report suggests its tasks still open from past reports; off, there
+  are no suggestions, no reminder line and no "still open" hints. Existing drafts are not changed.
 - **Slack preview off**: the side panel isn't rendered and the cards take the full width.
 - **Polish**: `polishButton` off hides the top-bar button; `polishLines` off hides the line
   sparkles; `polishAfterTimers` off skips the "Suggested wording" offer after Fill report from
@@ -1312,8 +1325,11 @@ added the original note again as a new line. Fill twice with a polish in between
   on insert and update (part of the fields `sameFields` compares), the report view returns it on
   every task, `entriesFromView` reads it, and the browser backup of a submitted report keeps it.
   Carry-over copies it to the carried line (so a carried, reworded line isn't added again by today's
-  Fill of the same note). It is not part of the report's version check: a page opened before the
-  deploy saves without it (clearing it), and the next save from a new page restores it.
+  Fill of the same note). Since CONTRACT 24 (1.09) a set note is part of the report's version
+  (`taskVersion`; a line without one hashes as before), because Play on Today writes it from
+  outside the report page: a tab opened before Play gets the "changed somewhere else" CONFLICT
+  instead of saving the line without it. A page opened before the 1.09 deploy whose lines have
+  notes gets that CONFLICT once and reloads.
 - Moving a card to another project (`unlinkTasks`, used by `pickProject` and by the request-a-project
   move) clears `timerNote` on its lines: the note belonged to the old project's timer.
 - Nothing else reads it: Slack text, the PM views, exports, revisions and AI prompts are unchanged.
@@ -1501,3 +1517,192 @@ Two small asks from the owner, shipped first (the to-do and unfinished-task sugg
 Unit: `projectColors` (normalise, presets, every `MORE_COLORS` passes, too light, too dark, `projectColorStyle` ignores bad values), the KPI sub ("1 new project", "Nothing waiting") and `href` (corrections only goes to `/attendance`, no permission gives no `href`). Services (`DB_NAME=daybook_test_<n>`): colours (yellow, palette hex, too light, too dark, invalid, uppercase hex is lowercased; before the migration a yellow or hex is refused with the message and nothing is written, also with a non-strict `sql_mode`); the overview count leaves out the Admin's own pending edit request. `themeFallback.test.js` covers the new tokens. E2E (`tests/e2e/colors.spec.js`): the Admin clicks Pending requests and lands on `/requests`; a PM picks Yellow, then Plum from More colours, presses Escape in the panel and the drawer stays open, saves, and sees the label on the list. `APP_VERSION` '1.08'.
 
 Also update CONTRACT §8 (`Kpi` `as`/`href`/`trailing`; colour props accept a custom hex) and §9 (the owner rows above).
+
+## 24. Today's to-do and unfinished-task suggestions (company request, Daybook 1.09)
+
+Two asks from the owner, approved with the answers at the end of this section (12 Nov 2026):
+
+3. Everyone who writes a daily report can write **today's to-do** in the morning, in the format the team already posts on Slack ("Project: Pine Tree lane" then "* task" lines), tick tasks off during the day, and find them already in the evening report.
+4. With carry forward on, picking a project shows its tasks still open from past reports, to add to today, mark done already or mark not needed.
+
+**Design:** the same prototype (`docs/design/todo-and-colours-prototype.html`), screens "Today", "Daily report", "Team" and "Slack"; light and dark, desktop and 390 px. Same rules as §23. UI copy has no dashes: the owner's "Project— X" is written "Project: X" everywhere Daybook writes it.
+
+### Words
+
+- **To-do** = the lines of the person's report for today, written before the work is done. **It is not a new list**: a to-do line _is_ a daily-report task line (`report_tasks`) of today's draft, so the morning plan and the evening report are the same rows. Ticked = Done; not ticked = In progress (Blocked keeps its tag and can be ticked to Done). There is still one priority-task list (CONTRACT 22); ticking a to-do line never closes a priority task.
+- **Open task** = a line In progress or Blocked in a **submitted** report that no later line was carried from and that isn't closed. A **lapsed draft** (a draft that locked without being submitted, a missed day, and that no approved edit request reopened: `suggestions.isLapsedDraft`) never became a report, so its lines count for nothing here: they don't carry their source on, don't hide a suggestion by title, and don't stop Done already or carrying the task again (with its `first_reported_on`).
+- **Closed** = the person said "Done already" (reason `done`) or "Not needed" (reason `dropped`) about an open task without bringing it into today. It is recorded on the old line only; the old report itself doesn't change (no new revision, no Slack update).
+- **Suggestion** = an open task of the person from the last 30 days before today, on a project that is still active (or a project request still pending), with no later line of the person on the same project with the same normalised title (any status). Duplicates by normalised title: the newest wins. Newest first, at most 10 per project. Only while the person's `carryOver` preference is on.
+- **Carried line** = a line created from a suggestion ("Add to today", or a typed or pasted title equal to a suggestion's on the same project): `carried_from_task_id` points to the source, and it copies the source's `first_reported_on`, `project_task_id` and `timer_note` (when `hasTimerNote`), exactly as `insertDraft` did.
+- **Planned project** = a project in today's report at 0 minutes with no Done line.
+
+> **Company rule (overrides the build guide 7.4.2 and CONTRACT §21; confirmed by the owner on 12 Nov 2026):** report drafts no longer start with copied unfinished tasks. With carry forward on, unfinished tasks are suggested when their project is picked (Request 4). `openForDate` and the edit-request draft (`editRequests.js:227`) stop calling `planCarryOver`; drafts that already exist are not changed.
+>
+> **Company rule (overrides `submit.js:38` and `timerCheck.js`):** a planned project may be submitted at 0 hours. It is saved with the report, so its tasks stay open and are suggested next time; it is left out of the Slack report text, the hour totals and the board's project list. A 0-hour project with a Done line still needs hours ("Hours must be above 0."). A 0-hour project with no tasks is dropped on submit, like empty rows. In required timer mode the "No timer time on this project today" check skips planned projects.
+
+### Data (migration `017_todo.js`, portable to MySQL 8.4; additive; every length is also checked in zod)
+
+- `daily_reports` gets `todo_posted_at DATETIME NULL`, `todo_slack_channel_id`, `todo_slack_ts` (same types as `slack_channel_id`, `slack_ts`) and `todo_post_hash CHAR(64) NULL` (sha256 of the plan last sent: project ids and line titles, no statuses, so ticking or a PM renaming a project never asks for an update). These columns are **never added to `REPORT_COLUMNS`** (`findById`, save and submit use it); they are read by a separate `repo.findTodoPost(reportId)`.
+- `report_tasks` gets `carry_closed_at DATETIME NULL` and `carry_closed_reason ENUM('done','dropped') NULL`. Neither is in `taskVersion`/`contentVersion`, so closing never makes an open report tab stale. A line's `timer_note` is part of the version once set (Play writes it, see §21).
+- Settings (`db/seeds/03_settings.js`, the settings schema, `settingsValues.js`): `slack_todo_channel_id`, `slack_todo_channel_name` (both null by default = to-dos are not posted). The owner's answer: to-dos go to **their own channel**, which the company creates; there is no fallback to the report channel.
+- Outbox: `OUTBOX_KINDS` (`slack/schemas.js`) gains `todo_post`, `todo_update`; `related_type 'todo'`, `related_id` = `daily_reports.id`.
+- No new table.
+
+**Deploy before migrate:** Today, the report and every other screen keep working: to-do lines are ordinary report lines. `findTodoPost` catches errno 1054, logs one warning and returns "not posted". The suggestion read catches 1054 on `carry_closed_*`, logs one warning and runs again without that filter (so suggestions still work). "Post to Slack", "Done already" and "Not needed" throw `new AppError('TODO_UNAVAILABLE', { status: 503, message: 'This needs the latest database update. Ask an Admin.' })` (the `PLAN_UNAVAILABLE` pattern). Missing settings keys read as their defaults. It all works once migrated, with no restart.
+
+### Request 3: today's to-do
+
+#### On Today (attendance)
+
+- **Place.** Desktop: Your day and This week; then "Working on" (only while a timer runs, directly under Your day as today); then the tasks row: the Urgent card (372 px) beside **Today's to-do** (`id="todo"`, the rest of the row; full width when there is no urgent project); then Priority tasks; then the report strip. **"My tasks this week" leaves Today** (see Choices; its lines are now either today's to-do or suggestions, and earlier days are in My log). Below 1024 px the order is Your day, Working on, Urgent, Today's to-do, This week, Priority tasks, the strip (the rows use `display: contents` and the cards get `order`). Shown to everyone with `report.self`, before and after check-in.
+- **Header.** Title "Today's to-do", then muted "2 of 5 done" beside it (only with lines); subtitle "What you'll work on today. It becomes your report." On the right: "Paste a list" (secondary, compact; only once the list has a project, the empty state has its own) and the Slack button (below).
+- **Empty** (centred like `EmptyState`, a 44 px ListChecks circle in `--primary-soft`): "Plan your day" / "Add what you'll work on today, by project. Your PM sees it, and it fills your report." with "Add project" (secondary, Plus) and "Paste a list" (secondary, ClipboardPaste). The reminder line (below) shows under them.
+- **Groups**, one per project in report order: `ProjectLabel` (md) and a 32 px Trash2 icon button "Remove {project}" (`title` "Remove project"; a trash, so it doesn't look like the X that removes one line) (removes its lines too, Undo toast "Project removed."; refused with "This project has hours in your report. Remove it in the report." when its minutes are above 0). Then the suggestion box (Request 4), the lines, and an input "Add a task" (borderless, 44 px row). Enter adds the line and keeps focus for the next one; Escape clears it. While typing, the report's priority-task suggestions show ("Priority tasks on Studio Ubique", `matchSuggestions`); picking one links the line (`projectTaskId`). Pasting text with more than one line opens the paste dialog with it; its tasks before any heading start on this project (shown as its label with "Change", no red note). From the keyboard, "Add to today" or "Add all to today" that empties the suggestion box moves focus to "Add a task".
+- **A line** (48 px): an 18 px checkbox (`accent-color: var(--primary)`, 36 px hit area, `aria-label` "Done: {title}", TaskCheck's pattern), the title (click or Enter to edit inline; Enter saves, Escape cancels; 2 to 500 characters), small tags: "From Wednesday" (neutral, carried lines; "From yesterday", or "From 2 Nov" beyond 6 days), "Blocked" (red soft), "Now" (green with dot); then two 32 px icon buttons (44 px at 640 px and below), muted until hover, always visible on touch: "Start a timer for {title}" (Play) and "Remove {title}" (X; hides it with an Undo toast "Task removed.", deleted when the toast ends). Done lines: muted, struck through.
+- **Play** shows only when the person is checked in, not on a break and not checked out, timers aren't off, the group is an active project (not a project request), the line isn't Done and no timer runs on it. It calls `POST /api/me/todo/lines/[id]/timer`: `timers.start` with the project, the line's `projectTaskId` (left out when that priority task is closed) and `note` = the first 200 characters of the title; then, in the same request, the line's `timer_note` = that note, so Fill report from timers merges into this line (`reportTimers.lineFor` matches by `timerNote`) even if the title is reworded later. A set note is part of the report's version, so a report tab opened before Play gets "This report changed somewhere else" on its next save instead of saving the line without its note, and re-reads when it becomes visible. Refusals from `timers.start` are toasted as they come. Once it runs, Play goes (the line is "Now"); if Play had focus, focus moves to the line's title.
+- **"Now"** = the person's running entry has the group's `project_id` and its normalised note equals the line's `timer_note` or its title.
+- **TimerStartForm** (the Today timer form): after a project is picked, the note field offers that project's not-done to-do lines (same listbox as `matchSuggestions`, heading "Your to-do on Studio Ubique"). Picking one starts the timer through the same `.../lines/[id]/timer` route.
+- **Priority tasks card**: each row gets a 32 px Plus icon button "Add to to-do: {title}" (44 px at 640 px and below). It adds a line to the to-do with the task's title and `projectTaskId` (creating the group). When a to-do line already links that task, the button is replaced by a muted check and "In to-do".
+- **Add project**: a dashed full-width "Add project" button under the groups opens the report's `ProjectPicker` (no "Ask for a missing project" here; projects already in the list are greyed "In your to-do"; "2 still open" beside projects with suggestions, prop `showOpenCounts`, off in the timer form). Picking one adds the group with the input focused and its suggestion box.
+- **Reminder line** (only while suggestions exist for projects not in the list): muted "Still open from past reports:" then each project as a text button with its count, "Acme booking app (2)". Clicking opens the **Still open dialog** (Request 4); it never adds a project by itself.
+- **Slack button.** "Post to Slack" (primary, compact; only while Slack is on with a bot token, a to-do channel is set in Settings, and the list has a line: `slack.canPostTodo`). After the click: disabled "Posting…". Sent: muted check "Posted at 9:41 AM". Failed: red "Couldn't post to Slack." and "Try again" (secondary). After the list changes (not after a tick): "Update post" (secondary) beside "Posted at …", then "Updating…". Hidden when the list is empty. While a post is sending, the card asks `GET /api/me/todo` every 5 seconds for up to a minute.
+- **After submit**: the card shrinks to its header: "Today's to-do" with subtitle "2 of 5 done. Your report is in." and no buttons (the strip already offers Edit report).
+- **ReportStrip**, before submit, when the to-do has lines: body "Your to-do is already in it. Add the hours and check each status." (otherwise as today).
+- **Saving**: every action is its own request, applied at once; the result replaces the card's state, except that an answer to a request sent before the one the card last took is dropped, and every change the answer may not hold yet (a write still on its way, or one that ended after the answer was read) stays on top of it, so a box never unticks itself between quick ticks (`today/todoSync.js`). The card re-reads on `router.refresh` (AutoRefresh) unless a write is in flight, with the same rule (the router runs refreshes one after another); text being typed is kept. Errors toast the API's message and put the line back. Undo toasts use `useToastSlot` like `NotificationUndo`.
+- **Undo and later actions**: an add to a project whose line (same normalised title or priority task) or whole project waits behind the Undo toast, or whose DELETE is on its way, sends that DELETE first and waits for it before the add goes, so the add never lands in a row about to be deleted (paste, Plus, Still open dialog and "Add a task" alike). A click on a link to another page while such a DELETE waits sends it first and follows the link once it has answered (at most 4 s), so the next page (the report) is drawn without the removed lines.
+- **Lines start In progress**, whatever "New tasks start as" says (that preference is for lines added in the report).
+- **Narrow**: below 1024 px the header actions wrap under the title; at 640 px and below the buttons share one full-width row and "Posted at …" takes its own line. The paste and Still open dialogs are bottom sheets at 520 px and below. Dark theme from the tokens. Skeleton: a header bar and three 48 px rows in `today/loading.js`, in the new place.
+
+#### Paste a list
+
+- `Dialog` (560 px): title "Paste your to-do"; a textarea "Your list" (rows 8, max 20,000 characters); help: Start each project with "Project:" and each task with * or •. Your usual Slack list works as it is.
+- Under it, live: "We found 3 projects and 5 tasks." and a preview per project heading: **exact match**: the `ProjectLabel` and a "Change" text button (which swaps in the Select); **close match**: a `Select` already set to the project, with muted "Matched from "Riverkraft website""; **no match**: red "No project called "Blue Harbour"." and a `Select` "Pick a project" (all pickable projects, plus "Skip these tasks"). Tasks before any heading: "These tasks have no project." and the Select. Lines already in the to-do show muted "Already in your to-do" and aren't added; a line equal to a suggestion shows "From Wednesday" (it is added as a carried line); "(Done)" shows a Done tag.
+- Footer: Cancel and "Add 5 tasks" (primary; disabled while a group has no project and isn't skipped, or nothing is new; the count includes the new tasks of a group still waiting for its project, as the prototype). Done: toast "Added 5 tasks."
+- **Parser** (`src/modules/reports/todoText.js`, pure, browser-safe): `parseTodoText(text)` → `{ groups: [{ heading, lines: [{ title, status }] }], loose: [...], skipped: n }`:
+  - Lines are trimmed; blank lines skipped; spaces collapse.
+  - Ignored anywhere: "Tasks" and "Today's to-do" alone, "Date: DD-MM-YYYY" and "Hours: 2h 15m" (Daybook's own formats). Ignored only before the first heading: "Name: …". Any other "Date: …" line is a task.
+  - **Bullets**: `*`, `•`, `◦`, `▪`, `‣`, `+`, `-`, `–`, `—`, `·`, or a number with `.` or `)` **followed by a space** (`\d+[.)]\s+`). So "1.5h keyword audit" and "2.0 launch checklist" keep their text, and "1 web blog publish" keeps its number.
+  - **Headings**: "Project" followed by `—`, `–`, `-` or `:` (spaces optional), then the name: always a heading ("Project— Pine Tree lane", "Project- Studioubique", "Project: Dotado"). "Project" followed only by a space: a heading only when the rest matches a project exactly ("Project kickoff call with client" is a task). A non-bullet line ending with ":" is a heading only before the first heading, or when its text matches a project ("Follow up with the client about:" under a heading is a task).
+  - A non-bullet line under a heading is a task; lines before any heading are `loose`.
+  - A trailing "(Done)", "(In progress)" or "(Blocked)" sets the status (Done = ticked); otherwise In progress.
+  - Titles under 2 or over 500 characters are skipped and counted. Headings with no lines are left out. At most 20 projects and 50 tasks each, as the report.
+  - `matchProject(heading, projects)`: normalise both (lowercase; accents and everything but letters and digits removed). Equal = exact ("Studioubique" = "Studio Ubique"). Else **close** = exactly one project whose normalised name starts with the heading's, or the heading's starts with the name's, with both at least 4 characters ("Riverkraft website" → "Riverkraft"; "Website SEO audit" never picks "SEO"). Else none.
+
+#### How it becomes the report (reports)
+
+- The first to-do write of the day creates today's draft (`openForDate`, without copied lines, see the company rule), then its project card (0 minutes) and the line. The evening report already has every project and task: ticked lines are Done, the rest In progress, Blocked stays Blocked. The person adds the hours, checks each status and submits; nothing is typed twice.
+- Report page notice above the cards while the draft has a line and a project at 0 minutes: "Add the hours for each project and check each status. Tasks you ticked on Today are Done." (muted Card, Info icon).
+- A planned project's card shows, under its head, muted "Not worked on today. Its tasks stay open." instead of an error (company rule). The Slack preview leaves it out.
+- Writes from Today while the report is open in another tab make that tab show the existing "This report changed somewhere else" notice on its next save (unchanged); the report tab re-reads when it becomes visible (`ReportProvider.jsx:257-280`).
+
+#### Who sees what (dashboards)
+
+The to-do is part of the report, so whoever sees reports sees it: **the person, every PM and Admins (the CEO), live; not HR** (HR has no report view).
+
+- **Team board** "Projects today" (PM and Admin), **before submit**: only the running timer's project (green "Now" and its label, as today) and a text button "To-do: 2 of 5 done" (ChevronDown) that opens a popover (380 px, menu surface; right-aligned on desktop, left-aligned at 640 px and below): "Priya's to-do", muted "Posted to Slack at 9:41 AM" or "Not posted to Slack" (only while posting is on: Slack on, a bot token and a to-do channel, the rule of the Today button, `slack.canPostTodo`), the groups with a filled green check or an empty circle per line, the tags as on Today, and "Open Priya Sharma's page". Planned projects are not shown as labels, so they don't read as worked. **After submit**: the submitted projects with hours, as today, plus the same button. A checked-in person with no lines: muted "No to-do yet". New filter pill "No to-do (2)" (`?filter=no-todo`): checked in, report not submitted, no lines.
+- The board's Report cell reads "Draft" from the first to-do line (it is a draft report). That is expected.
+- **Employee detail** (`/team/[userId]`): a "Today's to-do" card above Report history, read-only, subtitle "2 of 5 done · Posted at 9:41 AM" (or "Not posted"); empty: "No to-do yet today." Report history shows closed lines with a muted note: "Marked done on Thu, 12 Nov" or "Marked not needed on Thu, 12 Nov".
+- **Tasks to watch** (`dashboard/repo.listOpenTasks`) and the stuck-task count leave out closed lines.
+- No overview item and no reminder for missing to-dos in this release (the to-do is optional).
+- The project report, Hours tab and AI PM summary still read submitted reports; planned projects add 0 minutes. Ask AI (`aiAsk/repo`: hours, people, days, task lines, project people) and a priority task's latest report (`projectTasks/repo.listReportLines`) leave planned entries out, so a planned line never reads as worked.
+
+#### Slack (system)
+
+- Posting is the person's choice: "Post to Slack" calls `reports.queueTodoPost({ user })`. In one transaction that locks the `daily_reports` row it builds the text with `formatTodo` and the hash, refuses an empty list ("Add a task first."), and calls `slack.queueTodoPost({ reportId, userId, text, hash, update })` (as the person, `username`/`icon_url` like reports) to `slackTodoChannelId` (never the report channel). Needs `slackEnabled` and a `slackTodoChannelId`; otherwise the button is hidden and the route answers `CONFLICT` (409) "Slack posting is off." Audit `report.todo_post` with the report id.
+- **Delivery** mirrors `deliverReport`: a row is skipped when a newer to-do row exists for the same report (two quick clicks send one, up-to-date, message); a `todo_post` is sent as `chat.update` when the report already has `todo_slack_ts`; `MESSAGE_GONE` posts again. `markSent` stores the channel, ts, `todo_posted_at` and `todo_post_hash` through `reports.saveTodoSlackMessage`. The newer-row check (`slack/repo.js:42-60`) learns `related_type 'todo'`. `slack.latestTodoDelivery(reportId)` → `{ status, at }` gives the card its Posting / Posted / Couldn't post state.
+- `post.changed` = the current plan's hash differs from `todo_post_hash`, so "Update post" shows after an edit, never after a tick.
+- `formatTodo({ userName, workDate, entries })` in `@/modules/slack/format` (pure). Empty projects and titles are left out; done lines get " (Done)", blocked " (Blocked)"; escaped with `escapeSlackText` when queued:
+
+```
+Name: Priya Sharma
+Date: 12-11-2026
+Today's to-do
+
+Project: Pine Tree Lane
+• Monitoring google ads campaign and removing irrelevant search terms
+
+Project: Studio Ubique
+• 1 web blog publish
+• Analysing the gsc stats to improve web blog content
+• 1 listicle content post on linkedin
+
+Project: Dotado
+• 2 Web blog topic research
+```
+
+- **Settings → Slack**: one more field under the report channel, "Post to-dos to" (`Select`): "Don't post to-dos" (default), then the bot's channels. Help: "Pick the channel for people's morning to-do. Until one is picked, the Post to Slack button stays hidden. Add the Daybook app to the channel first." It writes `slackTodoChannelId`/`Name` (null for "Don't post to-dos").
+
+### Request 4: unfinished tasks are suggested when you pick the project
+
+- **Where**: a box under a to-do group the moment its project is added (picker, paste), and inside a report card when its project is picked ("Add another project", or changing a card's project). `ProjectPicker` shows muted "2 still open" beside a project with suggestions.
+- **The box** (`--surface-muted`, 1px `--line` border, radius 12, padding 12 16): title "Still open from past reports", help "Add the ones you'll work on today. Mark the rest done or not needed." Each row: the title, its status tag (In progress primary soft, Blocked red soft), its day tag ("From Wednesday"), then "Add to today" (secondary, compact), "Done already" (secondary, compact, Check icon) and "Not needed" (text button). With two or more rows: "Add all to today" (text button). The box goes away when it is empty. Rows wrap under the title on phones.
+  - **Add to today** = a carried line in today's list, keeping its status.
+  - **Done already** = closes the old line with reason `done`. Today's report is not touched, so no project is forced into today. Toast "Marked done." with Undo. It leaves suggestions and Tasks to watch. (If the work was done today, use "Add to today" and tick it.)
+  - **Not needed** = closes it with reason `dropped`. Toast "Marked not needed." with Undo. Same effects.
+- **Still open dialog** (`Dialog`, 560 px, bottom sheet at 520 px and below), from the reminder line on Today or in the report: title "Still open from past reports", the same help, every suggestion grouped by project (`ProjectLabel` heading, then rows as above), footer "Close". "Add to today" here adds the project's group (or card) and the line; the other two never add a project.
+- **Nothing is duplicated**: a suggestion disappears once any line (draft lines too) is carried from it, or a later line on the project has the same normalised title, or it is closed. Typing or pasting a title equal to a suggestion's on the same project makes that line carried, and so does renaming a line on Today to such a title (`updateTodoLine`: the line keeps its id, takes the source's `first_reported_on`, `project_task_id`, `timer_note` (its own when the source has none) and status (unless it is Done); a line already carried keeps its link).
+- **Carry forward off** (My settings): no suggestions, no reminder line, no "still open" hints.
+- **My settings** copy (preferences): the `carryOver` toggle becomes "Suggest my unfinished tasks", help "When you pick a project, its unfinished tasks from past reports show up." The key and its default (on) don't change.
+- **Report save** (`taskInputSchema` gains `carriedFromTaskId`, positive integer, optional). In `save.js writeEntries` it is checked **only on lines being inserted**: the source must be the person's own line, in a submitted report before this day, on the same project (or request), In progress or Blocked, not closed, and not carried by another line, ignoring lines of this report that this same save deletes and lines of a lapsed draft; one claim per source per save; `carried_from_task_id` of an existing line never changes. When it passes, `first_reported_on`, `project_task_id` and `timer_note` come from the source; otherwise it is dropped and the line saves as new. The report card shows the existing "Carried over" tag while it has a carried line.
+
+### Modules
+
+- `@/modules/reports` (new files `todo.js`, `suggestions.js`; pure `todoText.js`):
+  - `getTodo({ user, date?, timerState? })` → `{ workDate, reportId, editable, submitted, done, total, post: { state: 'none'|'sending'|'sent'|'failed', at, changed, postedAt }, slack: { canPost }, timer: { canStart }, groups: [{ entryId, project: { id, name, color } | request: { id, name }, minutes, lines: [{ id, title, status, done, projectTaskId, now, carriedFrom: { workDate, dayLabel } | null, canStart }] }], suggestions }`. Never creates the draft. `timer.canStart` and `line.canStart` are the Play rule.
+  - Writes: `addTodoLine({ user, projectId?, projectRequestId?, title, projectTaskId?, carriedFromTaskId? })` → the to-do plus `added` (false for a duplicate) and `lineId`, `addTodoLines({ user, groups: [{ projectId | projectRequestId, lines: [{ title, status }] }] })` → `{ added, skipped, todo }`, `updateTodoLine({ user, id, title?, done? })`, `removeTodoLine({ user, id })`, `removeTodoProject({ user, entryId })` → the to-do, `startTodoTimer({ user, id })` → the to-do plus `timerState` (what `POST /api/timers/start` answers).
+  - **Write flow** (no deadlocks on the first add): call `openForDate` **outside** the transaction (insert, catch ER_DUP); then in the transaction lock the existing row with `findByIdForUpdate`, re-read its entries under the lock, find or insert the project's entry, write the line. Retry the whole write once on errno 1213. Every transaction that inserts or links lines (the to-do writes, the report save and submit, closing a suggestion) runs at **READ COMMITTED** (`reports/writeTx.js` `lineTransaction`; a server whose binary log is in statement format refuses that with errno 1665, and then it falls back to the default level with one warning), and the report save and submit retry once on 1213 too: under REPEATABLE READ the share-locked read of a source's carriers took gap locks, and two people carrying at once deadlocked. The carriers are read plainly after `lockLines` locks the source FOR UPDATE (every claim and close locks it first). The project-request check (`confirmRequests`) reads the request's status and requester with its share lock, on the transaction's own connection, never through a second pool connection while the report row is locked. Refuse `REPORT_LOCKED` after submit ("Your report is in. Change tasks in the report.") and the report's limits ("A report can have up to 20 projects.", "A project can have up to 50 tasks.", "Write at least 2 characters."). A duplicate title on the same project (normalised) is skipped, not an error.
+  - `listCarrySuggestions({ userId, date })` → `{ [projectKey]: [{ taskId, title, status, workDate, dayLabel }] }` (`projectKey` `p12` or `r4`; 20 projects, 10 lines each), one query plus the active-project check; `{}` while `carryOver` is off.
+  - `closeSuggestion({ user, taskId, reason, undo?, ip? })` → `{ taskId, closed, reason }` (`reason` null after an undo): `NOT_FOUND` for a line that isn't the person's own or isn't open (never `FORBIDDEN`).
+  - `queueTodoPost({ user, ip? })` → `{ queued: 'post' | 'update', todo }` (`todo` with `post.state` 'sending'); `saveTodoSlackMessage({ reportId, channelId, ts, hash, at })` (called by slack).
+  - `submit.js`, `timerCheck.js`: the planned-project rule. `formatReport` input leaves out planned projects.
+- `@/modules/slack`: `queueTodoPost`, `latestTodoDelivery`, delivery of `todo_post`/`todo_update`, `formatTodo` in `format.js`; `OUTBOX_KINDS` and the newer-row check.
+- `@/modules/dashboard`: board row `todo: { total, done, post, groups } | null`, labels only after submit, the `no-todo` filter; `getEmployee` gets `todoToday`; `listOpenTasks` leaves out closed lines.
+- `@/modules/timers`: unchanged; `startTodoTimer` calls `timers.start({ user, projectId, projectTaskId, note })`.
+- **Client imports**: client components may import `@/modules/reports/todoText` (pure, browser-safe), an exception to §2 like `@/modules/slack/format` (whose `formatTodo` the card does not need, but may use).
+
+### API
+
+| Route                                                                                                    | Permission    | Notes                                                                                |
+| -------------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------ |
+| `GET /api/me/todo`                                                                                       | `report.self` | today's to-do with suggestions                                                       |
+| `POST /api/me/todo/lines` `{ projectId \| projectRequestId, title, projectTaskId?, carriedFromTaskId? }` | `report.self` | returns the to-do plus `added` and `lineId`                                          |
+| `POST /api/me/todo/lines/bulk` `{ groups }`                                                              | `report.self` | the paste; returns `{ added, skipped, todo }`; reads its own body, over 128 KB → 413 |
+| `PATCH /api/me/todo/lines/[id]` `{ title?, done? }`, `DELETE` same                                       | `report.self` | own line in today's draft only, else `NOT_FOUND`                                     |
+| `POST /api/me/todo/lines/[id]/timer`                                                                     | `report.self` | starts a timer on the line (see Play); returns the to-do plus `timerState`           |
+| `DELETE /api/me/todo/projects/[entryId]`                                                                 | `report.self` | 409 when the project has minutes                                                     |
+| `POST /api/me/todo/slack`                                                                                | `report.self` | post or update → `{ queued, todo }`; 6 a minute per person                           |
+| `POST /api/me/carry-suggestions/[taskId]/close` `{ reason: 'done' \| 'dropped', undo? }`                 | `report.self` | own open line only, else `NOT_FOUND`; → `{ taskId, closed, reason }`                 |
+| existing `PUT /api/reports/[id]`                                                                         | unchanged     | tasks may carry `carriedFromTaskId`                                                  |
+| existing `GET /api/team/today`, `team/[userId]`                                                          | unchanged     | now return `todo`, `todoToday`; HR still `FORBIDDEN`                                 |
+
+**Rate limits are per person** (the office shares one IP, and `withRoute`'s `rateLimit` keys on IP): each handler calls ``checkRateLimit(PER_PERSON, ROUTE, `user:${user.id}`)`` as `api/me/preferences/route.js` does; 60 writes a minute, 6 Slack posts a minute, 120 reads of `GET /api/me/todo` a minute. Owner: reports (`me/todo/**`, `me/carry-suggestions/**`).
+
+### Files and owners
+
+| Owner        | Files                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| orchestrator | `db/migrations/017_todo.js`, `db/seeds/03_settings.js`, `src/config/version.js`, this section                                                                                                                                                                                                                                                                                                                                     |
+| reports      | `src/modules/reports/{todo,suggestions,todoText}.js` (+ `index`, `schemas`, `drafts`, `save`, `submit`, `timerCheck`, `repo`), `api/me/todo/**`, `api/me/carry-suggestions/**`, `(app)/report/CarrySuggestions.jsx`, `StillOpenDialog.jsx` (+ css), `report/ProjectCard.jsx` (planned line), `report/ProjectPicker.jsx` (+ css: "2 still open", `usedLabel`, `showOpenCounts`), `report/ReportEditor.jsx` (notice, reminder line) |
+| attendance   | `(app)/today/TodoCard.jsx`, `TodoPasteDialog.jsx` (+ css), `page.js` and `page.module.css` (new order, no TasksCard), `todayData.js`, `TodayCards.jsx` (ReportStrip copy), `PriorityCard.jsx` (Add to to-do), `TimerStartForm.jsx` (to-do lines in the note), `loading.js`                                                                                                                                                        |
+| dashboards   | `src/modules/dashboard/{team,employee,repo}.js`, `(app)/team/TodoPopover.jsx`, `TodoList.jsx` (+ css), `TeamBoardCells.jsx`, `TeamBoard.jsx`, `team/[userId]/page.js`, `ReportHistory.jsx` (closed note)                                                                                                                                                                                                                          |
+| system       | `src/modules/slack/{format,service,outbox,schemas,repo}.js`, `src/modules/settings/schemas.js`                                                                                                                                                                                                                                                                                                                                    |
+| people-admin | `(app)/settings/SlackSection.jsx` ("Post to-dos to"), `settingsValues.js`                                                                                                                                                                                                                                                                                                                                                         |
+| preferences  | `(app)/my-settings/MySettingsSections.jsx`, `src/modules/preferences/schemas.js:36` (the `carryOver` label)                                                                                                                                                                                                                                                                                                                       |
+
+### Tests and version
+
+- **Unit**: `parseTodoText` (the owner's exact text gives 3 projects and 5 tasks; "Project—", "Project-", "Project:", "Project kickoff call with client" is a task; "1.5h keyword audit" and "2.0 launch checklist" keep their text; "1 web blog publish" keeps its number; "Date: confirm launch date with client" is a task; "Date: 12-11-2026" and "Name:" before a heading are ignored; "Follow up with the client about:" under a heading is a task; "◦ nested sub task" loses its bullet; every bullet; "(Done)"; loose lines; empty headings; length limits), `matchProject` (exact after normalising, close by prefix, "Website SEO audit" against "SEO" is none, two candidates = none), `formatTodo` (the owner's layout, Done and Blocked suffixes, empty groups left out), `dayLabel`.
+- **Services** (`DB_NAME=daybook_test_<n>`, fake Slack transport): the first line creates the draft with no copied lines; **5 parallel first adds give one report and one entry**; tick and untick; remove line and project (refused with minutes); bulk with duplicates; a typed title equal to a suggestion becomes carried **and copies `timer_note` and `project_task_id`**; suggestions (30 days, every open day, newest wins, carried, closed, same later title and inactive excluded; carry forward off gives none); Done already and Not needed close the old line, leave today's report alone and drop it from Tasks to watch; `carriedFromTaskId` on report save (own and open: kept; someone else's, done, closed, other project, already carried: dropped; **remove and re-add in one save keeps the link**); **plan 2 projects, log hours on 1, submit: it passes, Slack shows one project, and the other project's lines are suggested tomorrow**; a Done line at 0 hours is refused; Start timer (refused before check-in, on a project request, on an inactive project; a closed priority task is dropped; a 300-character title gives a 200-character note and the line's `timer_note`; Fill merges into that line); Slack (post then update on the same ts, **two quick posts give one message**, posting off 409, `changed` after an edit and not after a tick, a failed delivery shows `failed`); `REPORT_COLUMNS` and the suggestion read before the migration; per-person rate limit; HR gets `FORBIDDEN` on `/api/team/*` with to-do data.
+- **Rewrites** (carry-over now suggests): `tests/services/reportsCarryOver.test.js`, `reportsPriorityLinks.test.js`, `reportsTimerNote.test.js`, `dashboard.employee.test.js`, `tests/unit/reportPreferences.test.js`, and `reports.test.js` where it expects copied lines.
+- **E2E** `tests/e2e/todo.spec.js`: an employee pastes the owner's text, ticks a line, sees no "Post to Slack" (the e2e server has no Slack connection, and the route answers 409 "Slack posting is off."; posting, updating and a failed post are covered with the fake transport by the service and card unit tests), picks a project with a suggestion, clicks Done already, opens the report, sees every line with the right status, leaves Dotado at 0 hours and submits; a PM opens the board popover; HR can't open it. `APP_VERSION` '1.09'.
+
+Also update CONTRACT §7 ("Later sections add: ... reports → `me/todo/**`, `me/carry-suggestions/**` (24)"), §9 (the owner rows above) and §21 (the `carryOver` row of the preferences table and the "Carry-over off" bullet: carry forward now suggests, it no longer copies).
+
+### Owner's answers (12 Nov 2026)
+
+1. **One list.** The to-do is the start of today's report; planned projects can be submitted at 0 hours and their tasks come back next time.
+2. **Suggest, don't copy.** The company rule above applies: drafts stop copying unfinished tasks.
+3. **Slack: a separate to-do channel**, created by the company and picked by an Admin in Settings → Slack. Posts only when the person clicks "Post to Slack". No channel picked = no button.
+4. **No preference** on "My tasks this week": the recommended option applies, the to-do replaces it on Today.
+
+Not choices, stated for the record: the to-do is optional (no reminder, no CEO alert in this release); PMs and Admins see it live, HR doesn't, as with reports.

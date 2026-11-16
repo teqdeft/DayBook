@@ -1,6 +1,7 @@
 // Gives every report entry its tasks. Each person's reports are walked oldest first; a task that
 // is still in progress or blocked continues in the person's next report of the same project as a
-// carried task (carried_from_task_id, same first_reported_on), the way carry-over works in the app.
+// carried task (carried_from_task_id, same first_reported_on), as if the person had added it from
+// the app's suggestions (CONTRACT 24). The lines left open on purpose are in todo.js.
 import { TASK_BANK } from './projects.js';
 import { VISHAL_DAYS } from './schedule.js';
 import { hash } from './calendar.js';

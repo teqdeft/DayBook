@@ -1,17 +1,22 @@
 // The rules behind Delete with Undo (CONTRACT 22), without React: one delete at a time waits behind
 // its toast. It is sent when the toast ends, when another delete takes the toast, when the board goes
 // away, or when the page is left (then with keepalive, so it still arrives). Undo takes it back before
-// it is sent. Nothing is sent twice; only a delete that failed can be tried again. useUndoDelete.js
-// wires this to the toast and the page.
+// it is sent. Nothing is sent twice; only a delete that failed can be tried again. A page can also
+// send a waiting delete at once and wait for it to answer (settle: Today's to-do, CONTRACT 24, before
+// an add that would meet the row, or before leaving). useUndoDelete.js wires this to the toast and
+// the page.
 
 /**
  * @param {{ send: (entry: object) => Promise<unknown>, sendOnLeave: (entry: object) => void }} io
  *   send: the DELETE while the page is open; sendOnLeave: the same with keepalive, when leaving
  * @returns {{ hold: Function, end: Function, undo: Function, sendNow: Function, leave: Function,
- *   listen: Function, readonly pending: object | null }}
+ *   listen: Function, settle: Function, readonly pending: object | null,
+ *   readonly busy: boolean }}
  */
 export function createDeleteQueue({ send, sendOnLeave }) {
   const sent = new Set();
+  // The deletes on their way: key -> a promise that settles once the DELETE has answered.
+  const inflight = new Map();
   let pending = null;
   let nextToast = 0;
   let handlers = null;
@@ -19,7 +24,7 @@ export function createDeleteQueue({ send, sendOnLeave }) {
   function commit(entry) {
     if (sent.has(entry.key)) return;
     sent.add(entry.key);
-    Promise.resolve()
+    const answered = Promise.resolve()
       .then(() => send(entry))
       .then(
         () => handlers?.onSent?.(entry),
@@ -28,7 +33,15 @@ export function createDeleteQueue({ send, sendOnLeave }) {
           sent.delete(entry.key);
           handlers?.onFailed?.(entry, error);
         },
-      );
+      )
+      .then(
+        () => undefined,
+        () => undefined,
+      )
+      .finally(() => {
+        if (inflight.get(entry.key) === answered) inflight.delete(entry.key);
+      });
+    inflight.set(entry.key, answered);
   }
 
   /** The toast ended (time up, closed or Escape): send its delete. */
@@ -43,6 +56,25 @@ export function createDeleteQueue({ send, sendOnLeave }) {
   return {
     get pending() {
       return pending;
+    },
+
+    /** Whether a delete waits behind its toast or is on its way. */
+    get busy() {
+      return pending !== null || inflight.size > 0;
+    },
+
+    /**
+     * Sends the waiting delete now when it is one of `keys` (every key when left out), and waits
+     * for those deletes to answer, failed ones too (an add that must not meet the row, leaving
+     * the page). Never rejects.
+     * @param {string[]} [keys]
+     * @returns {Promise<void>}
+     */
+    settle(keys) {
+      const wanted = (key) => !keys || keys.includes(key);
+      if (pending && wanted(pending.key)) end(pending.toast);
+      const waits = [...inflight].filter(([key]) => wanted(key)).map(([, answered]) => answered);
+      return Promise.all(waits).then(() => undefined);
     },
 
     /**

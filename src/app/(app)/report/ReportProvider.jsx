@@ -2,12 +2,15 @@
 // Holds the report editor's state for the whole page (the top bar's totals and button, the
 // project cards and the Slack preview): autosave one second after the last change while the
 // report is a draft (autosave.js), submit, and what happens on a lock, a validation error or a
-// report that changed somewhere else (each save sends the version this page last saw).
+// report that changed somewhere else (each save sends the version this page last saw). It also
+// keeps the unfinished-task suggestions (CONTRACT 24, useCarrySuggestions) and makes a line typed
+// with a suggestion's title carried from it.
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/apiClient';
 import { createAutosave } from './autosave';
+import { linkTypedTitles } from './reportCarry';
 import { firstHoursError, parseHours } from './reportHours';
 import {
   NO_ERRORS,
@@ -18,6 +21,7 @@ import {
   serialize,
 } from './reportState';
 import { clearBackup, writeBackup } from './reportBackup';
+import { useCarrySuggestions } from './useCarrySuggestions';
 import { useTimerFill } from './useTimerFill';
 
 const ReportContext = createContext(null);
@@ -56,7 +60,8 @@ function blockReason(error) {
 /**
  * @param {{ data: object, children: import('react').ReactNode }} props `data` comes from the page:
  *   { report, picker, user, presentMinutes, workedMinutes, timers, gapWarningMinutes, slackLines,
- *   previewTime, ... }. The context's `timers` is the newest copy of data.timers (useTimerFill).
+ *   previewTime, carrySuggestions, ... }. The context's `timers` is the newest copy of data.timers
+ *   (useTimerFill); its `carry` is the suggestions as they stand on the page (useCarrySuggestions).
  */
 export default function ReportProvider({ data, children }) {
   const router = useRouter();
@@ -68,6 +73,12 @@ export default function ReportProvider({ data, children }) {
   const [saveState, setSaveState] = useState('idle');
   const [blocked, setBlocked] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // "Still open from past reports" (CONTRACT 24); `change` reads the latest through carryRef.
+  const carry = useCarrySuggestions(data.carrySuggestions, entries);
+  const carryRef = useRef(carry);
+  useEffect(() => {
+    carryRef.current = carry;
+  });
   // Required timer mode: takes the timers' hours as they are now, before a submit (useTimerFill).
   const timerSync = useRef(null);
   const live = useRef({
@@ -145,8 +156,14 @@ export default function ReportProvider({ data, children }) {
    */
   const change = useCallback((updater, clear, options) => {
     const state = live.current;
-    const next = updater(state.entries);
-    if (next === state.entries) return;
+    const updated = updater(state.entries);
+    if (updated === state.entries) return;
+    // A line typed (or filled) with a suggestion's title becomes carried from it (CONTRACT 24).
+    const { all, closed } = carryRef.current;
+    const next = linkTypedTitles(state.entries, updated, all, {
+      closed,
+      reinsert: state.status === 'draft',
+    });
     state.entries = next;
     state.changes += 1;
     setEntries(next);
@@ -393,6 +410,7 @@ export default function ReportProvider({ data, children }) {
     setErrors,
     timers,
     applyTimers,
+    carry,
   };
   return <ReportContext.Provider value={value}>{children}</ReportContext.Provider>;
 }

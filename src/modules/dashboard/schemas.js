@@ -46,10 +46,12 @@ function checkRange(schema, maxDays) {
     });
 }
 
-/** GET /api/team/today: optional board filter. */
+/** GET /api/team/today: optional board filter ('no-todo': checked in, no to-do yet, CONTRACT 24). */
 export const teamTodayQuerySchema = z.object({
   filter: z
-    .enum(['everyone', 'missing', 'late'], { error: 'Filter must be everyone, missing or late.' })
+    .enum(['everyone', 'missing', 'late', 'no-todo'], {
+      error: 'Filter must be everyone, missing, late or no-todo.',
+    })
     .default('everyone'),
 });
 

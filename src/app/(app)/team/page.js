@@ -149,6 +149,11 @@ export default async function TeamPage({ searchParams }) {
               label: `Late (${counts.late})`,
               href: hrefFor({ range, filter: 'late' }),
             },
+            {
+              value: 'no-todo',
+              label: `No to-do (${counts.noTodo})`,
+              href: hrefFor({ range, filter: 'no-todo' }),
+            },
           ]}
           day={{
             label: today.dayLabel,

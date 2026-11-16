@@ -36,7 +36,11 @@ export function monthLogWorkbook(log) {
     lateMinutes: day.attendance ? day.attendance.lateMinutes : '',
     present: day.attendance ? hours(day.presentMinutes) : '',
     logged: day.report ? hours(day.report.totalMinutes) : '',
-    projects: (day.report?.entries ?? []).map((entry) => entry.projectName).join(', '),
+    // Only the projects worked on: a planned one (0 minutes, CONTRACT 24) has no hours.
+    projects: (day.report?.entries ?? [])
+      .filter((entry) => entry.minutes > 0)
+      .map((entry) => entry.projectName)
+      .join(', '),
     report: LOG_STATUS_LABELS[day.status] ?? day.status,
   }));
   const taskRows = days.flatMap((day) =>
@@ -44,7 +48,7 @@ export function monthLogWorkbook(log) {
       entry.tasks.map((task, index) => ({
         date: day.date,
         project: entry.projectName,
-        hours: index === 0 ? hours(entry.minutes) : '',
+        hours: index === 0 && entry.minutes > 0 ? hours(entry.minutes) : '',
         task: task.title,
         status: TASK_STATUS_LABELS[task.status] ?? task.status,
         report: day.report.status === 'submitted' ? 'Submitted' : 'Draft',

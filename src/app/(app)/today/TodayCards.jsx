@@ -1,14 +1,12 @@
-// The Today page's cards (artboard 01): Your day, This week, the urgent card, My tasks this week
-// and the report strip (Priority tasks is in PriorityCard.jsx). Server Components; they receive
-// ready-to-show data from todayData.js.
+// The Today page's cards (artboard 01): Your day, This week, the urgent card and the report strip
+// (Priority tasks is in PriorityCard.jsx, Today's to-do in TodoCard.jsx, CONTRACT 24, which
+// replaced "My tasks this week"). Server Components; they receive ready-to-show data from
+// todayData.js.
 import Button from '@/components/Button';
 import Card, { CardHeader } from '@/components/Card';
-import DataTable from '@/components/DataTable';
 import DayBar from '@/components/DayBar';
-import EmptyState from '@/components/EmptyState';
 import ProjectLabel from '@/components/ProjectLabel';
 import StatTile from '@/components/StatTile';
-import StatusCell from '@/components/StatusCell';
 import Tag from '@/components/Tag';
 import WeekBars from '@/components/WeekBars';
 import { formatClockShort, formatDayShort, formatTime, workDate as localDate } from '@/lib/time';
@@ -110,64 +108,6 @@ export function UrgentCard({ urgent, tz, today }) {
   );
 }
 
-const TASK_COLUMNS = [
-  {
-    key: 'title',
-    header: 'Task',
-    width: 271,
-    render: (row) => <span className={styles.taskTitle}>{row.title}</span>,
-  },
-  {
-    key: 'project',
-    header: 'Project',
-    width: 173,
-    render: (row) => <ProjectLabel project={row.project} />,
-  },
-  {
-    key: 'status',
-    header: 'Status',
-    width: 149,
-    align: 'center',
-    render: (row) => <StatusCell status={row.status} />,
-  },
-  {
-    key: 'updated',
-    header: 'Updated',
-    render: (row) => <span className={styles.muted}>{row.updated}</span>,
-  },
-];
-
-export function TasksCard({ tasks }) {
-  return (
-    <Card padding="none" className={styles.tasks}>
-      <CardHeader
-        title="My tasks this week"
-        actions="From your daily reports"
-        divider
-        className={styles.tasksHead}
-      />
-      <DataTable
-        columns={TASK_COLUMNS}
-        rows={tasks}
-        dense
-        caption="My tasks this week"
-        empty={
-          <EmptyState
-            compact
-            title="No tasks yet this week"
-            body="Tasks from your daily reports show up here."
-            action={
-              <Button variant="secondary" size="compact" href="/report">
-                Write today&apos;s report
-              </Button>
-            }
-          />
-        }
-      />
-    </Card>
-  );
-}
-
 export function ReportStrip({ data }) {
   const current = data.settings;
   const channel =
@@ -178,11 +118,15 @@ export function ReportStrip({ data }) {
   const title = submitted
     ? 'Your report is in'
     : `Your report is due at ${formatClockShort(current.reportReminderAt)}`;
+  // CONTRACT 24: the to-do's lines are already in the report.
+  const planned = (data.todo?.initialTodo?.total ?? 0) > 0;
   const body = submitted
     ? `You can still change it until ${data.locksText}.${channel ? ` Changes update the same message in ${channel}.` : ''}`
-    : channel
-      ? `It posts to ${channel} on Slack in the usual format.`
-      : 'Your PM sees it here as soon as you submit it.';
+    : planned
+      ? 'Your to-do is already in it. Add the hours and check each status.'
+      : channel
+        ? `It posts to ${channel} on Slack in the usual format.`
+        : 'Your PM sees it here as soon as you submit it.';
   return (
     <Card tone="dark" className={styles.strip}>
       <div className={styles.stripText}>

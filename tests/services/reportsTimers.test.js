@@ -307,13 +307,34 @@ describe('required mode', () => {
   });
 
   it('puts the timer message on a field the basic rules also flag, and keeps the others', async () => {
-    const { draft, entries } = await draftWith([{ projectId: internal.id, hours: 0, tasks: [] }]);
+    // A Done line at 0 hours still needs hours (CONTRACT 24), and a card with hours needs a task.
+    const { draft, entries } = await draftWith([
+      { projectId: internal.id, hours: 0, tasks: [{ title: 'Shipped login', status: 'done' }] },
+      { projectId: iwill.id, hours: 1, tasks: [] },
+    ]);
     await expect(reports.submitReport({ user, reportId: draft.id, entries })).rejects.toMatchObject(
       {
         message: NO_TIMER_TIME,
-        fields: { 'entries.0.hours': NO_TIMER_TIME, 'entries.0.tasks': 'Add at least one task.' },
+        fields: {
+          'entries.0.hours': NO_TIMER_TIME,
+          'entries.1.hours': NO_TIMER_TIME,
+          'entries.1.tasks': 'Add at least one task.',
+        },
       },
     );
+  });
+
+  it('skips a planned project (0 hours, no Done line) that has no timer time', async () => {
+    setTimerSummary(user.id, TUESDAY, [
+      { projectId: internal.id, projectName: 'internal-tool', roundedMinutes: 60 },
+    ]);
+    const { draft, entries } = await draftWith([
+      { projectId: internal.id, minutes: 60, tasks: [task('Working on backend')] },
+      { projectId: iwill.id, minutes: 0, tasks: [task('Payment page')] },
+    ]);
+    const submitted = await reports.submitReport({ user, reportId: draft.id, entries });
+    expect(submitted).toMatchObject({ status: 'submitted', totalMinutes: 60 });
+    expect(submitted.entries.map((entry) => entry.minutes)).toEqual([60, 0]);
   });
 
   it('still saves the draft when a caller without a version is refused', async () => {
