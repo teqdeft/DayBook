@@ -111,6 +111,15 @@
   height: 36px;
 }
 
+/* "Projects today": the labels, then the to-do button or "No to-do yet" under them */
+.projects {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
 .labels {
   display: flex;
   flex-wrap: wrap;
@@ -126,8 +135,9 @@
   min-width: 0;
 }
 
-.muted {
-  font-size: var(--text-small);
+/* "No to-do yet" (CONTRACT 24): the row text's 14 px, as the design draws it. */
+.noTodo {
+  font-size: 14px;
   color: var(--muted);
 }
 

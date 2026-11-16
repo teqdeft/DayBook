@@ -2,9 +2,11 @@
 // report lists for the API, and the entry move used when a project request is decided.
 import { db, parseJson } from '@/lib/db';
 import { AppError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { can } from '@/lib/permissions';
 import { addDays, nowDate, workDate, workingDaysBetween } from '@/lib/time';
 import { settings } from '@/modules/settings';
+import * as carryRepo from './carryRepo';
 import * as repo from './repo';
 import { loadEntriesFor, loadReportView, reportView } from './view';
 
@@ -29,31 +31,9 @@ export function getSubmittedMinutesByDay(userId, from, to) {
 }
 
 /**
- * The latest version of each task a person reported between two days (drafts included), newest
- * first. A carried task replaces the one it continues, so each chain shows once.
- * @returns {Promise<Array<{ taskId, title, status, projectId, projectName, projectColor,
- *   workDate, firstReportedOn }>>}
- */
-export async function listRecentTasks(userId, from, to) {
-  const rows = await repo.listTasksInRange(userId, from, to);
-  const continued = new Set(rows.map((row) => row.carriedFromTaskId).filter(Boolean));
-  return rows
-    .filter((row) => !continued.has(row.taskId) && row.title.trim())
-    .map((row) => ({
-      taskId: row.taskId,
-      title: row.title,
-      status: row.status,
-      projectId: row.projectId ?? null,
-      projectName: (row.projectId ? row.projectName : row.requestName) ?? '',
-      projectColor: row.projectId ? (row.projectColor ?? null) : null,
-      workDate: row.workDate,
-      firstReportedOn: row.firstReportedOn,
-    }));
-}
-
-/**
  * Stuck tasks (guide 7.5): tasks still in progress in the person's latest submitted report
- * whose first report was at least `stuckTaskDays` working days ago.
+ * whose first report was at least `stuckTaskDays` working days ago. A line the person closed from
+ * the suggestions ("Done already", "Not needed", CONTRACT 24) isn't stuck.
  * @param {number} userId
  * @param {{ today?: string }} [options]
  * @returns {Promise<Array<{ taskId, title, status, projectId, projectName, projectColor,
@@ -83,7 +63,10 @@ export async function listStuckTasks(userId, { today } = {}) {
       });
     }
   }
-  return stuck.sort((a, b) => a.firstReportedOn.localeCompare(b.firstReportedOn));
+  const closed = await carryRepo.closedIdsAmong(stuck.map((task) => task.taskId));
+  return stuck
+    .filter((task) => !closed.has(Number(task.taskId)))
+    .sort((a, b) => a.firstReportedOn.localeCompare(b.firstReportedOn));
 }
 
 /** True when any report entry points at the project request (hours were logged to it). */
@@ -127,6 +110,70 @@ export async function moveProjectRequestEntries({ projectRequestId, projectId },
  */
 export async function saveSlackMessage({ reportId, channelId, ts }) {
   await repo.updateReport(reportId, { slackChannelId: channelId, slackTs: ts });
+}
+
+/** MySQL "Unknown column": migration 017 (the to-do columns) hasn't run yet. */
+const NO_SUCH_COLUMN = 1054;
+let todoColumnsWarned = false;
+
+/**
+ * The to-do message posted to Slack for a report (CONTRACT 24), read apart from REPORT_COLUMNS.
+ * Deploy before migrate: until migration 017 has run it answers null ("not posted"), with one
+ * warning in the log per process.
+ * @param {number} reportId
+ * @returns {Promise<{ postedAt: Date | null, channelId: string | null, ts: string | null,
+ *   hash: string | null } | null>} null when no to-do was posted for the report
+ */
+export async function findTodoPost(reportId) {
+  let row;
+  try {
+    row = await repo.findTodoPost(reportId);
+  } catch (error) {
+    if (error?.errno !== NO_SUCH_COLUMN) throw error;
+    if (!todoColumnsWarned) {
+      todoColumnsWarned = true;
+      logger.warn('The to-do columns are missing (run npm run migrate); to-dos show as not posted');
+    }
+    return null;
+  }
+  if (!row || (!row.todoSlackTs && !row.todoPostedAt)) return null;
+  return {
+    postedAt: row.todoPostedAt ?? null,
+    channelId: row.todoSlackChannelId ?? null,
+    ts: row.todoSlackTs ?? null,
+    hash: row.todoPostHash ?? null,
+  };
+}
+
+/**
+ * Called by the Slack outbox after a to-do post or update succeeds: the report remembers the
+ * message (so "Update post" edits it), when it went out and the hash of the plan it showed. The
+ * report's own columns and versions don't change (updated_at included: posting isn't an edit), so
+ * an open report tab never turns stale.
+ * @param {{ reportId: number, channelId: string, ts: string, hash?: string | null,
+ *   at?: Date }} input at defaults to now
+ * @param {import('knex').Knex} [trx]
+ * @throws TODO_UNAVAILABLE (503, "This needs the latest database update. Ask an Admin.") before
+ *   migration 017
+ */
+export async function saveTodoSlackMessage({ reportId, channelId, ts, hash, at }, trx = db) {
+  const changes = {
+    todoSlackChannelId: channelId,
+    todoSlackTs: ts,
+    todoPostedAt: at ?? nowDate(),
+    todoPostHash: hash ?? null,
+    // Set to itself, so ON UPDATE CURRENT_TIMESTAMP leaves it (MySQL and MariaDB alike).
+    updatedAt: trx.raw('`updated_at`'),
+  };
+  try {
+    await repo.updateReport(reportId, changes, trx);
+  } catch (error) {
+    if (error?.errno !== NO_SUCH_COLUMN) throw error;
+    throw new AppError('TODO_UNAVAILABLE', {
+      status: 503,
+      message: 'This needs the latest database update. Ask an Admin.',
+    });
+  }
 }
 
 /**

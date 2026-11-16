@@ -61,6 +61,9 @@ export const KEYS = Object.freeze([
   'autoMarkMissingCheckout',
   'slackReportChannelId',
   'slackReportChannelName',
+  // Today's to-do (CONTRACT 24)
+  'slackTodoChannelId',
+  'slackTodoChannelName',
   'slackPostReports',
   'slackRemind',
   'slackUrgentNotify',
@@ -139,7 +142,8 @@ export function changedKeys(values, saved) {
     const value = key === 'workingDays' ? [...values[key]].sort((a, b) => a - b) : values[key];
     if (JSON.stringify(value ?? null) !== JSON.stringify(saved[key] ?? null)) body[key] = value;
   }
-  // The channel name travels with its id.
+  // A channel name travels with its id.
   if ('slackReportChannelId' in body) body.slackReportChannelName = values.slackReportChannelName;
+  if ('slackTodoChannelId' in body) body.slackTodoChannelName = values.slackTodoChannelName ?? null;
   return body;
 }

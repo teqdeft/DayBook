@@ -1,6 +1,7 @@
 // Employee detailed view (artboard 06): a person's numbers for a range, their month calendar,
-// hours by project, tasks to watch and report history. PM and Admin; an Admin's page is 404 for
-// anyone but another Admin (their attendance is Admin-only).
+// hours by project, tasks to watch, today's to-do (CONTRACT 24, read-only) and report history.
+// PM and Admin; an Admin's page is 404 for anyone but another Admin (their attendance is
+// Admin-only).
 import { notFound } from 'next/navigation';
 import Avatar from '@/components/Avatar';
 import Button from '@/components/Button';
@@ -17,6 +18,7 @@ import { requirePage } from '@/lib/session';
 import { dashboard } from '@/modules/dashboard';
 import { employeeDetailQuerySchema, userIdParamSchema } from '@/modules/dashboard/schemas';
 import ScreenTimeCard from '../../screen-time/ScreenTimeCard';
+import TodoList, { todoCardSubtitle } from '../TodoList';
 import CustomRange from './CustomRange';
 import ReportHistory from './ReportHistory';
 import { loadScreenTimeCard } from './screenTime';
@@ -72,7 +74,7 @@ export default async function EmployeePage({ params, searchParams }) {
   if (!id.success) notFound();
   const { options, errors, input } = readRange(await searchParams);
   const detail = await loadDetail(id.data, options, viewer);
-  const { person, period, calendar, hours, tasks } = detail;
+  const { person, period, calendar, hours, tasks, todoToday } = detail;
   const screenTime = await loadScreenTimeCard({ viewer, person, period, today: detail.date });
   const base = `/team/${person.id}`;
   const showCustom = options.range === 'custom' || input.range === 'custom';
@@ -197,6 +199,21 @@ export default async function EmployeePage({ params, searchParams }) {
           </Card>
         </div>
       </div>
+
+      {todoToday ? (
+        <Card padding="none" className={styles.todoCard}>
+          <CardHeader
+            title="Today's to-do"
+            subtitle={todoCardSubtitle(todoToday) ?? undefined}
+            divider
+          />
+          {todoToday.groups.length ? (
+            <TodoList groups={todoToday.groups} variant="card" />
+          ) : (
+            <p className={styles.todoEmpty}>No to-do yet today.</p>
+          )}
+        </Card>
+      ) : null}
 
       <Card padding="none" className={styles.historyCard}>
         <CardHeader

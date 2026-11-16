@@ -6,6 +6,14 @@ import { logger } from '@/lib/logger';
 
 const RATE_LIMITED = 'slack_webapi_rate_limited_error';
 const MAX_CHANNEL_PAGES = 25;
+/** chat.update errors that mean the old message is gone, so a new post replaces it. */
+const MESSAGE_GONE = new Set([
+  'message_not_found',
+  'cant_update_message',
+  'channel_not_found',
+  'is_archived',
+  'edit_window_closed',
+]);
 
 let testClient = null;
 
@@ -59,6 +67,11 @@ export function rateLimitRetryAfter(error) {
   if (error?.code !== RATE_LIMITED) return null;
   const seconds = Number(error.retryAfter);
   return Number.isFinite(seconds) && seconds > 0 ? seconds : 60;
+}
+
+/** True when a chat.update failed because the message can no longer be updated (MESSAGE_GONE). */
+export function isMessageGone(error) {
+  return MESSAGE_GONE.has(error?.data?.error);
 }
 
 /** A short error description for logs and last_error: 'not_in_channel', 'rate_limited', ... */

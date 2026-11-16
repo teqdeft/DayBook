@@ -1,13 +1,12 @@
-// Loads and shapes everything the Today page shows. Server only (called from page.js).
+// Loads and shapes everything the Today page shows. Server only (called from page.js). Today's
+// to-do (CONTRACT 24) replaced "My tasks this week": its first state comes from todayTodo.js.
 import {
   addDays,
   clockToMinutes,
   formatClockShort,
-  formatDayMonthShort,
   formatDayShort,
   formatDuration,
   formatHours,
-  formatRelativeDay,
   formatTime,
   formatTimeAmPm,
   isWorkingDay,
@@ -28,14 +27,10 @@ import { reports } from '@/modules/reports';
 import { settings } from '@/modules/settings';
 import { shortDuration } from './timerData';
 import { statusPill, stillWorkingNote } from './todayStatus';
-import { loadTimerParts, timerCard } from './todayTimers';
+import { loadTimerParts, pickerWithTasks, timerCard, timersShownFor } from './todayTimers';
+import { loadTodo } from './todayTodo';
 import { loadWfh } from './todayWfh';
 
-const OPEN_TASK = new Set(['in_progress', 'blocked']);
-// The artboard's card holds four rows, level with the urgent card beside it; the full list is in
-// My log.
-const MAX_TASKS = 4;
-const STATUS_ORDER = { in_progress: 0, blocked: 1, done: 2 };
 // The "Priority tasks" card shows this many; "Show more" opens the rest.
 const MAX_PRIORITY_TASKS = 6;
 
@@ -111,41 +106,6 @@ function weekDays({ today, current, submitted, dayStatus, presentToday }) {
   });
 }
 
-/** 'Today', 'Since Monday' (an open task first reported earlier), 'Friday', 'Yesterday'. */
-function updatedLabel(task, today) {
-  const first = task.firstReportedOn;
-  if (task.status === 'in_progress' && first && first < task.workDate) {
-    const since = formatRelativeDay(first, today);
-    if (since === 'Yesterday') return 'Since yesterday';
-    return /^\d/.test(since) ? `Since ${formatDayMonthShort(first)}` : `Since ${since}`;
-  }
-  return formatRelativeDay(task.workDate, today);
-}
-
-/**
- * This week's tasks plus tasks still open from the week before: in progress first, then blocked,
- * then done, each newest first (the order the artboard shows).
- */
-function taskRows(tasks, { from, today }) {
-  return tasks
-    .filter((task) => task.workDate >= from || OPEN_TASK.has(task.status))
-    .map((task, index) => ({ task, index }))
-    .sort(
-      (a, b) =>
-        (STATUS_ORDER[a.task.status] ?? 3) - (STATUS_ORDER[b.task.status] ?? 3) ||
-        a.index - b.index,
-    )
-    .slice(0, MAX_TASKS)
-    .map(({ task }) => task)
-    .map((task) => ({
-      id: task.taskId,
-      title: task.title,
-      status: task.status,
-      project: { name: task.projectName, color: task.projectColor },
-      updated: updatedLabel(task, today),
-    }));
-}
-
 /**
  * The "Priority tasks" card (CONTRACT section 13): every open priority task of the person, P1
  * first (the order listOpenForUser gives); the card shows the first MAX_PRIORITY_TASKS and opens
@@ -215,19 +175,28 @@ export async function loadToday({ user, ip }) {
     current.activityTrackingEnabled !== false &&
     can(user, 'activity.self') &&
     Boolean(user.tracksAttendance);
-  const [dayStatus, submitted, tasks, urgent, pending, todayReports, screen, priority, cards] =
+  // The picker and its priority tasks serve the timer form and the to-do: loaded once.
+  const pickerParts =
+    timersShownFor(user, current) || can(user, 'report.self')
+      ? pickerWithTasks(user.id)
+      : Promise.resolve({ picker: null, tasks: [] });
+  const timerParts = loadTimerParts(user, current, pickerParts);
+  const [dayStatus, submitted, urgent, pending, todayReports, screen, priority, cards] =
     await Promise.all([
       safe(reports.getDayStatus(user.id, today), { status: 'none', totalMinutes: 0 }),
       safe(reports.getSubmittedMinutesByDay(user.id, week.from, today), {}),
-      safe(reports.listRecentTasks(user.id, addDays(week.from, -7), today), []),
       safe(projects.listUrgentForMember(user.id), []),
       attendance.listCorrections({ status: 'pending', userId: user.id, limit: 10 }),
       safe(reports.listReports({ user, from: today, to: today, limit: 1 }), { rows: [] }),
       screenTracked ? safe(activity.getDay(user.id, today), null) : null,
       safe(projectTasks.listOpenForUser(user.id), []),
-      Promise.all([loadTimerParts(user, current), loadWfh({ user, mine, today, current })]),
+      Promise.all([
+        timerParts,
+        loadWfh({ user, mine, today, current }),
+        loadTodo({ user, timerParts, pickerParts }),
+      ]),
     ]);
-  const [timerParts, wfhParts] = cards;
+  const [timerState, wfhParts, todo] = cards;
   const row = mine.row;
   const presentToday = mine.presentMinutes;
   // Today's bar shows worked time (present minus breaks, CONTRACT 15) until the report is in.
@@ -267,9 +236,10 @@ export async function loadToday({ user, ip }) {
     },
     projectsToday,
     screenTime: screenTracked ? screenTimeLine(screen) : null,
-    tasks: taskRows(tasks, { from: week.from, today }),
     priority: priorityRows(priority, user.id),
-    timer: timerCard({ row, parts: timerParts, breaks: mine.breaks, tz }),
+    timer: timerCard({ row, parts: timerState, breaks: mine.breaks, tz }),
+    // Today's to-do (CONTRACT 24): { initialTodo, picker, priority }, null without report.self.
+    todo,
     urgent,
     pending: pending.items.map((item) => ({
       id: item.id,

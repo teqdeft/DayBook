@@ -1,0 +1,305 @@
+/* A project of Today's to-do (CONTRACT 24 prototype): its label and trash, the suggestion box,
+   the 48 px lines (tick, title and tags, Play and X) and the borderless "Add a task" row. */
+.group {
+  padding: 12px 20px 4px;
+}
+
+.groupLine {
+  border-top: 1px solid var(--line);
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.box {
+  margin: 8px 0 6px;
+}
+
+.lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A line: 48 px, the tick, the title and its tags, then Play and X */
+.line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--track);
+}
+
+.check {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-left: -9px;
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.check input:disabled {
+  cursor: default;
+}
+
+.what {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  min-width: 0;
+  padding: 6px 0;
+}
+
+/* The title is a button: click or Enter edits it in place. */
+.title {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-size: var(--text-body);
+  line-height: 21px;
+  color: var(--ink);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.title:disabled {
+  cursor: default;
+}
+
+.done .title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.editInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  padding: 1px 8px 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--ink);
+}
+
+.editInput:focus-visible {
+  border-color: var(--primary);
+}
+
+.lineActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  margin-right: -6px;
+}
+
+/* Play, X and the project's trash: 32 px, muted until the row is hovered. */
+.act {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--placeholder);
+  cursor: pointer;
+}
+
+.trash {
+  margin-right: -6px;
+  color: var(--muted);
+}
+
+.line:hover .act,
+.groupHead:hover .act {
+  color: var(--ink-2);
+}
+
+.act:hover:not(:disabled) {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.act:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* "Add a task": a borderless 48 px row */
+.addRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+}
+
+.addIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-left: -9px;
+  color: var(--muted);
+}
+
+.addInput {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 1px 0 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--ink);
+  outline: none;
+}
+
+.addInput::placeholder {
+  color: var(--placeholder);
+}
+
+.addInput:focus-visible {
+  box-shadow: inset 0 -2px 0 var(--primary);
+}
+
+.addRow .addButton {
+  --btn-pad-x: 12px;
+  --btn-pad-top: 2px;
+  height: 36px;
+  font-size: 14px;
+}
+
+/* The priority tasks offered while a task is typed (the report's look). */
+.suggest {
+  position: absolute;
+  top: calc(100% - 4px);
+  left: 18px;
+  z-index: 30;
+  width: min(460px, calc(100% - 18px));
+  padding: 0 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--navy) 16%, transparent);
+}
+
+.suggestHead {
+  padding: 10px 14px 4px;
+  font-size: var(--text-tag);
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.suggest ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  margin: 0 6px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.option:hover,
+.optionActive {
+  background: var(--surface-muted);
+}
+
+.optionTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionNote {
+  flex: none;
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+/* Phones: 16 px sides, and the line buttons and the tick get 44 px. */
+@media (max-width: 640px) {
+  .group {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .act {
+    width: 44px;
+    height: 44px;
+  }
+
+  .lineActions,
+  .trash {
+    margin-right: -12px;
+  }
+
+  .check {
+    width: 44px;
+    height: 44px;
+    margin-left: -13px;
+  }
+
+  .addInput,
+  .editInput {
+    font-size: 16px;
+  }
+
+  .suggest {
+    left: 0;
+    width: 100%;
+  }
+}
+
+/* Touch screens have no hover: the line buttons are always clear. */
+@media (hover: none) {
+  .act {
+    color: var(--ink-2);
+  }
+}

@@ -81,6 +81,18 @@ export default function Loading() {
         </div>
       </div>
 
+      {/* Today's to-do (CONTRACT 24) */}
+      <Card padding="none">
+        <div className={styles.historyHead}>
+          <Skeleton width={130} height={20} />
+        </div>
+        <div className={styles.todoBody}>
+          <Skeleton width={120} height={26} radius={6} />
+          <Skeleton width="60%" height={14} />
+          <Skeleton width="45%" height={14} />
+        </div>
+      </Card>
+
       <Card padding="none">
         <div className={styles.historyHead}>
           <Skeleton width={140} height={20} />

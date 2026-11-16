@@ -73,7 +73,8 @@ beforeEach(async () => {
 });
 
 describe('opening a report', () => {
-  it("creates today's draft with carry-over from the latest submitted report", async () => {
+  it("creates today's draft with no copied lines; open tasks are suggested instead", async () => {
+    // CONTRACT 24 company rule: drafts no longer copy unfinished tasks (build guide 7.4.2).
     await insertReport(people.person, '2026-09-25', {
       entries: [{ project: internal, minutes: 480, tasks: [task('Old work')] }],
     });
@@ -88,7 +89,7 @@ describe('opening a report', () => {
         { project: onHold, minutes: 60, tasks: [task('Legacy fixes')] },
       ],
     });
-    // The backend task started a week earlier; carry-over must keep that date.
+    // The backend task started a week earlier; a line carried from it must keep that date.
     await db('reportTasks')
       .where({ id: monday.taskIds[0] })
       .update({ firstReportedOn: '2026-09-21' });
@@ -97,9 +98,34 @@ describe('opening a report', () => {
 
     expect(view).toMatchObject({ workDate: TUESDAY, status: 'draft', editable: true, revision: 0 });
     expect(view.locksAt.toISOString()).toBe('2026-09-30T06:30:00.000Z');
-    expect(view.entries.map((e) => e.projectName)).toEqual(['internal-tool', 'iwilltillimwell']);
-    expect(view.entries.every((e) => e.minutes === 0 && e.carried)).toBe(true);
-    expect(view.entries[0].tasks).toEqual([
+    expect(view.entries).toEqual([]);
+    // Every open day counts; done lines and the on-hold project are left out.
+    const suggested = await reports.listCarrySuggestions({ userId: user.id, date: TUESDAY });
+    expect(Object.keys(suggested)).toEqual([`p${internal.id}`, `p${iwill.id}`]);
+    expect(suggested[`p${internal.id}`].map((t) => [t.title, t.status, t.dayLabel])).toEqual([
+      ['Working on backend', 'in_progress', 'From yesterday'],
+      ['Old work', 'in_progress', 'From Friday'],
+    ]);
+
+    // Adding two of them: the lines link back and keep their first day and status.
+    const saved = await reports.saveReport({
+      user,
+      reportId: view.id,
+      entries: input([
+        {
+          projectId: internal.id,
+          hours: 0,
+          tasks: [{ ...task('Working on backend'), carriedFromTaskId: monday.taskIds[0] }],
+        },
+        {
+          projectId: iwill.id,
+          hours: 0,
+          tasks: [{ ...task('Payment page', 'blocked'), carriedFromTaskId: monday.taskIds[2] }],
+        },
+      ]),
+    });
+    expect(saved.entries.every((e) => e.minutes === 0 && e.carried)).toBe(true);
+    expect(saved.entries[0].tasks).toEqual([
       expect.objectContaining({
         title: 'Working on backend',
         status: 'in_progress',
@@ -107,8 +133,11 @@ describe('opening a report', () => {
         carriedFromTaskId: monday.taskIds[0],
       }),
     ]);
-    expect(view.entries[1].tasks[0]).toMatchObject({ status: 'blocked', firstReportedOn: MONDAY });
-    expect(view.entries[1].isUrgent).toBe(true);
+    expect(saved.entries[1].tasks[0]).toMatchObject({ status: 'blocked', firstReportedOn: MONDAY });
+    expect(saved.entries[1].isUrgent).toBe(true);
+    expect(
+      Object.keys(await reports.listCarrySuggestions({ userId: user.id, date: TUESDAY })),
+    ).toEqual([`p${internal.id}`]);
   });
 
   it('returns the same draft when opened again, and ignores later drafts as a source', async () => {
@@ -140,10 +169,17 @@ describe('autosave', () => {
       entries: [{ project: internal, minutes: 300, tasks: [task('Working on backend')] }],
     });
     const draft = await reports.openForDate({ user });
-    const entries = entriesFrom(draft);
-    entries[0].hours = '6';
-    entries[0].tasks.push({ title: '  API docs ', status: 'done' });
-    entries.push({ projectId: iwill.id, hours: 2, tasks: [task('Content changes', 'done')] });
+    const entries = [
+      {
+        projectId: internal.id,
+        hours: '6',
+        tasks: [
+          { ...task('Working on backend'), carriedFromTaskId: source.taskIds[0] },
+          { title: '  API docs ', status: 'done' },
+        ],
+      },
+      { projectId: iwill.id, hours: 2, tasks: [task('Content changes', 'done')] },
+    ];
 
     const saved = await reports.saveReport({ user, reportId: draft.id, entries: input(entries) });
 
@@ -151,7 +187,7 @@ describe('autosave', () => {
     expect(saved.entries.map((e) => e.minutes)).toEqual([360, 120]);
     const [carried, added] = saved.entries[0].tasks;
     expect(carried).toMatchObject({
-      id: draft.entries[0].tasks[0].id,
+      firstReportedOn: MONDAY,
       carriedFromTaskId: source.taskIds[0],
     });
     expect(added).toMatchObject({
@@ -160,12 +196,16 @@ describe('autosave', () => {
       carriedFromTaskId: null,
     });
 
-    // Removing a project and a task deletes them; the total follows.
+    // Removing a project and a task deletes them; the total follows; the carried line keeps its
+    // id and link.
     const next = entriesFrom(saved).slice(0, 1);
     next[0].tasks = next[0].tasks.slice(0, 1);
     next[0].hours = 7.75;
     const again = await reports.saveReport({ user, reportId: draft.id, entries: input(next) });
     expect(again.totalMinutes).toBe(465);
+    expect(again.entries[0].tasks).toEqual([
+      expect.objectContaining({ id: carried.id, carriedFromTaskId: source.taskIds[0] }),
+    ]);
     expect(
       await db('reportEntries').where({ reportId: draft.id }).count({ n: '*' }).first(),
     ).toEqual({ n: 1 });
@@ -678,41 +718,6 @@ describe('reads other modules use', () => {
     expect(await reports.getLastReportDateByProject(user.id)).toEqual({
       [internal.id]: MONDAY,
       [iwill.id]: MONDAY,
-    });
-  });
-
-  it('lists recent tasks with carry-over chains collapsed', async () => {
-    const monday = await insertReport(people.person, MONDAY, {
-      entries: [
-        { project: internal, minutes: 480, tasks: [task('Backend'), task('Docs', 'done')] },
-      ],
-    });
-    await insertReport(people.person, TUESDAY, {
-      status: 'draft',
-      entries: [
-        {
-          project: internal,
-          minutes: 60,
-          tasks: [
-            {
-              title: 'Backend',
-              status: 'done',
-              firstReportedOn: MONDAY,
-              carriedFromTaskId: monday.taskIds[0],
-            },
-          ],
-        },
-      ],
-    });
-    const tasks = await reports.listRecentTasks(user.id, MONDAY, TUESDAY);
-    expect(tasks.map((t) => [t.title, t.status, t.workDate])).toEqual([
-      ['Backend', 'done', TUESDAY],
-      ['Docs', 'done', MONDAY],
-    ]);
-    expect(tasks[0]).toMatchObject({
-      projectName: 'internal-tool',
-      projectColor: 'blue',
-      firstReportedOn: MONDAY,
     });
   });
 

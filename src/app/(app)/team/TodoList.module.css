@@ -1,0 +1,93 @@
+/* Someone's to-do, read-only (CONTRACT 24, prototype screens "Team" and the employee page). */
+.list {
+  min-width: 0;
+}
+
+.lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  display: flex;
+  align-items: flex-start;
+  color: var(--ink);
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  margin-top: 2px;
+}
+
+.text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tag {
+  margin-left: 8px;
+  vertical-align: 1px;
+}
+
+.iconDone {
+  color: var(--green);
+}
+
+.iconDone circle {
+  fill: var(--green);
+}
+
+.iconDone path {
+  stroke: var(--on-fill);
+}
+
+.iconOpen {
+  color: var(--muted);
+}
+
+.iconBlocked {
+  color: var(--red);
+}
+
+/* the Team board's popover: 24 px labels, 14 px lines, 20 px tags */
+.popover .group + .group {
+  margin-top: 12px;
+}
+
+.popover .lines {
+  margin-top: 6px;
+}
+
+.popover .line {
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.popover .tag {
+  height: 20px;
+  font-size: 11px;
+}
+
+/* the Employee detail's card: one band per project split by a thin line, 15 px lines */
+.card .group {
+  padding: 14px 20px 10px;
+}
+
+.card .group + .group {
+  border-top: 1px solid var(--track);
+}
+
+.card .lines {
+  margin-top: 8px;
+}
+
+.card .line {
+  gap: 10px;
+  padding: 6px 0;
+  font-size: var(--text-body);
+  line-height: 21px;
+}

@@ -66,7 +66,9 @@ write and submit a report and the PM sees it; a report edit request approved; an
 correction; project management (the projects list, a project's tabs, tasks with Undo, a real PDF
 and Word file read in the browser, a note, the deadline and a phase move, and another PM's view);
 the Pending requests card and project colours (yellow, More colours, Escape in its panel, a colour
-too light to see); and every main screen per role with no console errors. The specs are in
+too light to see); today's to-do (the usual Slack list pasted, a tick, a suggested task marked done
+already, the report with every line and a planned project submitted at 0 hours, the PM's popover
+on the Team board); and every main screen per role with no console errors. The specs are in
 `tests/e2e/`.
 
 ```bash
@@ -122,7 +124,7 @@ npm run test:e2e
   projects table shows each project's all-time hours under "Hours this week".
 - **AI with Gemini, version label, notification center** (CONTRACT 20): see
   [AI with Gemini](#ai-with-gemini) below. The sidebar and sign-in page show the version, now
-  "Daybook v1.08" (`src/config/version.js`, raised with each release). In the bell, clicking a
+  "Daybook v1.09" (`src/config/version.js`, raised with each release). In the bell, clicking a
   notification marks it read; each one can be marked unread or deleted (swipe left on touch
   screens, with Undo), and the bell swings gently while there are unread ones.
 - **My settings** (company request, CONTRACT 21): every person has a **My settings** page (last
@@ -163,6 +165,22 @@ npm run test:e2e
   browser's colour picker); a colour too light or too dark to see in one of the themes is refused.
   Stored by migration 016; until `npm run migrate` has run, the first six colours keep working and
   yellow or a custom colour is refused with a clear message.
+- **Today's to-do and unfinished-task suggestions** (company request, CONTRACT 24, Daybook 1.09):
+  everyone who writes a daily report plans the day on Today under **Today's to-do**, by project,
+  and ticks tasks off during the day. **Paste a list** takes the usual Slack post as it is
+  ("Project: Pine Tree Lane" then "* task" lines) and matches each heading to a project. The to-do
+  is the start of today's report: in the evening every project and task is already there (ticked
+  ones Done), so only the hours and the statuses are left to check. PMs and Admins see it live on
+  the Team board ("To-do: 2 of 5 done") and on the person's page; HR doesn't. Unfinished tasks
+  are no longer copied into new reports: with "Suggest my unfinished tasks" on (My settings),
+  picking a project shows its tasks still open from past reports, to add to today, mark done
+  already or mark not needed. A project planned but not worked on can be submitted at 0 hours; it
+  stays out of the Slack post and the hour totals, and its tasks are suggested again next time.
+  **Post to Slack** sends the to-do, as the person, to a separate to-do channel that an Admin
+  picks in Settings → Slack → **Post to-dos to** after adding the Daybook app to it; until one is
+  picked the button stays hidden (reports still go to their own channel). Stored by migration
+  017; until `npm run migrate` has run, the to-do and the suggestions work, but Post to Slack,
+  Done already and Not needed answer "This needs the latest database update. Ask an Admin."
 
 ## Slack setup (one Slack app per environment)
 
@@ -196,9 +214,11 @@ npm run test:e2e
 
 8. Restart `npm run dev` (or the web server) and `npm run worker` — the worker sends every Slack
    message from the outbox.
-9. In Slack, invite the bot to the report channel: `/invite @Daybook` in `#daily-reports`.
+9. In Slack, invite the bot to the report channel: `/invite @Daybook` in `#daily-reports`, and to
+   the to-do channel if people post their morning to-do (for example `#daily-todo`).
 10. In Daybook as Admin: **Settings → Slack** shows **Connected**; pick the channel under **Post
-    reports to**, check the switches, and **Save changes**.
+    reports to** (and the to-do channel under **Post to-dos to**, or leave "Don't post to-dos"),
+    check the switches, and **Save changes**.
 11. Make sure everyone's Daybook email is their Slack email. Their Slack ID is saved at first
     sign-in, and the worker's hourly `slack-user-sync` job looks up anyone still missing.
 12. Test: submit a daily report — it appears in the channel within about 10 seconds, under the
@@ -303,6 +323,13 @@ hold the text of files and notes, and Ask Daybook never reads it.
   (migration 016 changes `projects.color` so it can hold yellow and custom colours; until it runs,
   the first six colours keep working and yellow or a custom colour is refused with a clear
   message). There is nothing new to install.
+- Daybook 1.09 (today's to-do, suggestions): run `npm run migrate` before the restart (migration
+  017 adds the to-do's Slack columns to `daily_reports` and "Done already" / "Not needed" to
+  `report_tasks`). There is nothing new to install. To-dos post to Slack only once an Admin picks
+  a channel under Settings → Slack → **Post to-dos to**. Report saves and to-do writes run at the
+  READ COMMITTED isolation level, so two people carrying a task at once never deadlock. A database
+  whose binary log is in statement format can't log that: then the log shows one warning ("report
+  writes run at the default isolation level") and writes work as before.
 
 ## Deploying on cPanel (Setup Node.js App)
 
@@ -386,7 +413,9 @@ migration table is already locked (a run was stopped part way), run the same lin
 `migrate:unlock` in place of `migrate:latest`, then the line again. For 1.07 the migrate step must
 come before Restart (it adds the project plan tables); nothing new is installed on the server, and
 Settings → AI → Project summaries starts off. For 1.08 too: migrate before Restart (migration 016
-changes the project colour column), nothing new to install.
+changes the project colour column), nothing new to install. For 1.09 too: migrate before Restart
+(migration 017 adds the to-do columns), nothing new to install; then, to post to-dos to Slack, add
+the Daybook app to the to-do channel and pick it in Settings → Slack → **Post to-dos to**.
 
 **Checking** — `NODE_ENV=production npm run doctor` (after the `source` command, in `~/daybook`)
 shows whether the worker cron is running, whether Slack works and who gets desktop notifications;

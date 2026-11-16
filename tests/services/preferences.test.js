@@ -191,7 +191,7 @@ describe('saving preferences', () => {
     await expectValidation(
       { carryOver: 'false' },
       {
-        carryOver: 'Bring unfinished tasks into my next report must be on or off.',
+        carryOver: 'Suggest my unfinished tasks must be on or off.',
       },
     );
     await expectValidation(

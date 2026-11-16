@@ -1,7 +1,10 @@
 // Pure helpers for the report editor's state (browser side): turning the API's report into
 // editable rows, back into the PUT body, and mapping the API's field errors onto rows. The hours
-// boxes (exact minutes, shown as '2h 15m') are read and written by reportHours.js.
+// boxes (exact minutes, shown as '2h 15m') are read and written by reportHours.js. A line carried
+// from a past report's open task (CONTRACT 24) keeps `carriedFromTaskId`; reportCarry.js decides
+// which lines get it.
 import { entryMinutes, timeText, timeToSend } from './reportHours';
+import { isPlannedRow } from './reportPlanned';
 
 let counter = 0;
 
@@ -28,6 +31,7 @@ function taskFromView(task) {
     title: task.title ?? '',
     status: task.status,
     carried: Boolean(task.carriedFromTaskId),
+    carriedFromTaskId: task.carriedFromTaskId ?? null,
     projectTaskId: task.projectTaskId ?? null,
     priority: task.projectTaskId ? (task.priority ?? null) : null,
     projectTaskTitle: task.projectTaskId ? (task.projectTaskTitle ?? null) : null,
@@ -101,23 +105,46 @@ export function newTask(status) {
     title: '',
     status: TASK_STATUSES.has(status) ? status : 'in_progress',
     carried: false,
+    carriedFromTaskId: null,
     ...NO_LINK,
     timerNote: null,
   };
 }
 
-/** Whether a line holds something that belongs to its card's project: a link or a timer note. */
+/** A carried line not saved yet: the server checks its link (same project) when it inserts it. */
+const carriedUnsaved = (task) => Boolean(task.carriedFromTaskId && !task.id);
+
+/**
+ * A line no longer carried (CONTRACT 24). A saved line that was sent again as a new row to become
+ * carried (reportCarry.js) gets its own id back.
+ */
+export function uncarried(task) {
+  const line = { ...task, id: task.id ?? task.replacedId ?? null };
+  delete line.replacedId;
+  return { ...line, carried: false, carriedFromTaskId: null, typed: false };
+}
+
+/**
+ * Whether a line holds something that belongs to its card's project: a link, a timer note, or a
+ * carry not saved yet.
+ */
 function tiedToProject(task) {
-  return Boolean(task.projectTaskId || task.timerNote);
+  return Boolean(task.projectTaskId || task.timerNote || carriedUnsaved(task));
+}
+
+function unlinked(task) {
+  const line = { ...task, ...NO_LINK, timerNote: null };
+  return carriedUnsaved(task) ? uncarried(line) : line;
 }
 
 /**
  * The tasks with every priority link and timer note removed (the card moved to another project:
- * both belonged to the old one, CONTRACT 13 and 21).
+ * both belonged to the old one, CONTRACT 13 and 21), and unsaved carries too (a carried line
+ * must stay on its source's project, CONTRACT 24).
  */
 export function unlinkTasks(tasks) {
   return tasks.some(tiedToProject)
-    ? tasks.map((task) => (tiedToProject(task) ? { ...task, ...NO_LINK, timerNote: null } : task))
+    ? tasks.map((task) => (tiedToProject(task) ? unlinked(task) : task))
     : tasks;
 }
 
@@ -167,6 +194,8 @@ export function serialize(entries, { keepLastValid = false } = {}) {
         projectTaskId: task.projectTaskId ?? undefined,
         // Left out (undefined) for lines that weren't filled from a timer note.
         timerNote: task.timerNote ?? undefined,
+        // Only a new line can become carried (the save checks it on insert, CONTRACT 24).
+        carriedFromTaskId: task.id ? undefined : (task.carriedFromTaskId ?? undefined),
       })),
     };
   });
@@ -174,27 +203,44 @@ export function serialize(entries, { keepLastValid = false } = {}) {
 }
 
 /**
+ * A line as the save inserted it: a carry the server didn't accept (CONTRACT 24: not the
+ * person's open task, closed meanwhile, carried by another line) is dropped, so the card doesn't
+ * say "Carried over" for it.
+ */
+function asSaved(task, saved) {
+  const line = { ...task, id: saved.id };
+  delete line.replacedId;
+  const refused =
+    line.carriedFromTaskId && 'carriedFromTaskId' in saved && !saved.carriedFromTaskId;
+  return refused ? uncarried(line) : line;
+}
+
+/**
  * Copies database ids from a saved report onto the rows that were sent, by position. Rows added
- * or changed since then keep their local state; only missing ids are filled in.
+ * or changed since then keep their local state; only missing ids are filled in. A line that is
+ * waiting to be sent again as a carried row (`replacedId`, reportCarry.js) doesn't take back the
+ * id it gave up.
  */
 export function applySavedIds(entries, keys, view) {
   const ids = new Map();
+  const savedTasks = new Map();
   keys.forEach((sent, i) => {
     const saved = view.entries[i];
     if (!saved) return;
     ids.set(sent.entryKey, saved.id);
     sent.taskKeys.forEach((taskKey, j) => {
-      if (saved.tasks[j]) ids.set(taskKey, saved.tasks[j].id);
+      if (saved.tasks[j]) savedTasks.set(taskKey, saved.tasks[j]);
     });
   });
   let changed = false;
   const next = entries.map((entry) => {
     const entryId = ids.get(entry.key);
     const tasks = entry.tasks.map((task) => {
-      const taskId = ids.get(task.key);
-      if (!taskId || task.id === taskId) return task;
+      const saved = savedTasks.get(task.key);
+      const taskId = saved?.id;
+      if (!taskId || task.id === taskId || task.replacedId === taskId) return task;
       changed = true;
-      return { ...task, id: taskId };
+      return asSaved(task, saved);
     });
     const idChanged = entryId && entry.id !== entryId;
     if (idChanged) changed = true;
@@ -264,11 +310,16 @@ export function clearError(errors, { entryKey, field, taskKey }) {
   return errors;
 }
 
-/** Entries shaped for formatReport() (the Slack preview). */
+/**
+ * Entries shaped for formatReport() (the Slack preview). Planned projects (0 minutes, no Done
+ * line) are left out, as the server leaves them out of the post (CONTRACT 24).
+ */
 export function previewEntries(entries) {
-  return entries.map((entry) => ({
-    projectName: entry.projectName,
-    minutes: entryMinutes(entry),
-    tasks: entry.tasks,
-  }));
+  return entries
+    .filter((entry) => !isPlannedRow(entry))
+    .map((entry) => ({
+      projectName: entry.projectName,
+      minutes: entryMinutes(entry),
+      tasks: entry.tasks,
+    }));
 }

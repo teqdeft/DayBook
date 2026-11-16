@@ -1,14 +1,18 @@
 'use client';
 // Today's "Priority tasks" card (CONTRACT section 13, not on the canvas): the person's open
-// priority tasks, P1 first, in the My tasks card's table. The first few show; "Show N more" opens
-// the rest in place, so every task can be seen from Today.
+// priority tasks, P1 first, in a table. The first few show; "Show N more" opens the rest in place,
+// so every task can be seen from Today. CONTRACT 24: each row's Plus adds the task to today's
+// to-do (its title, linked to it, in its project's group); a task a to-do line already links
+// shows a muted check and "In to-do" instead.
 import { useId, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Plus } from 'lucide-react';
 import Card, { CardHeader } from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import PriorityTag from '@/components/PriorityTag';
 import ProjectLabel from '@/components/ProjectLabel';
 import { plural } from '@/lib/text';
+import { useTodo } from './TodoProvider';
+import { isLocked, linkedTaskIds } from './todoModel';
 import styles from './page.module.css';
 
 const COLUMNS = [
@@ -48,14 +52,62 @@ const COLUMNS = [
   },
 ];
 
+/** The To-do cell: "In to-do" when a line links the task, else Plus while the to-do takes lines. */
+function TodoCell({ row, todo, linked, locked }) {
+  if (linked.has(Number(row.id))) {
+    return (
+      <span className={styles.inTodo}>
+        <Check size={15} strokeWidth={1.8} aria-hidden="true" className={styles.inTodoIcon} />
+        In to-do
+      </span>
+    );
+  }
+  if (locked || !row.projectId) return null;
+  const project = { id: row.projectId, name: row.project.name, color: row.project.color };
+  return (
+    <button
+      type="button"
+      className={styles.todoAdd}
+      aria-label={`Add to to-do: ${row.title}`}
+      title="Add to to-do"
+      onClick={() =>
+        todo.addLine(
+          { project },
+          { title: row.title, projectTaskId: row.id, added: 'Added to your to-do.' },
+        )
+      }
+    >
+      <Plus size={18} strokeWidth={1.8} aria-hidden="true" />
+    </button>
+  );
+}
+
+/** The table's columns, with the To-do one while the page has a to-do (`report.self`). */
+function columnsFor(todo) {
+  if (!todo) return COLUMNS;
+  const linked = linkedTaskIds(todo.todo);
+  const locked = isLocked(todo.todo);
+  return [
+    ...COLUMNS,
+    {
+      key: 'todo',
+      header: 'To-do',
+      width: 84,
+      align: 'right',
+      render: (row) => <TodoCell row={row} todo={todo} linked={linked} locked={locked} />,
+    },
+  ];
+}
+
 /**
  * The person's open priority tasks, P1 first (Today shows the card only when there are some).
  * The project's PM sets them; linking a report line to one is in the daily report.
- * @param {{ priority: { rows: Array<{ id, priority, title, project: { name, color },
+ * @param {{ priority: { rows: Array<{ id, priority, title, projectId, project: { name, color },
  *   forYou: boolean }>, initial: number } }} props initial: how many show before "Show more"
  */
 export default function PriorityCard({ priority }) {
   const { rows, initial } = priority;
+  const todo = useTodo();
   const [expanded, setExpanded] = useState(false);
   const tableId = useId();
   const hidden = Math.max(rows.length - initial, 0);
@@ -69,7 +121,7 @@ export default function PriorityCard({ priority }) {
         className={styles.tasksHead}
       />
       <div id={tableId}>
-        <DataTable columns={COLUMNS} rows={shown} dense caption="Priority tasks" />
+        <DataTable columns={columnsFor(todo)} rows={shown} dense caption="Priority tasks" />
       </div>
       {hidden > 0 ? (
         <button

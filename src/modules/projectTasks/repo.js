@@ -214,7 +214,8 @@ export function remove(id, trx) {
 /**
  * Submitted report lines linked to these tasks on each task's latest reported day only (a task
  * carried over for weeks has a line every day; only the last day matters), newest first (submit
- * time, then line). The service keeps the first line per task.
+ * time, then line). The service keeps the first line per task. Lines of a planned project (0
+ * minutes, CONTRACT 24) aren't reports of work, so they never become the latest one.
  */
 export function listReportLines(taskIds, trx = db) {
   if (taskIds.length === 0) return Promise.resolve([]);
@@ -223,6 +224,7 @@ export function listReportLines(taskIds, trx = db) {
     .join('dailyReports as ld', 'ld.id', 'le.reportId')
     .whereIn('lt.projectTaskId', taskIds)
     .where('ld.status', 'submitted')
+    .where('le.minutes', '>', 0)
     .groupBy('lt.projectTaskId')
     .select('lt.projectTaskId')
     .max({ lastDate: 'ld.workDate' })
@@ -236,6 +238,7 @@ export function listReportLines(taskIds, trx = db) {
     )
     .whereIn('rt.projectTaskId', taskIds)
     .where('dr.status', 'submitted')
+    .where('re.minutes', '>', 0)
     .select('rt.projectTaskId', 'rt.status', 'dr.userId', 'u.name as userName', 'dr.workDate')
     .orderBy([
       { column: 'dr.workDate', order: 'desc' },

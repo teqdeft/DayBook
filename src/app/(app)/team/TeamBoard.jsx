@@ -1,10 +1,11 @@
 'use client';
 // The team board (artboard 05): people grouped into In office, Working from home and Not checked
 // in. Groups collapse from their title and show a few people first ("Show 17 more"). Filters are
-// links (?filter=missing|late), so the Overview's "Needs attention" can link straight to them.
-// Before the report time a report not submitted yet is "Due 6:30 PM" (or Draft), not Missing.
-// Live status (CONTRACT 15): "On break" under the check-in time, "Now" and the timed project
-// first in "Projects today".
+// links (?filter=missing|late|no-todo), so the Overview's "Needs attention" can link straight to
+// them. Before the report time a report not submitted yet is "Due 6:30 PM" (or Draft), not
+// Missing. Live status (CONTRACT 15): "On break" under the check-in time, "Now" and the timed
+// project first in "Projects today". Today's to-do (CONTRACT 24): "To-do: 2 of 5 done" with its
+// popover under the projects, or "No to-do yet".
 import Link from 'next/link';
 import { useState } from 'react';
 import Avatar from '@/components/Avatar';
@@ -96,7 +97,8 @@ function columns({ day }) {
 /**
  * @param {{
  *   groups: { key: string, title: string, tone: string, count: number, rows: object[] }[],
- *   filter: 'everyone'|'missing'|'late', filterItems: { value: string, label: string, href: string }[],
+ *   filter: 'everyone'|'missing'|'late'|'no-todo',
+ *   filterItems: { value: string, label: string, href: string }[],
  *   day: { label: string, now: string, start: string, end: string, tz: string },
  *   exportHref: string, everyoneHref: string, reportDue?: { label: string, before: boolean },
  * }} props  reportDue: today's report time ('6:30 PM') and whether it is still ahead
@@ -188,5 +190,6 @@ function emptyBody(filter, reportDue) {
 function emptyTitle(filter) {
   if (filter === 'missing') return 'No reports missing right now.';
   if (filter === 'late') return 'Nobody is late today.';
+  if (filter === 'no-todo') return 'Everyone checked in has a to-do.';
   return 'Nobody on the team board yet.';
 }

@@ -2,6 +2,7 @@
 // The only repo allowed to read across other modules' tables (CONTRACT section 4): every function
 // is read-only and runs one query for one widget, never a query per row.
 import { db, parseJson } from '@/lib/db';
+import { readWithTodoColumns } from './todoColumns';
 
 // ---------- sidebar badges ----------
 
@@ -128,7 +129,8 @@ export function listTrackedPeopleDay(date, { withAdmins = true } = {}) {
 }
 
 /**
- * Project labels of every submitted report on one day, in report order.
+ * Project labels of every submitted report on one day, in report order. Projects with hours
+ * only: a planned project (0 minutes, CONTRACT 24) was not worked on, so it never shows as a label.
  * @param {string} date
  * @returns {Promise<{ reportId: number, name: string, color: string|null }[]>}
  */
@@ -138,6 +140,7 @@ export function listSubmittedReportProjects(date) {
     .leftJoin('projects as p', 'p.id', 'e.projectId')
     .leftJoin('projectRequests as pr', 'pr.id', 'e.projectRequestId')
     .where({ 'r.workDate': date, 'r.status': 'submitted' })
+    .where('e.minutes', '>', 0)
     .select('e.reportId', db.raw('COALESCE(p.name, pr.name) as name'), 'p.color')
     .orderBy([{ column: 'e.reportId' }, { column: 'e.sortOrder' }, { column: 'e.id' }]);
 }
@@ -157,16 +160,21 @@ export function listOpenBreaks(date) {
 
 /**
  * Timers running on one day (at most one per person) with their project, for the board's "Now"
- * tag (CONTRACT 15).
+ * tag (CONTRACT 15) and the "Now" line of the to-do (CONTRACT 24).
  * @param {string} date
- * @returns {Promise<{ userId: number, name: string, color: string|null, note: string|null }[]>}
+ * @param {{ userId?: number }} [options] one person's timer only
+ * @returns {Promise<{ userId: number, projectId: number, name: string, color: string|null,
+ *   note: string|null }[]>}
  */
-export function listRunningTimers(date) {
+export function listRunningTimers(date, { userId } = {}) {
   return db('timeEntries as t')
     .join('projects as p', 'p.id', 't.projectId')
     .where({ 't.workDate': date })
     .whereNull('t.endedAt')
-    .select('t.userId', 'p.name', 'p.color', 't.note');
+    .modify((q) => {
+      if (userId) q.where('t.userId', userId);
+    })
+    .select('t.userId', 't.projectId', 'p.name', 'p.color', 't.note');
 }
 
 // ---------- hours ----------
@@ -291,33 +299,38 @@ export function listReports(userId, from, to) {
 
 /**
  * Entries and their tasks for the person's reports between two dates, one row per task (an
- * entry without tasks comes back once with null task columns).
+ * entry without tasks comes back once with null task columns). carryClosedAt and
+ * carryClosedReason ('done' | 'dropped') say the person closed an open line from the suggestions
+ * (CONTRACT 24); before migration 017 they are left out (readWithTodoColumns).
  */
 export function listReportEntries(userId, from, to) {
-  return db('reportEntries as e')
-    .join('dailyReports as r', 'r.id', 'e.reportId')
-    .leftJoin('projects as p', 'p.id', 'e.projectId')
-    .leftJoin('projectRequests as pr', 'pr.id', 'e.projectRequestId')
-    .leftJoin('reportTasks as t', 't.entryId', 'e.id')
-    .where('r.userId', userId)
-    .whereBetween('r.workDate', [from, to])
-    .select(
-      'e.id as entryId',
-      'e.reportId',
-      'e.minutes',
-      db.raw('COALESCE(p.name, pr.name) as project_name'),
-      'p.color',
-      't.id as taskId',
-      't.title',
-      't.status',
-    )
-    .orderBy([
-      { column: 'r.workDate' },
-      { column: 'e.sortOrder' },
-      { column: 'e.id' },
-      { column: 't.sortOrder' },
-      { column: 't.id' },
-    ]);
+  return readWithTodoColumns((withClosed) =>
+    db('reportEntries as e')
+      .join('dailyReports as r', 'r.id', 'e.reportId')
+      .leftJoin('projects as p', 'p.id', 'e.projectId')
+      .leftJoin('projectRequests as pr', 'pr.id', 'e.projectRequestId')
+      .leftJoin('reportTasks as t', 't.entryId', 'e.id')
+      .where('r.userId', userId)
+      .whereBetween('r.workDate', [from, to])
+      .select(
+        'e.id as entryId',
+        'e.reportId',
+        'e.minutes',
+        db.raw('COALESCE(p.name, pr.name) as project_name'),
+        'p.color',
+        't.id as taskId',
+        't.title',
+        't.status',
+        ...(withClosed ? ['t.carryClosedAt', 't.carryClosedReason'] : []),
+      )
+      .orderBy([
+        { column: 'r.workDate' },
+        { column: 'e.sortOrder' },
+        { column: 'e.id' },
+        { column: 't.sortOrder' },
+        { column: 't.id' },
+      ]),
+  );
 }
 
 /** Submit history (report_revisions) of the person's reports between two dates. */
@@ -372,7 +385,9 @@ export function listOpenEditRequests(userId, from, to) {
 
 /**
  * The person's tasks whose latest submitted version is still in progress (the version no later
- * submitted task was carried from), reported on or after `since`. Oldest first report first.
+ * submitted task was carried from), reported on or after `since`, leaving out lines the person
+ * closed from the suggestions ("Done already", "Not needed"; CONTRACT 24, from migration 017 on).
+ * Oldest first report first.
  */
 export function listOpenTasks(userId, since) {
   const carriedLater = db('reportTasks as t2')
@@ -381,23 +396,28 @@ export function listOpenTasks(userId, since) {
     .whereRaw('t2.carried_from_task_id = t.id')
     .where('r2.status', 'submitted')
     .select(db.raw('1'));
-  return db('reportTasks as t')
-    .join('reportEntries as e', 'e.id', 't.entryId')
-    .join('dailyReports as r', 'r.id', 'e.reportId')
-    .leftJoin('projects as p', 'p.id', 'e.projectId')
-    .leftJoin('projectRequests as pr', 'pr.id', 'e.projectRequestId')
-    .where({ 'r.userId': userId, 'r.status': 'submitted', 't.status': 'in_progress' })
-    .where('r.workDate', '>=', since)
-    .whereNotExists(carriedLater)
-    .select(
-      't.id',
-      't.title',
-      't.firstReportedOn',
-      'r.workDate',
-      db.raw('COALESCE(p.name, pr.name) as project_name'),
-      'p.color',
-    )
-    .orderBy([{ column: 't.firstReportedOn' }, { column: 't.id' }]);
+  return readWithTodoColumns((withClosed) =>
+    db('reportTasks as t')
+      .join('reportEntries as e', 'e.id', 't.entryId')
+      .join('dailyReports as r', 'r.id', 'e.reportId')
+      .leftJoin('projects as p', 'p.id', 'e.projectId')
+      .leftJoin('projectRequests as pr', 'pr.id', 'e.projectRequestId')
+      .where({ 'r.userId': userId, 'r.status': 'submitted', 't.status': 'in_progress' })
+      .where('r.workDate', '>=', since)
+      .whereNotExists(carriedLater)
+      .modify((q) => {
+        if (withClosed) q.whereNull('t.carryClosedAt');
+      })
+      .select(
+        't.id',
+        't.title',
+        't.firstReportedOn',
+        'r.workDate',
+        db.raw('COALESCE(p.name, pr.name) as project_name'),
+        'p.color',
+      )
+      .orderBy([{ column: 't.firstReportedOn' }, { column: 't.id' }]),
+  );
 }
 
 // ---------- company (Overview) ----------
@@ -584,7 +604,9 @@ export function listExportDaysWithoutReport({ from, to, userId, withAdmins = tru
 
 // ---------- project report (CONTRACT section 12) ----------
 // Submitted reports only (build guide 7.10). Entries still under a pending project request are
-// not part of the project yet; approving the request moves them onto it.
+// not part of the project yet; approving the request moves them onto it. Entries with hours only:
+// a planned project (0 minutes, CONTRACT 24) was not worked on that day, so it adds no day, no
+// person, no log row and no task version (its open lines stay in the person's Tasks to watch).
 
 /**
  * First and last day with a submitted report entry on the project (all time).
@@ -595,6 +617,7 @@ export async function projectReportSpan(projectId) {
   const row = await db('reportEntries as e')
     .join('dailyReports as r', 'r.id', 'e.reportId')
     .where({ 'e.projectId': projectId, 'r.status': 'submitted' })
+    .where('e.minutes', '>', 0)
     .select(db.raw('MIN(r.work_date) as first_on'), db.raw('MAX(r.work_date) as last_on'))
     .first();
   return { firstOn: dateOrNull(row?.firstOn), lastOn: dateOrNull(row?.lastOn) };
@@ -610,6 +633,7 @@ export function listProjectReportersOn(projectId, date) {
     .join('dailyReports as r', 'r.id', 'e.reportId')
     .join('users as u', 'u.id', 'r.userId')
     .where({ 'e.projectId': projectId, 'r.status': 'submitted', 'r.workDate': date })
+    .where('e.minutes', '>', 0)
     .groupBy('u.id', 'u.name', 'r.submittedAt')
     .select('u.id', 'u.name', 'r.submittedAt')
     .orderBy([{ column: 'r.submittedAt', order: 'desc' }, { column: 'u.name' }]);
@@ -624,6 +648,7 @@ export function listProjectEntries(projectId, from, to) {
     .join('dailyReports as r', 'r.id', 'e.reportId')
     .join('users as u', 'u.id', 'r.userId')
     .where({ 'e.projectId': projectId, 'r.status': 'submitted' })
+    .where('e.minutes', '>', 0)
     .whereBetween('r.workDate', [from, to])
     .select(
       'e.id as entryId',
@@ -652,6 +677,7 @@ export function listProjectTasks(projectId, from, to) {
     .join('reportEntries as e', 'e.id', 't.entryId')
     .join('dailyReports as r', 'r.id', 'e.reportId')
     .where({ 'e.projectId': projectId, 'r.status': 'submitted' })
+    .where('e.minutes', '>', 0)
     .whereBetween('r.workDate', [from, to])
     .select(
       't.id',

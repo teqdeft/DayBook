@@ -22,8 +22,20 @@ function groupBy(rows, key) {
   return map;
 }
 
+const CLOSED_WORDS = { done: 'Marked done', dropped: 'Marked not needed' };
+
+/**
+ * "Marked done on Thu, 12 Nov" / "Marked not needed on Thu, 12 Nov" for a line the person closed
+ * from the suggestions without bringing it into a later day (CONTRACT 24), else null.
+ */
+export function closedNoteOf(row, tz) {
+  const words = CLOSED_WORDS[row.carryClosedReason];
+  if (!words || !row.carryClosedAt) return null;
+  return `${words} on ${formatDayShort(workDate(tz, row.carryClosedAt))}`;
+}
+
 /** Report entries (one row per task from the repo) as projects with their tasks. */
-function entriesOf(rows = []) {
+function entriesOf(rows = [], tz) {
   const entries = new Map();
   for (const row of rows) {
     if (!entries.has(row.entryId)) {
@@ -36,7 +48,12 @@ function entriesOf(rows = []) {
       });
     }
     if (row.taskId) {
-      entries.get(row.entryId).tasks.push({ id: row.taskId, title: row.title, status: row.status });
+      entries.get(row.entryId).tasks.push({
+        id: row.taskId,
+        title: row.title,
+        status: row.status,
+        closedNote: closedNoteOf(row, tz),
+      });
     }
   }
   return [...entries.values()];
@@ -120,7 +137,10 @@ function historyRow({ date, attendance, report, entries, revisions, requests, ct
     present: present === null ? '—' : formatDuration(present),
     loggedMinutes: submitted ? Number(report.totalMinutes) : 0,
     logged: submitted ? formatHours(report.totalMinutes) : loggedText,
-    projects: submitted ? entries.map((entry) => entry.project) : [],
+    // Projects with hours only: a planned project (0 minutes, CONTRACT 24) wasn't worked on.
+    projects: submitted
+      ? entries.filter((entry) => entry.minutes > 0).map((entry) => entry.project)
+      : [],
     report: status,
     reportLabel: status === 'due' ? `Due ${ctx.due.label}` : null,
     reportStatus: report?.status ?? null,
@@ -158,7 +178,7 @@ export function buildHistory(input) {
         date,
         attendance: row,
         report,
-        entries: report ? entriesOf(entriesByReport.get(report.id)) : [],
+        entries: report ? entriesOf(entriesByReport.get(report.id), ctx.tz) : [],
         revisions: report ? revisionsOf(revisionsByReport.get(report.id), ctx.tz) : [],
         requests: requestsOf(dayRequests, { profile, ctx }),
         ctx,

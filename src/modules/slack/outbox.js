@@ -7,6 +7,7 @@ import { reports } from '@/modules/reports';
 import { settings } from '@/modules/settings';
 import * as client from './client';
 import * as repo from './repo';
+import { deliverTodo, isPermanentTodoError, saveTodoDelivery, TODO_KINDS } from './todoDelivery';
 
 export const BATCH_SIZE = 20;
 /** Minutes to wait after the 1st, 2nd, 3rd and 4th failure; the 5th failure is final. */
@@ -16,14 +17,6 @@ export const RETRY_MINUTES = [1, 5, 15, 60];
  * than a worst-case batch (20 rows x the client's 15-second timeout = 5 minutes).
  */
 const CLAIM_LEASE_MINUTES = 10;
-/** chat.update errors that mean the old message is gone, so a new post replaces it. */
-const MESSAGE_GONE = new Set([
-  'message_not_found',
-  'cant_update_message',
-  'channel_not_found',
-  'is_archived',
-  'edit_window_closed',
-]);
 const REPORT_KINDS = new Set(['report_post', 'report_update']);
 /**
  * A direct message still unsent after this long (for example queued while no bot token was set)
@@ -65,13 +58,16 @@ function postReport(channel, payload) {
  */
 async function deliverReport(row, payload) {
   const reportId = row.relatedType === 'report' ? row.relatedId : null;
-  if (reportId && (await repo.hasNewerReportMessage({ id: row.id, reportId }))) {
+  if (
+    reportId &&
+    (await repo.hasNewerMessage({ id: row.id, relatedType: 'report', relatedId: reportId }))
+  ) {
     return { skipped: 'superseded by a newer version of this report' };
   }
   let target = null;
   if (row.kind === 'report_update') target = { channel: row.channel, ts: payload.ts };
   else if (reportId) {
-    const sent = await repo.findSentReportMessage(reportId);
+    const sent = await repo.findSentMessage({ relatedType: 'report', relatedId: reportId });
     if (sent) target = { channel: sent.channel, ts: sent.resultTs };
   }
   if (!target) return { ...(await postReport(row.channel, payload)), kind: 'report_post' };
@@ -80,7 +76,7 @@ async function deliverReport(row, payload) {
     return { ...result, kind: 'report_update' };
   } catch (error) {
     const current = await settings.getAll();
-    if (!MESSAGE_GONE.has(error?.data?.error) || !current.slackReportChannelId) throw error;
+    if (!client.isMessageGone(error) || !current.slackReportChannelId) throw error;
     logger.warn(
       { outboxId: row.id, reportId, slackError: error.data.error },
       'slack report message can no longer be updated; posting a new one',
@@ -91,11 +87,12 @@ async function deliverReport(row, payload) {
 
 function deliver(row, payload) {
   if (REPORT_KINDS.has(row.kind)) return deliverReport(row, payload);
+  if (TODO_KINDS.has(row.kind)) return deliverTodo(row, payload);
   if (row.kind === 'dm') return client.postMessage({ channel: row.channel, text: payload.text });
   return postReport(row.channel, payload);
 }
 
-async function markSent(row, delivered) {
+async function markSent(row, delivered, payload) {
   const at = nowDate();
   const changes = {
     status: 'sent',
@@ -104,7 +101,7 @@ async function markSent(row, delivered) {
     lastError: null,
     updatedAt: at,
   };
-  if (REPORT_KINDS.has(row.kind)) {
+  if (REPORT_KINDS.has(row.kind) || TODO_KINDS.has(row.kind)) {
     Object.assign(changes, {
       kind: delivered.kind,
       channel: delivered.channel,
@@ -114,6 +111,8 @@ async function markSent(row, delivered) {
     changes.resultTs = delivered.ts ?? null;
   }
   await repo.updateOutbox(row.id, changes);
+  // A to-do post or update: the report keeps its channel, ts, time and plan hash (CONTRACT 24).
+  if (TODO_KINDS.has(row.kind)) await saveTodoDelivery(row, delivered, payload, at);
   // A new report message: remember it on the report, so later submits update the same message.
   if (delivered.kind === 'report_post' && row.relatedType === 'report' && row.relatedId) {
     try {
@@ -150,7 +149,7 @@ async function handleFailure(row, error) {
   }
   const attempts = row.attempts + 1;
   const lastError = slackError.slice(0, 500);
-  if (attempts <= RETRY_MINUTES.length) {
+  if (attempts <= RETRY_MINUTES.length && !isPermanentTodoError(row, error)) {
     const retryInMinutes = RETRY_MINUTES[attempts - 1];
     const nextAttemptAt = now().add(retryInMinutes, 'minute').toDate();
     await repo.updateOutbox(row.id, { attempts, lastError, nextAttemptAt, updatedAt: nowDate() });
@@ -163,7 +162,9 @@ async function handleFailure(row, error) {
   await repo.updateOutbox(row.id, { status: 'failed', attempts, lastError, updatedAt: nowDate() });
   logger.error(
     { outboxId: row.id, kind: row.kind, attempts, slackError },
-    'slack message failed after all retries',
+    attempts > RETRY_MINUTES.length
+      ? 'slack message failed after all retries'
+      : 'slack message failed; sending again would not help',
   );
   return { status: 'failed' };
 }
@@ -199,7 +200,7 @@ async function sendRow(row) {
       });
       return { status: 'skipped' };
     }
-    await markSent(row, delivered);
+    await markSent(row, delivered, payload);
     return { status: 'sent' };
   } catch (error) {
     return handleFailure(row, error);
@@ -209,9 +210,10 @@ async function sendRow(row) {
 /**
  * Sends due Slack messages: claims up to 20 pending rows whose next_attempt_at has passed, sends
  * each one outside the claiming transaction, then marks it sent (with result_ts; for a new report
- * post also reports.saveSlackMessage) or schedules a retry after 1, 5, 15 and 60 minutes before
- * marking it failed. A rate-limit reply waits the retry_after Slack asks for. Without
- * SLACK_BOT_TOKEN nothing is sent and rows stay pending.
+ * post also reports.saveSlackMessage, for a to-do reports.saveTodoSlackMessage) or schedules a
+ * retry after 1, 5, 15 and 60 minutes before marking it failed (a to-do fails at once on an error
+ * a retry can't fix, such as not_in_channel). A rate-limit reply waits the retry_after Slack asks
+ * for. Without SLACK_BOT_TOKEN nothing is sent and rows stay pending.
  * @returns {Promise<{ sent: number, skipped: number, retried: number, failed: number,
  *   configured: boolean }>}
  */

@@ -1,6 +1,8 @@
-// Carry-over off (CONTRACT 21, My settings): a new draft — opening the report, or an approved edit
-// request creating a missing day — starts without carried lines for a person who turned it off.
-// Drafts that already exist keep theirs, and other people still get carry-over.
+// Carry forward (CONTRACT 24 company rule, overriding the build guide 7.4.2 and CONTRACT 21): a new
+// draft (opening the report, or an approved edit request creating a missing day) starts with no
+// copied lines, whatever the person's carryOver preference. While it is on, the unfinished tasks
+// are suggested instead (listCarrySuggestions); while it is off, nothing is. Drafts that already
+// exist keep their lines.
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { setNowForTests } from '@/lib/time';
@@ -61,6 +63,11 @@ const carriedTitles = (view) =>
     entry.tasks.filter((t) => t.carriedFromTaskId).map((t) => t.title),
   );
 
+const suggestedTitles = async (person, date) =>
+  Object.values(await reports.listCarrySuggestions({ userId: person.id, date }))
+    .flat()
+    .map((task) => task.title);
+
 beforeAll(async () => {
   await resetDatabase();
   people = await createPeople();
@@ -76,41 +83,75 @@ beforeEach(async () => {
   setNowForTests(TUESDAY_MORNING);
 });
 
-describe('carry-over off', () => {
-  it('starts a new draft without carried lines; others still get theirs', async () => {
+describe('new drafts', () => {
+  it('start with no copied lines; the open task is suggested instead', async () => {
+    const monday = await reportWithOpenWork(people.person, MONDAY);
+
+    const view = await reports.openForDate({ user });
+
+    expect(view).toMatchObject({ workDate: TUESDAY, status: 'draft', editable: true });
+    expect(view.entries).toEqual([]);
+    expect(await db('reportTasks').count({ n: '*' }).first()).toEqual({ n: 2 }); // Monday's only
+    expect(await reports.listCarrySuggestions({ userId: user.id, date: TUESDAY })).toEqual({
+      [`p${internal.id}`]: [
+        {
+          taskId: monday.taskIds[0],
+          title: 'Working on backend',
+          status: 'in_progress',
+          workDate: MONDAY,
+          dayLabel: 'From yesterday',
+        },
+      ],
+    });
+  });
+
+  it('give no suggestions while carry forward is off; others still get theirs', async () => {
     await reportWithOpenWork(people.person, MONDAY);
     await reportWithOpenWork(people.colleague, MONDAY);
     await preferences.update({ user, values: { carryOver: false } });
 
-    expect(await reports.planCarryOver(user.id, TUESDAY)).toEqual([]);
     const mine = await reports.openForDate({ user });
-    expect(mine).toMatchObject({ workDate: TUESDAY, status: 'draft', editable: true });
     expect(mine.entries).toEqual([]);
+    expect(await reports.listCarrySuggestions({ userId: user.id, date: TUESDAY })).toEqual({});
 
     const theirs = await reports.openForDate({ user: colleague });
-    expect(carriedTitles(theirs)).toEqual(['Working on backend']);
-  });
+    expect(theirs.entries).toEqual([]);
+    expect(await suggestedTitles(colleague, TUESDAY)).toEqual(['Working on backend']);
 
-  it('leaves a draft that already exists as it is', async () => {
-    await reportWithOpenWork(people.person, MONDAY);
-    const opened = await reports.openForDate({ user });
-    expect(carriedTitles(opened)).toEqual(['Working on backend']);
-
-    await preferences.update({ user, values: { carryOver: false } });
-    const again = await reports.openForDate({ user, workDate: TUESDAY });
-    expect(again.id).toBe(opened.id);
-    expect(carriedTitles(again)).toEqual(['Working on backend']);
-
-    // On again: the next new draft carries over as before.
+    // On again: suggested as before.
     await preferences.update({ user, values: { carryOver: true } });
-    setNowForTests('2026-09-30T04:00:00Z'); // Wednesday; Tuesday's draft was never submitted
-    expect(carriedTitles(await reports.openForDate({ user }))).toEqual(['Working on backend']);
+    expect(await suggestedTitles(user, TUESDAY)).toEqual(['Working on backend']);
   });
 
-  it('applies to a missing day an approved edit request creates', async () => {
+  it('leave a draft that already exists as it is (copied lines from before 1.09 stay)', async () => {
+    const monday = await reportWithOpenWork(people.person, MONDAY);
+    const existing = await insertReport(people.person, TUESDAY, {
+      status: 'draft',
+      entries: [
+        {
+          project: internal,
+          minutes: 0,
+          tasks: [
+            {
+              title: 'Working on backend',
+              status: 'in_progress',
+              carriedFromTaskId: monday.taskIds[0],
+            },
+          ],
+        },
+      ],
+    });
+
+    const opened = await reports.openForDate({ user, workDate: TUESDAY });
+    expect(opened.id).toBe(existing.id);
+    expect(carriedTitles(opened)).toEqual(['Working on backend']);
+    // That line already continues Monday's task, so nothing is suggested twice.
+    expect(await reports.listCarrySuggestions({ userId: user.id, date: TUESDAY })).toEqual({});
+  });
+
+  it('start empty on a missing day an approved edit request creates', async () => {
     setNowForTests(WEDNESDAY_MORNING);
     await reportWithOpenWork(people.person, THURSDAY);
-    await preferences.update({ user, values: { carryOver: false } });
     const request = await reports.requestEdit({
       user,
       workDate: FRIDAY,
@@ -121,20 +162,14 @@ describe('carry-over off', () => {
     const created = await reports.openForDate({ user, workDate: FRIDAY });
     expect(created).toMatchObject({ workDate: FRIDAY, status: 'draft', editable: true });
     expect(created.entries).toEqual([]);
-  });
+    expect(await db('reportTasks').count({ n: '*' }).first()).toEqual({ n: 2 });
+    // That day's suggestions are counted from Friday.
+    const suggested = await reports.listCarrySuggestions({ userId: user.id, date: FRIDAY });
+    expect(suggested[`p${internal.id}`]).toEqual([
+      expect.objectContaining({ title: 'Working on backend', dayLabel: 'From yesterday' }),
+    ]);
 
-  it('carries over into that missing day while it is on', async () => {
-    setNowForTests(WEDNESDAY_MORNING);
-    await reportWithOpenWork(people.person, THURSDAY);
-    const request = await reports.requestEdit({
-      user,
-      workDate: FRIDAY,
-      reason: 'I forgot Friday',
-    });
-    await reports.approveEditRequest({ user: pm, requestId: request.id });
-
-    const created = await reports.openForDate({ user, workDate: FRIDAY });
-    expect(carriedTitles(created)).toEqual(['Working on backend']);
-    expect(await db('reportTasks').count({ n: '*' }).first()).toEqual({ n: 3 });
+    await preferences.update({ user, values: { carryOver: false } });
+    expect(await reports.listCarrySuggestions({ userId: user.id, date: FRIDAY })).toEqual({});
   });
 });

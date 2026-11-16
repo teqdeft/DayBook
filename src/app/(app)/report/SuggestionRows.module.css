@@ -1,0 +1,61 @@
+/* The rows of "Still open from past reports" (CONTRACT 24 prototype): a line above each, the
+   title and its tags on the left, the three buttons on the right; they wrap under the title when
+   the row is narrow. */
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.what {
+  display: flex;
+  flex: 1 1 220px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.title {
+  min-width: 0;
+  margin-right: 2px;
+  font-size: var(--text-body);
+  line-height: 21px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 36 px buttons with 14 px text, as in the prototype (two classes, so they win over the size). */
+.actions .action {
+  --btn-pad-x: 12px;
+  --btn-pad-top: 2px;
+  gap: 6px;
+  height: 36px;
+  font-size: 14px;
+}
+
+.check {
+  color: var(--green);
+}
+
+.actions .drop {
+  min-height: 36px;
+  padding: 0 6px;
+}

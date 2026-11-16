@@ -1,15 +1,16 @@
 // Saving a report's entries and tasks (build guide 7.4.4): the project checks, the stale-save
 // check and the row writes shared by autosave and submit, and autosave itself.
-import { db } from '@/lib/db';
 import { AppError } from '@/lib/errors';
 import { nowDate } from '@/lib/time';
 import { projects } from '@/modules/projects';
 import { timers } from '@/modules/timers';
 import * as repo from './repo';
+import { resolveCarried, saveClaims } from './carry';
 import { assertEditable, getOwnReport } from './drafts';
 import { checkPriorityLinks } from './links';
 import { entryMinutes } from './schemas';
 import { contentVersion, loadReportView } from './view';
+import { lineTransaction, retryOnDeadlock } from './writeTx';
 
 /**
  * The projects the person timed on a day (CONTRACT 15), read once and only when needed.
@@ -83,15 +84,19 @@ function requestHandled(index) {
 export async function confirmRequests({ user, entries }, trx) {
   const ids = [...new Set(entries.map((entry) => entry.projectRequestId).filter(Boolean))];
   if (ids.length === 0) return;
-  await repo.shareLockProjectRequests(ids, trx);
-  const pending = new Map();
+  // Read with the lock, on this transaction's connection: asking the projects service here would
+  // take a second pool connection while the report row is locked, and a burst of saves holding
+  // every connection would then wait for each other until the lock wait timeout.
+  const rows = await repo.shareLockProjectRequests(ids, trx);
+  const pending = new Set(
+    rows
+      .filter((row) => row.status === 'pending' && Number(row.requestedBy) === Number(user.id))
+      .map((row) => Number(row.id)),
+  );
   for (const [index, entry] of entries.entries()) {
-    const requestId = entry.projectRequestId;
-    if (!requestId) continue;
-    if (!pending.has(requestId)) {
-      pending.set(requestId, Boolean(await projects.findPendingRequestForUser(requestId, user.id)));
+    if (entry.projectRequestId && !pending.has(Number(entry.projectRequestId))) {
+      throw requestHandled(index);
     }
-    if (!pending.get(requestId)) throw requestHandled(index);
   }
 }
 
@@ -126,15 +131,40 @@ function sameFields(row, fields) {
 }
 
 /**
- * Replaces a report's entries and tasks with the given ones, keeping ids (so carry-over links
- * from later reports survive): known ids are updated, new rows inserted, missing rows deleted.
+ * Writes one task line: updates a stored line the save keeps (only when something changed; its
+ * carried_from_task_id never changes), otherwise inserts it, linked to the open task it was added
+ * from when that link passed resolveCarried (CONTRACT 24).
+ * @returns {Promise<number>} the line's id
+ */
+async function writeTask({ task, fields, report, taskById, keptTasks, carried, at }, trx) {
+  if (task.id && taskById.has(task.id) && !keptTasks.has(task.id)) {
+    if (!sameFields(taskById.get(task.id), fields)) await repo.updateTask(task.id, fields, trx);
+    return task.id;
+  }
+  return repo.insertTask(
+    {
+      ...fields,
+      firstReportedOn: report.workDate,
+      carriedFromTaskId: null,
+      ...carried.get(task),
+      createdAt: at,
+    },
+    trx,
+  );
+}
+
+/**
+ * Replaces a report's entries and tasks with the given ones, keeping ids (so links from lines
+ * carried from them survive): known ids are updated, new rows inserted, missing rows deleted.
  * Keeps total_minutes in sync. Call inside a transaction with the report row locked.
- * @param {{ id: number, workDate: string, status: string }} report
+ * @param {{ id: number, userId: number, workDate: string, status: string }} report
  * @param {Array<{ id?: number, projectId?: number, projectRequestId?: number, minutes?: number,
  *   hours?: number, tasks: Array<{ id?: number, title: string, status: string,
- *   projectTaskId?: number, timerNote?: string | null }> }>} entries (links checked with
- *   checkPriorityLinks first); the time is `minutes`, else `hours` (entryMinutes), stored to the
- *   minute
+ *   projectTaskId?: number, timerNote?: string | null, carriedFromTaskId?: number }> }>} entries
+ *   (links checked with checkPriorityLinks first); the time is `minutes`, else `hours`
+ *   (entryMinutes), stored to the minute. `carriedFromTaskId` is read only on lines being
+ *   inserted and kept only when it passes resolveCarried (carry.js); then the line copies the
+ *   source's first_reported_on, project_task_id and timer_note
  * @param {import('knex').Knex} trx
  * @param {{ baseVersion?: string }} [options] the version the person's page last saw
  * @returns {Promise<number>} the new total in minutes
@@ -146,6 +176,17 @@ export async function writeEntries(report, entries, trx, { baseVersion } = {}) {
   });
   // Before migration 014 the lines are written without their timer note (repo.hasTimerNote).
   const keepNotes = await repo.hasTimerNote(trx);
+  const { claims, deletedIds } = saveClaims(entries, storedTasks);
+  const carried = await resolveCarried(
+    {
+      userId: report.userId,
+      workDate: report.workDate,
+      keepNotes,
+      ignoreTaskIds: deletedIds,
+      claims,
+    },
+    trx,
+  );
   const entryById = new Map(storedEntries.map((entry) => [entry.id, entry]));
   const taskById = new Map(storedTasks.map((task) => [task.id, task]));
   const keptEntries = new Set();
@@ -180,22 +221,8 @@ export async function writeEntries(report, entries, trx, { baseVersion } = {}) {
         sortOrder: taskOrder,
         updatedAt: at,
       };
-      if (task.id && taskById.has(task.id) && !keptTasks.has(task.id)) {
-        if (!sameFields(taskById.get(task.id), taskFields))
-          await repo.updateTask(task.id, taskFields, trx);
-        keptTasks.add(task.id);
-      } else {
-        const taskId = await repo.insertTask(
-          {
-            ...taskFields,
-            firstReportedOn: report.workDate,
-            carriedFromTaskId: null,
-            createdAt: at,
-          },
-          trx,
-        );
-        keptTasks.add(taskId);
-      }
+      const context = { report, taskById, keptTasks, carried, at };
+      keptTasks.add(await writeTask({ task, fields: taskFields, ...context }, trx));
     }
   }
   await repo.deleteTasks(
@@ -213,7 +240,8 @@ export async function writeEntries(report, entries, trx, { baseVersion } = {}) {
 /**
  * Autosave: saves a draft's entries and tasks (time 0 to 24 hours, to the minute; empty task
  * rows allowed). After the first submit every save is a new revision, so saving a submitted report
- * runs the submit rules instead.
+ * runs the submit rules instead. One transaction at READ COMMITTED (writeTx.js), run again once
+ * when the database picks it as a deadlock victim.
  * @param {{ user: object, reportId: number, entries: object[], baseVersion?: string }} input
  *   entries from saveReportSchema; baseVersion is the report version the page last saw
  * @returns {Promise<object>} the saved report view
@@ -224,18 +252,20 @@ export async function saveDraft({ user, reportId, entries, baseVersion }) {
   const report = await getOwnReport(user, reportId);
   assertEditable(report);
   await checkProjects({ user, reportId, workDate: report.workDate, entries });
-  await db.transaction(async (trx) => {
-    const locked = await repo.findByIdForUpdate(reportId, trx);
-    assertEditable(locked);
-    if (locked.status !== 'draft') {
-      throw new AppError('CONFLICT', {
-        message: 'This report was just submitted. Reload the page to see it.',
-      });
-    }
-    // Before the entry and task rows are locked: deleting a linked task waits for this save.
-    await checkPriorityLinks({ reportId, entries }, trx);
-    await confirmRequests({ user, entries }, trx);
-    await writeEntries(locked, entries, trx, { baseVersion });
-  });
+  await retryOnDeadlock(() =>
+    lineTransaction(async (trx) => {
+      const locked = await repo.findByIdForUpdate(reportId, trx);
+      assertEditable(locked);
+      if (locked.status !== 'draft') {
+        throw new AppError('CONFLICT', {
+          message: 'This report was just submitted. Reload the page to see it.',
+        });
+      }
+      // Before the entry and task rows are locked: deleting a linked task waits for this save.
+      await checkPriorityLinks({ reportId, entries }, trx);
+      await confirmRequests({ user, entries }, trx);
+      await writeEntries(locked, entries, trx, { baseVersion });
+    }),
+  );
   return loadReportView(await repo.findById(reportId));
 }

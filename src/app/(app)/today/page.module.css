@@ -32,12 +32,12 @@
   align-items: stretch;
 }
 
-/* Urgent narrow + My tasks wide */
+/* Urgent narrow (372 px) + Today's to-do wide (CONTRACT 24); each card keeps its own height */
 .rowTasks {
   display: grid;
   grid-template-columns: 372px minmax(0, 1fr);
   gap: 19px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .rowTasksSolo {
@@ -158,18 +158,15 @@
   color: var(--marigold-text);
 }
 
-/* My tasks this week */
-/* the artboard's header is 1 px taller than the shared divider header */
-.tasks .tasksHead,
+/* Today's to-do (TodoCard.module.css has the rest) */
+.todo {
+  min-width: 0;
+}
+
+/* Priority tasks: the artboard's table header is 1 px taller than the shared divider header */
 .priority .tasksHead {
   min-height: 55px;
   padding-bottom: 16px;
-}
-
-.tasks {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
 }
 
 .taskTitle {
@@ -202,6 +199,42 @@
 .forYou {
   font-weight: 600;
   color: var(--ink);
+}
+
+/* The To-do column (CONTRACT 24): a 32 px Plus, or a muted check and "In to-do". */
+.todoAdd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-right: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.todoAdd:hover {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.inTodo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.inTodoIcon {
+  flex: none;
+  color: var(--green);
 }
 
 /* "Show 2 more priority tasks": a quiet text button under the table, like a table footer. */
@@ -305,9 +338,48 @@
   }
 }
 
-/* the table's rows become cards with 16 px sides; the header lines up with them */
+/* Below 1024 px the rows let go of their cards (display: contents), so the cards line up in the
+   order CONTRACT 24 gives: Your day, Working on, Urgent, the to-do, This week, Priority tasks, the
+   strip and the links under it. The table's rows become cards with 16 px sides; the header lines
+   up with them. */
 @media (max-width: 1023px) {
-  .tasks .tasksHead,
+  .rowDay,
+  .rowTasks {
+    display: contents;
+  }
+
+  .rowDay > :first-child {
+    order: 1;
+  }
+
+  .timer {
+    order: 2;
+  }
+
+  .urgent {
+    order: 3;
+  }
+
+  .todo {
+    order: 4;
+  }
+
+  .rowDay > :last-child {
+    order: 5;
+  }
+
+  .priority {
+    order: 6;
+  }
+
+  .strip {
+    order: 7;
+  }
+
+  .help {
+    order: 8;
+  }
+
   .priority .tasksHead {
     padding-right: 16px;
     padding-left: 16px;
@@ -326,6 +398,13 @@
 @media (max-width: 640px) {
   .wideOnly {
     display: none;
+  }
+
+  /* The To-do column's Plus: 44 px on phones */
+  .todoAdd {
+    width: 44px;
+    height: 44px;
+    margin-right: 0;
   }
 
   .phoneOnly {

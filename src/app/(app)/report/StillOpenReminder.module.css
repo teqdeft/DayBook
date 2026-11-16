@@ -1,0 +1,31 @@
+/* The notice above the report's cards and the reminder line under them (CONTRACT 24 prototype). */
+.notice {
+  --card-pad: 14px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.noticeIcon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--muted);
+}
+
+.noticeText {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+
+.reminder {
+  font-size: var(--text-small);
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.reminderButton {
+  margin-left: 10px;
+  line-height: 20px;
+}

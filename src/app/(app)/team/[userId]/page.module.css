@@ -186,6 +186,18 @@
   flex: none;
 }
 
+/* Today's to-do (CONTRACT 24): read-only, above Report history */
+.todoCard {
+  overflow: hidden;
+}
+
+.todoEmpty {
+  padding: 24px 20px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
 .historyCard {
   overflow: hidden;
 }

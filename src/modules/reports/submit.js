@@ -1,27 +1,32 @@
 // Submitting a report (build guide 7.4.5-7.4.7): validation, revision, snapshot and the Slack post.
-import { db, toJson } from '@/lib/db';
+import { toJson } from '@/lib/db';
 import { AppError } from '@/lib/errors';
 import { emit } from '@/lib/events';
 import { logger } from '@/lib/logger';
 import { nowDate } from '@/lib/time';
 import { slack } from '@/modules/slack';
 import * as repo from './repo';
+import { isEmptyEntry, isPlannedEntry, writtenTasks } from './planned';
 import { MAX_TASK_LENGTH, entryMinutes } from './schemas';
 import { assertEditable, getOwnReport } from './drafts';
 import { checkPriorityLinks } from './links';
 import { checkProjects, confirmRequests, lockStoredRows, saveDraft, writeEntries } from './save';
 import { checkTimerHours, withTimerProblems } from './timerCheck';
 import { loadEntriesFor, loadReportView, snapshotOf } from './view';
+import { lineTransaction, retryOnDeadlock } from './writeTx';
 
 export const MAX_DAY_MINUTES = 16 * 60;
 
 /**
  * The submit rules: at least one project; each project with time above 0 (any whole minutes) and
  * at least one task; tasks 2 to 500 characters; no project twice; 16 hours or less in total.
- * Empty task rows (nothing typed) are ignored. Field keys follow the order sent, for example
- * 'entries.0.hours' or 'entries.1.tasks.0.title'.
+ * Empty task rows (nothing typed) are ignored. Company rule (CONTRACT 24): a planned project (0
+ * minutes, no Done line, see planned.js) may stay at 0 hours next to at least one worked project;
+ * a 0-hour project with no task is dropped like an empty row; a 0-hour project with a Done line
+ * still needs hours. Field keys follow the order sent, for example 'entries.0.hours' or
+ * 'entries.1.tasks.0.title'.
  * @param {Array<{ projectId?: number|null, projectRequestId?: number|null, minutes: number,
- *   tasks: Array<{ title: string }> }>} entries
+ *   tasks: Array<{ title: string, status?: string }> }>} entries
  * @returns {AppError | null} a VALIDATION_FAILED error, or null when the report can be submitted
  */
 export function submitProblems(entries) {
@@ -29,27 +34,32 @@ export function submitProblems(entries) {
   const add = (key, message) => {
     if (!fields[key]) fields[key] = message;
   };
-  if (entries.length === 0) add('entries', 'Add at least one project before you submit.');
+  const kept = entries
+    .map((entry, i) => ({ entry, i }))
+    .filter(({ entry }) => !isEmptyEntry(entry));
+  if (kept.length === 0) add('entries', 'Add at least one project before you submit.');
+  // Planned projects go with worked ones: a report of planned projects only has no hours at all.
+  const worked = kept.some(({ entry }) => !isPlannedEntry(entry));
   const seen = new Set();
   let total = 0;
-  entries.forEach((entry, i) => {
+  kept.forEach(({ entry, i }) => {
     const minutes = Number(entry.minutes) || 0;
     total += minutes;
-    if (minutes <= 0) add(`entries.${i}.hours`, 'Hours must be above 0.');
+    if (minutes <= 0 && (!worked || !isPlannedEntry(entry))) {
+      add(`entries.${i}.hours`, 'Hours must be above 0.');
+    }
     const key = entry.projectId ? `p${entry.projectId}` : `r${entry.projectRequestId}`;
     if (seen.has(key)) add(`entries.${i}.project`, 'This project is already in the report.');
     seen.add(key);
-    let written = 0;
     entry.tasks.forEach((task, j) => {
       const title = String(task.title ?? '').trim();
       if (!title) return;
-      written += 1;
       if (title.length < 2) add(`entries.${i}.tasks.${j}.title`, 'Write at least 2 characters.');
       if (title.length > MAX_TASK_LENGTH) {
         add(`entries.${i}.tasks.${j}.title`, `Keep the task under ${MAX_TASK_LENGTH} characters.`);
       }
     });
-    if (written === 0) add(`entries.${i}.tasks`, 'Add at least one task.');
+    if (writtenTasks(entry).length === 0) add(`entries.${i}.tasks`, 'Add at least one task.');
   });
   if (total > MAX_DAY_MINUTES) add('total', 'A day can have at most 16 hours.');
   const messages = Object.values(fields);
@@ -66,16 +76,23 @@ function inputForCheck(entries) {
   }));
 }
 
-/** Inside the submit transaction: new revision, snapshot, Slack post. Returns nothing. */
+/**
+ * Inside the submit transaction: drops empty task rows and 0-hour projects without tasks, then
+ * the new revision, snapshot and Slack post (planned projects stay in the report and its snapshot,
+ * but not in the Slack text). Returns the new revision.
+ */
 async function recordSubmit({ user, locked, stored }, trx) {
   const blankTaskIds = stored.flatMap((entry) =>
     entry.tasks.filter((task) => !task.title.trim()).map((task) => task.id),
   );
   await repo.deleteTasks(blankTaskIds, trx);
-  const clean = stored.map((entry) => ({
-    ...entry,
-    tasks: entry.tasks.filter((task) => task.title.trim()),
-  }));
+  await repo.deleteEntries(
+    stored.filter(isEmptyEntry).map((entry) => entry.id),
+    trx,
+  );
+  const clean = stored
+    .filter((entry) => !isEmptyEntry(entry))
+    .map((entry) => ({ ...entry, tasks: writtenTasks(entry) }));
   const snapshot = snapshotOf(clean);
   const at = nowDate();
   const revision = (Number(locked.revision) || 0) + 1;
@@ -118,7 +135,8 @@ async function recordSubmit({ user, locked, stored }, trx) {
       userName: user.name,
       userSlackUserId: user.slackUserId ?? null,
       avatarUrl: user.avatarUrl ?? null,
-      entries: snapshot.entries,
+      // Planned projects weren't worked on today (CONTRACT 24): Slack shows the worked ones only.
+      entries: snapshot.entries.filter((entry) => !isPlannedEntry(entry)),
     },
     trx,
   );
@@ -165,23 +183,25 @@ export async function submitReport({ user, reportId, entries, baseVersion }) {
     }
     throw problem;
   }
-  let revision;
-  await db.transaction(async (trx) => {
-    const locked = await repo.findByIdForUpdate(reportId, trx);
-    assertEditable(locked);
-    if (entries) {
-      // Again under share locks, so a task deleted or marked done meanwhile can't slip in.
-      await checkPriorityLinks({ reportId, entries }, trx);
-      await confirmRequests({ user, entries }, trx);
-      await writeEntries(locked, entries, trx, { baseVersion });
-    } else {
-      await lockStoredRows(locked, trx, { baseVersion });
-    }
-    const stored = (await loadEntriesFor([reportId], trx)).get(reportId) ?? [];
-    const problem = submitProblems(stored);
-    if (problem) throw problem;
-    revision = await recordSubmit({ user, locked, stored }, trx);
-  });
+  // READ COMMITTED (writeTx.js), and run again once when picked as a deadlock victim.
+  const revision = await retryOnDeadlock(() =>
+    lineTransaction(async (trx) => {
+      const locked = await repo.findByIdForUpdate(reportId, trx);
+      assertEditable(locked);
+      if (entries) {
+        // Again under share locks, so a task deleted or marked done meanwhile can't slip in.
+        await checkPriorityLinks({ reportId, entries }, trx);
+        await confirmRequests({ user, entries }, trx);
+        await writeEntries(locked, entries, trx, { baseVersion });
+      } else {
+        await lockStoredRows(locked, trx, { baseVersion });
+      }
+      const stored = (await loadEntriesFor([reportId], trx)).get(reportId) ?? [];
+      const problem = submitProblems(stored);
+      if (problem) throw problem;
+      return recordSubmit({ user, locked, stored }, trx);
+    }),
+  );
   await emit('report.submitted', {
     reportId,
     userId: user.id,

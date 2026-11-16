@@ -32,8 +32,8 @@ test('an employee checks in, submits the daily report and the PM sees it', async
   });
 
   await test.step('write and submit the daily report', async () => {
-    // On a day with no tasks yet this week (a Monday), the empty task list offers the same link.
-    await karan.getByRole('link', { name: "Write today's report" }).first().click();
+    // The report strip at the bottom of Today.
+    await karan.getByRole('link', { name: "Write today's report" }).click();
     await expect(karan).toHaveURL(/\/report$/);
     await expect(karan.getByRole('heading', { level: 1 })).toHaveText('Daily report');
 
@@ -99,7 +99,10 @@ test('an employee checks in, submits the daily report and the PM sees it', async
     await expect(row).toBeVisible();
     await expect(await cellUnder(board, row, 'Report')).toHaveText('Submitted');
     await expect(await cellUnder(board, row, 'Logged')).toHaveText('6h 30m');
-    await expect(await cellUnder(board, row, 'Projects today')).toHaveText(PROJECT);
+    // The submitted project, then the report's lines as the day's to-do (CONTRACT 24).
+    const projects = await cellUnder(board, row, 'Projects today');
+    await expect(projects.getByText(PROJECT, { exact: true })).toBeVisible();
+    await expect(projects.getByRole('button', { name: 'To-do: 0 of 1 done' })).toBeVisible();
   });
 
   await test.step('the PM has no Today or Daily report (company rule)', async () => {

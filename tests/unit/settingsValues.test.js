@@ -116,6 +116,33 @@ describe('Settings form values', () => {
     });
   });
 
+  it('edits the to-do channel (CONTRACT 24) under the report channel; its name travels with its id', () => {
+    expect(KEYS.indexOf('slackTodoChannelId')).toBe(KEYS.indexOf('slackReportChannelName') + 1);
+    expect(KEYS.indexOf('slackTodoChannelName')).toBe(KEYS.indexOf('slackTodoChannelId') + 1);
+    const saved = { ...SAVED, slackTodoChannelId: null, slackTodoChannelName: null };
+    expect(toForm(saved)).toMatchObject({ slackTodoChannelId: null, slackTodoChannelName: null });
+    const picked = toValues(
+      { ...toForm(saved), slackTodoChannelId: 'C0TODO', slackTodoChannelName: 'morning-todo' },
+      saved,
+    );
+    expect(changedKeys(picked.values, saved)).toEqual({
+      slackTodoChannelId: 'C0TODO',
+      slackTodoChannelName: 'morning-todo',
+    });
+    // "Don't post to-dos" saves null for both, and never touches the report channel.
+    const on = { ...saved, slackTodoChannelId: 'C0TODO', slackTodoChannelName: 'morning-todo' };
+    const off = toValues(
+      { ...toForm(on), slackTodoChannelId: null, slackTodoChannelName: null },
+      on,
+    );
+    expect(changedKeys(off.values, on)).toEqual({
+      slackTodoChannelId: null,
+      slackTodoChannelName: null,
+    });
+    // Saved settings from before the key existed read as "Don't post to-dos": nothing to send.
+    expect(changedKeys(toValues(toForm(SAVED), SAVED).values, SAVED)).toEqual({});
+  });
+
   it('turning it on checks the time again', () => {
     const saved = { ...SAVED, autoCheckoutEnabled: false, autoCheckoutAt: '18:00' };
     const form = { ...toForm(saved), autoCheckoutEnabled: true };

@@ -22,6 +22,7 @@ import { buildCalendar, calendarTitle } from './calendar';
 import { buildHistory } from './history';
 import * as repo from './repo';
 import { hoursBars, loadContext, reportDue, showsAdmins, totalMinutes } from './shared';
+import { todoToday } from './todo';
 
 export const DETAIL_RANGES = ['week', 'month', 'custom'];
 // Tasks in progress this many working days (after the first) are listed even before they are
@@ -198,9 +199,11 @@ function profileOf(person, ctx) {
  *   from?: string, to?: string }} options  custom needs from <= to (checked by the schema);
  *   viewer is the signed-in person (none = a system read, sees everyone)
  * @returns {Promise<object>} { person, attendanceNote, period, stats, calendar, hours, tasks,
- *   history, historyEmptyText, exportHref }. `attendanceNote` ({ title, body }) is set only for
- *   someone who doesn't check in (a PM, or tracking turned off): the page shows it instead of the
- *   attendance numbers, and `calendar.empty` instead of a month without check-ins.
+ *   todoToday, history, historyEmptyText, exportHref }. `attendanceNote` ({ title, body }) is set
+ *   only for someone who doesn't check in (a PM, or tracking turned off): the page shows it
+ *   instead of the attendance numbers, and `calendar.empty` instead of a month without check-ins.
+ *   `todoToday` is today's to-do (see todoToday(), null for someone who doesn't write reports);
+ *   history tasks carry `closedNote` ("Marked done on Thu, 12 Nov" | null).
  * @throws NOT_FOUND when the person doesn't exist, or is an Admin and the viewer isn't (an
  *   Admin's attendance is shown to Admins only)
  */
@@ -218,7 +221,7 @@ export async function getEmployeeDetail({ userId, viewer, range = 'month', from,
   const spanTo = max(period.to, monthDays.to);
   const historyTo = period.end >= period.from ? period.end : addDays(period.from, -1);
 
-  const [attendance, reports, entries, revisions, requests, hoursRows, openTasks] =
+  const [attendance, reports, entries, revisions, requests, hoursRows, openTasks, todo] =
     await Promise.all([
       repo.listAttendance(userId, spanFrom, spanTo),
       repo.listReports(userId, spanFrom, spanTo),
@@ -227,6 +230,7 @@ export async function getEmployeeDetail({ userId, viewer, range = 'month', from,
       repo.listOpenEditRequests(userId, period.from, historyTo),
       repo.hoursByProject({ from: period.from, to: period.end, userId }),
       repo.listOpenTasks(userId, addDays(ctx.today, -TASK_LOOKBACK_DAYS)),
+      todoToday(person, ctx),
     ]);
   const profile = profileOf(person, ctx);
   const attendanceNote = attendanceNoteOf(profile);
@@ -261,6 +265,7 @@ export async function getEmployeeDetail({ userId, viewer, range = 'month', from,
       rows: hoursRows,
     },
     tasks: tasksToWatch(openTasks, ctx),
+    todoToday: todo,
     history: buildHistory({
       days,
       attendance,

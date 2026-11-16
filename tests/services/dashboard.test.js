@@ -167,7 +167,7 @@ describe('getTeamToday (section 7.10)', () => {
     expect(names('office')).toEqual(['Ava', 'Ben', 'Eli']);
     expect(names('wfh')).toEqual(['Cara', 'Dev']);
     expect(names('not_checked_in')).toEqual(['Finn']);
-    expect(counts).toEqual({ everyone: 6, missing: 2, late: 3 });
+    expect(counts).toEqual({ everyone: 6, missing: 2, late: 3, noTodo: 2 });
   });
 
   it('fills each board row: check-in, late tag, logged time, report and projects', async () => {

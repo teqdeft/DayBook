@@ -41,6 +41,14 @@ const CLOCK_KEYS = new Set([
   'aiPmSummaryAt',
   'aiHrNotesAt',
 ]);
+// Slack channels: an id or name, or null for "don't post" (the to-do channel, CONTRACT 24, is null
+// until an Admin picks one; a missing row reads as null too, since the live server never seeds).
+const CHANNEL_KEYS = new Set([
+  'slackReportChannelId',
+  'slackReportChannelName',
+  'slackTodoChannelId',
+  'slackTodoChannelName',
+]);
 // Whole numbers kept inside their allowed range (a hand-edited row can't turn idle detection into
 // "idle after 0 minutes").
 const BOUNDED_KEYS = {
@@ -97,8 +105,7 @@ function normalizeValue(key, value) {
     return days.length > 0 ? days.sort((a, b) => a - b) : [...fallback];
   }
   if (key === 'timezone') return typeof value === 'string' && isTimeZone(value) ? value : fallback;
-  if (key === 'slackReportChannelId' || key === 'slackReportChannelName')
-    return value ? String(value) : null;
+  if (CHANNEL_KEYS.has(key)) return value ? String(value) : null;
   if (key === 'timersMode') return TIMER_MODES.includes(value) ? value : fallback;
   return typeof value === 'string' ? value : fallback;
 }
@@ -166,6 +173,7 @@ export function setCacheTtlForTests(ms) {
  *   reportLock: string, gapWarningMinutes: number, stuckTaskDays: number,
  *   allowUnverifiedOffice: boolean, autoMarkMissingCheckout: boolean, slackEnabled: boolean,
  *   slackReportChannelId: string | null, slackReportChannelName: string | null,
+ *   slackTodoChannelId: string | null, slackTodoChannelName: string | null,
  *   slackPostReports: boolean, slackRemind: boolean, slackUrgentNotify: boolean,
  *   slackRequestsNotify: boolean, activityTrackingEnabled: boolean,
  *   activityIdleMinutes: number, activityRetentionDays: number, pushEnabled: boolean,
@@ -180,7 +188,8 @@ export function setCacheTtlForTests(ms) {
  *   notifications for everyone (CONTRACT 14); timers and breaks (CONTRACT 15):
  *   timerAwayMinutes 5-240, timerReminderMinutes 0-240 (0 = never), breakAllowanceMinutes 0-480
  *   (0 = no allowance); check-in rules (CONTRACT 17); auto check-out (CONTRACT 19):
- *   autoCheckoutAt is 'HH:mm', later than officeEnd while autoCheckoutEnabled is on
+ *   autoCheckoutAt is 'HH:mm', later than officeEnd while autoCheckoutEnabled is on; the to-do
+ *   channel (CONTRACT 24): null until an Admin picks one, never the report channel
  */
 export async function getAll() {
   if (cacheTtlMs > 0 && cache.value && performance.now() - cache.loadedAt < cacheTtlMs) {

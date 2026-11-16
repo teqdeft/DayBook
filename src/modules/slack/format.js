@@ -1,6 +1,6 @@
-// The Slack report text, in the team's existing format (build guide section 11). Pure and free of
-// imports: the report page's Slack preview imports it in the browser, so the preview always
-// matches what posts.
+// The Slack report and to-do texts, in the team's existing format (build guide section 11,
+// CONTRACT 24). Pure and free of imports: the report page's Slack preview imports it in the
+// browser, so the preview always matches what posts.
 
 export const STATUS_LABELS = {
   done: 'Done',
@@ -76,6 +76,45 @@ export function formatReport({ userName, workDate, entries } = {}) {
       lines.push(`• ${title} (${STATUS_LABELS[task.status] ?? oneLine(task.status)})`);
     }
     blocks.push(lines.join('\n'));
+  }
+  return blocks.join('\n\n');
+}
+
+/** A to-do line's status after its title: open lines have none (CONTRACT 24). */
+const TODO_SUFFIXES = { done: ' (Done)', blocked: ' (Blocked)' };
+
+/**
+ * Builds the Slack text for a person's to-do (CONTRACT 24):
+ *
+ *   Name: Priya Sharma
+ *   Date: 12-11-2026
+ *   Today's to-do
+ *
+ *   Project: Pine Tree Lane
+ *   • Monitoring google ads campaign and removing irrelevant search terms
+ *
+ *   Project: Studio Ubique
+ *   • 1 web blog publish (Done)
+ *
+ * Done lines end in " (Done)", blocked ones in " (Blocked)", lines in progress have no status.
+ * Lines with an empty title, and projects left without a line, are left out. A to-do includes
+ * planned projects (0 minutes): the caller passes every project of the plan.
+ * @param {{ userName: string, workDate: string, entries: Array<{ projectName: string,
+ *   lines?: Array<{ title: string, status: string }>,
+ *   tasks?: Array<{ title: string, status: string }> }> }} todo tasks is accepted instead of lines
+ * @returns {string}
+ */
+export function formatTodo({ userName, workDate, entries } = {}) {
+  const blocks = [`Name: ${oneLine(userName)}\nDate: ${dateDmy(workDate)}\nToday's to-do`];
+  for (const entry of entries ?? []) {
+    const lines = [];
+    for (const line of entry.lines ?? entry.tasks ?? []) {
+      const title = oneLine(line.title);
+      if (title) lines.push(`• ${title}${TODO_SUFFIXES[line.status] ?? ''}`);
+    }
+    if (lines.length > 0) {
+      blocks.push([`Project: ${oneLine(entry.projectName)}`, ...lines].join('\n'));
+    }
   }
   return blocks.join('\n\n');
 }

@@ -1,5 +1,6 @@
 // Today while it loads: the same blocks as the page (Your day, This week, the Working on card of
-// project timers, tasks, report strip).
+// project timers, the urgent card beside Today's to-do, report strip). The to-do is a header bar
+// and three 48 px rows (CONTRACT 24).
 import Card from '@/components/Card';
 import Skeleton from '@/components/Skeleton';
 import page from './page.module.css';
@@ -63,17 +64,20 @@ export default function TodayLoading() {
           <Skeleton width="80%" height={24} className={styles.sub} />
           <Skeleton width="60%" height={24} />
         </Card>
-        <Card padding="none">
-          <div className={styles.tableHead}>
-            <Skeleton width={170} height={20} />
+        <Card padding="none" className={page.todo}>
+          <div className={styles.todoHead}>
+            <Skeleton width={150} height={20} />
+            <Skeleton width={260} height={14} />
           </div>
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className={styles.row}>
-              <Skeleton width="30%" height={14} />
-              <Skeleton width={90} height={26} radius={6} />
-              <Skeleton width={133} height={34} radius={8} />
-            </div>
-          ))}
+          <div className={styles.todoLines}>
+            <Skeleton width={90} height={26} radius={6} />
+            {[0, 1, 2].map((i) => (
+              <div key={i} className={styles.todoRow}>
+                <Skeleton width={18} height={18} radius={4} />
+                <Skeleton width={`${50 - i * 8}%`} height={14} />
+              </div>
+            ))}
+          </div>
         </Card>
       </section>
       <Skeleton height={90} radius={16} />

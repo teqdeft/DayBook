@@ -140,6 +140,20 @@ const timerNote = z
   .nullish()
   .transform((value) => value || null);
 
+/**
+ * The open task a new line was added from (CONTRACT 24, a suggestion): a positive whole number;
+ * null, undefined and '' mean none. The save checks it (carry.js) and drops it when it doesn't
+ * pass; an existing line's link never changes.
+ */
+const carriedFromTaskId = z.preprocess(
+  (value) => (value === '' || value === null ? undefined : value),
+  z
+    .number({ error: 'That task to carry is not valid.' })
+    .int('That task to carry is not valid.')
+    .positive('That task to carry is not valid.')
+    .optional(),
+);
+
 export const taskInputSchema = z.object({
   id: optionalId,
   title: z
@@ -149,6 +163,7 @@ export const taskInputSchema = z.object({
   status: z.enum(TASK_STATUSES, { error: 'Pick Done, In progress or Blocked.' }),
   projectTaskId,
   timerNote,
+  carriedFromTaskId,
 });
 
 /**
@@ -255,3 +270,9 @@ export const monthLogQuerySchema = z.object({
   month: isoMonth.optional(),
   format: z.enum(['json', 'xlsx'], { error: 'Format is json or xlsx.' }).default('json'),
 });
+
+/**
+ * Field schemas the to-do and suggestion schemas reuse (todoSchemas.js, CONTRACT 24), so a to-do
+ * line's ids read exactly like a report line's.
+ */
+export const sharedFields = { id, optionalId, projectTaskId, carriedFromTaskId };

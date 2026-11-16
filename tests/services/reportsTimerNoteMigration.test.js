@@ -1,7 +1,7 @@
 // "Timer lines remember their note" (CONTRACT 21) before `npm run migrate` has added
 // report_tasks.timer_note (migration 014): a deploy that runs first still opens, saves, submits
-// and carries reports over, only without timer notes, and logs one warning. Once the migration has
-// run, notes are kept again without a restart.
+// and carries lines from a suggestion (CONTRACT 24), only without timer notes, and logs one
+// warning. Once the migration has run, notes are kept again without a restart.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
@@ -54,6 +54,27 @@ function filledRows(view) {
 
 const notes = (view) => view.entries[0].tasks.map((task) => [task.title, task.timerNote]);
 
+/**
+ * Today's draft (it starts empty, CONTRACT 24) with the project's first suggestion added, as the
+ * report page saves it.
+ */
+async function draftFromSuggestion(date) {
+  const opened = await reports.openForDate({ user });
+  expect(opened.entries).toEqual([]);
+  const [first] = (await reports.listCarrySuggestions({ userId: user.id, date }))[
+    `p${internal.id}`
+  ];
+  const line = { title: first.title, status: first.status, carriedFromTaskId: first.taskId };
+  return reports.saveReport({
+    user,
+    reportId: opened.id,
+    baseVersion: opened.version,
+    entries: saveReportSchema.parse({
+      entries: [{ projectId: internal.id, minutes: 0, tasks: [line] }],
+    }).entries,
+  });
+}
+
 beforeAll(async () => {
   await resetDatabase();
   const people = await createPeople();
@@ -83,11 +104,11 @@ afterAll(async () => {
 });
 
 describe('before migration 014', () => {
-  it('opens, carries over, saves and submits task lines without their timer note', async () => {
+  it('opens, carries from a suggestion, saves and submits lines without their timer note', async () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     setNowForTests(TUESDAY_MORNING);
 
-    const draft = await reports.openForDate({ user });
+    const draft = await draftFromSuggestion('2026-09-29');
     expect(notes(draft)).toEqual([[TYPO, null]]);
     expect(draft.entries[0].tasks[0].carriedFromTaskId).toBeTruthy();
 
@@ -127,7 +148,8 @@ describe('before migration 014', () => {
     expect(await timerNoteColumn()).toBe(true);
     setNowForTests(WEDNESDAY_MORNING);
 
-    const draft = await reports.openForDate({ user });
+    // Tuesday's line was saved without a note, so the line carried from it has none yet.
+    const draft = await draftFromSuggestion('2026-09-30');
     expect(notes(draft)).toEqual([[TYPO, null]]);
     const saved = await reports.saveReport({
       user,

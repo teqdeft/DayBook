@@ -1,6 +1,7 @@
 // Server only (called from todayData.js): what Today's Working on card needs (CONTRACT 15) —
 // the person's timer state (the one the sidebar's chip got in this request), the project picker,
-// the open priority tasks they can link on each of its projects and today's breaks.
+// the open priority tasks they can link on each of its projects and today's breaks. The picker and
+// its tasks are loaded once for the page: the to-do card uses them too (CONTRACT 24).
 import { timerStateFor } from '@/components/AppFrame';
 import { toLocal } from '@/lib/time';
 import { projects } from '@/modules/projects';
@@ -26,12 +27,12 @@ export function timersShownFor(user, current) {
 }
 
 /**
- * The picker and, for every project in it, the open priority tasks the person can link (the
- * server's check: projectTasks.findOpenForPicker, so "Other projects" offer their tasks for
- * anyone too). The tasks are left out if they can't be read.
+ * The picker (with the person's pending project requests) and, for every project in it, the open
+ * priority tasks the person can link (the server's check: projectTasks.findOpenForPicker, so
+ * "Other projects" offer their tasks for anyone too). The tasks are left out if they can't be read.
  * @returns {Promise<{ picker: object | null, tasks: object[] }>}
  */
-async function pickerWithTasks(userId) {
+export async function pickerWithTasks(userId) {
   const picker = await safe(projects.getPickerFor(userId), null);
   if (!picker) return { picker: null, tasks: [] };
   const { urgent, mine, others } = timerPicker(picker);
@@ -43,13 +44,17 @@ async function pickerWithTasks(userId) {
 /**
  * The timer state, the picker and its tasks, loaded together (null and none when the card isn't
  * shown).
+ * @param {object} user the session user
+ * @param {{ timersMode: string }} current settings
+ * @param {Promise<{ picker: object | null, tasks: object[] }>} pickerParts pickerWithTasks, which
+ *   the page loads once
  * @returns {Promise<{ state: object | null, picker: object | null, tasks: object[] }>}
  */
-export async function loadTimerParts(user, current) {
+export async function loadTimerParts(user, current, pickerParts) {
   if (!timersShownFor(user, current)) return { state: null, picker: null, tasks: [] };
   const [state, { picker, tasks }] = await Promise.all([
     safe(timerStateFor(user), null),
-    pickerWithTasks(user.id),
+    pickerParts,
   ]);
   return { state, picker, tasks };
 }

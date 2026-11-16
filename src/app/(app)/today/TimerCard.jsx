@@ -2,15 +2,13 @@
 // Today's "Working on" card (CONTRACT 15): the running timer (project, task or note, a ticking
 // 1:24:10, Stop and Switch project), the start form when nothing runs, "Timer paused for your
 // break" on a break, then today's entries with Add time and "Tracked today 5h 45m". After every
-// change it dispatches 'daybook:timers-changed' and refreshes the page.
+// change it dispatches 'daybook:timers-changed' and refreshes the page. CONTRACT 24: the start
+// form offers the picked project's to-do lines as the note; picking one starts the timer through
+// the line (POST /api/me/todo/lines/:id/timer), so the line's report task gets the timer.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeftRight, Coffee, Square } from 'lucide-react';
-import Button from '@/components/Button';
 import Card, { CardHeader } from '@/components/Card';
-import ProjectLabel from '@/components/ProjectLabel';
 import {
   elapsedSeconds,
-  formatElapsed,
   isNewerState,
   liveTotalMinutes,
   noteServerTime,
@@ -19,8 +17,10 @@ import {
 import { api } from '@/lib/apiClient';
 import { dayjs, now, toLocal } from '@/lib/time';
 import { addTimeDefaults, pausedEntry, shortDuration, timerAnnouncement } from './timerData';
-import TimerEntries, { EntryText } from './TimerEntries';
+import TimerEntries from './TimerEntries';
+import { Paused, Running } from './TimerNow';
 import TimerStartForm from './TimerStartForm';
+import { useTodo } from './TodoProvider';
 import { useTimerActions } from './useTimerActions';
 import styles from './TimerCard.module.css';
 
@@ -37,97 +37,23 @@ function viewOf(state) {
   return state.blocked === null ? 'idle' : 'blocked';
 }
 
-function Running({
-  entry,
-  serverMs,
-  canSwitch,
-  busy,
-  stopping,
-  onSwitch,
-  onStop,
-  stopRef,
-  switchRef,
-}) {
-  const seconds = elapsedSeconds(entry.startedAt, serverMs);
-  return (
-    <div className={styles.running}>
-      <div className={styles.what}>
-        <span className={styles.liveDot} aria-hidden="true" />
-        <ProjectLabel
-          project={{ name: entry.projectName, color: entry.projectColor }}
-          size="lg"
-          className={styles.project}
-        />
-        <EntryText entry={entry} empty="No note" className={styles.whatText} />
-      </div>
-      <span
-        className={styles.elapsed}
-        role="timer"
-        aria-label={`Running for ${shortDuration(Math.floor(seconds / 60))}`}
-      >
-        {formatElapsed(seconds)}
-      </span>
-      <div className={styles.buttons}>
-        {canSwitch ? (
-          <Button
-            ref={switchRef}
-            variant="secondary"
-            icon={<ArrowLeftRight size={18} strokeWidth={1.8} aria-hidden="true" />}
-            onClick={onSwitch}
-            disabled={busy}
-          >
-            Switch project
-          </Button>
-        ) : null}
-        <Button
-          ref={stopRef}
-          icon={<Square size={15} strokeWidth={1.8} aria-hidden="true" />}
-          onClick={onStop}
-          loading={stopping}
-          disabled={busy}
-        >
-          Stop
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function Paused({ entry, seconds }) {
-  return (
-    <div className={styles.paused}>
-      <span className={styles.pausedIcon} aria-hidden="true">
-        <Coffee size={20} strokeWidth={1.8} />
-      </span>
-      <div className={styles.pausedText}>
-        <p className={styles.pausedTitle}>
-          {entry ? 'Timer paused for your break' : "You're on a break"}
-        </p>
-        <p className={styles.pausedHint}>
-          {entry
-            ? `${entry.projectName} starts again when you end your break.`
-            : "Start a timer when you're back."}
-        </p>
-      </div>
-      <span
-        className={`${styles.elapsed} ${styles.breakElapsed}`}
-        role="timer"
-        aria-label={`On break for ${shortDuration(Math.floor(seconds / 60))}`}
-      >
-        {formatElapsed(seconds)}
-      </span>
-    </div>
-  );
-}
-
 /**
  * @param {{ initialState: object, picker: object, tasks: Record<string, object[]>, tz: string,
- *   checkInClock: string, breaks?: Array<{ startClock: string, endClock: string | null }> }}
+ *   checkInClock: string, breaks?: Array<{ startClock: string, endClock: string | null }>,
+ *   className?: string }}
  *   props initialState: timers.getState; tasks: open priority tasks by project id;
  *   checkInClock: 'HH:mm' (where Add time starts when nothing is tracked yet); breaks: today's
  *   breaks as clocks (Add time's defaults stay clear of them)
  */
-export default function TimerCard({ initialState, picker, tasks, tz, checkInClock, breaks = [] }) {
+export default function TimerCard({
+  initialState,
+  picker,
+  tasks,
+  tz,
+  checkInClock,
+  breaks = [],
+  className = '',
+}) {
   const [state, setState] = useState(initialState);
   const [lastProp, setLastProp] = useState(initialState);
   const [switching, setSwitching] = useState(false);
@@ -136,6 +62,7 @@ export default function TimerCard({ initialState, picker, tasks, tz, checkInCloc
   const projectRef = useRef(null);
   const focusNext = useRef(null);
   const { run, busy, working } = useTimerActions(setState);
+  const todo = useTodo();
 
   // A page refresh brings a new state; an older one never replaces an action's answer.
   if (initialState !== lastProp) {
@@ -173,6 +100,28 @@ export default function TimerCard({ initialState, picker, tasks, tz, checkInCloc
       return data;
     },
     [run],
+  );
+
+  // A to-do line picked as the note: the line's timer route answers the to-do and the timer. The
+  // to-do takes the answer like one of its own writes (never over a newer one).
+  const startLine = useCallback(
+    async (lineId) => {
+      const data = await run(
+        'start',
+        async () => {
+          const send = () => api.post(`/api/me/todo/lines/${lineId}/timer`);
+          const { data: answer } = await (todo ? todo.track(send) : send());
+          return { data: answer?.timerState ?? null };
+        },
+        { failTitle: "Couldn't start the timer" },
+      );
+      if (data?.running) {
+        focusNext.current = 'stop';
+        setSwitching(false);
+      }
+      return data;
+    },
+    [run, todo],
   );
 
   async function stop() {
@@ -216,7 +165,7 @@ export default function TimerCard({ initialState, picker, tasks, tz, checkInCloc
 
   const showForm = view === 'idle' || (view === 'running' && switching);
   return (
-    <Card as="section" aria-label="Working on" className={styles.card}>
+    <Card as="section" aria-label="Working on" className={`${styles.card} ${className}`}>
       <CardHeader
         title="Working on"
         actions={
@@ -253,6 +202,8 @@ export default function TimerCard({ initialState, picker, tasks, tz, checkInCloc
             starting={working === 'start'}
             switching={switching}
             onStart={start}
+            todoGroups={todo?.todo.groups}
+            onStartLine={startLine}
             onCancel={() => {
               focusNext.current = 'switch';
               setSwitching(false);

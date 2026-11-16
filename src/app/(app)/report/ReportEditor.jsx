@@ -1,7 +1,8 @@
 'use client';
 // The Daily report body: notices, "From your timers", one card per project, "Add another
 // project", "Back to today", and the Slack preview on the right (unless the person turned it off
-// in My settings, CONTRACT 21: then the cards take the full width).
+// in My settings, CONTRACT 21: then the cards take the full width). CONTRACT 24 adds the notice
+// above the cards for a planned draft and the "Still open from past reports" reminder under them.
 import { useEffect, useRef, useState } from 'react';
 import { CircleAlert, Info, TriangleAlert } from 'lucide-react';
 import Button from '@/components/Button';
@@ -12,6 +13,7 @@ import { usePolish } from './PolishProvider';
 import ProjectPicker from './ProjectPicker';
 import RequestProjectDialog from './RequestProjectDialog';
 import SlackPreview from './SlackPreview';
+import StillOpenReminder, { HoursNotice } from './StillOpenReminder';
 import TimersCard from './TimersCard';
 import { useReport } from './ReportProvider';
 import { totalMinutes } from './reportHours';
@@ -160,6 +162,8 @@ function MissingDay() {
 export default function ReportEditor() {
   const { data, entries, report, readOnly, submitting, change, updateEntry, restore, timers } =
     useReport();
+  // "2 still open" in the picker (CONTRACT 24).
+  const openCounts = useReport().carry.counts;
   const [adding, setAdding] = useState(false);
   const [requesting, setRequesting] = useState(null);
   const addRef = useRef(null);
@@ -224,6 +228,7 @@ export default function ReportEditor() {
         <Notices onRestore={restoreRows} />
         {report.status === 'none' ? <MissingDay /> : null}
         <TimersCard />
+        <HoursNotice />
         {entries.length > 0 ? (
           <div className={styles.cards} inert={submitting || undefined}>
             {entries.map((entry) => (
@@ -248,6 +253,7 @@ export default function ReportEditor() {
             />
           </div>
         ) : null}
+        <StillOpenReminder />
         {readOnly ? null : (
           <div ref={addRef} className={styles.addWrap}>
             <button
@@ -266,6 +272,8 @@ export default function ReportEditor() {
                 picker={data.picker}
                 used={used}
                 anchorRef={addRef}
+                openCounts={openCounts}
+                showOpenCounts
                 onPick={(pick) => {
                   setAdding(false);
                   addProject(pick);

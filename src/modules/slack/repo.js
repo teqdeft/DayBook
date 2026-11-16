@@ -1,6 +1,10 @@
 import { db } from '@/lib/db';
 
-const REPORT_KINDS = ['report_post', 'report_update'];
+/** The outbox kinds that are versions of one message, by related_type (report or to-do). */
+const MESSAGE_KINDS = {
+  report: ['report_post', 'report_update'],
+  todo: ['todo_post', 'todo_update'],
+};
 
 export async function insertOutbox(row, trx = db) {
   const [id] = await trx('slack_outbox').insert(row);
@@ -38,25 +42,37 @@ export function updateOutbox(id, changes, trx = db) {
   return trx('slack_outbox').where({ id }).update(changes);
 }
 
-/** True when a later report message row exists for the same report (this one is out of date). */
-export async function hasNewerReportMessage({ id, reportId }, trx = db) {
+/**
+ * True when a later message row exists for the same report or to-do (this one is out of date).
+ * @param {{ id: number, relatedType: 'report' | 'todo', relatedId: number }} row
+ */
+export async function hasNewerMessage({ id, relatedType, relatedId }, trx = db) {
   const row = await trx('slack_outbox')
-    .where({ relatedType: 'report', relatedId: reportId })
-    .whereIn('kind', REPORT_KINDS)
+    .where({ relatedType, relatedId })
+    .whereIn('kind', MESSAGE_KINDS[relatedType] ?? [])
     .where('id', '>', id)
     .first('id');
   return Boolean(row);
 }
 
-/** The latest delivered message for a report (its channel and ts), if one was sent. */
-export function findSentReportMessage(reportId, trx = db) {
+/** The latest delivered message for a report or to-do (its channel and ts), if one was sent. */
+export function findSentMessage({ relatedType, relatedId }, trx = db) {
   return trx('slack_outbox')
-    .where({ relatedType: 'report', relatedId: reportId, status: 'sent' })
-    .whereIn('kind', REPORT_KINDS)
+    .where({ relatedType, relatedId, status: 'sent' })
+    .whereIn('kind', MESSAGE_KINDS[relatedType] ?? [])
     .whereNotNull('resultTs')
     .whereNotNull('channel')
     .orderBy('id', 'desc')
     .first('id', 'channel', 'resultTs');
+}
+
+/** The newest message row for a report or to-do, whatever its status (to-do delivery state). */
+export function findLatestMessage({ relatedType, relatedId }, trx = db) {
+  return trx('slack_outbox')
+    .where({ relatedType, relatedId })
+    .whereIn('kind', MESSAGE_KINDS[relatedType] ?? [])
+    .orderBy('id', 'desc')
+    .first('id', 'kind', 'status', 'attempts', 'sentAt', 'createdAt', 'updatedAt');
 }
 
 export async function pendingStats(trx = db) {

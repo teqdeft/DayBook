@@ -75,6 +75,22 @@ export function findProject(picker, projectId) {
   return null;
 }
 
+/**
+ * The to-do lines the timer form offers as the note once a project is picked (CONTRACT 24): the
+ * project's lines that aren't done, can take a timer now and are saved.
+ * @param {object[] | undefined} groups the to-do's groups (useTodo().todo.groups)
+ * @param {number} projectId the picked project
+ * @returns {Array<{ id: number, title: string }>}
+ */
+export function todoOffers(groups, projectId) {
+  const group = (groups ?? []).find(
+    (item) => item.project && Number(item.project.id) === Number(projectId),
+  );
+  return (group?.lines ?? []).filter(
+    (line) => !line.done && line.canStart && Number.isInteger(line.id),
+  );
+}
+
 /** '9:30–10:15', or '10:15–now' while it runs. */
 export function entryRange(entry) {
   const start = formatClockShort(entry.startClock);

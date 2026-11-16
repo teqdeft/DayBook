@@ -1,0 +1,51 @@
+/* "Still open from past reports" (CONTRACT 24): a grey inner box with a 1 px line, radius 12,
+   padding 12 16. */
+.box {
+  min-width: 0;
+  padding: 12px 16px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-tile);
+  background: var(--surface-muted);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.heading {
+  min-width: 0;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.title svg {
+  flex: none;
+}
+
+.help {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.addAll {
+  line-height: 20px;
+}
+
+/* Where focus waits after the last row was closed from the keyboard; Tab goes on from here. */
+.anchor {
+  display: block;
+  outline: none;
+}

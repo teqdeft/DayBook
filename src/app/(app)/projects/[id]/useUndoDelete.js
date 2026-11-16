@@ -77,10 +77,13 @@ function useDeleteQueue({ show, hideToast }) {
  * @returns {{ isHidden: (key: string) => boolean,
  *   remove: (item: { key: string, url: string, label: string, failTitle?: string,
  *     keyboard?: boolean, returnFocus?: () => HTMLElement | null }) => void,
- *   toast: import('react').ReactElement }} key: unique on the page ('task:12'); url: what the DELETE
+ *   toast: import('react').ReactElement, settle: (keys?: string[]) => Promise<void>,
+ *   waiting: () => boolean }} key: unique on the page ('task:12'); url: what the DELETE
  *   is sent to; label: the toast ('Task deleted.'); failTitle: the error toast's title; keyboard:
  *   the delete came from the keyboard, so the toast takes focus; returnFocus: where focus goes after
- *   Undo, Tab or Escape. Render `toast` once, anywhere in the component.
+ *   Undo, Tab or Escape. Render `toast` once, anywhere in the component. settle: sends the waiting
+ *   delete now when it is one of `keys` (any, when left out; its toast goes) and resolves once
+ *   those deletes have answered; waiting: whether a delete waits or is on its way.
  */
 export function useUndoDelete() {
   const [hidden, setHidden] = useState(() => new Set());
@@ -101,6 +104,18 @@ export function useUndoDelete() {
 
   const isHidden = useCallback((key) => hidden.has(key), [hidden]);
 
+  // Send the waiting delete now (when it is one of `keys`, or any) and wait for the answers.
+  const settle = useCallback(
+    (keys) => {
+      const held = queue.pending;
+      const done = queue.settle(keys);
+      if (held && held !== queue.pending) setShown(null);
+      return done;
+    },
+    [queue],
+  );
+  const waiting = useCallback(() => queue.busy, [queue]);
+
   function end() {
     if (shown) queue.end(shown.key);
     setShown(null);
@@ -120,5 +135,5 @@ export function useUndoDelete() {
     onEnd: end,
     onLeave: () => queue.pending?.returnFocus?.()?.focus(),
   });
-  return { isHidden, remove, toast };
+  return { isHidden, remove, toast, settle, waiting };
 }
