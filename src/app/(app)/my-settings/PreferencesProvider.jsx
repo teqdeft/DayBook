@@ -3,7 +3,8 @@
 // shown, and change(key, value), which shows the new value at once and saves that one key
 // (PATCH /api/me/preferences). A failed save puts the control back and shows a toast. A theme
 // change applies to the page at once. Once the saves are done the shell (bell, theme) is
-// refreshed from the server.
+// refreshed from the server; a saved Sound, Choose a sound or Show a preview also goes to the
+// other open tabs at once (CONTRACT 26).
 import {
   createContext,
   useCallback,
@@ -15,6 +16,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check } from 'lucide-react';
+import { postPreferenceChange } from '@/components/live/liveChannel';
 import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/apiClient';
 import { applyTheme } from '@/lib/theme';
@@ -22,6 +24,19 @@ import { createPreferenceSaver } from './preferenceSaver';
 import styles from './page.module.css';
 
 const PreferencesContext = createContext(null);
+
+// The keys the live bell reads (CONTRACT 26). Other open Daybook tabs use a saved value at once,
+// until their own next refresh brings it from the server.
+const LIVE_KEYS = new Set(['bellSound', 'bellTone', 'bellPreview']);
+
+/** Shares a saved live-bell preference with the other tabs; never fails the save it follows. */
+function tellOtherTabs(key, saved, value) {
+  try {
+    postPreferenceChange({ [key]: saved && Object.hasOwn(saved, key) ? saved[key] : value });
+  } catch {
+    // No BroadcastChannel here: the other tabs get it from their next refresh.
+  }
+}
 
 /** @returns {{ values: Record<string, unknown>, status: 'idle' | 'saving' | 'saved',
  *   change: (key: string, value: unknown) => void }} */
@@ -52,8 +67,11 @@ export default function PreferencesProvider({ initial, children }) {
       if (key === 'theme') applyTheme(next);
       saver.current ??= createPreferenceSaver({
         initial,
-        send: async (name, value) =>
-          (await api.patch('/api/me/preferences', { [name]: value })).data,
+        send: async (name, value) => {
+          const { data } = await api.patch('/api/me/preferences', { [name]: value });
+          if (LIVE_KEYS.has(name)) tellOtherTabs(name, data, value);
+          return data;
+        },
         onStatus: setStatus,
         onRevert: (name, value) => {
           setValues((current) => ({ ...current, [name]: value }));

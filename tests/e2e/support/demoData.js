@@ -2,9 +2,10 @@
 // screen (which locked report to ask about, which day has a missing check-out, a project's or a
 // person's id, today's company date),
 // and one thing no screen shows: whether the server asked the AI. Everything else the specs check
-// is read from the screens, not from here. Two writes (the teardown loads the demo data again):
-// removeCheckInToday (holidays-leave.spec.js needs a second person without a check-in today) and
-// startBreakToday (breaks.spec.js needs someone on a break now, at any time of day).
+// is read from the screens, not from here. Three writes (the teardown loads the demo data again):
+// removeCheckInToday (holidays-leave.spec.js needs a second person without a check-in today),
+// startBreakToday (breaks.spec.js needs someone on a break now, at any time of day) and
+// addNotification (live-notifications.spec.js needs a new notification while a page is open).
 import knex from 'knex';
 import { buildKnexConfig } from '../../../knexfile.js';
 
@@ -178,4 +179,33 @@ export async function startBreakToday(email) {
   return new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit' }).format(
     end,
   );
+}
+
+/**
+ * Adds a bell notification for a person while their pages are open, as `notifications.notify`
+ * writes it (unread, the desktop push already handled: the e2e server has no push keys). The demo's
+ * evening state dates some of today's rows after the real clock, and the bell sorts by `createdAt`,
+ * so the new row is dated a second after the person's newest one when that is later than now: it
+ * is the top of the bell, as a new notification is.
+ * @param {string} email
+ * @param {{ type: string, title: string, body?: string | null, link?: string | null }} notification
+ * @returns {Promise<number>} the new row's id
+ */
+export async function addNotification(email, { type, title, body = null, link = null }) {
+  const userId = await userIdByEmail(email);
+  const newest = await db()('notifications').where({ userId }).max({ at: 'createdAt' }).first();
+  const after = newest?.at ? new Date(newest.at).getTime() + 1000 : 0;
+  const createdAt = new Date(Math.max(Math.floor(Date.now() / 1000) * 1000, after));
+  const [id] = await db()('notifications').insert({
+    userId,
+    type,
+    title,
+    body,
+    link,
+    readAt: null,
+    pushedAt: createdAt,
+    createdAt,
+    updatedAt: createdAt,
+  });
+  return Number(id);
 }

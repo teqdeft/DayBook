@@ -127,6 +127,44 @@ describe('GET and PATCH /api/me/preferences', () => {
     expect(await storedRow(alice)).toBeNull();
   });
 
+  it('reads and saves the bell sound, the tone and the preview (CONTRACT 26)', async () => {
+    expect(DEFAULTS).toMatchObject({
+      bellRing: true,
+      bellSound: 'important',
+      bellTone: 'chime',
+      bellPreview: true,
+    });
+    const saved = await call(PATCH, 'PATCH', { bellSound: 'all', bellTone: 'pop' });
+    expect(saved).toEqual({
+      status: 200,
+      data: { ...DEFAULTS, bellSound: 'all', bellTone: 'pop' },
+    });
+    expect((await call(PATCH, 'PATCH', { bellPreview: false })).data).toMatchObject({
+      bellSound: 'all',
+      bellTone: 'pop',
+      bellPreview: false,
+    });
+    expect(await storedRow(alice)).toEqual({
+      bellSound: 'all',
+      bellTone: 'pop',
+      bellPreview: false,
+    });
+    await call(PATCH, 'PATCH', { bellSound: 'important', bellTone: 'chime', bellPreview: true });
+    expect(await storedRow(alice)).toEqual({});
+
+    for (const [body, field, message] of [
+      [{ bellSound: 'loud' }, 'bellSound', 'Sound must be Important only, All or Off.'],
+      [{ bellTone: 'siren' }, 'bellTone', 'The sound must be Chime, Soft bell, Ding or Pop.'],
+      [{ bellPreview: 'yes' }, 'bellPreview', 'Show a preview must be on or off.'],
+    ]) {
+      const answer = await call(PATCH, 'PATCH', body);
+      expect(answer.status).toBe(400);
+      expect(answer.error).toMatchObject({ code: 'VALIDATION_FAILED', message });
+      expect(answer.error.fields).toEqual({ [field]: message });
+    }
+    expect(await storedRow(alice)).toEqual({});
+  });
+
   it('names an unknown key however it is called, and only the first one', async () => {
     const message = (key) => `"${key}" isn't one of your settings.`;
     const named = async (body) => {

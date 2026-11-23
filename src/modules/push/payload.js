@@ -32,19 +32,42 @@ export function notificationUrl(link, appUrl) {
 }
 
 /**
- * The JSON a notification is pushed as: { id, title, body, url }, kept small (push services take
- * about 4 KB) with the title and body clipped.
- * @param {{ id: number, title: string, body?: string | null, link?: string | null }} notification
+ * The JSON a notification is pushed as: { id, userId, title, body, url }, plus mustShow: true for
+ * an Apple endpoint (CONTRACT 26: public/sw.js then always shows the system notification). Kept
+ * small (push services take about 4 KB) with the title and body clipped; no type and no other
+ * personal data.
+ * @param {{ id: number, userId: number, title: string, body?: string | null,
+ *   link?: string | null }} notification
  * @param {string} appUrl
+ * @param {{ mustShow?: boolean }} [options]
  * @returns {string}
  */
-export function buildPayload(notification, appUrl) {
+export function buildPayload(notification, appUrl, { mustShow = false } = {}) {
+  const userId = Number(notification.userId);
   return JSON.stringify({
     id: Number(notification.id),
+    userId: Number.isSafeInteger(userId) && userId > 0 ? userId : null,
     title: clip(notification.title, TITLE_MAX) || 'Daybook',
     body: clip(notification.body, BODY_MAX),
     url: notificationUrl(notification.link, appUrl),
+    ...(mustShow === true ? { mustShow: true } : {}),
   });
+}
+
+/**
+ * True for Safari's push service (web.push.apple.com): the host is push.apple.com or ends with
+ * .push.apple.com. Safari revokes a subscription after a few pushes without a system notification,
+ * so these always show one (CONTRACT 26).
+ * @param {string | null | undefined} endpoint
+ * @returns {boolean} false for anything that isn't a URL
+ */
+export function isApplePush(endpoint) {
+  try {
+    const host = new URL(String(endpoint ?? '')).hostname.toLowerCase();
+    return host === 'push.apple.com' || host.endsWith('.push.apple.com');
+  } catch {
+    return false;
+  }
 }
 
 /**

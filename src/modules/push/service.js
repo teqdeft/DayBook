@@ -6,7 +6,13 @@ import { AppError, validationError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { now, nowDate } from '@/lib/time';
 import { settings } from '@/modules/settings';
-import { buildPayload, classifyFailure, describeFailure, endpointHash } from './payload';
+import {
+  buildPayload,
+  classifyFailure,
+  describeFailure,
+  endpointHash,
+  isApplePush,
+} from './payload';
 import * as repo from './repo';
 import { subscribeSchema, unsubscribeSchema } from './schemas';
 import { hasKeys, sendPush, vapidKeys } from './sender';
@@ -203,7 +209,10 @@ async function runPool(items, size, fn) {
   await Promise.all(lanes);
 }
 
-/** One message per (notification, subscription), minus the ones a retry already delivered. */
+/**
+ * One message per (notification, subscription), minus the ones a retry already delivered. The
+ * payload carries the person's id, and mustShow for an Apple endpoint (CONTRACT 26).
+ */
 function planDeliveries(due, subscriptions) {
   const byUser = new Map();
   for (const subscription of subscriptions) {
@@ -220,8 +229,15 @@ function planDeliveries(due, subscriptions) {
       deliveredBefore.delete(notification.id);
       continue;
     }
-    const payload = buildPayload(notification, env.APP_URL);
-    for (const subscription of targets) deliveries.push({ notification, subscription, payload });
+    // Apple endpoints get mustShow (CONTRACT 26): at most two variants per notification.
+    const variants = new Map();
+    for (const subscription of targets) {
+      const mustShow = isApplePush(subscription.endpoint);
+      if (!variants.has(mustShow)) {
+        variants.set(mustShow, buildPayload(notification, env.APP_URL, { mustShow }));
+      }
+      deliveries.push({ notification, subscription, payload: variants.get(mustShow) });
+    }
   }
   return { deliveries, skipped };
 }

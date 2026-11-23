@@ -7,7 +7,14 @@ import { nowDate } from '@/lib/time';
 import * as repo from './repo';
 import { PREFERENCE_DEFAULTS, PREFERENCE_FIELDS, preferencesUpdateSchema } from './schemas';
 
-export { PREFERENCE_DEFAULTS, SUBMIT_BUTTONS, NEW_TASK_STATUSES, THEMES } from './schemas';
+export {
+  PREFERENCE_DEFAULTS,
+  SUBMIT_BUTTONS,
+  NEW_TASK_STATUSES,
+  BELL_SOUNDS,
+  BELL_TONES,
+  THEMES,
+} from './schemas';
 
 // MySQL's "table doesn't exist": a deploy before `npm run migrate` added user_preferences.
 const NO_SUCH_TABLE = 1146;
@@ -66,7 +73,8 @@ export function withDefaults(stored) {
  * @returns {Promise<{ submitButtons: 'both' | 'checkout' | 'submit',
  *   newTaskStatus: 'in_progress' | 'done', carryOver: boolean, slackPreview: boolean,
  *   polishButton: boolean, polishLines: boolean, polishAfterTimers: boolean, bellRing: boolean,
- *   theme: 'system' | 'light' | 'dark' }>}
+ *   bellSound: 'important' | 'all' | 'off', bellTone: 'chime' | 'bell' | 'ding' | 'pop',
+ *   bellPreview: boolean, theme: 'system' | 'light' | 'dark' }>}
  */
 export async function getFor(userId) {
   const id = Number(userId);

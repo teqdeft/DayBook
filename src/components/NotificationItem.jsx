@@ -5,8 +5,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Mail, MailOpen, Trash2 } from 'lucide-react';
-import { formatRelativeDay, formatTimeAmPm, workDate } from '@/lib/time';
-import { isInAppLink } from './NotificationBell.list';
+import { isInAppLink, itemTime } from './NotificationBell.list';
 import {
   SWIPE_SETTLE_MS,
   swipeDeletes,
@@ -107,9 +106,7 @@ export default function NotificationItem({ item, today, tz, onOpen, onToggleRead
   const titleId = useId();
   const { rowRef, drag, handlers } = useSwipe(() => onDelete(item));
   const read = Boolean(item.readAt);
-  const when = item.createdAt
-    ? `${formatRelativeDay(workDate(tz, item.createdAt), today)} at ${formatTimeAmPm(item.createdAt, tz)}`
-    : null;
+  const when = itemTime(item, tz, today);
 
   const content = (
     <>

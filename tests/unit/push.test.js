@@ -9,6 +9,7 @@ import {
   classifyFailure,
   describeFailure,
   endpointHash,
+  isApplePush,
   notificationUrl,
 } from '@/modules/push/payload';
 import {
@@ -70,10 +71,12 @@ describe('notificationUrl', () => {
 });
 
 describe('buildPayload', () => {
-  it('is { id, title, body, url } as JSON', () => {
+  it('is { id, userId, title, body, url } as JSON, with no type', () => {
     const payload = buildPayload(
       {
         id: 42,
+        userId: 7,
+        type: 'project_task.added',
         title: 'New P1 task on internal-tool: Fix login timeout',
         body: null,
         link: '/today',
@@ -82,21 +85,45 @@ describe('buildPayload', () => {
     );
     expect(JSON.parse(payload)).toEqual({
       id: 42,
+      userId: 7,
       title: 'New P1 task on internal-tool: Fix login timeout',
       body: '',
       url: `${APP}/today`,
     });
   });
 
+  it('adds mustShow only when asked (CONTRACT 26)', () => {
+    const row = { id: 3, userId: 7, title: 'Neha Kapoor reminded you to check in', link: '/today' };
+    expect(JSON.parse(buildPayload(row, APP, { mustShow: true }))).toEqual({
+      id: 3,
+      userId: 7,
+      title: 'Neha Kapoor reminded you to check in',
+      body: '',
+      url: `${APP}/today`,
+      mustShow: true,
+    });
+    expect(JSON.parse(buildPayload(row, APP, { mustShow: false }))).not.toHaveProperty('mustShow');
+    expect(JSON.parse(buildPayload(row, APP, {}))).not.toHaveProperty('mustShow');
+    expect(JSON.parse(buildPayload(row, APP))).not.toHaveProperty('mustShow');
+  });
+
+  it('gives userId null when the row has none', () => {
+    expect(JSON.parse(buildPayload({ id: 1, title: 'x' }, APP)).userId).toBeNull();
+  });
+
   it('clips long text and squeezes white space, so it stays far under 4 KB', () => {
     const payload = buildPayload(
       {
         id: 1,
+        userId: 123456,
         title: `  ${'T'.repeat(500)}  `,
-        body: `line one\n\n${'b'.repeat(2000)}`,
+        body: `line one
+
+${'b'.repeat(2000)}`,
         link: '/',
       },
       APP,
+      { mustShow: true },
     );
     const data = JSON.parse(payload);
     expect(data.title).toHaveLength(TITLE_MAX);
@@ -108,6 +135,23 @@ describe('buildPayload', () => {
 
   it('falls back to "Daybook" for an empty title', () => {
     expect(JSON.parse(buildPayload({ id: 1, title: '  ' }, APP)).title).toBe('Daybook');
+  });
+});
+
+describe('isApplePush', () => {
+  it("is true for Safari's push service only", () => {
+    expect(isApplePush('https://web.push.apple.com/QGuQyavXutnMH8l_7k2')).toBe(true);
+    expect(isApplePush('https://push.apple.com/x')).toBe(true);
+    expect(isApplePush('https://WEB.PUSH.APPLE.COM/x')).toBe(true);
+    expect(isApplePush('https://fcm.googleapis.com/fcm/send/abc')).toBe(false);
+    expect(isApplePush('https://wns2-par02p.notify.windows.com/w/?token=abc')).toBe(false);
+    expect(isApplePush('https://updates.push.services.mozilla.com/wpush/v2/abc')).toBe(false);
+    expect(isApplePush('https://notpush.apple.com/x')).toBe(false);
+    expect(isApplePush('https://push.apple.com.evil.example/x')).toBe(false);
+  });
+
+  it('is false for anything that is not a URL', () => {
+    for (const bad of ['not a url', '', null, undefined, 42]) expect(isApplePush(bad)).toBe(false);
   });
 });
 

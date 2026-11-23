@@ -19,6 +19,9 @@ const DEFAULTS = {
   polishLines: true,
   polishAfterTimers: true,
   bellRing: true,
+  bellSound: 'important',
+  bellTone: 'chime',
+  bellPreview: true,
   theme: 'system',
 };
 let alice;
@@ -77,6 +80,9 @@ describe('reading preferences', () => {
         theme: 'purple',
         carryOver: 'no',
         newTaskStatus: 'blocked',
+        bellSound: 'loud',
+        bellTone: 'siren',
+        bellPreview: 'yes',
         oldKey: 1,
       }),
       updatedAt: new Date(T0),
@@ -136,6 +142,36 @@ describe('saving preferences', () => {
     expect(await storedRow(alice)).toEqual({ carryOver: false, submitButtons: 'submit' });
     const row = await db('userPreferences').where({ userId: alice.id }).first();
     expect(row.updatedAt.toISOString()).toBe('2026-10-26T06:00:00.000Z');
+  });
+
+  it('stores the bell sound, the tone and the preview only when they differ (CONTRACT 26)', async () => {
+    const all = await preferences.update({ user: alice, values: { bellSound: 'all' } });
+    expect(all).toEqual({ ...DEFAULTS, bellSound: 'all' });
+    expect(await storedRow(alice)).toEqual({ bellSound: 'all' });
+    await preferences.update({ user: alice, values: { bellSound: 'off', bellTone: 'ding' } });
+    expect(await storedRow(alice)).toEqual({ bellSound: 'off', bellTone: 'ding' });
+    await preferences.update({ user: alice, values: { bellPreview: false } });
+    expect(await preferences.getFor(alice.id)).toEqual({
+      ...DEFAULTS,
+      bellSound: 'off',
+      bellTone: 'ding',
+      bellPreview: false,
+    });
+    // Back to the defaults: the keys leave the row.
+    await preferences.update({
+      user: alice,
+      values: { bellSound: 'important', bellTone: 'chime' },
+    });
+    await preferences.update({ user: alice, values: { bellPreview: true } });
+    expect(await storedRow(alice)).toEqual({});
+    expect(await preferences.getFor(alice.id)).toEqual(DEFAULTS);
+    for (const tone of ['bell', 'ding', 'pop']) {
+      expect((await preferences.update({ user: alice, values: { bellTone: tone } })).bellTone).toBe(
+        tone,
+      );
+    }
+    expect(preferences.BELL_SOUNDS).toEqual(['important', 'all', 'off']);
+    expect(preferences.BELL_TONES).toEqual(['chime', 'bell', 'ding', 'pop']);
   });
 
   it('creates the row on the first change, even when it sets a default', async () => {
@@ -199,6 +235,18 @@ describe('saving preferences', () => {
       {
         bellRing: 'Ring the bell for unread notifications must be on or off.',
       },
+    );
+    await expectValidation(
+      { bellSound: 'loud' },
+      { bellSound: 'Sound must be Important only, All or Off.' },
+    );
+    await expectValidation(
+      { bellTone: 'siren' },
+      { bellTone: 'The sound must be Chime, Soft bell, Ding or Pop.' },
+    );
+    await expectValidation(
+      { bellPreview: 'yes' },
+      { bellPreview: 'Show a preview must be on or off.' },
     );
     await expectValidation({}, { _: 'Choose a setting to change.' });
     await expectValidation(undefined, { _: 'Choose a setting to change.' });

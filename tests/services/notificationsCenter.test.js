@@ -45,7 +45,7 @@ function call(handler, method, id, { body, origin = env.appOrigin } = {}) {
 
 /** Creates one notification for a person and returns its id. */
 async function add(user, title) {
-  await notifications.notify({ userIds: [user.id], type: 'test', title, link: '/today' });
+  await notifications.notify({ userIds: [user.id], type: 'system.test', title, link: '/today' });
   const row = await db('notifications').where({ userId: user.id, title }).first('id');
   return row.id;
 }

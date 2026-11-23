@@ -1,7 +1,38 @@
 import { z } from 'zod';
 
-/** POST /api/notifications/read-all takes no fields; unknown ones are ignored. */
-export const readAllSchema = z.object({}).optional();
+/** The most ids one "Mark these as read" sends (the newest of a summary card, CONTRACT 26). */
+export const READ_IDS_MAX = 50;
+const READ_IDS_MESSAGE = 'Pick 1 to 50 notifications.';
+
+/** 1 to 50 notification ids, each a positive whole number. */
+function isIdList(value) {
+  return (
+    Array.isArray(value) &&
+    value.length >= 1 &&
+    value.length <= READ_IDS_MAX &&
+    value.every((id) => Number.isSafeInteger(id) && id > 0)
+  );
+}
+
+/**
+ * POST /api/notifications/read-all: {} marks every unread one; { ids } only those (CONTRACT 26).
+ * Unknown fields are ignored. Every problem with ids is reported on the field itself.
+ */
+export const readAllSchema = z
+  .object({ ids: z.custom(isIdList, { error: READ_IDS_MESSAGE }).optional() })
+  .optional();
+
+/**
+ * GET /api/notifications?after=<id> (the live check, CONTRACT 26): the highest id the tab has
+ * seen, a whole number from 0.
+ */
+export const liveQuerySchema = z.object({
+  after: z.coerce
+    .number({ error: 'Use a notification id.' })
+    .int('Use a notification id.')
+    .min(0, 'Use a notification id.')
+    .max(Number.MAX_SAFE_INTEGER, 'Use a notification id.'),
+});
 
 /** One in-app notification, as passed to notifications.notify(). */
 export const notifySchema = z.object({

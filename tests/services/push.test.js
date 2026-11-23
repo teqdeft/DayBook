@@ -266,7 +266,7 @@ describe('push.unsubscribe, deleteForUser and deactivation', () => {
 });
 
 describe('push.sendPending', () => {
-  it('sends { id, title, body, url } to every browser and marks it pushed', async () => {
+  it('sends { id, userId, title, body, url } to every browser and marks it pushed', async () => {
     const sender = fakeService();
     const first = browserSubscription();
     await push.subscribe({ user: actor(alice), subscription: first });
@@ -281,6 +281,7 @@ describe('push.sendPending', () => {
     expect(target).toEqual({ endpoint: first.endpoint, keys: first.keys });
     expect(JSON.parse(payload)).toEqual({
       id: row.id,
+      userId: alice.id,
       title: 'New P1 task on internal-tool: Fix login timeout',
       body: 'Users are signed out after 5 minutes.',
       url: `${env.appOrigin}/projects/3`,
@@ -295,6 +296,37 @@ describe('push.sendPending', () => {
     // Nothing left for the next tick.
     expect((await push.sendPending()).claimed).toBe(0);
     expect(sender).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives an Apple endpoint mustShow and every payload the person id (CONTRACT 26)', async () => {
+    const sender = fakeService();
+    const apple = browserSubscription('web.push.apple.com');
+    const chrome = browserSubscription();
+    const edge = browserSubscription('wns2-par02p.notify.windows.com');
+    await push.subscribe({ user: actor(alice), subscription: apple });
+    await push.subscribe({ user: actor(alice), subscription: chrome });
+    await push.subscribe({ user: actor(bob), subscription: edge });
+    const mine = await notification(alice.id);
+    const bobs = await notification(bob.id, { type: 'leave.marked', title: 'Leave marked' });
+
+    expect(await push.sendPending()).toMatchObject({ claimed: 2, sent: 3, failed: 0 });
+    const byEndpoint = new Map(
+      sender.mock.calls.map(([target, payload]) => [target.endpoint, JSON.parse(payload)]),
+    );
+    expect(byEndpoint.get(apple.endpoint)).toEqual({
+      id: mine.id,
+      userId: alice.id,
+      title: 'New P1 task on internal-tool: Fix login timeout',
+      body: 'Users are signed out after 5 minutes.',
+      url: `${env.appOrigin}/today`,
+      mustShow: true,
+    });
+    const { mustShow, ...rest } = byEndpoint.get(apple.endpoint);
+    expect(mustShow).toBe(true);
+    expect(byEndpoint.get(chrome.endpoint)).toEqual(rest);
+    expect(byEndpoint.get(edge.endpoint)).toMatchObject({ id: bobs.id, userId: bob.id });
+    expect(byEndpoint.get(edge.endpoint)).not.toHaveProperty('mustShow');
+    for (const [, payload] of sender.mock.calls) expect(payload).not.toContain('"type"');
   });
 
   it('opens the home page when a notification has no in-app link', async () => {

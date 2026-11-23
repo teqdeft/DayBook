@@ -4,13 +4,22 @@
 // settings (`bellRing`, CONTRACT 21; read from UserPrefs). It opens the latest 20 notifications with
 // "Mark all as read"; each item marks itself read and opens its screen, and can be marked read or
 // unread and deleted with Undo (NotificationItem, CONTRACT 20). The dropdown ends with "Show on
-// this computer" (desktop notifications for this browser, CONTRACT 14).
+// this computer" (desktop notifications for this browser, CONTRACT 14). Inside LiveNotifications
+// it follows the live check (NotificationBell.live, CONTRACT 26); without it, it is as in 1.10.
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/apiClient';
 import { now, workDate } from '@/lib/time';
-import { useNotificationActions } from './NotificationBell.actions';
-import { hidePending } from './NotificationBell.list';
+import { useLiveNotifications } from './live/LiveNotifications';
+import { useNotificationActions, useUndoFocus } from './NotificationBell.actions';
+import {
+  BELL_LIMIT,
+  createLiveBuffer,
+  hidePending,
+  readResponse,
+  sameUser,
+} from './NotificationBell.list';
+import { useBellLive } from './NotificationBell.live';
 import { bellSwing } from './NotificationBell.ring';
 import NotificationList from './NotificationList';
 import NotificationUndo from './NotificationUndo';
@@ -23,14 +32,18 @@ const SWING_CLASS = { now: styles.ringNow, later: styles.ringLater };
 
 const REFRESH_AFTER_MS = 60_000;
 
-// The canvas draws its own bell (straight sides, flat base, a round clapper), not lucide's; traced
-// from the artboards at 1 unit = 1 CSS px and drawn the lucide way (currentColor, round joins).
-function BellIcon() {
+/**
+ * The canvas draws its own bell (straight sides, flat base, a round clapper), not lucide's; traced
+ * from the artboards at 1 unit = 1 CSS px and drawn the lucide way (currentColor, round joins).
+ * Also the preview cards' icon for system notifications, at 18 px (CONTRACT 26).
+ * @param {{ size?: number }} props
+ */
+export function BellIcon({ size = 20 }) {
   return (
     <svg
       className={styles.icon}
-      width="20"
-      height="20"
+      width={size}
+      height={size}
       viewBox="0 0 20 20"
       fill="none"
       stroke="currentColor"
@@ -46,15 +59,6 @@ function BellIcon() {
   );
 }
 
-/** Accepts `{ data: [...] }`, `{ data: { items|notifications: [...] } }` and an optional unreadCount. */
-function readResponse(json) {
-  const data = json?.data;
-  const items = Array.isArray(data) ? data : (data?.items ?? data?.notifications ?? []);
-  const count = json?.unreadCount ?? data?.unreadCount;
-  const unread = typeof count === 'number' ? count : items.filter((n) => !n.readAt).length;
-  return { items, unread };
-}
-
 /**
  * @param {{ initialUnread?: number, tz?: string,
  *   push?: { publicKey: string, userId: number } | null }} props
@@ -64,8 +68,10 @@ function readResponse(json) {
 export default function NotificationBell({ initialUnread = 0, tz = 'Asia/Kolkata', push = null }) {
   const router = useRouter();
   const toast = useToast();
+  const live = useLiveNotifications();
   const desktop = useDesktopPush(push);
   const ringEnabled = useBellRing();
+  const [buffer] = useState(createLiveBuffer);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState(null);
   const [status, setStatus] = useState('idle'); // idle | loading | error
@@ -77,22 +83,32 @@ export default function NotificationBell({ initialUnread = 0, tz = 'Asia/Kolkata
   const buttonRef = useRef(null);
   const lastLoad = useRef(0);
   const pendingRef = useRef(null); // a delete still waiting for its Undo toast to end
+  const openRef = useRef(false); // the list is open (set at once on opening, for the live store)
   const panelId = useId();
   const titleId = useId();
 
-  const load = useCallback(async ({ quiet = false } = {}) => {
-    if (!quiet) setStatus('loading');
-    try {
-      const json = await api.get('/api/notifications?limit=20');
+  const load = useCallback(
+    async ({ quiet = false } = {}) => {
+      if (!quiet) setStatus('loading');
+      buffer.started();
+      const json = await api.get('/api/notifications?limit=20').catch(() => null);
+      // With the live store, an answer for someone else (signed in in another tab) shows nothing.
+      if (!json || !sameUser(live, json.data)) {
+        buffer.ended(null);
+        if (!quiet) setStatus('error');
+        return;
+      }
       const result = hidePending(readResponse(json), pendingRef.current);
       lastLoad.current = now().valueOf();
-      setItems(result.items.slice(0, 20));
+      setItems(buffer.ended(result.items.slice(0, BELL_LIMIT), pendingRef.current));
       setUnread(result.unread);
       setStatus('idle');
-    } catch {
-      if (!quiet) setStatus('error');
-    }
-  }, []);
+      // Rows the person just saw in the open list never get a card or a chime later.
+      const latestId = json.data?.latestId;
+      if (live && openRef.current && Number.isFinite(latestId)) live.markSeen(latestId);
+    },
+    [buffer, live],
+  );
   const reload = useCallback(() => load({ quiet: true }), [load]);
 
   const close = useCallback(({ focus = true } = {}) => {
@@ -107,6 +123,20 @@ export default function NotificationBell({ initialUnread = 0, tz = 'Asia/Kolkata
     setUnread,
     pendingRef,
     onNavigate,
+    reload,
+    live,
+  });
+  const undoFocus = useUndoFocus({ rootRef, buttonRef, actions });
+  useBellLive({
+    live,
+    buffer,
+    open,
+    loaded: items !== null,
+    buttonRef,
+    setItems,
+    setUnread,
+    pendingRef,
+    onOpenBell: openList,
     reload,
   });
 
@@ -127,14 +157,25 @@ export default function NotificationBell({ initialUnread = 0, tz = 'Asia/Kolkata
   const swing = bellSwing({ enabled: ringEnabled, unread, open, now: ring.now });
   const ringClass = swing ? SWING_CLASS[swing] : '';
 
+  function show() {
+    openRef.current = true;
+    setOpen(true);
+    setRing((r) => (r.now ? { ...r, now: false } : r));
+    load({ quiet: items !== null });
+  }
+
   function toggle() {
     if (open) {
       setOpen(false);
       return;
     }
-    setOpen(true);
-    setRing((r) => (r.now ? { ...r, now: false } : r));
-    load({ quiet: items !== null });
+    show();
+  }
+
+  /** The summary card's "See them": the list opens as with the button, which then has focus. */
+  function openList() {
+    if (!openRef.current) show();
+    buttonRef.current?.focus();
   }
 
   async function markAllRead() {
@@ -145,6 +186,7 @@ export default function NotificationBell({ initialUnread = 0, tz = 'Asia/Kolkata
       const readAt = now().toISOString();
       setItems((list) => (list ?? []).map((n) => (n.readAt ? n : { ...n, readAt })));
       setUnread(0);
+      live?.reportReadAll(readAt);
       router.refresh();
     } catch (error) {
       toast({ title: "Couldn't mark them as read", body: error.message, tone: 'error' });
@@ -153,28 +195,9 @@ export default function NotificationBell({ initialUnread = 0, tz = 'Asia/Kolkata
     }
   }
 
-  /** Focus back in the list: on `target` when it is still there, else the list's top, else the bell. */
-  function focusList(target) {
-    const fallback = rootRef.current?.querySelector('[data-notification-fallback]');
-    (target?.isConnected ? target : (fallback ?? buttonRef.current))?.focus();
-  }
-
-  function undo() {
-    // Undo had focus and goes away with the toast: focus goes to the item that came back.
-    const fromToast = document.activeElement?.closest?.('[data-notification-undo]');
-    const id = actions.pending?.item.id;
-    actions.undo();
-    if (!fromToast) return;
-    requestAnimationFrame(() => {
-      const row = rootRef.current?.querySelector(`[data-notification-id="${id}"]`);
-      focusList(row?.querySelector('a, button'));
-    });
-  }
-
-  /** Tab, Shift+Tab or Escape on the Undo toast: back to the row focus was on before it. */
-  function leaveUndo() {
-    focusList(actions.pending?.returnFocus);
-  }
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
 
   // Close on outside click and Escape while open (the Undo toast counts as inside).
   useEffect(() => {
@@ -210,14 +233,15 @@ export default function NotificationBell({ initialUnread = 0, tz = 'Asia/Kolkata
   }, [load]);
 
   // A desktop notification just popped up (public/sw.js tells open pages): show it here too.
+  // With the live store, the provider listens and its check brings the rows (CONTRACT 26).
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) return undefined;
+    if (live || !('serviceWorker' in navigator)) return undefined;
     function onMessage(event) {
       if (event.data?.type === 'daybook:notification') load({ quiet: true });
     }
     navigator.serviceWorker.addEventListener('message', onMessage);
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
-  }, [load]);
+  }, [live, load]);
 
   return (
     <div ref={rootRef} className={styles.root}>
@@ -266,10 +290,10 @@ export default function NotificationBell({ initialUnread = 0, tz = 'Asia/Kolkata
       ) : null}
       <NotificationUndo
         pending={actions.pending}
-        onUndo={undo}
+        onUndo={undoFocus.undo}
         onDismiss={actions.dismiss}
         onHold={actions.hold}
-        onLeave={leaveUndo}
+        onLeave={undoFocus.leave}
       />
     </div>
   );

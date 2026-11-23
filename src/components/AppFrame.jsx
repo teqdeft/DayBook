@@ -1,6 +1,7 @@
 // Server only: loads what the shell needs (company name, nav badges, the timer state for the
-// sidebar's timer chip, the person's preferences) and renders the sidebar and main area around a
-// page. Used by src/app/(app)/layout.js and by the not-found page for signed-in people.
+// sidebar's timer chip, the person's preferences, their newest notification id for the live bell)
+// and renders the sidebar and main area around a page. Used by src/app/(app)/layout.js and by the
+// not-found page for signed-in people.
 import { cache } from 'react';
 import { homePathFor, navigationFor } from '@/config/navigation';
 import { logger } from '@/lib/logger';
@@ -8,12 +9,14 @@ import { can } from '@/lib/permissions';
 import { aiAsk } from '@/modules/aiAsk';
 import { aiSummaries } from '@/modules/aiSummaries';
 import { dashboard } from '@/modules/dashboard';
+import { notifications } from '@/modules/notifications';
 import { preferences, preferencesFor } from '@/modules/preferences';
 import { push } from '@/modules/push';
 import { settings } from '@/modules/settings';
 import { timers } from '@/modules/timers';
 import ActivityTracker from './ActivityTracker';
 import AppShell from './AppShell';
+import LiveNotifications from './live/LiveNotifications';
 import { PushSync } from './PushSwitch';
 import Sidebar from './Sidebar';
 import ThemeSync from './ThemeSync';
@@ -54,7 +57,11 @@ export default async function AppFrame({ user, children }) {
   // AI items (CONTRACT 20): Ask Daybook while it is available to them, Summaries once they have
   // one; a failure just hides the item. Preferences (CONTRACT 21): read once per request (the
   // page shares the read); a failure gives the defaults (the computer's theme, a ringing bell).
-  const [all, badges, timerState, ask, summaries, prefs] = await Promise.all([
+  // The live bell (CONTRACT 26) starts from the newest notification id at this render; without it
+  // the tab's first live check sets the starting point and alerts nothing. It is keyed by the
+  // person: when someone else signs in on this browser, a refresh of an open page (Today's auto
+  // refresh) mounts a fresh one for them, quiet, instead of reusing the last person's cursor.
+  const [all, badges, timerState, ask, summaries, prefs, latestId] = await Promise.all([
     safely(settings.getAll(), {}, 'shell: could not load settings', user.id),
     safely(dashboard.getNavBadges(user), {}, 'shell: could not load nav badges', user.id),
     timers.canUse(user)
@@ -66,6 +73,12 @@ export default async function AppFrame({ user, children }) {
       preferencesFor(user),
       preferences.PREFERENCE_DEFAULTS,
       'shell: could not load preferences',
+      user.id,
+    ),
+    safely(
+      notifications.latestId(user.id),
+      null,
+      'shell: could not read the latest notification',
       user.id,
     ),
   ]);
@@ -82,25 +95,33 @@ export default async function AppFrame({ user, children }) {
     <UserPrefsProvider prefs={prefs}>
       <ThemeSync theme={prefs.theme} />
       <ToastProvider>
-        <AppShell
-          sidebar={
-            <Sidebar
-              items={items}
-              companyName={all?.companyName}
-              homeHref={homePathFor(user)}
-              user={{
-                name: user.name,
-                email: user.email,
-                designation: user.designation ?? user.roleLabel,
-                initials: user.initials,
-                avatarUrl: user.avatarUrl,
-              }}
-              footer={showTimer ? <TimerChip initialState={timerState} /> : null}
-            />
-          }
+        <LiveNotifications
+          key={user.id}
+          userId={user.id}
+          latestId={latestId}
+          tz={all?.timezone}
+          push={Boolean(pushKey)}
         >
-          {children}
-        </AppShell>
+          <AppShell
+            sidebar={
+              <Sidebar
+                items={items}
+                companyName={all?.companyName}
+                homeHref={homePathFor(user)}
+                user={{
+                  name: user.name,
+                  email: user.email,
+                  designation: user.designation ?? user.roleLabel,
+                  initials: user.initials,
+                  avatarUrl: user.avatarUrl,
+                }}
+                footer={showTimer ? <TimerChip initialState={timerState} /> : null}
+              />
+            }
+          >
+            {children}
+          </AppShell>
+        </LiveNotifications>
         {tracksScreenTime ? (
           <ActivityTracker userId={user.id} idleMinutes={all.activityIdleMinutes} />
         ) : null}

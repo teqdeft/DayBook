@@ -115,7 +115,22 @@
   margin-top: 12px;
 }
 
-/* AI: who gets the task lines, under the switches */
+/* "Choose a sound" (CONTRACT 26): Play sound centred beside the choice, which keeps its width;
+   it wraps under it, at the left, when the card is too narrow for both. */
+.soundControls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.soundControls > .choice {
+  margin-top: 0;
+}
+
+/* AI: who gets the task lines, under the switches; Notifications: the desktop sound, under the
+   desktop switch */
 .note {
   padding-top: 13.75px;
   border-top: 1px solid var(--track);
@@ -127,6 +142,11 @@
 /* The bell's "Show on this computer" (its own divider above), lined up with the rows. */
 .pushRow > div {
   padding: 13.75px 0 2px;
+}
+
+/* the switch's wrapper ends with only 2 px: the note's divider sits a row's padding under it */
+.pushRow + .note {
+  margin-top: 13.75px;
 }
 
 /* ---------- Top bar status ---------- */
@@ -192,6 +212,11 @@
 
   .row {
     align-items: flex-start;
+  }
+
+  /* a 44 px touch target (two classes, so it wins over Button's compact height) */
+  .soundControls .playSound {
+    height: var(--control-height);
   }
 }
 

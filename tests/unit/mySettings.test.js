@@ -3,12 +3,21 @@ import {
   NEW_TASK_CHOICES,
   SECTIONS,
   sectionsFor,
+  SOUND_CHOICES,
   SUBMIT_BUTTON_CHOICES,
   THEME_CHOICES,
+  TONE_CHOICES,
   writesReports,
 } from '@/app/(app)/my-settings/sections';
 import { createPreferenceSaver } from '@/app/(app)/my-settings/preferenceSaver';
-import { NEW_TASK_STATUSES, SUBMIT_BUTTONS, THEMES } from '@/modules/preferences/schemas';
+import { TONE_NAMES } from '@/components/live/chime';
+import {
+  BELL_SOUNDS,
+  BELL_TONES,
+  NEW_TASK_STATUSES,
+  SUBMIT_BUTTONS,
+  THEMES,
+} from '@/modules/preferences/schemas';
 
 const ids = (who) => sectionsFor(who).map((section) => section.id);
 
@@ -76,6 +85,20 @@ describe('My settings sections (CONTRACT 21)', () => {
       'Match my computer',
       'Light',
       'Dark',
+    ]);
+  });
+
+  it('offers the bell sounds and the four tones with the contract labels (CONTRACT 26)', () => {
+    expect(SOUND_CHOICES.map((choice) => choice.value)).toEqual([...BELL_SOUNDS]);
+    expect(SOUND_CHOICES.map((choice) => choice.label)).toEqual(['Important only', 'All', 'Off']);
+    expect(TONE_CHOICES.map((choice) => choice.value)).toEqual([...BELL_TONES]);
+    // The page plays the picked value through playChimeNow(), so each must be a sound chime.js has.
+    expect(TONE_CHOICES.map((choice) => choice.value)).toEqual([...TONE_NAMES]);
+    expect(TONE_CHOICES.map((choice) => choice.label)).toEqual([
+      'Chime',
+      'Soft bell',
+      'Ding',
+      'Pop',
     ]);
   });
 });
