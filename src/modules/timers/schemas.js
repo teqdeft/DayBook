@@ -5,7 +5,8 @@ import { dayjs, normalizeClock } from '@/lib/time';
 
 export const NOTE_MAX = 200;
 export const STOP_REASONS = ['stopped', 'switched', 'break', 'checkout', 'midnight', 'away'];
-export const AWAY_DECISIONS = ['keep', 'remove'];
+/** keep, remove (it was a break) or left ("I had left, check me out", CONTRACT 25). */
+export const AWAY_DECISIONS = ['keep', 'remove', 'left'];
 
 const BODY_MESSAGE = 'Send the fields as a JSON object.';
 const ID_PATTERN = /^[1-9]\d{0,15}$/;
@@ -96,7 +97,7 @@ export const timerAwaySchema = z.object(
     entryId: idValue('Refresh and try again.'),
     from: moment,
     to: moment,
-    decision: z.enum(AWAY_DECISIONS, { error: 'Choose keep or remove.' }),
+    decision: z.enum(AWAY_DECISIONS, { error: 'Choose keep, remove or left.' }),
   },
   { error: BODY_MESSAGE },
 );
@@ -111,4 +112,9 @@ const idParamSchema = z.object({ id: idValue('Not found.') });
 export function routeId(params) {
   const parsed = idParamSchema.safeParse(params ?? {});
   return parsed.success ? parsed.data.id : null;
+}
+
+/** The numeric :breakId of /api/timers/away/:breakId/put-back, or null (404). */
+export function routeBreakId(params) {
+  return routeId({ id: params?.breakId });
 }

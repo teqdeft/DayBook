@@ -1,0 +1,67 @@
+/* The Missing check-outs side card (artboard 09; CONTRACT 25, item 7). Owner: builder C. */
+.missingCard {
+  --card-pad: 20px 24px 18px;
+}
+
+.missingList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.missingItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.missingText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.missingTitle {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.missingSub {
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted);
+}
+
+.missingAsked {
+  flex: none;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.fix {
+  flex: none;
+}
+
+/* "See all 12": the full list on /attendance/missing. */
+.seeAll {
+  display: inline-flex;
+  margin-top: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.sideEmpty {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}

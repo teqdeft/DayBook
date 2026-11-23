@@ -8,13 +8,15 @@ import styles from './WeekBars.module.css';
  * @param {{
  *   days: {
  *     label: string, value?: number | null, display?: string | null, max?: number,
- *     highlight?: boolean, faded?: boolean, color?: string,
+ *     highlight?: boolean, faded?: boolean, color?: string, title?: string,
  *     segments?: { value: number, color: string, label?: string }[],
  *   }[],
  *   height?: number, barWidth?: number, max?: number, showValues?: boolean, className?: string,
  * }} props
  *   `segments` stack from the bottom (first segment at the bottom). `highlight` marks today (bold
- *   label), `faded` draws the fill in the lighter primary (a day still in progress). `max` is the
+ *   label), `faded` draws the fill in the lighter primary (a day still in progress), or a stacked
+ *   column faded (Overview's holiday, CONTRACT 25); `title` is its hover text and is read with
+ *   the label ('Holiday: Guru Nanak Jayanti'). `max` is the
  *   value of a full bar (defaults to the largest day). `showValues` defaults to true when any day
  *   has a `display` value.
  */
@@ -44,8 +46,12 @@ export default function WeekBars({
       {days.map((day, index) => {
         const dayMax = day.max ?? top;
         return (
-          <div key={`${day.label}-${index}`} className={styles.day}>
-            <div className={styles.track} role="img" aria-label={describe(day, totals[index])}>
+          <div key={`${day.label}-${index}`} className={styles.day} title={day.title}>
+            <div
+              className={`${styles.track} ${day.segments && day.faded ? styles.fadedTrack : ''}`}
+              role="img"
+              aria-label={describe(day, totals[index])}
+            >
               {day.segments ? (
                 <Segments segments={day.segments} max={dayMax} />
               ) : fraction(day.value, dayMax) > 0 ? (
@@ -99,7 +105,8 @@ function Segments({ segments, max }) {
 function describe(day, total) {
   if (day.segments) {
     const parts = day.segments.map((s) => `${s.label ?? s.color} ${s.value}`).join(', ');
-    return `${day.label}: ${parts}`;
+    const label = day.title ? `${day.label}, ${day.title}` : day.label;
+    return parts ? `${label}: ${parts}` : label;
   }
   return `${day.label}: ${day.display || (total ? String(total) : 'nothing yet')}`;
 }

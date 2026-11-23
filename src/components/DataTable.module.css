@@ -167,6 +167,88 @@ button.groupToggle {
   border-bottom-color: var(--line);
 }
 
+/* From 1024 to 1279 px for a wide table (`stackBelow={1280}`, no groups): each row becomes a card
+   with its first cell across the top and the others in four columns, label above value, so a
+   table wider than its 718 to 973 px card never hides its last columns. Below 1024 px it is the
+   usual stacked card (the next block). */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .wrap:has(> .stackWide) {
+    overflow-x: visible;
+  }
+
+  .stackWide,
+  .stackWide tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .stackWide thead,
+  .stackWide colgroup {
+    display: none;
+  }
+
+  .stackWide tbody tr {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px 16px;
+    padding: 14px 20px 16px;
+    border-bottom: 1px solid var(--track);
+  }
+
+  .stackWide tbody:last-child tr:last-child {
+    border-bottom: 0;
+  }
+
+  .stackWide tbody td,
+  .stackWide tbody td:first-child,
+  .stackWide tbody td:last-child,
+  .stackWide tbody .right,
+  .stackWide tbody .center {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    height: auto;
+    padding: 0;
+    border-bottom: 0;
+    text-align: left;
+  }
+
+  .stackWide td::before {
+    content: attr(data-label);
+    font-size: var(--text-small);
+    line-height: 18px;
+    color: var(--muted);
+  }
+
+  .stackWide td:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .stackWide td:not([data-label])::before,
+  .stackWide td:first-child::before {
+    content: none;
+  }
+
+  .stackWide td:has(> .cell:empty),
+  .stackWide .hideOnMobile,
+  .stackWide td.hideOnMobile,
+  .stackWide td.hideOnMobile:last-child {
+    display: none;
+  }
+
+  .stackWide tbody .emptyRow {
+    display: block;
+    padding: 0;
+  }
+
+  .stackWide .emptyRow td,
+  .stackWide .emptyRow td:first-child {
+    display: block;
+    padding: 0;
+  }
+}
+
 /* Below 1024 px: stacked cards */
 @media (max-width: 1023px) {
   .wrap {

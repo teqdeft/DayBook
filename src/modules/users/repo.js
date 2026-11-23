@@ -81,6 +81,29 @@ export function listActive({ tracksAttendance, role } = {}, trx = db) {
   ]);
 }
 
+/**
+ * People who check in and were with the company in a date range (CONTRACT 25, the month view):
+ * joined by `to` (or no join date), and active or deactivated at or after `deactivatedFrom` (the
+ * UTC moment the range's first day starts). By name.
+ */
+export function listTrackedForRange({ to, deactivatedFrom }, trx = db) {
+  return baseQuery(trx)
+    .where('u.tracksAttendance', true)
+    .where((inner) => inner.whereNull('u.joinedOn').orWhere('u.joinedOn', '<=', to))
+    .where((inner) =>
+      inner
+        .where('u.status', 'active')
+        .orWhere((left) =>
+          left.whereNot('u.status', 'active').where('u.deactivatedAt', '>=', deactivatedFrom),
+        ),
+    )
+    .select(USER_COLUMNS)
+    .orderBy([
+      { column: 'u.name', order: 'asc' },
+      { column: 'u.id', order: 'asc' },
+    ]);
+}
+
 /** A page of people: active first, then deactivated, each by name. */
 export function list({ departmentId, status, q, limit, offset }, trx = db) {
   return applyFilters(baseQuery(trx), { departmentId, status, q })

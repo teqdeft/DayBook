@@ -1,0 +1,105 @@
+/* Mark leave and Edit leave (CONTRACT 25, item 9; hr-tools-prototype "leave" states). */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Note and the reason are Textareas with rows 2: the prototype's 66 px
+   (textarea.control.rows-2), not Textarea's 88 px. */
+.fields textarea {
+  min-height: 66px;
+}
+
+/* First day and Last day, Type and Pay side by side; stacked on a phone (the prototype's
+   .fields-2) or when too narrow for two. */
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+/* Part of the day and Pay fill their field, each item an equal share. */
+.full {
+  display: flex;
+  width: 100%;
+}
+
+.full > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* The live preview: a grey box with the main line and one note per line. */
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+}
+
+.previewMain {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.note {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.warn {
+  font-weight: 600;
+  color: var(--marigold-text);
+}
+
+.bad {
+  font-weight: 600;
+  color: var(--red-text);
+}
+
+/* "Delete leave" sits at the footer's start, away from Save. */
+.footStart {
+  display: inline-flex;
+  margin-right: auto;
+}
+
+.danger {
+  color: var(--red-text);
+}
+
+.danger:hover {
+  color: var(--red-text);
+}
+
+@media (max-width: 520px) {
+  .footStart {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* On a phone the pairs stack, and 44 px to tap (CONTRACT 25): Delete leave, and each item of Part
+   of the day and Pay. */
+@media (max-width: 640px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .danger {
+    min-height: 44px;
+  }
+
+  .fields .full {
+    height: auto;
+  }
+
+  .fields .full > * {
+    height: 44px;
+  }
+}

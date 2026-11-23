@@ -1,10 +1,11 @@
 // My log (build guide section 8): a person's month of reports, hours and attendance, as the page,
-// GET /api/me/log and the Excel download use it.
+// GET /api/me/log and the Excel download use it. The person's day (CONTRACT 25) decides the
+// working days: a company holiday or the person's own leave is never "not checked in", and the
+// day carries the person's own leave type and pay (never HR's note).
 import {
   addMonths,
   dayjs,
   eachDay,
-  isWorkingDay,
   locksAtFor,
   monthOf,
   monthRange,
@@ -34,7 +35,8 @@ function percent(part, whole) {
 /**
  * The report state shown in a My log row: submitted (still editable), locked, edit_requested,
  * draft, not_started (checked in, nothing written yet, still open), missing (checked in or
- * drafted but never submitted before the lock) or not_checked_in.
+ * drafted but never submitted before the lock), not_checked_in, or for a day off with no
+ * check-in and no report `off`: 'holiday' or 'on_leave' (CONTRACT 25).
  */
 export function rowStatus({
   report,
@@ -43,10 +45,12 @@ export function rowStatus({
   dayLocked,
   at,
   tracksAttendance = true,
+  off = null,
 }) {
   if (pending) return 'edit_requested';
   if (report?.status === 'submitted') return isEditable(report, at) ? 'submitted' : 'locked';
   if (report) return isEditable(report, at) ? 'draft' : 'missing';
+  if (!attendanceRow && off) return off;
   if (!attendanceRow && tracksAttendance) return 'not_checked_in';
   return dayLocked ? 'missing' : 'not_started';
 }
@@ -58,7 +62,19 @@ function editableUntil(report, at) {
   return report.unlockedUntil;
 }
 
-function buildDay({ day, today, attendanceRow, report, entries, pending, current, at, tracks }) {
+/** A company holiday on a working weekday ({ name }), else null. */
+function holidayOf(personDay) {
+  return personDay.holiday && personDay.weekday ? { name: personDay.holiday.name } : null;
+}
+
+/** Holiday or full-day leave without a check-in: the row reads 'holiday' or 'on_leave'. */
+function offStatusOf(personDay) {
+  if (holidayOf(personDay)) return 'holiday';
+  return personDay.leave?.part === 'full' ? 'on_leave' : null;
+}
+
+function buildDay({ day, personDay, today, attendanceRow, report, entries, pending, ctx }) {
+  const { current, at, tracks } = ctx;
   const locksAt = report?.locksAt ?? locksAtFor(day, current.reportLock, current.timezone);
   const dayLocked = report ? !isEditable(report, at) : !at.isBefore(dayjs(locksAt));
   const status = rowStatus({
@@ -68,17 +84,22 @@ function buildDay({ day, today, attendanceRow, report, entries, pending, current
     dayLocked,
     at,
     tracksAttendance: tracks,
+    off: offStatusOf(personDay),
   });
+  const leave = personDay.leave;
   return {
     date: day,
     isToday: day === today,
-    isWorkingDay: isWorkingDay(day, current.workingDays),
+    isWorkingDay: personDay.isWorkingDay,
+    holiday: holidayOf(personDay),
+    // The person's own leave: the part, type and pay (CONTRACT 25), never HR's note.
+    leave: leave ? { part: leave.part, paid: leave.paid, leaveType: leave.leaveType } : null,
     attendance: attendanceRow
       ? {
           checkInAt: attendanceRow.checkInAt,
           checkOutAt: attendanceRow.checkOutAt ?? null,
           location: attendanceRow.location,
-          lateMinutes: Number(attendanceRow.lateMinutes) || 0,
+          lateMinutes: attendance.effectiveLateMinutes({ row: attendanceRow, day: personDay }),
           checkoutStatus: attendanceRow.checkoutStatus,
         }
       : null,
@@ -103,9 +124,27 @@ function buildDay({ day, today, attendanceRow, report, entries, pending, current
   };
 }
 
-function summarize({ days, today, reports, tracks = true }) {
-  const worked = days.filter((d) => d.isWorkingDay && (d.date < today || d.attendance));
-  const present = days.filter((d) => d.isWorkingDay && d.attendance);
+/**
+ * The working days so far and what became of them, from attendance.dayCounts (CONTRACT 25): a
+ * working day counts once it has passed, or today once checked in or on leave; present, leave
+ * and absent may be halves (half-day leave). Holidays and days off never count.
+ */
+function countDays(items, today) {
+  const totals = { workingDays: 0, present: 0, leave: 0, absent: 0 };
+  for (const { date, personDay, row } of items) {
+    if (!personDay.isWorkingDay || !personDay.employed) continue;
+    const counts = attendance.dayCounts({ day: personDay, row, past: date < today });
+    if (date >= today && counts.present + counts.leave === 0) continue;
+    totals.workingDays += 1;
+    totals.present += counts.present;
+    totals.leave += counts.leave;
+    totals.absent += counts.absent;
+  }
+  return totals;
+}
+
+function summarize({ items, days, today, reports, tracks = true }) {
+  const counted = countDays(items, today);
   const withAttendance = days.filter((d) => d.attendance);
   const late = withAttendance.filter((d) => d.attendance.lateMinutes > 0);
   const lateTotal = late.reduce((sum, d) => sum + d.attendance.lateMinutes, 0);
@@ -120,12 +159,13 @@ function summarize({ days, today, reports, tracks = true }) {
       loggedMinutes,
       presentMinutes,
       loggedPercent: percent(loggedMinutes, presentMinutes),
-      daysPresent: present.length,
-      workingDays: worked.length,
-      presentPercent: percent(present.length, worked.length),
+      daysPresent: counted.present,
+      workingDays: counted.workingDays,
+      presentPercent: percent(counted.present, counted.workingDays),
+      leaveDays: counted.leave,
       lateDays: late.length,
       lateAverageMinutes: late.length ? Math.round(lateTotal / late.length) : 0,
-      latePercent: percent(late.length, worked.length),
+      latePercent: percent(late.length, counted.workingDays),
       reportsSubmitted: submitted.length,
       reportsExpected: Math.max(expected, submitted.length),
       reportsPercent: percent(submitted.length, Math.max(expected, submitted.length)),
@@ -134,16 +174,55 @@ function summarize({ days, today, reports, tracks = true }) {
       office: withAttendance.filter((d) => d.attendance.location === 'office').length,
       wfh: withAttendance.filter((d) => d.attendance.location === 'wfh').length,
       late: late.length,
-      // Someone who doesn't track attendance is never "not checked in".
-      notCheckedIn: tracks ? Math.max(0, worked.length - present.length) : 0,
+      leave: counted.leave,
+      // Someone who doesn't track attendance is never "not checked in"; a half-day leave no-show
+      // counts half (dayCounts' absent).
+      notCheckedIn: tracks ? counted.absent : 0,
     },
   };
 }
 
 /**
+ * The month's reads for one person, in parallel, and the person's day for each date: their own
+ * calendar with leaveDetail (the leave's type and pay are theirs to see; the note is never read).
+ * Someone who doesn't track attendance is counted against the company's working days, as before.
+ */
+async function loadMonth({ user, from, monthEnd, start, end }) {
+  const hasDays = start <= end;
+  const [attendanceRows, reports, requests, hoursByProject, calendar] = await Promise.all([
+    hasDays ? attendance.listForUserRange(user.id, start, end) : [],
+    hasDays ? repo.listByUserRange(user.id, start, end) : [],
+    repo.listEditRequestsByUser(user.id, { from, to: monthEnd, limit: 100 }),
+    listMinutesByProject({ from, to: monthEnd, userId: user.id }),
+    hasDays
+      ? attendance.loadCalendar({
+          from: start,
+          to: end,
+          userIds: [user.id],
+          leaveDetail: true,
+          withWfh: false,
+        })
+      : null,
+  ]);
+  const person = user.tracksAttendance === false ? { ...user, tracksAttendance: true } : user;
+  return {
+    attendanceRows: attendanceRows ?? [],
+    reports,
+    requests,
+    hoursByProject,
+    entries: await loadEntriesFor(reports.map((report) => report.id)),
+    dayOf: (date) => calendar.dayFor(person, date),
+  };
+}
+
+/**
  * Everything My log shows for one month: the four numbers, one row per working day up to today
- * (newest first; also any other day with a check-in or a report), hours by project, the
- * person's edit requests for the month and the attendance counts.
+ * (newest first; also any other day with a check-in or a report, and the company holidays on a
+ * working weekday), hours by project, the person's edit requests for the month and the
+ * attendance counts. CONTRACT 25: each day carries `holiday` ({ name } | null) and `leave` ({
+ * part, paid, leaveType } | null, the person's own); `kpis.workingDays` counts the working days
+ * so far while employed, leave included; `attendance.notCheckedIn` is dayCounts' absent (halves
+ * allowed) and late is the effective late.
  * @param {{ user: { id: number, joinedOn?: string | null, tracksAttendance?: boolean },
  *   month?: string }} input month 'YYYY-MM', default this month (a later month shows this one)
  * @returns {Promise<object>}
@@ -158,39 +237,33 @@ export async function getMonthLog({ user, month }) {
   const { from, to: monthEnd } = monthRange(selected);
   const start = user.joinedOn && user.joinedOn > from ? user.joinedOn : from;
   const end = monthEnd < today ? monthEnd : today;
-  const hasDays = start <= end;
-  const [attendanceRows, reports, requests, hoursByProject] = await Promise.all([
-    hasDays ? attendance.listForUserRange(user.id, start, end) : [],
-    hasDays ? repo.listByUserRange(user.id, start, end) : [],
-    repo.listEditRequestsByUser(user.id, { from, to: monthEnd, limit: 100 }),
-    listMinutesByProject({ from, to: monthEnd, userId: user.id }),
-  ]);
-  const entries = await loadEntriesFor(reports.map((report) => report.id));
-  const attendanceByDay = new Map((attendanceRows ?? []).map((row) => [row.workDate, row]));
+  const loaded = await loadMonth({ user, from, monthEnd, start, end });
+  const { reports, requests, entries, dayOf } = loaded;
+  const attendanceByDay = new Map(loaded.attendanceRows.map((row) => [row.workDate, row]));
   const reportByDay = new Map(reports.map((report) => [report.workDate, report]));
   const pendingByDay = new Map(
     requests.filter((r) => r.status === 'pending').map((r) => [r.workDate, r]),
   );
-  const dates = hasDays
-    ? eachDay(start, end).filter(
-        (day) =>
-          isWorkingDay(day, current.workingDays) ||
-          attendanceByDay.has(day) ||
-          reportByDay.has(day),
-      )
-    : [];
-  const days = dates.reverse().map((day) => {
-    const report = reportByDay.get(day) ?? null;
+  const items = (start <= end ? eachDay(start, end) : [])
+    .map((date) => ({ date, personDay: dayOf(date), row: attendanceByDay.get(date) ?? null }))
+    .filter(
+      ({ date, personDay, row }) =>
+        personDay.isWorkingDay || row || reportByDay.has(date) || holidayOf(personDay),
+    )
+    .reverse();
+  const tracks = user.tracksAttendance !== false;
+  const ctx = { current, at, tracks };
+  const days = items.map(({ date, personDay, row }) => {
+    const report = reportByDay.get(date) ?? null;
     return buildDay({
-      day,
+      day: date,
+      personDay,
       today,
-      attendanceRow: attendanceByDay.get(day) ?? null,
+      attendanceRow: row,
       report,
       entries: report ? (entries.get(report.id) ?? []) : [],
-      pending: pendingByDay.get(day) ?? null,
-      current,
-      at,
-      tracks: user.tracksAttendance !== false,
+      pending: pendingByDay.get(date) ?? null,
+      ctx,
     });
   });
   return {
@@ -200,9 +273,9 @@ export async function getMonthLog({ user, month }) {
     nextMonth: selected < thisMonth ? addMonths(selected, 1) : null,
     lockText: lockRuleText(current.reportLock),
     timezone: tz,
-    ...summarize({ days, today, reports, tracks: user.tracksAttendance !== false }),
+    ...summarize({ items, days, today, reports, tracks }),
     days,
-    hoursByProject,
+    hoursByProject: loaded.hoursByProject,
     editRequests: requests.slice(0, 5).map(editRequestView),
     requestableDays: days.filter((day) => day.canRequestEdit).map((day) => day.date),
   };

@@ -1,0 +1,30 @@
+/* Today's holiday or leave notice (CONTRACT 25, items 6 and 9; prototype `.notice`). */
+.notice {
+  --card-pad: 14px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--muted);
+}
+
+.body {
+  min-width: 0;
+}
+
+.text {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+
+.more {
+  margin-top: 2px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}

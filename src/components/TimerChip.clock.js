@@ -129,13 +129,66 @@ export function awayLength(minutes) {
 }
 
 /**
- * The away question (CONTRACT 15): "You were away 32 min (1:10–1:42 PM) while your acme-app
- * timer ran. Keep this time or remove it?"
- * @param {{ minutes: number, fromClock: string, toClock: string, projectName: string }} away
+ * The away question (CONTRACT 25 A): "You were away 32 min (1:10–1:42 PM) while your acme-app
+ * timer ran." A gap with no screen time: "Daybook didn't hear from your computer for 40 min
+ * (…)". With the Left offer: "You were away from 6:42 PM to 8:52 PM while your acme-app timer
+ * ran, after your shift ended at 6:30 PM."
+ * @param {{ minutes: number, fromClock: string, toClock: string, projectName: string,
+ *   kind?: 'away' | 'no_data', left?: { clock: string, shiftEndClock: string } | null }} away
  */
 export function awayQuestion(away) {
-  const range = clockRange(away.fromClock, away.toClock);
-  return `You were away ${awayLength(away.minutes)} (${range}) while your ${away.projectName} timer ran. Keep this time or remove it?`;
+  const timer = `while your ${away.projectName} timer ran`;
+  const quiet = away.kind === 'no_data';
+  if (away.left) {
+    const span = `from ${formatClock(away.fromClock)} to ${formatClock(away.toClock)}`;
+    const what = quiet ? `Daybook didn't hear from your computer ${span}` : `You were away ${span}`;
+    return `${what} ${timer}, after your shift ended at ${formatClock(away.left.shiftEndClock)}.`;
+  }
+  const length = `${awayLength(away.minutes)} (${clockRange(away.fromClock, away.toClock)})`;
+  return quiet
+    ? `Daybook didn't hear from your computer for ${length} ${timer}.`
+    : `You were away ${length} ${timer}.`;
+}
+
+/** The muted line under the question: what Remove, or the Left check-out, does. */
+export function awayHelp(away) {
+  if (away?.left) {
+    return `Checking out ends your day at ${formatClock(away.left.clock)} and stops your timer there.`;
+  }
+  return 'Remove takes this time off your timer and counts it as a break.';
+}
+
+/** The two buttons: Keep (focused, so Enter never removes time) and Remove or Left. */
+export function awayChoices(away) {
+  return {
+    keep: 'Keep, I was working',
+    other: away?.left
+      ? `I had left, check me out at ${formatClock(away.left.clock)}`
+      : 'Remove, it was a break',
+  };
+}
+
+/**
+ * The toast after an answer: Keep "Kept as work"; Remove "Counted as a break" ("Away time
+ * removed" when it couldn't be saved as a break, before the database update) with "32 min came
+ * off your acme-app timer."; Left "Checked out at 6:42 PM", "Your acme-app timer stopped then
+ * too."
+ * @param {{ minutes: number, projectName: string, left?: object | null }} away what was asked
+ * @param {{ decision: string, savedAsBreak?: boolean } | null | undefined} answer the API's
+ */
+export function awayAnswerToast(away, answer) {
+  const decision = answer?.decision;
+  if (decision === 'keep') return { title: 'Kept as work' };
+  if (decision === 'left') {
+    return {
+      title: `Checked out at ${formatClock(away.left?.clock ?? away.fromClock)}`,
+      body: `Your ${away.projectName} timer stopped then too.`,
+    };
+  }
+  return {
+    title: answer?.savedAsBreak === false ? 'Away time removed' : 'Counted as a break',
+    body: `${awayLength(away.minutes)} came off your ${away.projectName} timer.`,
+  };
 }
 
 /** One key per away span, so each span is asked about once. */

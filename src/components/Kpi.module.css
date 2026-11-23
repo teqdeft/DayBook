@@ -69,3 +69,9 @@
 .bar {
   margin-top: 8px;
 }
+
+/* Takes the card's spare height in a grid row, so the footer and bar sit at the bottom
+   (CONTRACT 25). Zero high when the card is as tall as its content. */
+.spacer {
+  flex: 1 0 0;
+}

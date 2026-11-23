@@ -331,6 +331,14 @@
   margin: 0 4px;
 }
 
+/* "Next holiday: …" and "Leave coming up: …" under the help links (CONTRACT 25). */
+.comingUp {
+  font-size: var(--text-small);
+  line-height: 20px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 1180px) {
   .rowDay,
   .rowTasks {

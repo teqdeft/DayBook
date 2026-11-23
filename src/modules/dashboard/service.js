@@ -6,7 +6,8 @@ import { settings } from '@/modules/settings';
 import * as repo from './repo';
 
 export { getHoursByProject, getHoursCard, getTeamToday } from './team';
-export { getEmployeeDetail, daysInProgress, isStuckTask } from './employee';
+export { getEmployeeDetail } from './employee';
+export { daysInProgress, isStuckTask } from './employeeTasks';
 export { getOverview } from './overview';
 export { buildHoursExport } from './exportHours';
 export { projectReportPeriod } from './projectReportPeriods';

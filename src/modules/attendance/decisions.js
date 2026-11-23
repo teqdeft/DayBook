@@ -10,6 +10,8 @@ import { settings } from '@/modules/settings';
 import { escapeSlackText } from '@/modules/slack/format';
 import { slack } from '@/modules/slack';
 import { users } from '@/modules/users';
+import { getDay } from './calendarReads';
+import { clearCheckoutEntered } from './checkoutEntered';
 import { assertOrder, auditView } from './hr';
 import * as repo from './repo';
 import { computeLateMinutes, showsAttendanceOf, workingDayFlag } from './rules';
@@ -38,17 +40,27 @@ async function loadPending(id, actor, trx) {
   return { correction, person };
 }
 
-/** Applies an approved correction to the attendance row; returns [before, after] rows. */
+/**
+ * Applies an approved correction to the attendance row; returns [before, after] rows. Late
+ * minutes and the working-day flag follow the person's day (CONTRACT 25: none on a holiday or
+ * full-day leave), read after the row is locked: a holiday or leave write that rewrote the row
+ * (applyDayRules) has committed by then, so the late minutes never come from the old calendar.
+ * A new missing-day row is covered by that write's recheckDayRules. An approved check-out clears
+ * who entered the old one (the row reads "Corrected").
+ */
 async function applyCorrection({ correction, person }, current, trx) {
-  const late = (checkInAt) =>
+  const dayOf = () => (person ? getDay({ person, date: correction.workDate }, trx) : undefined);
+  const late = (checkInAt, day) =>
     computeLateMinutes({
       checkInAt,
       workDate: correction.workDate,
       shiftStart: person?.shiftStart,
       settings: current,
+      day,
     });
   const at = nowDate();
   if (correction.type === 'missing_day') {
+    const day = await dayOf();
     if (await repo.findByUserAndDate(correction.userId, correction.workDate, trx)) {
       throw new AppError('ATTENDANCE_EXISTS');
     }
@@ -60,8 +72,8 @@ async function applyCorrection({ correction, person }, current, trx) {
         checkOutAt: correction.requestedEndTime,
         location: correction.requestedLocation ?? 'office',
         officeVerified: true,
-        lateMinutes: late(correction.requestedTime),
-        isWorkingDay: workingDayFlag(correction.workDate, current),
+        lateMinutes: late(correction.requestedTime, day),
+        isWorkingDay: workingDayFlag(correction.workDate, current, day),
         checkoutStatus: 'corrected',
         source: 'hr',
         createdAt: at,
@@ -74,19 +86,20 @@ async function applyCorrection({ correction, person }, current, trx) {
   const row =
     (correction.attendanceId &&
       (await repo.findById(correction.attendanceId, trx, { forUpdate: true }))) ||
-    (await repo.findByUserAndDate(correction.userId, correction.workDate, trx));
+    (await repo.findByUserAndDate(correction.userId, correction.workDate, trx).forUpdate());
   if (!row) throw new AppError('NOT_FOUND', { message: 'That attendance row no longer exists.' });
   const changes = { updatedAt: at };
   if (correction.type === 'check_in') {
     assertOrder(correction.requestedTime, row.checkOutAt, 'checkIn');
     changes.checkInAt = correction.requestedTime;
-    changes.lateMinutes = late(correction.requestedTime);
+    changes.lateMinutes = late(correction.requestedTime, await dayOf());
   } else {
     assertOrder(row.checkInAt, correction.requestedTime);
     changes.checkOutAt = correction.requestedTime;
     changes.checkoutStatus = 'corrected';
   }
   await repo.updateRow(row.id, changes, trx);
+  if (correction.type === 'check_out') await clearCheckoutEntered(row.id, trx);
   return [row, await repo.findById(row.id, trx)];
 }
 

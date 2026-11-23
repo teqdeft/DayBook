@@ -1,8 +1,9 @@
 'use client';
 // Runs one timer request for Today's Working on card (CONTRACT 15): the answer (the new timer
 // state) replaces the card's state, the server clock is noted, the sidebar chip hears
-// 'daybook:timers-changed' and the page refreshes. Errors that mean the page is out of date
-// (another tab, check-out, timers turned off) toast and refresh; field errors go back to the form.
+// 'daybook:timers-changed' and the page refreshes (so "Your day" follows a Put back, CONTRACT
+// 25 A). Errors that mean the page is out of date (another tab, check-out, timers turned off, HR
+// changed a break) toast and refresh; field errors go back to the form.
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ToastProvider';

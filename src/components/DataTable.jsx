@@ -1,6 +1,7 @@
 // Data table used by every list screen. Server-safe (no hooks): pages pass `render(row)` functions
 // from Server Components, or use it inside a Client Component (for example for group toggles).
 // Below 1024 px each row becomes a stacked card; cells show their column label (data-label).
+// A wide table can become cards from 1024 to 1279 px too (`stackBelow={1280}`).
 import { ChevronDown } from 'lucide-react';
 import { plural } from '@/lib/text';
 import { resolveTextColor } from './chartColors';
@@ -23,11 +24,14 @@ import styles from './DataTable.module.css';
  *   columns: Column[], rows?: any[], rowKey?: string | ((row: any) => string|number),
  *   groups?: Group[], empty?: import('react').ReactNode, dense?: boolean,
  *   headerVariant?: 'default'|'compact', caption?: string, className?: string,
- *   rowClassName?: (row: any) => string | undefined,
+ *   rowClassName?: (row: any) => string | undefined, stackBelow?: 1024 | 1280,
  * }} props
  *   `groups` (Team board) replaces `rows`. `dense` is the shorter table on Today (37 px header,
  *   51 px rows).
  *   `headerVariant` defaults to 'compact' (the slim header on the Team board) when groups are used.
+ *   `stackBelow` 1280 (a table without groups that is wider than its 718 to 973 px card from 1024
+ *   to 1279 px): there each row is a card, its first cell across the top and the others in four
+ *   columns with their label above, so no column hides off to the side (CONTRACT 25).
  */
 export default function DataTable({
   columns,
@@ -40,6 +44,7 @@ export default function DataTable({
   caption,
   className = '',
   rowClassName,
+  stackBelow = 1024,
 }) {
   const variant = headerVariant ?? (groups ? 'compact' : 'default');
   const isEmpty = groups ? groups.every((g) => g.rows.length === 0 && !g.count) : rows.length === 0;
@@ -48,6 +53,7 @@ export default function DataTable({
     dense ? styles.dense : '',
     variant === 'compact' ? styles.compactHead : '',
     groups ? styles.grouped : '',
+    stackBelow === 1280 ? styles.stackWide : '',
   ].join(' ');
 
   return (

@@ -63,9 +63,21 @@ export function isoWeekday(date) {
   return day === 0 ? 7 : day;
 }
 
-/** True when the date's weekday is one of the working days (Monday = 1). */
-export function isWorkingDay(date, workingDays) {
-  return workingDays.includes(isoWeekday(date));
+/**
+ * True when `holidays` (optional: a Set or an array of 'YYYY-MM-DD' dates, or a Map keyed by
+ * date) holds the date.
+ */
+function isHoliday(date, holidays) {
+  if (!holidays) return false;
+  return typeof holidays.has === 'function' ? holidays.has(date) : holidays.includes(date);
+}
+
+/**
+ * True when the date's weekday is one of the working days (Monday = 1) and, when `holidays` is
+ * given (a Set or an array of 'YYYY-MM-DD' dates), the date isn't one of them (CONTRACT 25).
+ */
+export function isWorkingDay(date, workingDays, holidays) {
+  return workingDays.includes(isoWeekday(date)) && !isHoliday(date, holidays);
 }
 
 export function addDays(date, days) {
@@ -81,10 +93,10 @@ export function eachDay(from, to) {
   return days;
 }
 
-/** Working days after `from` up to and including `to`. */
-export function workingDaysBetween(from, to, workingDays) {
+/** Working days after `from` up to and including `to`; `holidays` as for isWorkingDay(). */
+export function workingDaysBetween(from, to, workingDays, holidays) {
   if (!dayjs(to, DATE).isAfter(dayjs(from, DATE))) return 0;
-  return eachDay(addDays(from, 1), to).filter((d) => isWorkingDay(d, workingDays)).length;
+  return eachDay(addDays(from, 1), to).filter((d) => isWorkingDay(d, workingDays, holidays)).length;
 }
 
 /** Monday to Sunday of the week that contains `date`. */

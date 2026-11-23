@@ -1,15 +1,19 @@
 // Team dashboard (artboard 05): today's numbers, the attendance donut, "Urgent now" and the team
-// board, plus hours by project for a date range.
-import { formatClockShort, formatDuration, formatTime } from '@/lib/time';
-import { initials, plural } from '@/lib/text';
+// board, plus hours by project for a date range. Each person's day decides who is expected
+// (CONTRACT 25): someone on leave, on a holiday or on a day the company doesn't work is "Off
+// today", never "Not checked in", and the board never says the leave type or pay.
+import { formatClockShort, formatDuration } from '@/lib/time';
+import { plural } from '@/lib/text';
 import * as repo from './repo';
-import { linesByReport, todoOf, todoPostingOn } from './todo';
+import { GROUPS, boardRow, labelsByReport, matchesFilter } from './teamBoard';
+import { linesByReport, todoPostingOn } from './todo';
 import { listReportLines, listTodoPostedAt } from './todoRepo';
 import {
   checkedInKpi,
+  holidayOn,
   hoursBars,
-  isoOrNull,
   loadContext,
+  loadDashboardCalendar,
   nowSubtitle,
   people,
   percent,
@@ -20,103 +24,10 @@ import {
   summarizeDay,
   totalMinutes,
   urgentItems,
+  withPresence,
 } from './shared';
 
 export const BOARD_FILTERS = ['everyone', 'missing', 'late', 'no-todo'];
-
-const GROUPS = [
-  { key: 'office', title: 'In office', tone: 'primary' },
-  { key: 'wfh', title: 'Working from home', tone: 'violet' },
-  { key: 'not_checked_in', title: 'Not checked in', tone: 'red' },
-];
-
-function groupOf(row) {
-  if (!row.attendanceId) return 'not_checked_in';
-  return row.location === 'wfh' ? 'wfh' : 'office';
-}
-
-/**
- * The Report column for someone with a row. Submitted when today's report is submitted; Not
- * checked in without a check-in. For someone who checked in without submitting: before today's
- * report time (settings.reportReminderAt) it is still Due, or Draft once they started one; from
- * the report time on it is Missing (a draft too, like the "Reports submitted" number).
- * @returns {'submitted'|'draft'|'due'|'missing'|'not_checked_in'}
- */
-function boardReportStatus({ checkedIn, reportStatus }, due) {
-  if (reportStatus === 'submitted') return 'submitted';
-  if (!checkedIn) return 'not_checked_in';
-  if (!due.before) return 'missing';
-  return reportStatus === 'draft' ? 'draft' : 'due';
-}
-
-/**
- * One team board row. Logged is the submitted report's total. reportLabel is the Report cell's
- * words when they aren't the status's own ('Due 6:30 PM'). onBreak, breakSince and workingOn are
- * the live status (CONTRACT 15). todo is today's to-do (CONTRACT 24, null without lines) and
- * noTodo says "No to-do yet": checked in, report not submitted, no lines. Projects are the
- * submitted report's projects with hours; before submit only the running timer's project shows
- * (workingOn), so planned projects never read as worked.
- */
-function boardRow(row, labels, ctx, live) {
-  const checkedIn = Boolean(row.attendanceId);
-  const submitted = row.reportStatus === 'submitted';
-  const lateMinutes = Number(row.lateMinutes ?? 0);
-  const report = boardReportStatus({ checkedIn, reportStatus: row.reportStatus }, ctx.due);
-  const todo = row.reportId ? todoFor(row, ctx, live) : null;
-  return {
-    id: row.id,
-    name: row.name,
-    initials: initials(row.name),
-    designation: row.designation,
-    role: row.role,
-    avatarUrl: row.avatarUrl,
-    href: `/team/${row.id}`,
-    group: groupOf(row),
-    checkInAt: isoOrNull(row.checkInAt),
-    checkOutAt: isoOrNull(row.checkOutAt),
-    checkIn: checkedIn ? formatTime(row.checkInAt, ctx.tz) : null,
-    officeVerified: checkedIn ? Boolean(row.officeVerified) : null,
-    lateMinutes,
-    late: lateMinutes > 0 ? `Late ${formatDuration(lateMinutes)}` : null,
-    loggedMinutes: submitted ? Number(row.totalMinutes ?? 0) : 0,
-    logged: submitted ? formatDuration(row.totalMinutes) : checkedIn ? formatDuration(0) : '—',
-    report,
-    reportLabel: report === 'due' ? `Due ${ctx.due.label}` : null,
-    projects: submitted ? (labels.get(row.reportId) ?? []) : [],
-    todo,
-    noTodo: checkedIn && !submitted && !todo,
-    ...liveStatus(row.id, live),
-  };
-}
-
-/** The person's to-do from today's report lines, with "Now" from their running timer. */
-function todoFor(row, ctx, live) {
-  return todoOf(live.lines.get(row.reportId) ?? [], {
-    today: ctx.today,
-    tz: ctx.tz,
-    timer: live.timers.get(row.id) ?? null,
-    posting: live.posting,
-    postedAt: live.postedAt.get(row.reportId) ?? null,
-  });
-}
-
-/** On break since when, and the running timer's project (CONTRACT 15). */
-function liveStatus(userId, live) {
-  const breakSince = live.breaks.get(userId) ?? null;
-  const timer = live.timers.get(userId);
-  return {
-    onBreak: Boolean(breakSince),
-    breakSince: isoOrNull(breakSince),
-    workingOn: timer ? { name: timer.name, color: timer.color, note: timer.note ?? null } : null,
-  };
-}
-
-function matchesFilter(row, filter) {
-  if (filter === 'missing') return row.report === 'missing';
-  if (filter === 'late') return row.lateMinutes > 0;
-  if (filter === 'no-todo') return row.noTodo;
-  return true;
-}
 
 /** '26 minutes' as on the canvas; an hour or more reads '1h 37m'. */
 function lateAverage(minutes) {
@@ -148,43 +59,14 @@ function dayKpis(summary, ctx) {
   ];
 }
 
-function labelsByReport(rows) {
-  const map = new Map();
-  for (const row of rows) {
-    const list = map.get(row.reportId) ?? [];
-    if (!list.some((item) => item.name === row.name))
-      list.push({ name: row.name, color: row.color });
-    map.set(row.reportId, list);
-  }
-  return map;
-}
-
-/**
- * Everything the Team dashboard shows about today, for every active person who tracks
- * attendance and has joined (the whole team, as on the canvas and the Attendance screen).
- * Project managers and anyone else who doesn't track attendance never appear, and Admins appear
- * only to another Admin (company rule: their attendance is never shown to PMs or HR), in rows,
- * groups, counts, numbers and the donut alike.
- * @param {{ filter?: 'everyone'|'missing'|'late'|'no-todo', viewer?: { role: string } }}
- *   [options] filter picks the board rows; viewer is the signed-in person (none = a system read,
- *   sees everyone)
- * @returns {Promise<object>} { date, now, timezone, subtitle, dayStart, dayEnd, dayLabel, summary,
- *   kpis, attendance, urgent, reportDue: { label, before }, filter, counts: { everyone, missing,
- *   late, noTodo }, groups }; each board row's report is 'submitted' | 'draft' | 'due' |
- *   'missing' | 'not_checked_in' (see boardReportStatus; 'due' and 'draft' only before the report
- *   time, so the missing filter and its count are empty until then) with reportLabel
- *   ('Due 6:30 PM' | null), onBreak, breakSince (ISO | null) and workingOn ({ name, color, note } |
- *   null, the running timer; always null while timers are off, when running timers aren't read),
- *   todo (todoOf: { total, done, post, groups } | null) and noTodo (boolean)
- */
-export async function getTeamToday({ filter = 'everyone', viewer } = {}) {
-  const loaded = await loadContext();
-  const ctx = { ...loaded, due: reportDue(loaded) };
+/** Today's reads for the board, each one query; people come with their day and presence. */
+async function loadToday(ctx, viewer) {
   const timersOff = ctx.settings.timersMode === 'off';
   const posting = todoPostingOn(ctx.settings);
-  const [rows, labelRows, urgent, openBreaks, runningTimers, lineRows, postedAt] =
+  const [rows, calendar, labelRows, urgent, openBreaks, runningTimers, lineRows, postedAt] =
     await Promise.all([
       repo.listTrackedPeopleDay(ctx.today, { withAdmins: showsAdmins(viewer) }),
+      loadDashboardCalendar({ from: ctx.today, to: ctx.today }),
       repo.listSubmittedReportProjects(ctx.today),
       repo.listUrgentProjects(),
       repo.listOpenBreaks(ctx.today),
@@ -192,8 +74,6 @@ export async function getTeamToday({ filter = 'everyone', viewer } = {}) {
       listReportLines({ date: ctx.today }),
       posting ? listTodoPostedAt({ date: ctx.today }) : new Map(),
     ]);
-  const summary = summarizeDay(rows);
-  const labels = labelsByReport(labelRows);
   const live = {
     breaks: new Map(openBreaks.map((item) => [item.userId, item.startedAt])),
     timers: new Map(runningTimers.map((item) => [item.userId, item])),
@@ -201,30 +81,74 @@ export async function getTeamToday({ filter = 'everyone', viewer } = {}) {
     posting,
     postedAt,
   };
+  return {
+    rows: withPresence(rows, { calendar, date: ctx.today, ctx }),
+    holiday: holidayOn(calendar, ctx.today, ctx.settings.workingDays),
+    labels: labelsByReport(labelRows),
+    urgent,
+    live,
+  };
+}
+
+/** The attendance donut: office, WFH, not checked in and off today (CONTRACT 25). */
+function attendanceDonut(summary) {
+  return {
+    total: summary.tracked,
+    totalLabel: people(summary.tracked).replace(/^\d+ /, ''),
+    segments: [
+      { key: 'office', label: 'Office', value: summary.office, color: 'primary' },
+      { key: 'wfh', label: 'Working from home', value: summary.wfh, color: 'violet' },
+      { key: 'missing', label: 'Not checked in', value: summary.notCheckedIn, color: 'red' },
+      { key: 'off', label: 'Off today', value: summary.off, color: 'teal' },
+    ],
+  };
+}
+
+/**
+ * Everything the Team dashboard shows about today, for every active person who tracks
+ * attendance and has joined (the whole team, as on the canvas and the Attendance screen).
+ * Project managers and anyone else who doesn't track attendance never appear, and Admins appear
+ * only to another Admin (company rule: their attendance is never shown to PMs or HR), in rows,
+ * groups, counts, numbers and the donut alike. Each person's day (CONTRACT 25) decides the
+ * group: someone on leave, on a holiday or on a day off without a check-in is in "Off today"
+ * with a tag, never "Not checked in"; the payload never carries the leave type or pay.
+ * @param {{ filter?: 'everyone'|'missing'|'late'|'no-todo', viewer?: { role: string } }}
+ *   [options] filter picks the board rows; viewer is the signed-in person (none = a system read,
+ *   sees everyone)
+ * @returns {Promise<object>} { date, now, timezone, subtitle, holiday, dayStart, dayEnd, dayLabel,
+ *   summary, kpis, attendance, urgent, reportDue: { label, before }, filter, counts: { everyone,
+ *   missing, late, noTodo }, groups }; groups are office, wfh, not_checked_in and off; each board
+ *   row's report is 'submitted' | 'draft' | 'due' | 'missing' | 'not_checked_in' | 'off' (see
+ *   boardReportStatus; 'due' and 'draft' only before the report time, so the missing filter and
+ *   its count are empty until then) with reportLabel ('Due 6:30 PM' | null), offTag ({ label,
+ *   tone } | null), onBreak, breakSince (ISO | null) and workingOn ({ name, color, note } | null,
+ *   the running timer; always null while timers are off, when running timers aren't read), todo
+ *   (todoOf: { total, done, post, groups } | null) and noTodo (boolean). summary adds off; on a
+ *   holiday the subtitle ends " · Holiday: <name>"
+ */
+export async function getTeamToday({ filter = 'everyone', viewer } = {}) {
+  const loaded = await loadContext();
+  const ctx = { ...loaded, due: reportDue(loaded) };
+  const { rows, holiday, labels, urgent, live } = await loadToday(ctx, viewer);
+  const summary = summarizeDay(rows);
   const board = rows.map((row) => boardRow(row, labels, ctx, live));
   const activeFilter = BOARD_FILTERS.includes(filter) ? filter : 'everyone';
   const shown = board.filter((row) => matchesFilter(row, activeFilter));
   const { officeStart, officeEnd } = ctx.settings;
+  const subtitle = nowSubtitle(ctx);
 
   return {
     date: ctx.today,
     now: ctx.now.toISOString(),
     timezone: ctx.tz,
-    subtitle: nowSubtitle(ctx),
+    subtitle: holiday ? `${subtitle} · Holiday: ${holiday.name}` : subtitle,
+    holiday,
     dayStart: officeStart,
     dayEnd: officeEnd,
     dayLabel: `Day, ${formatClockShort(officeStart)} to ${formatClockShort(officeEnd)}`,
     summary,
     kpis: dayKpis(summary, ctx),
-    attendance: {
-      total: summary.tracked,
-      totalLabel: people(summary.tracked).replace(/^\d+ /, ''),
-      segments: [
-        { key: 'office', label: 'Office', value: summary.office, color: 'primary' },
-        { key: 'wfh', label: 'Working from home', value: summary.wfh, color: 'violet' },
-        { key: 'missing', label: 'Not checked in', value: summary.notCheckedIn, color: 'red' },
-      ],
-    },
+    attendance: attendanceDonut(summary),
     urgent: urgentItems(urgent, ctx, 'members'),
     reportDue: { label: ctx.due.label, before: ctx.due.before },
     filter: activeFilter,

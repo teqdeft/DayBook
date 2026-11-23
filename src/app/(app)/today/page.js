@@ -6,7 +6,10 @@
 // and the Working on card (project timers) under Your day while timers aren't off. CONTRACT 17:
 // Office from any network and HR-approved work from home on the check-in card, and the "Ask HR"
 // line under the correction links. CONTRACT 19: "Checked out automatically at 6:12" after an auto
-// check-out, and a "Still working?" line under the top bar after office hours.
+// check-out, and a "Still working?" line under the top bar after office hours. CONTRACT 25: the
+// holiday or leave notice above it, the late mark of the person's day on the check-in card, the
+// missing check-out line and pop-up (`?checkout=missing` opens it) and the "coming up" lines in
+// the help box.
 import { headers } from 'next/headers';
 import { Info } from 'lucide-react';
 import Card from '@/components/Card';
@@ -28,9 +31,11 @@ import BreakButton from './BreakButton';
 import CheckInCard from './CheckInCard';
 import CheckOutButton from './CheckOutButton';
 import CorrectionLinks from './CorrectionLinks';
+import MissingCheckoutPrompt from './MissingCheckoutPrompt';
 import PriorityCard from './PriorityCard';
 import TimerCard from './TimerCard';
 import TodoCard from './TodoCard';
+import TodayDayNotice from './TodayDayNotice';
 import TodoProvider from './TodoProvider';
 import { loadToday } from './todayData';
 import { ReportStrip, UrgentCard, WeekCard, YourDayCard } from './TodayCards';
@@ -66,8 +71,16 @@ function TopActions({ data, tracksAttendance }) {
   );
 }
 
+/** "9:30", the person's own late mark today (the split plus the grace on first-half leave). */
+function lateAfterOf(data, user) {
+  const mark =
+    data.day?.lateMark ??
+    attendance.lateMarkFor({ shiftStart: user.shiftStart, settings: data.settings });
+  return formatClockShort(mark);
+}
+
 /** Everything under the top bar's notice; the page's to-do (TodoProvider) wraps it. */
-function TodayBody({ data, user }) {
+function TodayBody({ data, user, openMissing }) {
   const { row, settings: current, tz, today } = data;
   const hasUrgent = data.urgent.length > 0;
   return (
@@ -82,10 +95,9 @@ function TodayBody({ data, user }) {
             officeAnywhere={data.officeAnywhere}
             wfh={data.wfh}
             today={today}
-            lateAfter={formatClockShort(
-              attendance.lateMarkFor({ shiftStart: user.shiftStart, settings: current }),
-            )}
+            lateAfter={lateAfterOf(data, user)}
             officeHours={`${formatClockShort(current.officeStart)} to ${formatClockShort(current.officeEnd)}`}
+            day={data.day}
             tz={tz}
           />
         )}
@@ -113,6 +125,9 @@ function TodayBody({ data, user }) {
       <ReportStrip data={data} />
 
       <div className={styles.help}>
+        {user.tracksAttendance ? (
+          <MissingCheckoutPrompt missing={data.missing} openMissing={openMissing} />
+        ) : null}
         <CorrectionLinks
           today={today}
           yesterday={addDays(today, -1)}
@@ -121,17 +136,24 @@ function TodayBody({ data, user }) {
           pending={data.pending}
         />
         {data.wfhLinks ? <WfhLinks today={today} {...data.wfhLinks} /> : null}
+        {data.comingUp.map((line) => (
+          <p key={line} className={styles.comingUp}>
+            {line}
+          </p>
+        ))}
       </div>
     </>
   );
 }
 
-export default async function TodayPage() {
+export default async function TodayPage({ searchParams }) {
   const user = await requirePage('attendance.self');
   const ip = clientIp({ headers: await headers() });
-  const data = await loadToday({ user, ip });
+  const [data, params] = await Promise.all([loadToday({ user, ip }), searchParams]);
   const { tz, today } = data;
-  const body = <TodayBody data={data} user={user} />;
+  // The midnight notification and HR's "Ask for the check-out time" link here (CONTRACT 25).
+  const openMissing = params?.checkout === 'missing';
+  const body = <TodayBody data={data} user={user} openMissing={openMissing} />;
 
   return (
     <div className={styles.page}>
@@ -142,6 +164,8 @@ export default async function TodayPage() {
         actions={<TopActions data={data} tracksAttendance={Boolean(user.tracksAttendance)} />}
         bell
       />
+
+      <TodayDayNotice day={data.day} upcoming={data.upcoming} />
 
       {data.stillWorking ? (
         <Card padding="compact" className={styles.notice} role="status">

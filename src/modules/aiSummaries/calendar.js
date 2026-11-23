@@ -1,5 +1,6 @@
 // Company-calendar helpers for the summary jobs: the UTC bounds of a company date, the ISO week
-// key of HR's weekly notes and the week's last working day.
+// key of HR's weekly notes and the week's last working day (company holidays skipped, CONTRACT
+// 25).
 import { addDays, dayjs, isoWeekday, isWorkingDay, localToUtc, weekRange } from '@/lib/time';
 
 /**
@@ -33,13 +34,14 @@ export function isoWeekKey(date) {
  * The last working day (settings.workingDays) of the Monday-to-Sunday week that holds `date`.
  * @param {string} date 'YYYY-MM-DD'
  * @param {number[]} workingDays ISO weekdays, Monday = 1
- * @returns {string | null} null when the company has no working days
+ * @param {Set<string> | string[]} [holidays] company holiday dates, skipped (CONTRACT 25)
+ * @returns {string | null} null when the week has no working day
  */
-export function lastWorkingDayOfWeek(date, workingDays) {
+export function lastWorkingDayOfWeek(date, workingDays, holidays) {
   const { from } = weekRange(date);
   for (let offset = 6; offset >= 0; offset -= 1) {
     const day = addDays(from, offset);
-    if (isWorkingDay(day, workingDays)) return day;
+    if (isWorkingDay(day, workingDays, holidays)) return day;
   }
   return null;
 }

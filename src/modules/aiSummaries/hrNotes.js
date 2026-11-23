@@ -3,6 +3,9 @@
 // fast model writes neutral, factual notes, saved for each recipient (the active HR people, or
 // the Admins when there is no HR) with a bell notification. An Admin's attendance is never in
 // them (CONTRACT 16), and an 'auto' check-out is a check-out, counted on its own (CONTRACT 19).
+// The person's day counts holidays and leave (CONTRACT 25): neither is an absence, late is the
+// effective late, and missing and auto check-outs follow the month view's rules. The leave type,
+// pay and note never reach Gemini (the calendar is read without leaveDetail).
 import { db } from '@/lib/db';
 import { can } from '@/lib/permissions';
 import {
@@ -10,13 +13,13 @@ import {
   formatClock,
   formatDayShort,
   formatDuration,
-  isWorkingDay,
   localToUtc,
   now,
   weekRange,
 } from '@/lib/time';
 import { ai } from '@/modules/ai';
 import { attendance } from '@/modules/attendance';
+import { audit } from '@/modules/audit';
 import { notifications } from '@/modules/notifications';
 import { settings } from '@/modules/settings';
 import { users } from '@/modules/users';
@@ -49,11 +52,25 @@ async function recipients() {
   return hr.length > 0 ? hr : users.listByRole('admin');
 }
 
+// What the prompt says about holidays and leave (CONTRACT 25), word for word.
+const LEAVE_NOTE =
+  'holidays are company holidays; leaveDays are days HR marked as leave (a half day is 0.5). ' +
+  'Neither is an absence.';
+// Audit actions that make a row a missing or an auto check-out for good (the month rules).
+const HISTORY_ACTIONS = ['attendance.mark_missing', 'attendance.auto_checkout'];
+const NO_HISTORY = { missing: new Set(), auto: new Set() };
+
 function emptyCounts(user) {
   return {
     user,
     workingDays: 0,
+    expectedDays: 0,
+    holidays: 0,
+    leaveDays: 0,
     presentDays: [],
+    daysPresent: 0,
+    daysOffWorked: 0,
+    absentDays: 0,
     wfhDays: 0,
     lateDays: 0,
     lateMinutes: 0,
@@ -64,43 +81,92 @@ function emptyCounts(user) {
 }
 
 /**
- * Each person's attendance numbers for the days, from attendance.listDay() lists (one per day,
- * in the same order): everyone tracked and active who had joined, never an Admin.
- * @returns {Array<{ user: object, workingDays: number, presentDays: string[], wfhDays: number,
- *   lateDays: number, lateMinutes: number, missingCheckOuts: number, autoCheckOuts: number,
- *   breaksOverDays: number }>}
+ * A missing check-out by the month rules: marked missing at midnight (audit), still missing, or
+ * an open row from a day before today (it will be).
  */
-export function countWeek({ days, dayLists, workingDays }) {
+function isMissing(row, { date, today, history }) {
+  if (row.checkoutStatus === 'missing' || history.missing.has(row.id)) return true;
+  return row.checkoutStatus === 'open' && date < today;
+}
+
+/** Adds one listDay item (a person's day and row) to their week. */
+function addDay(person, item, { date, today, history }) {
+  const { day, attendance: row } = item;
+  const counts = attendance.dayCounts({ day, row, past: date < today });
+  if (day.isWorkingDay && day.employed) person.workingDays += 1;
+  person.expectedDays += counts.expected;
+  person.holidays += counts.holiday;
+  person.leaveDays += counts.leave;
+  person.daysPresent += counts.present;
+  person.daysOffWorked += counts.dayOffWorked;
+  person.absentDays += counts.absent;
+  if (!row) return;
+  person.presentDays.push(date);
+  if (row.location === 'wfh') person.wfhDays += 1;
+  if (item.lateMinutes > 0) {
+    person.lateDays += 1;
+    person.lateMinutes += item.lateMinutes;
+  }
+  if (isMissing(row, { date, today, history })) person.missingCheckOuts += 1;
+  if (row.checkoutStatus === 'auto' || history.auto.has(row.id)) person.autoCheckOuts += 1;
+  if (item.overAllowanceMinutes > 0) person.breaksOverDays += 1;
+}
+
+/**
+ * Each person's attendance numbers for the days, from attendance.listDay() lists (one per day,
+ * in the same order): everyone tracked and active who had joined, never an Admin. Day counts come
+ * from attendance.dayCounts (CONTRACT 25; halves allowed): workingDays = working days while
+ * employed, expectedDays, holidays, leaveDays, daysPresent, daysOffWorked and absentDays (past
+ * days only). Late is the effective late (listDay's lateMinutes). Missing and auto check-outs
+ * follow the month rules: `history` holds the row ids with an attendance.mark_missing or
+ * attendance.auto_checkout audit row.
+ * @param {{ days: string[], dayLists: object[][], today: string,
+ *   history?: { missing: Set<number>, auto: Set<number> } }} input today = the company's today
+ * @returns {Array<{ user: object, workingDays: number, expectedDays: number, holidays: number,
+ *   leaveDays: number, presentDays: string[], daysPresent: number, daysOffWorked: number,
+ *   absentDays: number, wfhDays: number, lateDays: number, lateMinutes: number,
+ *   missingCheckOuts: number, autoCheckOuts: number, breaksOverDays: number }>}
+ */
+export function countWeek({ days, dayLists, today, history = NO_HISTORY }) {
   const people = new Map();
-  days.forEach((day, index) => {
-    const working = isWorkingDay(day, workingDays);
+  days.forEach((date, index) => {
     for (const item of dayLists[index] ?? []) {
       if (item.user.role === 'admin') continue;
       if (!people.has(item.user.id)) people.set(item.user.id, emptyCounts(item.user));
-      const person = people.get(item.user.id);
-      if (working) person.workingDays += 1;
-      const row = item.attendance;
-      if (!row) continue;
-      person.presentDays.push(day);
-      if (row.location === 'wfh') person.wfhDays += 1;
-      if (row.lateMinutes > 0) {
-        person.lateDays += 1;
-        person.lateMinutes += row.lateMinutes;
-      }
-      if (row.checkoutStatus === 'missing') person.missingCheckOuts += 1;
-      if (row.checkoutStatus === 'auto') person.autoCheckOuts += 1;
-      if (item.overAllowanceMinutes > 0) person.breaksOverDays += 1;
+      addDay(people.get(item.user.id), item, { date, today, history });
     }
   });
   return [...people.values()];
 }
 
-/** Monday to `date`, everyone's numbers, plus correction requests and missing reports. */
+/** The rows that were ever marked missing or auto checked out (one audit read for the week). */
+async function checkoutHistory(dayLists) {
+  const rowIds = dayLists
+    .flat()
+    .filter((item) => item.attendance && item.user.role !== 'admin')
+    .map((item) => item.attendance.id);
+  const rows = await audit.listForEntities({
+    entityType: 'attendance',
+    entityIds: rowIds,
+    actions: HISTORY_ACTIONS,
+  });
+  const ids = (action) =>
+    new Set(rows.filter((row) => row.action === action).map((row) => Number(row.entityId)));
+  return { missing: ids('attendance.mark_missing'), auto: ids('attendance.auto_checkout') };
+}
+
+/**
+ * Monday to `date`, everyone's numbers, plus correction requests and missing reports. One
+ * calendar for the week (holidays and leave, no leaveDetail: Gemini never gets the type or pay),
+ * one listDay per day, one audit read for the missing and auto check-outs.
+ */
 async function loadWeek(date, values) {
   const { from } = weekRange(date);
   const days = eachDay(from, date);
-  const dayLists = await Promise.all(days.map((day) => attendance.listDay(day)));
-  const people = countWeek({ days, dayLists, workingDays: values.workingDays });
+  const calendar = await attendance.loadCalendar({ from, to: date, withWfh: false });
+  const dayLists = await Promise.all(days.map((day) => attendance.listDay(day, { calendar })));
+  const history = await checkoutHistory(dayLists);
+  const people = countWeek({ days, dayLists, today: date, history });
   const ids = people.map((person) => person.user.id);
   const sent = {
     from: dayBounds(from, values.timezone).from,
@@ -137,7 +203,12 @@ function promptFor({ from, date, people, values, tokenFor }) {
     people: people.map((person) => ({
       person: tokenFor(person.user.id),
       workingDays: person.workingDays,
-      daysPresent: person.presentDays.length,
+      expectedDays: person.expectedDays,
+      daysPresent: person.daysPresent,
+      daysOffWorked: person.daysOffWorked,
+      absentDays: person.absentDays,
+      holidays: person.holidays,
+      leaveDays: person.leaveDays,
       wfhDays: person.wfhDays,
       lateDays: person.lateDays,
       totalLate: formatDuration(person.lateMinutes),
@@ -152,6 +223,9 @@ function promptFor({ from, date, people, values, tokenFor }) {
     'Attendance numbers per person for this week so far (JSON). autoCheckOuts are days Daybook',
     'checked the person out because their computer showed no activity after office hours; they',
     'count as check-outs. missingReports are days they checked in without submitting a report.',
+    LEAVE_NOTE,
+    'expectedDays are the working days they were expected in, absentDays the past ones of those',
+    'without a check-in, and daysOffWorked check-ins on days off.',
     JSON.stringify(data, null, 1),
   ].join('\n');
 }

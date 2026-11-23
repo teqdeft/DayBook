@@ -26,7 +26,7 @@ export const PERMISSIONS = {
   'report.approve_edit': 'Approve or decline report edit requests',
   'project_request.handle': 'Approve or decline project requests',
   'attendance.view_all': 'Attendance screen for everyone',
-  'attendance.correct': 'Edit attendance, handle correction requests',
+  'attendance.correct': 'Edit attendance, handle correction requests, mark leave and holidays',
   'people.manage': 'Add, edit and deactivate employees',
   'export.hours': 'Download hours as Excel',
   'overview.view': 'Company overview',

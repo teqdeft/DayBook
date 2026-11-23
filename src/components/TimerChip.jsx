@@ -5,7 +5,10 @@
 // runs or a break is on: the clock and the away question), every 60 s while the page is visible,
 // when the page becomes visible again and on 'daybook:timers-changed'. When the state has away
 // time and the page is visible it asks about it, once per span (only the chip asks, so the
-// question never shows twice); see createAwayAsks for when a span is asked again.
+// question never shows twice); see createAwayAsks for when a span is asked again. CONTRACT 25 A:
+// it also asks about the page's own state on mount (so a question survives a page load after
+// Stop or Check out), and waits while another modal dialog is open (the check-out dialog), asking
+// on the next load; Today's missing check-out pop-up waits for it in turn.
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -13,12 +16,12 @@ import { Square } from 'lucide-react';
 import { api } from '@/lib/apiClient';
 import { dayjs, now } from '@/lib/time';
 import { useAppShell } from './AppShell';
-import TimerAwayDialog from './TimerAwayDialog';
+import TimerAwayDialog, { AWAY_DIALOG } from './TimerAwayDialog';
 import {
   TIMERS_CHANGED,
   announceTimersChanged,
+  awayAnswerToast,
   awayKey,
-  awayLength,
   createAwayAsks,
   elapsedSeconds,
   formatElapsed,
@@ -32,6 +35,9 @@ import styles from './TimerChip.module.css';
 
 const POLL_MS = 60 * 1000;
 const isVisible = () => document.visibilityState === 'visible';
+// Another modal dialog on the page (the away question itself carries AWAY_DIALOG).
+const OTHER_MODAL = `[role="dialog"][aria-modal="true"]:not(.${AWAY_DIALOG})`;
+const otherModalOpen = () => Boolean(document.querySelector(OTHER_MODAL));
 
 /** The first control after `element` in tab order (outside it), else the main area. */
 function focusableAfter(element) {
@@ -71,15 +77,26 @@ export default function TimerChip({ initialState }) {
     if (isNewerState(initialState, state)) setState(initialState);
   }
 
-  /** Takes a state from the API and asks about away time it hasn't asked about yet. */
+  /**
+   * Asks about away time it hasn't asked about yet, while the page is visible and no other modal
+   * is open (it is asked on a later load then).
+   */
+  const ask = useCallback(
+    (away) => {
+      if (away && isVisible() && !otherModalOpen() && asks.shouldAsk(away)) setAsking(away);
+    },
+    [asks],
+  );
+
+  /** Takes a state from the API and asks about its away time. */
   const take = useCallback(
     (data, sentAt) => {
       if (!data) return;
       noteServerTime(data.serverNow, sentAt, now().valueOf());
       setState((current) => (isNewerState(data, current) ? data : current));
-      if (isVisible() && asks.shouldAsk(data.away)) setAsking(data.away);
+      ask(data.away);
     },
-    [asks],
+    [ask],
   );
 
   const load = useCallback(async () => {
@@ -91,6 +108,13 @@ export default function TimerChip({ initialState }) {
       // Keep showing the last state; the next poll tries again.
     }
   }, [take]);
+
+  // The page's own state may already ask (after Stop or Check out nothing runs, so no load).
+  const [mountAway] = useState(() => initialState?.away ?? null);
+  useEffect(() => {
+    const asked = mountAway ? setTimeout(() => ask(mountAway), 0) : null;
+    return () => clearTimeout(asked);
+  }, [ask, mountAway]);
 
   useEffect(() => {
     const first = loadOnMount ? setTimeout(load, 0) : null;
@@ -125,7 +149,8 @@ export default function TimerChip({ initialState }) {
       const sentAt = now().valueOf();
       const { data } = await request();
       take(data, sentAt);
-      if (done) toast(done);
+      const message = typeof done === 'function' ? done(data) : done;
+      if (message) toast(message);
       announceTimersChanged('chip');
       startRefresh(() => router.refresh());
       return data ?? null;
@@ -167,13 +192,7 @@ export default function TimerChip({ initialState }) {
     const body = { entryId: away.entryId, from: away.from, to: away.to, decision };
     const data = await change(() => api.post('/api/timers/away', body), {
       failTitle: "Couldn't save your answer",
-      done:
-        decision === 'remove'
-          ? {
-              title: 'Away time removed',
-              body: `${awayLength(away.minutes)} came off your ${away.projectName} timer.`,
-            }
-          : { title: 'Away time kept' },
+      done: (answered) => awayAnswerToast(away, answered?.answer ?? { decision }),
     });
     setAnswering(null);
     // The answer's state may already ask about the next span (take opened it): close only this.

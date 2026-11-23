@@ -10,9 +10,13 @@ const { scripts } = JSON.parse(readFileSync(new URL('package.json', ROOT), 'utf8
 const readme = readFileSync(new URL('README.md', ROOT), 'utf8');
 const LEAN = 'node --disable-wasm-trap-handler --v8-pool-size=2 ';
 const KNEX = 'node_modules/knex/bin/cli.js';
+const lean = (command) => `NODE_ENV=production UV_THREADPOOL_SIZE=2 ${LEAN}${KNEX} ${command}`;
 
 /** The README's cPanel part: from its heading to the next "##" heading. */
 const cpanel = readme.slice(readme.indexOf('## Deploying on cPanel')).split(/\n## /)[0];
+
+/** The commands of each ```bash block in `text`, in order. */
+const blocksOf = (text) => [...text.matchAll(/```bash\n([\s\S]*?)```/g)].map(([, block]) => block);
 
 describe('the scripts the host runs', () => {
   it('start one lean Node process each', () => {
@@ -28,11 +32,22 @@ describe('the scripts the host runs', () => {
   });
 
   it('are what the cPanel steps run, with small thread pools and no npm', () => {
-    const lean = (command) => `NODE_ENV=production UV_THREADPOOL_SIZE=2 ${LEAN}${KNEX} ${command}`;
     expect(cpanel).toContain(lean('migrate:latest'));
     expect(cpanel).toContain(lean('seed:run'));
-    const commands = [...cpanel.matchAll(/```bash\n([\s\S]*?)```/g)].map(([, block]) => block);
+    const commands = blocksOf(cpanel);
     expect(commands.length).toBeGreaterThan(0);
     for (const block of commands) expect(block).not.toMatch(/npm run (migrate|seed)\b/);
+  });
+
+  it('give the 1.10 steps the unlock line, then the migrate line again, after an Aborted run', () => {
+    // A stopped run leaves the migration table locked: the same line alone does nothing.
+    const steps = cpanel.slice(cpanel.indexOf('For 1.10 (HR tools), step by step:'));
+    expect(blocksOf(steps).map((block) => block.trim())).toEqual([
+      'cd ~/daybook && git pull',
+      'npm ci --omit=dev',
+      lean('migrate:latest'),
+      lean('migrate:unlock'),
+      lean('migrate:latest'),
+    ]);
   });
 });

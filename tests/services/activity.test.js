@@ -554,3 +554,55 @@ describe('activity.deleteOlderThan', () => {
     expect(await activity.deleteOlderThan('2025-10-01')).toBe(0);
   });
 });
+
+describe('activity.anyoneSeenBetween (CONTRACT 25 A)', () => {
+  const day = '2025-09-30';
+  const gap = { workDate: day, from: at('2025-09-30T07:30:00Z'), to: at('2025-09-30T08:10:00Z') };
+
+  it("is true only when someone else's screen time overlaps the stretch that day", async () => {
+    await insertSegment(vishal, day, 'active', '2025-09-30T07:00:00Z', '2025-09-30T07:30:00Z');
+    await insertSegment(vishal, day, 'active', '2025-09-30T08:10:00Z', '2025-09-30T09:00:00Z');
+    expect(await activity.anyoneSeenBetween({ ...gap, exceptUserId: vishal.id })).toBe(false);
+    // Touching the stretch isn't overlapping it; another work date never counts.
+    await insertSegment(simran, day, 'idle', '2025-09-30T07:00:00Z', '2025-09-30T07:30:00Z');
+    await insertSegment(
+      simran,
+      '2025-10-01',
+      'active',
+      '2025-09-30T07:40:00Z',
+      '2025-09-30T07:50:00Z',
+    );
+    expect(await activity.anyoneSeenBetween({ ...gap, exceptUserId: vishal.id })).toBe(false);
+    await insertSegment(simran, day, 'locked', '2025-09-30T07:59:00Z', '2025-09-30T08:20:00Z');
+    expect(await activity.anyoneSeenBetween({ ...gap, exceptUserId: vishal.id })).toBe(true);
+    expect(await activity.anyoneSeenBetween({ ...gap, exceptUserId: simran.id })).toBe(false);
+  });
+
+  it('looks only more than 150 s inside: beats around an outage are staggered', async () => {
+    // Daybook is down 13:10:15 to 13:49:50 IST: Simran beats on :00, Vishal on :30.
+    const beats = async (user, from, to) => {
+      for (let t = at(from).getTime(); t <= at(to).getTime(); t += 60_000) {
+        await beat(user, new Date(t).toISOString());
+      }
+    };
+    await beats(simran, '2025-09-30T07:35:00Z', '2025-09-30T07:40:00Z');
+    await beats(vishal, '2025-09-30T07:34:30Z', '2025-09-30T07:39:30Z');
+    await beats(simran, '2025-09-30T08:20:00Z', '2025-09-30T08:25:00Z');
+    await beats(vishal, '2025-09-30T08:20:30Z', '2025-09-30T08:25:30Z');
+    const [before, after] = await segmentsOf(vishal);
+    const outage = { workDate: day, from: before.endedAt, to: after.startedAt };
+    expect(await activity.anyoneSeenBetween({ ...outage, exceptUserId: vishal.id })).toBe(false);
+    // Up to 150 s inside the stretch isn't enough; one second more is.
+    await insertSegment(simran, day, 'idle', '2025-09-30T07:41:00Z', '2025-09-30T07:42:00Z');
+    expect(await activity.anyoneSeenBetween({ ...outage, exceptUserId: vishal.id })).toBe(false);
+    await insertSegment(simran, day, 'locked', '2025-09-30T07:42:00Z', '2025-09-30T07:42:01Z');
+    expect(await activity.anyoneSeenBetween({ ...outage, exceptUserId: vishal.id })).toBe(true);
+    // A stretch of 300 s or less never counts, even inside someone else's segment.
+    const short = {
+      workDate: day,
+      from: at('2025-09-30T07:36:00Z'),
+      to: at('2025-09-30T07:41:00Z'),
+    };
+    expect(await activity.anyoneSeenBetween({ ...short, exceptUserId: vishal.id })).toBe(false);
+  });
+});

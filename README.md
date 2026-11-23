@@ -330,6 +330,12 @@ hold the text of files and notes, and Ask Daybook never reads it.
   READ COMMITTED isolation level, so two people carrying a task at once never deadlock. A database
   whose binary log is in statement format can't log that: then the log shows one warning ("report
   writes run at the default isolation level") and writes work as before.
+- Daybook 1.10 (HR tools): run the migrate line before the restart; nothing new to install.
+  Migration 018 adds four tables, adds columns to attendance and attendance_breaks (each table is
+  copied once: a few seconds in which check-ins wait), and rebuilds away breaks for timer Removes
+  since 1 Nov 2026, so Breaks and Worked for those days change on Attendance and in the Excel
+  files. Tell HR before payroll. If the line stops with Aborted, run the unlock line, then the
+  migrate line again (Updating, 1.10 step 2); it continues where it stopped.
 
 ## Deploying on cPanel (Setup Node.js App)
 
@@ -417,9 +423,48 @@ changes the project colour column), nothing new to install. For 1.09 too: migrat
 (migration 017 adds the to-do columns), nothing new to install; then, to post to-dos to Slack, add
 the Daybook app to the to-do channel and pick it in Settings → Slack → **Post to-dos to**.
 
+For 1.10 (HR tools), step by step:
+
+1. phpMyAdmin → your Daybook database → Export → Go: keep the file as a backup.
+2. In Terminal, after the `source` command, the three lines as usual, one at a time:
+
+   ```bash
+   cd ~/daybook && git pull
+   ```
+
+   ```bash
+   npm ci --omit=dev
+   ```
+
+   ```bash
+   NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:latest
+   ```
+
+   The last one prints `018: rebuilt N away breaks (M skipped)`. If it stops with `Aborted` (or
+   says the migration table is already locked), the stopped run left the lock on. Run this line
+   once:
+
+   ```bash
+   NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:unlock
+   ```
+
+   then the migrate line again; it continues where it stopped:
+
+   ```bash
+   NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:latest
+   ```
+
+3. Press Restart in Setup Node.js App right away.
+4. As Admin, before the next working morning: Settings → Attendance marks (Payroll month starts
+   on day), Settings → HR updates (the morning summary at 10:00 and check-in reminders after 30
+   minutes are on by default), Settings → Slack (two new switches), Attendance → Holidays (add
+   this year's).
+5. Tell the team that check-in reminders start the next working day. HR's first late alerts come
+   at office end of the next working day.
+
 **Checking** — `NODE_ENV=production npm run doctor` (after the `source` command, in `~/daybook`)
-shows whether the worker cron is running, whether Slack works and who gets desktop notifications;
-it prints no secrets. Adding `-- --notify=person@company.com` also sends that person a test
+shows whether every database update has run ("✓ Database is up to date"), whether the worker cron
+is running, whether Slack works and who gets desktop notifications; it prints no secrets. Adding `-- --notify=person@company.com` also sends that person a test
 notification.
 
 **Fresh start** — `NODE_ENV=production npm run reset` shows what's in the database;

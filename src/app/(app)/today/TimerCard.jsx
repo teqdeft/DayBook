@@ -5,6 +5,8 @@
 // change it dispatches 'daybook:timers-changed' and refreshes the page. CONTRACT 24: the start
 // form offers the picked project's to-do lines as the note; picking one starts the timer through
 // the line (POST /api/me/todo/lines/:id/timer), so the line's report task gets the timer.
+// CONTRACT 25 A: today's removed time (state.removed) shows in the entry list with Put back
+// (POST /api/timers/away/:breakId/put-back), after check-out too.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Card, { CardHeader } from '@/components/Card';
 import {
@@ -16,7 +18,13 @@ import {
 } from '@/components/TimerChip.clock';
 import { api } from '@/lib/apiClient';
 import { dayjs, now, toLocal } from '@/lib/time';
-import { addTimeDefaults, pausedEntry, shortDuration, timerAnnouncement } from './timerData';
+import {
+  addTimeDefaults,
+  pausedEntry,
+  putBackToast,
+  shortDuration,
+  timerAnnouncement,
+} from './timerData';
 import TimerEntries from './TimerEntries';
 import { Paused, Running } from './TimerNow';
 import TimerStartForm from './TimerStartForm';
@@ -151,6 +159,13 @@ export default function TimerCard({
       done: () => ({ title: 'Time deleted' }),
     });
 
+  // Put back: the away break goes and the time goes back on the timer when it safely can.
+  const putBack = (item) =>
+    run(`putback:${item.breakId}`, () => api.post(`/api/timers/away/${item.breakId}/put-back`), {
+      failTitle: "Couldn't put the time back",
+      done: (data) => putBackToast(data?.answer),
+    });
+
   // The card's state may be newer than the page's breaks: its open break counts too.
   const addDefaults = () =>
     addTimeDefaults({
@@ -223,9 +238,12 @@ export default function TimerCard({
       </div>
       <TimerEntries
         entries={state.entries}
+        removed={state.removed ?? []}
         serverMs={serverMs}
         busy={busy}
         deleting={working === 'delete'}
+        puttingBack={working?.startsWith('putback:') ? Number(working.slice(8)) : null}
+        onPutBack={putBack}
         picker={picker}
         tasks={tasks}
         addDefaults={addDefaults}

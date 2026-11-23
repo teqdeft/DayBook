@@ -82,6 +82,24 @@
   width: 100%;
 }
 
+/* The Where cell's status and, under it (CONTRACT 25), "First half", the holiday's name or
+   "On leave" on a checked-in day. */
+.whereStack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.whereNote {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--muted);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .none {
   color: var(--muted);
 }

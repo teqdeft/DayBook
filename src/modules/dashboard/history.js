@@ -1,5 +1,7 @@
-// "Report history" on the Employee detailed view: one row per working day in the range (plus any
-// other day with a check-in or a report), newest first, with that day's tasks and edit history.
+// "Report history" on the Employee detailed view: one row per day the person was expected in the
+// range, plus their holidays and leave days (CONTRACT 25) and any other day with a check-in or a
+// report, newest first, with that day's tasks and edit history. Leave shows as "On leave" and
+// its part of the day, never its type or pay (PMs see this page).
 import {
   formatDayShort,
   formatDuration,
@@ -10,6 +12,7 @@ import {
   minutesBetween,
   workDate,
 } from '@/lib/time';
+import { attendance as attendanceModule } from '@/modules/attendance';
 import { isoOrNull } from './shared';
 
 function groupBy(rows, key) {
@@ -94,16 +97,17 @@ function revisionsOf(rows = [], tz) {
 /**
  * Report column: Submitted (or Edited once it was submitted more than once), Missing when the
  * person checked in without submitting, Draft for an unsubmitted report on a day without a
- * check-in, Not checked in otherwise. Today before the report time (`dueToday`), a checked-in
- * day without a submitted report is still Due (Draft once one is started), as on the Team board.
- * @returns {'submitted'|'edited'|'missing'|'due'|'draft'|'not_checked_in'}
+ * check-in, 'off' (a dash) on a day they weren't expected (a holiday, full-day leave: CONTRACT
+ * 25), Not checked in otherwise. Today before the report time (`dueToday`), a checked-in day
+ * without a submitted report is still Due (Draft once one is started), as on the Team board.
+ * @returns {'submitted'|'edited'|'missing'|'due'|'draft'|'off'|'not_checked_in'}
  */
-export function historyReportStatus(attendance, report, dueToday = false) {
+export function historyReportStatus(attendance, report, dueToday = false, off = false) {
   if (report?.status === 'submitted') return report.revision > 1 ? 'edited' : 'submitted';
   if (attendance && dueToday) return report ? 'draft' : 'due';
   if (attendance) return 'missing';
   if (report) return 'draft';
-  return 'not_checked_in';
+  return off ? 'off' : 'not_checked_in';
 }
 
 /** Present time (build guide 7.10): check-out (or now, for today) minus check-in. */
@@ -113,22 +117,46 @@ export function presentMinutesOf(attendance, { today, now }) {
   return attendance.workDate === today ? minutesBetween(attendance.checkInAt, now) : null;
 }
 
-function whereOf(attendance) {
-  if (!attendance) return null;
+/** The day's holiday when it falls on a working weekday while employed, else null. */
+function holidayOf(day) {
+  return day?.holiday && day.weekday && day.employed ? day.holiday : null;
+}
+
+/** The check-in's place: office, unverified (office without the office network) or wfh. */
+function placeOf(attendance) {
   if (attendance.location === 'wfh') return 'wfh';
   return attendance.officeVerified === false ? 'unverified' : 'office';
 }
 
-function historyRow({ date, attendance, report, entries, revisions, requests, ctx }) {
+/**
+ * The Where cell (CONTRACT 25): the check-in's place; without one "On leave" or "Holiday"
+ * (StatusCell on_leave, holiday). `whereNote` is the muted line under it: the half of a leave
+ * day, the holiday's name, or "On leave" for someone who checked in on a leave day.
+ */
+function whereOf(attendance, day) {
+  if (attendance) return { where: placeOf(attendance), whereNote: day?.leave ? day.label : null };
+  if (day?.leave) {
+    const half = day.leave.part !== 'full';
+    return {
+      where: 'on_leave',
+      whereNote: half ? attendanceModule.PART_LABELS[day.leave.part] : null,
+    };
+  }
+  const holiday = holidayOf(day);
+  if (holiday) return { where: 'holiday', whereNote: holiday.name };
+  return { where: null, whereNote: null };
+}
+
+function historyRow({ date, attendance, report, entries, revisions, requests, day, ctx }) {
   const dueToday = date === ctx.today && Boolean(ctx.due?.before);
-  const status = historyReportStatus(attendance, report, dueToday);
+  const status = historyReportStatus(attendance, report, dueToday, day?.expected === 0);
   const submitted = status === 'submitted' || status === 'edited';
   const present = presentMinutesOf(attendance, ctx);
   const loggedText = attendance ? formatHours(0) : '—';
   return {
     date,
     dateLabel: formatDayShort(date),
-    where: whereOf(attendance),
+    ...whereOf(attendance, day),
     in: attendance ? formatTime(attendance.checkInAt, ctx.tz) : '—',
     out: attendance?.checkOutAt ? formatTime(attendance.checkOutAt, ctx.tz) : '—',
     // 'auto' counts like 'checked_out'; the page labels it "Auto check-out" (CONTRACT 19).
@@ -150,13 +178,27 @@ function historyRow({ date, attendance, report, entries, revisions, requests, ct
   };
 }
 
+/** Whether the person was expected on a date: the person's day, else the 1.09 weekday rule. */
+function expectedOn(date, day, { profile, ctx }) {
+  if (day) return day.expected > 0;
+  return (
+    isWorkingDay(date, ctx.settings.workingDays) &&
+    profile.tracksAttendance &&
+    !(profile.joinedOn && date < profile.joinedOn) &&
+    !(profile.deactivatedOn && date > profile.deactivatedOn)
+  );
+}
+
 /**
  * @param {{ days: string[], attendance: object[], reports: object[], entries: object[],
- *   revisions: object[], requests?: object[], profile: object, ctx: object }} input  `days`
- *   oldest first; `requests` are the person's pending or declined edit requests
+ *   revisions: object[], requests?: object[], profile: object, ctx: object,
+ *   dayOf?: (date: string) => object }} input  `days` oldest first; `requests` are the person's
+ *   pending or declined edit requests; `dayOf` is the person's day (PersonDay, CONTRACT 25), so
+ *   holidays and leave days show and aren't "Not checked in" (without it the weekday rule)
  */
 export function buildHistory(input) {
   const { days, attendance, reports, entries, revisions, requests = [], profile, ctx } = input;
+  const dayOf = input.dayOf ?? (() => null);
   const attendanceByDate = new Map(attendance.map((row) => [row.workDate, row]));
   const reportByDate = new Map(reports.map((row) => [row.workDate, row]));
   const entriesByReport = groupBy(entries, 'reportId');
@@ -166,13 +208,10 @@ export function buildHistory(input) {
   for (const date of [...days].reverse()) {
     const row = attendanceByDate.get(date) ?? null;
     const report = reportByDate.get(date) ?? null;
-    const expected =
-      isWorkingDay(date, ctx.settings.workingDays) &&
-      profile.tracksAttendance &&
-      !(profile.joinedOn && date < profile.joinedOn) &&
-      !(profile.deactivatedOn && date > profile.deactivatedOn);
+    const day = dayOf(date);
+    const shown = expectedOn(date, day, { profile, ctx }) || day?.leave || holidayOf(day);
     const dayRequests = requestsByDate.get(date) ?? [];
-    if (!row && !report && !expected && dayRequests.length === 0) continue;
+    if (!row && !report && !shown && dayRequests.length === 0) continue;
     rows.push(
       historyRow({
         date,
@@ -181,6 +220,7 @@ export function buildHistory(input) {
         entries: report ? entriesOf(entriesByReport.get(report.id), ctx.tz) : [],
         revisions: report ? revisionsOf(revisionsByReport.get(report.id), ctx.tz) : [],
         requests: requestsOf(dayRequests, { profile, ctx }),
+        day,
         ctx,
       }),
     );

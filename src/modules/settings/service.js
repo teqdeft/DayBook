@@ -1,24 +1,37 @@
 import { db, parseJson, toJson } from '@/lib/db';
 import { env } from '@/lib/env';
-import { AppError, validationError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { normalizeClock, nowDate } from '@/lib/time';
 import { audit } from '@/modules/audit';
 import { DEFAULT_SETTINGS } from '../../../db/seeds/03_settings.js';
+import { parseInput } from './parse';
 import * as repo from './repo';
 import {
   ACTIVITY_IDLE_MINUTES,
   ACTIVITY_RETENTION_DAYS,
   AI_DAILY_LIMIT,
   BREAK_ALLOWANCE_MINUTES,
+  CHECKIN_REMINDER_MINUTES,
   checkAutoCheckout,
-  normalizeIp,
-  officeNetworkSchema,
+  checkDayMarks,
+  checkHrSummary,
+  HALF_DAY_UNDER_MINUTES,
+  LATE_ALERT_DAYS,
+  LEFT_EARLY_GRACE_MINUTES,
+  PAYROLL_MONTH_START_DAY,
   settingsUpdateSchema,
+  SHORT_DAY_UNDER_MINUTES,
   TIMER_AWAY_MINUTES,
   TIMER_MODES,
   TIMER_REMINDER_MINUTES,
 } from './schemas';
+
+export {
+  addOfficeNetwork,
+  isOfficeIp,
+  listOfficeNetworks,
+  removeOfficeNetwork,
+} from './officeNetworks';
 
 const toCamel = (key) => key.replace(/_([a-z0-9])/g, (_, letter) => letter.toUpperCase());
 const toSnake = (key) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
@@ -40,6 +53,7 @@ const CLOCK_KEYS = new Set([
   'autoCheckoutAt',
   'aiPmSummaryAt',
   'aiHrNotesAt',
+  'hrSummaryAt', // CONTRACT 25
 ]);
 // Slack channels: an id or name, or null for "don't post" (the to-do channel, CONTRACT 24, is null
 // until an Admin picks one; a missing row reads as null too, since the live server never seeds).
@@ -58,6 +72,13 @@ const BOUNDED_KEYS = {
   timerReminderMinutes: TIMER_REMINDER_MINUTES,
   breakAllowanceMinutes: BREAK_ALLOWANCE_MINUTES,
   aiDailyLimit: AI_DAILY_LIMIT,
+  // Attendance marks and HR updates (CONTRACT 25)
+  halfDayUnderMinutes: HALF_DAY_UNDER_MINUTES,
+  shortDayUnderMinutes: SHORT_DAY_UNDER_MINUTES,
+  leftEarlyGraceMinutes: LEFT_EARLY_GRACE_MINUTES,
+  payrollMonthStartDay: PAYROLL_MONTH_START_DAY,
+  checkinReminderMinutes: CHECKIN_REMINDER_MINUTES,
+  lateAlertDays: LATE_ALERT_DAYS,
 };
 
 // ---------- cache ----------
@@ -183,31 +204,31 @@ export function setCacheTtlForTests(ms) {
  *   autoCheckoutAt: string, aiEnabled: boolean, aiDailyLimit: number, aiPolishEnabled: boolean,
  *   aiPmSummaryEnabled: boolean, aiPmSummaryAt: string, aiSummarySlack: boolean,
  *   aiHrNotesEnabled: boolean, aiHrNotesAt: string, aiAskEnabled: boolean,
- *   aiProjectSummaryEnabled: boolean }>} (AI, CONTRACT 20 and 22) a fresh copy, safe to change; activityIdleMinutes is 1-120 and
+ *   aiProjectSummaryEnabled: boolean, halfDayUnderMinutes: number, shortDayUnderMinutes: number,
+ *   leftEarlyGraceMinutes: number, payrollMonthStartDay: number, hrMorningSummary: boolean,
+ *   hrSummaryAt: string, hrEveningSummary: boolean, checkinReminderMinutes: number,
+ *   lateAlertDays: number, slackAttendanceRemind: boolean, slackHrSummary: boolean }>} (AI,
+ *   CONTRACT 20 and 22) a fresh copy, safe to change; activityIdleMinutes is 1-120 and
  *   activityRetentionDays 7-3650 (screen time, CONTRACT 11); pushEnabled switches desktop
  *   notifications for everyone (CONTRACT 14); timers and breaks (CONTRACT 15):
  *   timerAwayMinutes 5-240, timerReminderMinutes 0-240 (0 = never), breakAllowanceMinutes 0-480
  *   (0 = no allowance); check-in rules (CONTRACT 17); auto check-out (CONTRACT 19):
  *   autoCheckoutAt is 'HH:mm', later than officeEnd while autoCheckoutEnabled is on; the to-do
- *   channel (CONTRACT 24): null until an Admin picks one, never the report channel
+ *   channel (CONTRACT 24): null until an Admin picks one, never the report channel; attendance
+ *   marks and HR updates (CONTRACT 25): halfDayUnderMinutes and shortDayUnderMinutes 0-720 (0 =
+ *   off, half below short while both are on), leftEarlyGraceMinutes 0-240,
+ *   payrollMonthStartDay 1-28 (1 = calendar months; 26 = the 26th to the 25th, named after the
+ *   month it ends in), hrSummaryAt 'HH:mm' (at or after lateAfter and before officeEnd while
+ *   hrMorningSummary is on; the evening wrap-up goes at officeEnd + 30 minutes),
+ *   checkinReminderMinutes 0-240 after each person's own late mark (0 = off), lateAlertDays
+ *   1-31 (also the Needs a look threshold); slackAttendanceRemind and slackHrSummary are the
+ *   queueDm setting keys of the reminders and of both HR summaries
  */
 export async function getAll() {
   if (cacheTtlMs > 0 && cache.value && performance.now() - cache.loadedAt < cacheTtlMs) {
     return copy(cache.value);
   }
   return copy(await (cache.loading ?? startLoad()));
-}
-
-/** zod result -> the API's VALIDATION_FAILED error with a message per field. */
-function parseInput(schema, input) {
-  const result = schema.safeParse(input);
-  if (result.success) return result.data;
-  const fields = {};
-  for (const issue of result.error.issues) {
-    const path = issue.path.join('.') || '_';
-    if (!fields[path]) fields[path] = issue.message;
-  }
-  throw validationError(fields, Object.values(fields)[0]);
 }
 
 /**
@@ -220,13 +241,18 @@ function parseInput(schema, input) {
  * @returns {Promise<ReturnType<typeof getAll>>} the settings after the save
  * @throws VALIDATION_FAILED with fields, for example { timezone: 'Pick a valid time zone.' } or,
  *   while auto check-out is on, { autoCheckoutAt: 'Pick a time after office hours end.' } when
- *   the auto check-out time isn't later than office end (CONTRACT 19)
+ *   the auto check-out time isn't later than office end (CONTRACT 19); { halfDayUnderMinutes:
+ *   'Half day must be less than the short day time.' } while both marks are on, and, while the
+ *   morning HR summary is on, { hrSummaryAt: 'Pick a time at or after the late mark (9:30).' }
+ *   or { hrSummaryAt: 'Pick a time before office hours end.' } (CONTRACT 25)
  */
 export async function update({ user, values, ip }) {
   const parsed = parseInput(settingsUpdateSchema, values ?? {});
   const changes = await db.transaction(async (trx) => {
     const current = fromRows(await repo.listSettings(trx));
     checkAutoCheckout(current, parsed);
+    checkDayMarks(current, parsed);
+    checkHrSummary(current, parsed);
     const before = {};
     const after = {};
     for (const [key, value] of Object.entries(parsed)) {
@@ -280,99 +306,4 @@ async function stopRunningTimers(userId) {
   } catch (error) {
     logger.warn({ err: error, userId }, 'timers turned off; running timers could not be stopped');
   }
-}
-
-// ---------- office networks ----------
-
-function duplicateNetwork() {
-  return new AppError('DUPLICATE_NETWORK', {
-    fields: { ipAddress: 'That IP address is already saved.' },
-  });
-}
-
-/**
- * Saved office networks, oldest first.
- * @returns {Promise<Array<{ id: number, name: string, ipAddress: string, createdBy: number | null,
- *   createdAt: Date }>>}
- */
-export function listOfficeNetworks() {
-  return repo.listOfficeNetworks();
-}
-
-/**
- * Adds an office network (the office's public IP). Audited as 'office_network.add'.
- * @param {{ user: { id: number }, name: string, ipAddress: string, ip?: string | null }} input
- * @returns {Promise<{ id: number, name: string, ipAddress: string, createdBy: number | null,
- *   createdAt: Date }>}
- * @throws VALIDATION_FAILED (name 1-80 characters, a valid IPv4 or IPv6 address),
- *   DUPLICATE_NETWORK when the IP address is already saved
- */
-export async function addOfficeNetwork({ user, name, ipAddress, ip }) {
-  const input = parseInput(officeNetworkSchema, { name, ipAddress });
-  if (await repo.findOfficeNetworkByIp(input.ipAddress)) throw duplicateNetwork();
-  try {
-    return await db.transaction(async (trx) => {
-      const at = nowDate();
-      const id = await repo.insertOfficeNetwork(
-        { ...input, createdBy: user?.id ?? null, createdAt: at, updatedAt: at },
-        trx,
-      );
-      await audit.log(
-        {
-          actorId: user?.id ?? null,
-          action: 'office_network.add',
-          entityType: 'office_network',
-          entityId: id,
-          after: input,
-          ip,
-        },
-        trx,
-      );
-      return repo.findOfficeNetwork(id, trx);
-    });
-  } catch (error) {
-    // Two admins adding the same IP at once: the unique key catches the second one.
-    if (error?.errno === 1062) throw duplicateNetwork();
-    throw error;
-  }
-}
-
-/**
- * Removes an office network. Audited as 'office_network.remove'.
- * @param {{ user: { id: number }, id: number | string, ip?: string | null }} input
- * @returns {Promise<{ id: number }>}
- * @throws NOT_FOUND when the network doesn't exist (or was already removed)
- */
-export async function removeOfficeNetwork({ user, id, ip }) {
-  const networkId = Number(id);
-  if (!Number.isInteger(networkId) || networkId <= 0) throw new AppError('NOT_FOUND');
-  return db.transaction(async (trx) => {
-    const network = await repo.findOfficeNetwork(networkId, trx);
-    if (!network) throw new AppError('NOT_FOUND', { message: 'That network was already removed.' });
-    await repo.deleteOfficeNetwork(networkId, trx);
-    await audit.log(
-      {
-        actorId: user?.id ?? null,
-        action: 'office_network.remove',
-        entityType: 'office_network',
-        entityId: networkId,
-        before: { name: network.name, ipAddress: network.ipAddress },
-        ip,
-      },
-      trx,
-    );
-    return { id: networkId };
-  });
-}
-
-/**
- * True when the IP is one of the saved office networks (exact match; '::ffff:' IPv4-mapped
- * addresses are compared as plain IPv4).
- * @param {string | null | undefined} ip
- * @returns {Promise<boolean>}
- */
-export async function isOfficeIp(ip) {
-  const value = normalizeIp(ip);
-  if (!value) return false;
-  return Boolean(await repo.findOfficeNetworkByIp(value));
 }

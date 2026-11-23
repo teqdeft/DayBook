@@ -137,6 +137,32 @@
   margin-top: 10px;
 }
 
+/* Removed time (CONTRACT 25 A): muted, with Put back where the menu is. */
+.removed {
+  grid-template-areas: 'range what what minutes menu';
+}
+
+.removed .range,
+.removed .minutes {
+  color: var(--muted);
+}
+
+.removedWhat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px 16px;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.putBack {
+  flex: none;
+}
+
 /* Add / Edit time dialog */
 .fields {
   display: flex;
@@ -176,6 +202,17 @@
 
   .what:empty {
     display: none;
+  }
+
+  .removed {
+    grid-template-areas:
+      'what minutes menu'
+      'range range range';
+  }
+
+  /* 44 px hit area on touch (CONTRACT 25) */
+  .putBack {
+    min-height: 44px;
   }
 
   /* the task on one line, the note under it */

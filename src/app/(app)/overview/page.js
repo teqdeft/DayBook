@@ -33,6 +33,8 @@ const WEEK_LEGEND = [
   { key: 'wfh', label: 'Working from home', color: 'violet' },
   { key: 'missing', label: 'Not checked in', color: 'red' },
 ];
+// People on leave (CONTRACT 25), listed only in a week that has some.
+const OFF_LEGEND_ITEM = { key: 'off', label: 'Off', color: 'teal' };
 
 // A card with `href` ("Pending requests", CONTRACT 23) is a link: the whole card, with a chevron.
 const linkProps = (href) =>
@@ -97,7 +99,10 @@ export default async function OverviewPage({ searchParams }) {
             showValues={false}
             className={styles.weekBars}
           />
-          <Legend items={WEEK_LEGEND} className={styles.weekLegend} />
+          <Legend
+            items={attendanceWeek.hasOff ? [...WEEK_LEGEND, OFF_LEGEND_ITEM] : WEEK_LEGEND}
+            className={styles.weekLegend}
+          />
         </Card>
       </section>
 

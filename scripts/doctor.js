@@ -1,6 +1,7 @@
-// `npm run doctor`: a read-only check for a live server. It prints whether the worker cron is
-// running, whether Slack works (token, report channel, queue) and whether desktop notifications
-// can be delivered (keys, the Settings switch, who turned them on, the latest notifications).
+// `npm run doctor`: a read-only check for a live server. It prints whether every database update
+// has run, whether the worker cron is running, whether Slack works (token, report channel, queue)
+// and whether desktop notifications can be delivered (keys, the Settings switch, who turned them
+// on, the latest notifications).
 // It never prints tokens, private keys or push endpoints, so its output is safe to share.
 //
 // `npm run doctor -- --notify=person@company.com` also adds a test bell notification for that
@@ -29,6 +30,22 @@ function ago(at) {
 function notifyArg() {
   const arg = process.argv.find((value) => value.startsWith('--notify='));
   return arg ? arg.slice('--notify='.length).trim().toLowerCase() : '';
+}
+
+async function checkDatabase() {
+  console.log('\nDatabase');
+  // The migration files the database hasn't run yet (README "Updating" runs them).
+  const [, pending] = await db.migrate.list();
+  if (pending.length === 0) {
+    console.log(`${OK} Database is up to date`);
+    return;
+  }
+  const names = pending.map((migration) => migration.file ?? migration.name ?? String(migration));
+  const updates = names.length === 1 ? 'database update' : 'database updates';
+  console.log(
+    `${BAD} ${names.length} ${updates} not run: ${names.join(', ')}. ` +
+      'Run the migrate line in README Updating.',
+  );
 }
 
 async function checkWorker() {
@@ -199,6 +216,7 @@ async function main() {
     `Daybook doctor: ${toLocal(now(), tz).format('DD MMM YYYY HH:mm')} (${tz}), ` +
       `Node ${process.version}, ${env.NODE_ENV}, ${env.APP_URL}`,
   );
+  await checkDatabase();
   await checkWorker();
   await checkSlack(current);
   await checkPush(current, tz);

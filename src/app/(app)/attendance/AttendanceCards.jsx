@@ -1,138 +1,53 @@
-// Attendance page blocks (artboard 09): the "Everyone today" table (Present shows worked time once
-// someone took breaks, CONTRACT 15; Out says "Auto" for an auto check-out, CONTRACT 19), the
-// correction requests and the missing check-outs. Server Components; row actions are small client
-// components.
+// Attendance page blocks (artboard 09): the "Everyone today" table (its cells are in DayCells.jsx,
+// CONTRACT 25) and the correction requests. Server Components; row actions are small client
+// components. The On leave and On break pills show only above 0 (dayRows.pillsFor), and for HR on
+// today the Not checked in and On break filters get D's "Remind all".
 import Link from 'next/link';
+import { CalendarDays } from 'lucide-react';
 import Avatar from '@/components/Avatar';
 import Badge from '@/components/Badge';
 import Card, { CardHeader } from '@/components/Card';
 import DataTable from '@/components/DataTable';
 import EmptyState from '@/components/EmptyState';
 import FilterPills from '@/components/FilterPills';
-import StatusCell from '@/components/StatusCell';
-import Tag from '@/components/Tag';
+import BreakListHost from './BreakListHost';
 import CorrectionActions from './CorrectionActions';
-import RowAction from './RowAction';
+import {
+  ActionCell,
+  CheckInCell,
+  NoteCell,
+  OutCell,
+  PersonCell,
+  PresentCell,
+  WhereCell,
+} from './DayCells';
+import RemindAllButton from './RemindAllButton';
 import styles from './page.module.css';
-
-const DASH = <span className={styles.dash}>—</span>;
-const AUTO_TITLE = 'Auto check-out: no activity after office hours';
-
-/**
- * Present time; with breaks, worked time over a muted "Breaks 45m" line (like "Late 38m" under
- * the check-in time) and a red "Over 15m" tag past the daily allowance (CONTRACT 15).
- */
-function PresentCell({ row }) {
-  if (!row.present) return DASH;
-  if (!row.breaks) return <span className={styles.time}>{row.present}</span>;
-  return (
-    <span className={styles.worked} title={row.presentTitle}>
-      <span className={styles.time}>{row.present}</span>
-      <span className={styles.breaks}>{row.breaks}</span>
-      {row.over ? (
-        <Tag tone="red" padX={6} className={styles.over}>
-          {row.over}
-        </Tag>
-      ) : null}
-    </span>
-  );
-}
-
-/** The check-out time; under it a small "Auto" tag when the auto check-out closed the row. */
-function OutCell({ row }) {
-  if (!row.autoOut) return <span className={styles.time}>{row.checkOut}</span>;
-  return (
-    <span className={styles.out}>
-      <span className={styles.time}>{row.checkOut}</span>
-      <Tag tone="neutral" padX={6} className={styles.auto} title={AUTO_TITLE}>
-        Auto<span className="visually-hidden"> check-out</span>
-      </Tag>
-    </span>
-  );
-}
 
 function columns(canCorrect) {
   const list = [
-    {
-      key: 'person',
-      header: 'Person',
-      width: 189.67,
-      render: (row) => (
-        <span className={styles.person}>
-          <Avatar user={row.user} size={34} />
-          <span className={styles.personText}>
-            <span className={styles.personName}>{row.user.name}</span>
-            {row.user.designation ? (
-              <span className={styles.personRole}>{row.user.designation}</span>
-            ) : null}
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: 'where',
-      header: 'Where',
-      width: 105.67,
-      render: (row) => (
-        <StatusCell status={row.where} size="cellCompact" className={styles.where} />
-      ),
-    },
+    { key: 'person', header: 'Person', width: 189.67, render: (row) => <PersonCell row={row} /> },
+    { key: 'where', header: 'Where', width: 105.67, render: (row) => <WhereCell row={row} /> },
     {
       key: 'checkIn',
       header: 'Check-in',
       width: 89.33,
-      render: (row) =>
-        row.checkIn ? (
-          <span className={styles.checkIn}>
-            <span className={styles.checkInTime}>{row.checkIn}</span>
-            {row.late ? <span className={styles.late}>{row.late}</span> : null}
-          </span>
-        ) : (
-          DASH
-        ),
+      render: (row) => <CheckInCell row={row} />,
     },
-    {
-      key: 'out',
-      header: 'Out',
-      width: 72.67,
-      render: (row) =>
-        row.checkOut ? (
-          <OutCell row={row} />
-        ) : row.missing ? (
-          <span className={styles.missing}>Missing</span>
-        ) : (
-          DASH
-        ),
-    },
-    {
-      key: 'present',
-      header: 'Present',
-      width: 81,
-      render: (row) => <PresentCell row={row} />,
-    },
-    {
-      // The note takes what is left (142 px on the artboard), so a narrower table never squeezes
-      // HR's action out of view.
-      key: 'note',
-      header: 'Note',
-      render: (row) =>
-        row.note ? (
-          <span className={styles.note} title={row.note}>
-            {row.note}
-          </span>
-        ) : (
-          <span className={styles.noteDash}>—</span>
-        ),
-    },
+    { key: 'out', header: 'Out', width: 72.67, render: (row) => <OutCell row={row} /> },
+    { key: 'present', header: 'Present', width: 81, render: (row) => <PresentCell row={row} /> },
+    // The note takes what is left (142 px on the artboard; at least 96 px beside HR's wider
+    // action column), so a narrower table never squeezes HR's action out of view.
+    { key: 'note', header: 'Note', render: (row) => <NoteCell row={row} /> },
   ];
   if (canCorrect) {
     list.push({
       key: 'action',
       header: <span className="visually-hidden">Action</span>,
       label: 'Action',
-      width: 95.66, // the artboard's 776 px table less the columns before it
-      render: (row) =>
-        row.action ? <RowAction kind={row.action.kind} row={row.action.row} /> : null,
+      // RowAction and the row's "..." menu on one line (CONTRACT 25: 95.66 px became 120 px).
+      width: 120,
+      render: (row) => <ActionCell row={row} />,
     });
   }
   return list;
@@ -143,37 +58,53 @@ const EMPTY = {
   late: ['Nobody was late', 'Everyone checked in on time.'],
   wfh: ['Nobody worked from home', 'Everyone who checked in was at the office.'],
   not_checked_in: ['Everyone checked in', 'Nobody is missing.'],
+  on_leave: ['Nobody is on leave', 'Leave HR marks shows here.'],
   unverified: ['Nothing to confirm', 'Every office check-in came from the office network.'],
+  on_break: ['Nobody is on a break', 'People on a break show up here.'],
 };
 
-export function EveryoneCard({ data, pills, title }) {
-  const [emptyTitle, emptyBody] = EMPTY[data.filter];
+// The title takes the focus when a break fix takes the row whose list was open out of the filter.
+const EVERYONE_TITLE = 'everyone-title';
+
+export function EveryoneCard({ data, title }) {
+  const [emptyTitle, emptyBody] = EMPTY[data.filter] ?? EMPTY.all;
+  const pills = data.pills;
   return (
     <Card padding="none" className={styles.everyone}>
       <div className={styles.everyoneHead}>
-        <h2 className={styles.cardTitle}>{title}</h2>
-        <FilterPills items={pills} value={data.filter} label="Show" className={styles.pills} />
+        <h2 id={EVERYONE_TITLE} tabIndex={-1} className={styles.cardTitle}>
+          {title}
+        </h2>
+        <div className={styles.headTools}>
+          <FilterPills items={pills} value={data.filter} label="Show" className={styles.pills} />
+          {data.remindAll && data.remindAll.users.length > 0 ? (
+            <RemindAllButton kind={data.remindAll.kind} users={data.remindAll.users} />
+          ) : null}
+        </div>
       </div>
-      <DataTable
-        className={styles.table}
-        columns={columns(data.canCorrect)}
-        rows={data.rows}
-        caption={title}
-        empty={
-          <EmptyState
-            compact
-            title={emptyTitle}
-            body={emptyBody}
-            action={
-              data.filter === 'all' ? null : (
-                <Link href={pills[0].href} className={styles.emptyLink} scroll={false}>
-                  Show everyone
-                </Link>
-              )
-            }
-          />
-        }
-      />
+      <BreakListHost returnTo={EVERYONE_TITLE}>
+        <DataTable
+          className={styles.table}
+          columns={columns(data.canCorrect)}
+          rows={data.rows}
+          caption={title}
+          empty={
+            <EmptyState
+              compact
+              icon={<CalendarDays size={20} strokeWidth={1.8} />}
+              title={emptyTitle}
+              body={emptyBody}
+              action={
+                data.filter === 'all' ? null : (
+                  <Link href={pills[0].href} className={styles.emptyLink} scroll={false}>
+                    Show everyone
+                  </Link>
+                )
+              }
+            />
+          }
+        />
+      </BreakListHost>
     </Card>
   );
 }
@@ -215,32 +146,6 @@ export function CorrectionsCard({ corrections }) {
         <p className={styles.sideMore}>{total - items.length} more after these.</p>
       ) : null}
       <p className={styles.sideFoot}>Your reason is saved with every correction.</p>
-    </Card>
-  );
-}
-
-export function MissingCard({ missing }) {
-  return (
-    <Card className={styles.missingCard}>
-      <CardHeader title="Missing check-outs" />
-      {missing.items.length === 0 ? (
-        <p className={styles.sideEmpty}>None right now.</p>
-      ) : (
-        <ul className={styles.missingList}>
-          {missing.items.map((item) => (
-            <li key={item.id} className={styles.missingItem}>
-              <span className={styles.missingText}>
-                <span className={styles.missingTitle}>{item.title}</span>
-                <span className={styles.missingSub}>Marked at midnight</span>
-              </span>
-              {item.action ? <RowAction kind="fix" row={item.action.row} /> : null}
-            </li>
-          ))}
-        </ul>
-      )}
-      {missing.total > missing.items.length ? (
-        <p className={styles.sideMore}>{missing.total - missing.items.length} more to fix.</p>
-      ) : null}
     </Card>
   );
 }

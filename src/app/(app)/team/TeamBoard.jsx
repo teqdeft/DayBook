@@ -1,8 +1,9 @@
 'use client';
-// The team board (artboard 05): people grouped into In office, Working from home and Not checked
-// in. Groups collapse from their title and show a few people first ("Show 17 more"). Filters are
-// links (?filter=missing|late|no-todo), so the Overview's "Needs attention" can link straight to
-// them. Before the report time a report not submitted yet is "Due 6:30 PM" (or Draft), not
+// The team board (artboard 05): people grouped into In office, Working from home, Not checked in
+// and Off today (CONTRACT 25: leave, a holiday or a day off, with its tag and a dash for the
+// report). Groups collapse from their title and show a few people first ("Show 17 more").
+// Filters are links (?filter=missing|late|no-todo), so the Overview's "Needs attention" can link
+// straight to them. Before the report time a report not submitted yet is "Due 6:30 PM" (or Draft), not
 // Missing. Live status (CONTRACT 15): "On break" under the check-in time, "Now" and the timed
 // project first in "Projects today". Today's to-do (CONTRACT 24): "To-do: 2 of 5 done" with its
 // popover under the projects, or "No to-do yet".
@@ -19,9 +20,9 @@ import { CheckInCell, ProjectsCell } from './TeamBoardCells';
 import styles from './TeamBoard.module.css';
 
 // People shown before "Show N more", per group, as on the canvas. A filtered board shows everyone.
-const PREVIEW = { office: 3, wfh: 2, not_checked_in: 3 };
-const AVATAR_TONE = { office: 'blue', wfh: 'violet', not_checked_in: 'red' };
-const BAR_COLOR = { office: 'primary', wfh: 'violet', not_checked_in: 'primary' };
+const PREVIEW = { office: 3, wfh: 2, not_checked_in: 3, off: 3 };
+const AVATAR_TONE = { office: 'blue', wfh: 'violet', not_checked_in: 'red', off: 'teal' };
+const BAR_COLOR = { office: 'primary', wfh: 'violet', not_checked_in: 'primary', off: 'primary' };
 
 function columns({ day }) {
   return [
@@ -78,13 +79,16 @@ function columns({ day }) {
       header: 'Report',
       width: 153,
       align: 'center',
-      render: (row) => (
-        <StatusCell
-          status={row.report}
-          label={row.reportLabel ?? undefined}
-          className={styles.report}
-        />
-      ),
+      render: (row) =>
+        row.report === 'off' ? (
+          <span className={styles.dash}>—</span>
+        ) : (
+          <StatusCell
+            status={row.report}
+            label={row.reportLabel ?? undefined}
+            className={styles.report}
+          />
+        ),
     },
     {
       key: 'projects',

@@ -1,12 +1,27 @@
-// Attendance while it loads: the top bar, five number cards, the table card and the side cards.
+// Attendance while it loads: the top bar (with the Day / Month switch for HR and Admin), five
+// number cards, the table card and the side cards, split as the page splits them (CONTRACT 25:
+// two above the table and two after it below 1440 px), so nothing jumps when the page loads.
 import Card from '@/components/Card';
 import Skeleton from '@/components/Skeleton';
+import { can } from '@/lib/permissions';
+import { getSessionUser } from '@/lib/session';
 import page from './page.module.css';
 import styles from './loading.module.css';
 
 const ROWS = [0, 1, 2, 3, 4, 5, 6, 7];
 
-export default function AttendanceLoading() {
+function SideSkeleton({ tall }) {
+  return (
+    <Card className={styles.side}>
+      <Skeleton width={180} height={20} />
+      {tall ? <Skeleton height={150} radius={12} /> : <Skeleton width="70%" height={16} />}
+      {tall ? <Skeleton height={150} radius={12} /> : null}
+    </Card>
+  );
+}
+
+export default async function AttendanceLoading() {
+  const hr = can(await getSessionUser(), 'attendance.correct');
   return (
     <div className={page.page} aria-busy="true" aria-live="polite">
       <span className="visually-hidden">Loading attendance</span>
@@ -16,6 +31,7 @@ export default function AttendanceLoading() {
           <Skeleton width={260} height={16} />
         </div>
         <div className={styles.actions}>
+          {hr ? <Skeleton width={130} height={44} radius={10} /> : null}
           <Skeleton width={142} height={44} radius={10} />
           <Skeleton width={146} height={44} radius={10} />
         </div>
@@ -48,15 +64,14 @@ export default function AttendanceLoading() {
           ))}
         </Card>
         <div className={page.side}>
-          <Card className={styles.side}>
-            <Skeleton width={180} height={20} />
-            <Skeleton height={150} radius={12} />
-            <Skeleton height={150} radius={12} />
-          </Card>
-          <Card className={styles.side}>
-            <Skeleton width={160} height={20} />
-            <Skeleton width="70%" height={16} />
-          </Card>
+          <div className={page.sideAct}>
+            <SideSkeleton tall={hr} />
+            <SideSkeleton />
+          </div>
+          <div className={page.sideInfo}>
+            {hr ? <SideSkeleton /> : null}
+            <SideSkeleton />
+          </div>
         </div>
       </div>
     </div>

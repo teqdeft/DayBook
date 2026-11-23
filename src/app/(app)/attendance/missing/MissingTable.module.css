@@ -1,0 +1,278 @@
+/* The Missing check-outs table (CONTRACT 25, item 7): the head row with "Select all on this page"
+   or the bulk bar, the cells, and the cards below 1280 px (DataTable's stackBelow: the checkbox at
+   the card's top left; below 1024 px the bulk bar sticks to the bottom of the viewport). */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  min-height: 69px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.title {
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.selectAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.check:disabled {
+  cursor: not-allowed;
+}
+
+/* 18 px box, 44 px to tap */
+.checkHit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: -13px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.bulkCount {
+  margin-right: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+/* The column widths come from the prototype; long names are cut with an ellipsis. */
+.table table {
+  table-layout: fixed;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.personText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.personName {
+  overflow: hidden;
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personRole {
+  overflow: hidden;
+  font-size: var(--text-small);
+  line-height: 17px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stack {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.time {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.checkTime {
+  font-family: var(--font-heading-stack);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* A muted line under a value: 12 px, may take two lines. */
+.mline {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--muted);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.outInput {
+  width: 120px;
+  padding: 0 6px 0 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rowError {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 15px;
+  color: var(--red-text);
+  white-space: normal;
+}
+
+.reminded {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+}
+
+.actionNote {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+/* The cards (below 1280 px): the checkbox sits at the card's top left, beside the person, who
+   takes the card's first line. */
+@media (max-width: 1279px) {
+  .table tbody tr {
+    position: relative;
+  }
+
+  .table td.selCell {
+    position: absolute;
+    top: 15px;
+    left: 16px;
+    display: block;
+    width: auto;
+    padding: 0;
+  }
+
+  .table td.selCell + td {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: 34px;
+  }
+
+  .table td.selCell + td::before {
+    content: none;
+  }
+}
+
+/* From 1024 px the card is a grid (DataTable's stackBelow): the checkbox takes no grid column,
+   so it is placed from the card's edge, level with the avatar. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .table tbody td.selCell {
+    grid-column: auto;
+    top: 23px;
+    left: 20px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .head {
+    padding: 14px 16px;
+  }
+
+  .bulkOn .bulk {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    padding: 12px 16px;
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  /* Room under the list so the sticky bar never covers the last row. */
+  .bulkOn {
+    padding-bottom: 96px;
+  }
+}
+
+@media (max-width: 640px) {
+  .outInput {
+    width: 136px; /* 16 px text on phones needs the room */
+  }
+
+  /* 44 px to tap: "Fix" alone is 17 px wide. */
+  .actionButton {
+    display: inline-flex;
+    align-items: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* The count with Clear on the first line, Remind selected and Fix selected sharing the second,
+     every button 44 px to tap. */
+  .bulkOn .bulk {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(min-content, 1fr));
+  }
+
+  .bulkOn .bulk .bulkCount {
+    grid-area: 1 / 1;
+  }
+
+  .bulkOn .bulk .bulkButton {
+    min-height: 44px;
+  }
+
+  .bulkOn .bulk .bulkClear {
+    grid-area: 1 / 2;
+    justify-self: end;
+    min-width: 44px;
+  }
+
+  .bulkOn {
+    padding-bottom: 128px;
+  }
+}

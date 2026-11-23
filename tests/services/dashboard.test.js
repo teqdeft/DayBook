@@ -135,7 +135,7 @@ describe('getTeamToday (section 7.10)', () => {
     const { summary, attendance } = await dashboard.getTeamToday();
     expect(summary.wfh).toBe(2);
     expect(summary.office).toBe(3);
-    expect(attendance.segments.map((s) => s.value)).toEqual([3, 2, 1]);
+    expect(attendance.segments.map((s) => s.value)).toEqual([3, 2, 1, 0]);
     expect(attendance.total).toBe(6);
   });
 
@@ -366,7 +366,7 @@ describe('getTeamToday (section 7.10)', () => {
       expect((await attendance.getDaySummary(TODAY)).tracked).toBe(7);
       const { attendanceWeek } = await dashboard.getOverview({ viewer: people.admin });
       const today = attendanceWeek.days.find((d) => d.date === TODAY);
-      expect(today.segments.map((s) => s.value)).toEqual([4, 2, 1]);
+      expect(today.segments.map((s) => s.value)).toEqual([4, 2, 1, 0]);
     } finally {
       await db('attendance').where({ userId: early.id }).del();
       await db('users').where({ id: early.id }).del();
@@ -529,8 +529,9 @@ describe('getOverview', () => {
   it('stacks attendance per working day; days to come stay empty', async () => {
     const { attendanceWeek } = await dashboard.getOverview({ viewer: people.admin });
     const values = attendanceWeek.days.map((day) => day.segments.map((s) => s.value));
-    // Monday: Finn had not joined yet, so 5 people were expected.
-    expect(values).toEqual([[2, 1, 2], [1, 1, 4], [3, 2, 1], [], []]);
+    // Monday: Finn had not joined yet, so 5 people were expected. Nobody was off (CONTRACT 25).
+    expect(values).toEqual([[2, 1, 2, 0], [1, 1, 4, 0], [3, 2, 1, 0], [], []]);
+    expect(attendanceWeek.hasOff).toBe(false);
     expect(attendanceWeek.days.map((day) => day.label)).toEqual([
       'Mon',
       'Tue',

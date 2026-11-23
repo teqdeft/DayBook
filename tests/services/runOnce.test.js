@@ -7,13 +7,23 @@ import { forgetHandledKeysForTests, runOnce } from '@/worker/runOnce';
 import { createUser, resetDatabase, setSettings } from '../helpers/db.js';
 
 // The jobs call other owners' services; here they only need to be called with the right day.
-const { sendReportReminders, markMissingCheckouts, syncSlackUserIds } = vi.hoisted(() => ({
-  sendReportReminders: vi.fn(async () => ({ reminded: 3 })),
-  markMissingCheckouts: vi.fn(async () => ({ marked: 1 })),
-  syncSlackUserIds: vi.fn(async () => ({ updated: 2 })),
-}));
+const { sendReportReminders, markMissingCheckouts, syncSlackUserIds, deleteOldReminders } =
+  vi.hoisted(() => ({
+    sendReportReminders: vi.fn(async () => ({ reminded: 3 })),
+    markMissingCheckouts: vi.fn(async () => ({ marked: 1 })),
+    syncSlackUserIds: vi.fn(async () => ({ updated: 2 })),
+    deleteOldReminders: vi.fn(async () => 0),
+  }));
 vi.mock('@/modules/reports', () => ({ reports: { sendReportReminders } }));
-vi.mock('@/modules/attendance', () => ({ attendance: { markMissingCheckouts } }));
+vi.mock('@/modules/attendance', async () => ({
+  // The worker clock asks the real company day (weekday and holidays, CONTRACT 25).
+  attendance: {
+    markMissingCheckouts,
+    companyDay: (await import('@/modules/attendance/calendarReads')).companyDay,
+    // The cleanup's old-reminders step (CONTRACT 25, item 5).
+    deleteOldReminders,
+  },
+}));
 vi.mock('@/modules/users', () => ({ users: { syncSlackUserIds } }));
 
 const { reportReminderJob } = await import('@/worker/jobs/reportReminder');
@@ -233,8 +243,10 @@ describe('cleanup (03:00 company time, once a day)', () => {
         readNotifications: 1,
         jobRuns: 1,
         activitySegments: 0,
+        oldReminders: 0,
       },
     });
+    expect(deleteOldReminders).toHaveBeenCalledWith('2026-04-08'); // 180 days back
     for (const [name, table] of Object.entries(TABLES)) {
       expect(await countIds(table, rows.deleted[name]), `${name} deleted`).toBe(0);
       expect(await countIds(table, rows.kept[name]), `${name} kept`).toBe(rows.kept[name].length);

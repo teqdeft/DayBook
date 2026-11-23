@@ -1,7 +1,9 @@
 // The Screen time card's data on the Employee detailed view (docs/CONTRACT.md section 11): the
-// person's active, idle and locked time for the selected range. Server only (called from page.js).
+// person's active, idle and locked time for the selected range; a company holiday without data
+// draws no bar (CONTRACT 25). Server only (called from page.js).
 import { can } from '@/lib/permissions';
 import { activity } from '@/modules/activity';
+import { attendance } from '@/modules/attendance';
 import { settings } from '@/modules/settings';
 import { rangeSummary } from '../../screen-time/screenTimeView';
 
@@ -29,11 +31,12 @@ export async function loadScreenTimeCard({ viewer, person, period, today }) {
       },
     };
   }
-  const [current, range] = await Promise.all([
+  const [current, range, holidays] = await Promise.all([
     settings.getAll(),
     period.end >= period.from
       ? activity.getRange(person.id, period.from, period.end)
       : Promise.resolve(EMPTY_RANGE),
+    attendance.listHolidaysBetween(period.from, period.to),
   ]);
   const summary = rangeSummary({
     range: range ?? EMPTY_RANGE,
@@ -41,6 +44,7 @@ export async function loadScreenTimeCard({ viewer, person, period, today }) {
     to: period.to,
     today,
     workingDays: current.workingDays,
+    holidays: new Set(holidays.map((holiday) => holiday.date)),
   });
   return {
     subtitle: `${period.label}, ${summary.daysText}`,

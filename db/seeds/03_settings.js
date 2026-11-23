@@ -51,6 +51,20 @@ export const DEFAULT_SETTINGS = {
   ai_ask_enabled: true,
   // Project management (company request, CONTRACT 22)
   ai_project_summary_enabled: false, // PMs write a summary from a project's files and notes
+  // Attendance marks (CONTRACT 25, items 3 and 4). Worked = present time less breaks.
+  half_day_under_minutes: 270, // a finished working day worked under this is a Half day (0 = off)
+  short_day_under_minutes: 480, // worked under this, and not a Half day: Short day (0 = off)
+  left_early_grace_minutes: 15, // out more than this before their own shift end: Left early
+  payroll_month_start_day: 1, // 1 = calendar months; 26 = the 26th to the 25th, named after its end
+  // HR updates (CONTRACT 25, items 1, 5 and 10)
+  hr_morning_summary: true, // bell, desktop push and Slack DM to HR on working days
+  hr_summary_at: '10:00', // at or after Late after, before office end
+  hr_evening_summary: false, // sent at office end + 30 minutes
+  checkin_reminder_minutes: 30, // after each person's own late mark, once a day (0 = off)
+  late_alert_days: 4, // HR is told once per person per payroll month; also Needs a look
+  // Slack (CONTRACT 25)
+  slack_attendance_remind: true, // check-in reminders and the ones HR sends from Attendance
+  slack_hr_summary: true, // the morning summary and the evening wrap-up
 };
 
 export async function seed(knex) {

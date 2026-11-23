@@ -154,8 +154,12 @@ function onTimeClock(key, offset) {
   return clockOf(minutesOf('09:05') + (hash(key, offset, 'in') % 26));
 }
 
+/**
+ * A check-out between 6:15 and 6:49 PM: never more than the left early grace (15 minutes) before
+ * the 6:30 PM office end, so only the demo's one short day shows "Early" (CONTRACT 25, item 3).
+ */
 function checkOutClock(key, offset) {
-  return clockOf(minutesOf('18:02') + (hash(key, offset, 'outc') % 48));
+  return clockOf(minutesOf('18:15') + (hash(key, offset, 'outc') % 35));
 }
 
 /** Adds lateMinutes (canvas grace rule) and the check-out status. */

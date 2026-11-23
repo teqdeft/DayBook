@@ -60,7 +60,16 @@ const offset = z.coerce
   .min(0, 'The offset cannot be negative.')
   .default(0);
 
-export const FILTERS = ['all', 'late', 'wfh', 'not_checked_in', 'unverified'];
+// The day page's filters (CONTRACT 25 adds on_leave and on_break).
+export const FILTERS = [
+  'all',
+  'late',
+  'wfh',
+  'not_checked_in',
+  'on_leave',
+  'unverified',
+  'on_break',
+];
 
 /** POST /api/attendance/check-in */
 export const checkInSchema = z
@@ -81,7 +90,9 @@ export const breakSchema = z.object({}).default({});
 export const listQuerySchema = z.object({
   date: dateString('Pick a date like 2026-09-30.').optional(),
   filter: z
-    .enum(FILTERS, { error: 'Pick a filter: late, wfh, not_checked_in or unverified.' })
+    .enum(FILTERS, {
+      error: 'Pick a filter: late, wfh, not_checked_in, on_leave, unverified or on_break.',
+    })
     .optional()
     .default('all'),
   limit,

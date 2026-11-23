@@ -18,11 +18,35 @@
   align-items: start;
 }
 
-.side {
+.side,
+.sideAct,
+.sideInfo {
   display: flex;
   flex-direction: column;
   gap: 18px;
   min-width: 0;
+}
+
+/* "Missing check-out" as a link to the full list (CONTRACT 25, as overview/page.module.css). */
+.kpiLink {
+  color: inherit;
+  transition: border-color 120ms ease;
+}
+
+.kpiLink:hover {
+  border-color: var(--line-dashed);
+  text-decoration: none;
+}
+
+.kpiChevron {
+  transition:
+    transform 120ms ease,
+    color 120ms ease;
+}
+
+.kpiLink:hover .kpiChevron {
+  color: var(--ink);
+  transform: translateX(2px);
 }
 
 /* Everyone today */
@@ -55,6 +79,20 @@
   color: var(--ink);
 }
 
+/* Focus lands here when a break fix takes a row out of the filter (BreakListHost). */
+.cardTitle:focus-visible {
+  border-radius: 4px;
+}
+
+.headTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
 .pills {
   justify-content: flex-end;
 }
@@ -84,6 +122,16 @@
   color: var(--ink);
 }
 
+/* HR and Admins: the name opens the person's month (CONTRACT 25, item 8). */
+.personLink {
+  text-decoration: none;
+}
+
+.personLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .personRole {
   overflow: hidden;
   font-size: var(--text-small);
@@ -93,16 +141,22 @@
   white-space: nowrap;
 }
 
-.checkIn {
+/* A cell's lines: the time, then each line that applies (CONTRACT 25). */
+.stack {
   position: relative;
   top: -1px; /* the artboard sets the time 1 px above the row's centre */
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
 }
 
 .where {
   position: relative;
   top: -1px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .checkInTime {
@@ -123,15 +177,6 @@
   white-space: nowrap;
 }
 
-/* Present with breaks: worked time, "Breaks 45m" and, past the allowance, "Over 15m". */
-.worked {
-  position: relative;
-  top: -1px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
 .breaks {
   margin-top: 2px;
   font-size: 12px;
@@ -141,9 +186,38 @@
   white-space: nowrap;
 }
 
-.worked .over {
+/* 1.10: every new muted line is 12 px and may take 2 lines (never the nowrap above). */
+.mline {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--muted);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* "4th this month" at or over the late alert. */
+.mline.alert {
+  font-weight: 600;
+  color: var(--marigold-text);
+}
+
+/* The small tags in a cell: Over, Auto, Early, Check, On break, Half day, Short day. */
+.cellTag {
   height: 20px;
   margin-top: 3px;
+}
+
+.tagsWrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 6px;
+  margin-top: 3px;
+}
+
+.tagsWrap .cellTag {
+  margin-top: 0;
 }
 
 .time {
@@ -151,20 +225,6 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: var(--ink);
-}
-
-/* Out after an auto check-out: the time over a small "Auto" tag (like "Late 38m" under In). */
-.out {
-  position: relative;
-  top: -1px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.out .auto {
-  height: 20px;
-  margin-top: 3px;
 }
 
 .missing {
@@ -191,6 +251,21 @@
 
 .noteDash {
   color: var(--muted);
+}
+
+/* HR's Action column: RowAction and the row's "..." menu on one line, the reminder under it. */
+.act {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.actLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 36px;
 }
 
 .emptyLink {
@@ -292,59 +367,39 @@
   color: var(--muted);
 }
 
-/* Missing check-outs */
-.missingCard {
-  --card-pad: 20px 24px 18px;
-}
-
-.missingList {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.missingItem {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.missingText {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.missingTitle {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
-  color: var(--ink);
-}
-
-.missingSub {
-  font-size: 13px;
-  line-height: 19px;
-  color: var(--muted);
-}
-
-/* One column: the things HR acts on come before the long table. The table's artboard columns
-   plus HR's action ("Confirm") need 764 px, which only fit beside the 340 px column from the
-   artboard's 1440 px; narrower, the action (or, for PMs, the note) would be squeezed out. */
+/* One column: the things HR acts on come before the long table, and what HR reads (Needs a look,
+   Leave and holidays) after it, so on a 1366 or 1280 px laptop the day table stays near the top
+   (CONTRACT 25). The table's artboard columns plus HR's action need 764 px, which only fit beside
+   the 340 px column from the artboard's 1440 px; narrower, the action (or, for PMs, the note)
+   would be squeezed out. */
 @media (max-width: 1439px) {
   .main {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .side {
-    order: -1;
+    display: contents;
+  }
+
+  .sideAct,
+  .sideInfo {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     align-items: start;
+  }
+
+  .sideAct {
+    order: -1;
+  }
+
+  .sideInfo {
+    order: 1;
+  }
+
+  /* An empty wrapper (a PM without side cards) takes no row. */
+  .sideAct:empty,
+  .sideInfo:empty {
+    display: none;
   }
 }
 
@@ -368,7 +423,15 @@
     padding: 14px 16px;
   }
 
-  .pills {
+  .pills,
+  .headTools {
     justify-content: flex-start;
+  }
+}
+
+/* 44 px hit areas on touch (CONTRACT 25). */
+@media (max-width: 640px) {
+  .actLine {
+    min-height: 44px;
   }
 }

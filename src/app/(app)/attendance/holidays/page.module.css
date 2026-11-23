@@ -1,0 +1,114 @@
+/* Holidays (CONTRACT 25, item 6; hr-tools-prototype "holidays" states). */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--block-gap);
+  min-width: 0;
+}
+
+/* A day ("Tue, 24 Nov"), as the prototype's .time: body font, 500, tabular figures. */
+.date {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.name {
+  min-width: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Add / Edit holiday */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dateField {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Stays in the page while empty (a live region), with no height. */
+.liveLine {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.liveLine:empty {
+  margin-top: 0;
+}
+
+/* Loading */
+.skeletonHead {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 70px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.skeletonTableHead {
+  height: 40px;
+  border-bottom: 1px solid var(--track);
+  background: var(--surface-muted);
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 54px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--track);
+}
+
+.skeletonRow:last-child {
+  border-bottom: 0;
+}
+
+.skeletonTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  min-height: 59px;
+}
+
+.skeletonHeading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeletonActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The row's menu: on a phone the only way to edit or delete, so 44 px to tap, its items too
+   (CONTRACT 25). */
+@media (max-width: 640px) {
+  .menu > button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .menu [role='menuitem'] {
+    min-height: 44px;
+  }
+}

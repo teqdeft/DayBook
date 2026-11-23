@@ -115,6 +115,10 @@ export function listTrackedPeopleDay(date, { withAdmins = true } = {}) {
       'u.avatarUrl',
       'u.status',
       'u.joinedOn',
+      // The person's day (CONTRACT 25): the shift sets the half-day split of first-half leave.
+      'u.tracksAttendance',
+      'u.shiftStart',
+      'u.shiftEnd',
       'a.id as attendanceId',
       'a.checkInAt',
       'a.checkOutAt',
@@ -494,25 +498,18 @@ export async function countMissingCheckouts() {
 }
 
 /**
- * Check-ins per day and location for active tracked people between two dates. `joined` counts
- * the check-ins of people who had joined by that day (the rest checked in before their joining
- * date).
+ * Every check-in of active tracked people between two dates (both included), one row per person
+ * and day, oldest first: the Overview's "Attendance this week" asks each person's day
+ * (holidays, leave) whether they were expected (CONTRACT 25).
+ * @returns {Promise<Array<{ userId: number, workDate: string, location: string }>>}
  */
-export async function countAttendanceByDay(from, to) {
-  const rows = await db('attendance as a')
+export function listCheckInsBetween(from, to) {
+  return db('attendance as a')
     .join('users as u', 'u.id', 'a.userId')
     .where({ 'u.status': 'active', 'u.tracksAttendance': true })
     .whereBetween('a.workDate', [from, to])
-    .groupBy('a.workDate', 'a.location')
-    .select(
-      'a.workDate',
-      'a.location',
-      db.raw('COUNT(*) as count'),
-      db.raw(
-        'SUM(CASE WHEN u.joined_on IS NULL OR u.joined_on <= a.work_date THEN 1 ELSE 0 END) as joined',
-      ),
-    );
-  return rows.map((row) => ({ ...row, count: Number(row.count), joined: Number(row.joined) }));
+    .select('a.userId', 'a.workDate', 'a.location')
+    .orderBy([{ column: 'a.workDate' }, { column: 'a.userId' }]);
 }
 
 /** Active people per department (departments with nobody left out), largest first. */

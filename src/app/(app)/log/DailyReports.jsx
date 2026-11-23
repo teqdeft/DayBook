@@ -2,7 +2,8 @@
 // My log's "Daily reports" table (artboard 03): one row per day, newest first. A row opens to its
 // tasks with hours and status, and a line saying until when the report can change, with "Edit
 // report" (still open) or "Request an edit" (locked). The first days show; the rest of the month
-// is one click away.
+// is one click away. A holiday or a day of leave reads "Holiday" / "On leave", and a half day of
+// leave or a holiday adds a muted line under the date (CONTRACT 25).
 import { Fragment, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import Button from '@/components/Button';
@@ -159,6 +160,7 @@ export default function DailyReports({ rows, emptyText, emptyAction = null }) {
                         </Tag>
                       ) : null}
                     </span>
+                    {row.dayNote ? <span className={styles.dayNote}>{row.dayNote}</span> : null}
                   </td>
                   <td data-label="Check-in to out" className={styles.num}>
                     {row.times ?? <Dash />}

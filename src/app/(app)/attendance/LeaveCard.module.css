@@ -1,0 +1,101 @@
+/* The "Leave and holidays" side card (CONTRACT 25, item 9; prototype `.leave-*`, `.side-*`). */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.sub {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.empty {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.heading {
+  margin-top: 16px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.muted {
+  margin-top: 14px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--track);
+}
+
+/* Before migration 018: the sentence instead of the list and the buttons. */
+.unavailable {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+@media (max-width: 640px) {
+  .buttons > * {
+    min-height: 44px;
+  }
+}

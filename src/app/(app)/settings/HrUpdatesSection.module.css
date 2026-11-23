@@ -1,0 +1,15 @@
+/* HR updates (CONTRACT 25), as the HR tools prototype: the switches come first, so the first one
+   has no divider above it, and the two numbers follow under a divider. */
+div.first {
+  margin-top: 0;
+}
+
+.first > :first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.afterToggles {
+  padding-top: 16px;
+  border-top: 1px solid var(--track);
+}

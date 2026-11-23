@@ -2,9 +2,11 @@
 // hours export and the dashboard query schemas.
 import ExcelJS from 'exceljs';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { db } from '@/lib/db';
 import { xlsxResponse } from '@/lib/excel';
 import { dayjs, localToUtc, setNowForTests } from '@/lib/time';
 import { dashboard } from '@/modules/dashboard';
+import { reports } from '@/modules/reports';
 import { presentMinutesOf } from '@/modules/dashboard/history';
 import {
   employeeDetailQuerySchema,
@@ -310,6 +312,27 @@ describe('tasks to watch (section 7.5)', () => {
       ['Working on backend', 'In progress 3 days', false, 'beta'],
     ]);
     expect(tasks.stuckCount).toBe(1);
+  });
+
+  it('skips company holidays, so a holiday never makes a task older (CONTRACT 25)', async () => {
+    const holidays = new Set(['2026-09-25']);
+    expect(dashboard.isStuckTask('2026-09-23', TODAY, WORKING_DAYS, 5, holidays)).toBe(false);
+    expect(dashboard.daysInProgress('2026-09-23', TODAY, WORKING_DAYS, holidays)).toBe(5);
+    expect(dashboard.daysInProgress('2026-09-25', TODAY, WORKING_DAYS, holidays)).toBe(3);
+    await db('holidays').insert({ holidayDate: '2026-09-25', name: 'Test festival' });
+    try {
+      const { tasks } = await dashboard.getEmployeeDetail({ userId: person.id });
+      expect(tasks.items.map((t) => [t.title, t.label, t.stuck])).toEqual([
+        ['API for leave form', 'In progress 5 days', false],
+        ['Working on backend', 'In progress 3 days', false],
+      ]);
+      const stuck = await reports.listStuckTasks(person.id, { today: TODAY });
+      expect(stuck.map((task) => task.title)).not.toContain('API for leave form');
+    } finally {
+      await db('holidays').del();
+    }
+    const stuck = await reports.listStuckTasks(person.id, { today: TODAY });
+    expect(stuck.find((task) => task.title === 'API for leave form')?.workingDays).toBe(5);
   });
 
   it('uses the stuck_task_days setting', async () => {

@@ -1,5 +1,7 @@
 // Loads and shapes everything the Today page shows. Server only (called from page.js). Today's
 // to-do (CONTRACT 24) replaced "My tasks this week": its first state comes from todayTodo.js.
+// CONTRACT 25: the person's day (holiday, own leave), the This week labels from todayDay.js, the
+// "coming up" lines and the missing check-outs for the pop-up.
 import {
   addDays,
   clockToMinutes,
@@ -26,6 +28,7 @@ import { projectTasks } from '@/modules/projectTasks';
 import { reports } from '@/modules/reports';
 import { settings } from '@/modules/settings';
 import { shortDuration } from './timerData';
+import { comingUpLines, weekDayLabel } from './todayDay';
 import { statusPill, stillWorkingNote } from './todayStatus';
 import { loadTimerParts, pickerWithTasks, timerCard, timersShownFor } from './todayTimers';
 import { loadTodo } from './todayTodo';
@@ -75,8 +78,12 @@ function reportTag(dayStatus, dueAt) {
   return { tone: 'marigold', text: `Report due in ${formatDuration(left)}` };
 }
 
-/** Mon-Fri (the working days) of this week: logged hours, today's present time, future "—". */
-function weekDays({ today, current, submitted, dayStatus, presentToday }) {
+/**
+ * Mon-Fri (the working weekdays) of this week: logged hours, today's present time, future "—".
+ * A past or current holiday or full-leave day without hours reads "Holiday" / "Leave", faded
+ * (CONTRACT 25; `dayOf(date)` is the person's day).
+ */
+function weekDays({ today, current, submitted, dayStatus, presentToday, dayOf }) {
   const { from, to } = weekRange(today);
   const days = [];
   for (let date = from; date <= to; date = addDays(date, 1)) {
@@ -85,12 +92,13 @@ function weekDays({ today, current, submitted, dayStatus, presentToday }) {
   return days.map((date) => {
     const label = formatDayShort(date).slice(0, 3);
     if (date > today) return { date, label, value: 0, display: null };
+    const off = weekDayLabel(dayOf(date));
     if (date === today && dayStatus.status !== 'submitted') {
       return {
         date,
         label,
         value: presentToday,
-        display: presentToday > 0 ? formatHours(presentToday) : null,
+        display: presentToday > 0 ? formatHours(presentToday) : off,
         highlight: true,
         faded: true,
       };
@@ -100,8 +108,9 @@ function weekDays({ today, current, submitted, dayStatus, presentToday }) {
       date,
       label,
       value: minutes,
-      display: minutes > 0 ? formatHours(minutes) : null,
+      display: minutes > 0 ? formatHours(minutes) : off,
       highlight: date === today,
+      ...(minutes === 0 && off ? { faded: true } : {}),
     };
   });
 }
@@ -169,7 +178,10 @@ export async function loadToday({ user, ip }) {
   const tz = current.timezone;
   const today = localDate(tz);
   const week = weekRange(today);
-  const mine = await attendance.getMyToday({ user, ip });
+  const [mine, calendar] = await Promise.all([
+    attendance.getMyToday({ user, ip }),
+    attendance.loadCalendar({ from: week.from, to: week.to, userIds: [user.id], withWfh: false }),
+  ]);
   // Screen time is recorded only for tracked people, and only while the company has it on.
   const screenTracked =
     current.activityTrackingEnabled !== false &&
@@ -201,7 +213,14 @@ export async function loadToday({ user, ip }) {
   const presentToday = mine.presentMinutes;
   // Today's bar shows worked time (present minus breaks, CONTRACT 15) until the report is in.
   const workedToday = mine.workedMinutes ?? presentToday;
-  const days = weekDays({ today, current, submitted, dayStatus, presentToday: workedToday });
+  const days = weekDays({
+    today,
+    current,
+    submitted,
+    dayStatus,
+    presentToday: workedToday,
+    dayOf: (date) => calendar.dayFor(user, date),
+  });
   const loggedSoFar = days.reduce((sum, day) => sum + (Number(day.value) || 0), 0);
   const dueAt = localToUtc(today, current.reportReminderAt, tz);
   const locksAt = locksAtFor(today, current.reportLock, tz);
@@ -235,6 +254,12 @@ export async function loadToday({ user, ip }) {
       subtitle: `${formatDuration(loggedSoFar)} logged so far`,
     },
     projectsToday,
+    // The person's day (CONTRACT 25): holiday, own leave (type and pay, never HR's note), the
+    // next leave and holiday, and the missing check-outs for the pop-up.
+    day: mine.day,
+    upcoming: mine.upcoming,
+    missing: mine.missing,
+    comingUp: comingUpLines({ upcoming: mine.upcoming, today }),
     screenTime: screenTracked ? screenTimeLine(screen) : null,
     priority: priorityRows(priority, user.id),
     timer: timerCard({ row, parts: timerState, breaks: mine.breaks, tz }),

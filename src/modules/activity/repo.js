@@ -47,6 +47,21 @@ export function listForUserDate(userId, workDate, trx = db) {
 }
 
 /**
+ * True when someone other than `exceptUserId` has a segment of the work date that overlaps
+ * (from, to); the service passes a no-data gap less 150 s at each end. Reads the work_date index
+ * and stops at the first row.
+ */
+export async function existsOtherBetween({ workDate, from, to, exceptUserId }, trx = db) {
+  const row = await trx('activitySegments')
+    .where({ workDate })
+    .where('startedAt', '<', to)
+    .where('endedAt', '>', from)
+    .whereNot('userId', exceptUserId)
+    .first('id');
+  return Boolean(row);
+}
+
+/**
  * Seconds per work date and state for one person, with the first start and last end of each:
  * [{ workDate, state, seconds, firstStartedAt, lastEndedAt }], oldest day first.
  */

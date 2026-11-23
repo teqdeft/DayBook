@@ -1,5 +1,6 @@
-// Away time while a timer runs (CONTRACT 15): when the state offers it, keep and remove, a stale
-// answer, and the day summary that fills the daily report.
+// Away time (CONTRACT 15, CONTRACT 25 A): when the state offers it (every one of today's timer
+// entries, the running one included), keep, remove (now saved as an away break), a stale answer,
+// Put back, Add time over removed time, and the day summary that fills the daily report.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
@@ -27,7 +28,7 @@ let beta;
 let gamma;
 let taskP1;
 
-/** A timer on acme since 10:00 with 32 min of idle-then-locked screen time from 10:30 to 11:02. */
+/** A timer on acme since 10:00 with 32 min of locked-then-idle screen time from 10:30 to 11:02. */
 async function awayDay() {
   const id = await insertEntry(emp, acme, {
     from: '10:00',
@@ -35,8 +36,8 @@ async function awayDay() {
     projectTaskId: taskP1,
   });
   await addSegment(emp, 'active', '10:00', '10:30');
-  await addSegment(emp, 'idle', '10:30', '10:45');
-  await addSegment(emp, 'locked', '10:46', '11:02');
+  await addSegment(emp, 'locked', '10:30', '10:45');
+  await addSegment(emp, 'idle', '10:46', '11:02');
   await addSegment(emp, 'active', '11:03', '11:10');
   setClock('11:10');
   return id;
@@ -71,8 +72,10 @@ beforeEach(async () => {
     timer_away_minutes: 25,
     activity_tracking_enabled: true,
   });
+  await db('attendanceBreaks').del();
   await db('timeEntries').del();
   await db('activitySegments').del();
+  timers.forgetAway();
 });
 
 afterEach(() => {
@@ -91,6 +94,21 @@ describe('away time in the state', () => {
       fromClock: '10:30',
       toClock: '11:02',
       projectName: 'acme-app',
+      kind: 'away',
+      running: true,
+      left: null,
+    });
+  });
+
+  it('moves an idle start back by the idle minutes (Idle Detection says idle that late)', async () => {
+    await insertEntry(emp, acme, { from: '10:00' });
+    await addSegment(emp, 'active', '10:00', '10:35');
+    await addSegment(emp, 'idle', '10:35', '11:00');
+    await addSegment(emp, 'active', '11:01', '11:10');
+    expect((await timers.getState({ user: emp })).away).toMatchObject({
+      fromClock: '10:30',
+      toClock: '11:00',
+      minutes: 30,
     });
   });
 
@@ -106,14 +124,24 @@ describe('away time in the state', () => {
     expect((await timers.getState({ user: emp })).away).toBeNull();
   });
 
-  it('asks nothing without a running timer, with screen time off or when blocked', async () => {
-    await awayDay();
+  it('asks about a finished entry after Stop, oldest first; nothing with screen time off', async () => {
+    const id = await awayDay();
+    await timers.stop({ user: emp });
+    expect((await timers.getState({ user: emp })).away).toMatchObject({
+      entryId: id,
+      running: false,
+      fromClock: '10:30',
+    });
     await setSettings({ activity_tracking_enabled: false });
     expect((await timers.getState({ user: emp })).away).toBeNull();
     await setSettings({ activity_tracking_enabled: true, timers_mode: 'off' });
     expect((await timers.getState({ user: emp })).away).toBeNull();
-    await setSettings({ timers_mode: 'optional' });
-    await timers.stop({ user: emp });
+  });
+
+  it('never asks about manual entries', async () => {
+    await insertEntry(emp, acme, { from: '10:00', to: '11:05', source: 'manual' });
+    await addSegment(emp, 'locked', '10:10', '10:50');
+    await addSegment(emp, 'active', '10:51', '11:10');
     expect((await timers.getState({ user: emp })).away).toBeNull();
   });
 
@@ -176,6 +204,17 @@ describe('resolveAway', () => {
     expect(rows[0].id).toBe(id);
     expect(rows[1].awayCheckedUntil).toEqual(at('11:02'));
     expect(state.totalMinutes).toBe(38);
+    // ...and the 32 minutes are an away break, listed for Put back.
+    expect(state.answer).toMatchObject({
+      savedAsBreak: true,
+      minutes: 32,
+      projectName: 'acme-app',
+    });
+    expect(state.removed).toEqual([
+      expect.objectContaining({ fromClock: '10:30', toClock: '11:02', minutes: 32 }),
+    ]);
+    const [saved] = await db('attendanceBreaks').where({ userId: emp.id });
+    expect(saved).toMatchObject({ source: 'away', endReason: 'away', awayEntryId: id });
   });
 
   it('remove from the first minute moves the timer start, leaving no empty entry', async () => {
@@ -191,6 +230,8 @@ describe('resolveAway', () => {
     expect(state.away).toBeNull();
     const [row] = await entriesOf(emp);
     expect(row).toMatchObject({ startedAt: at('10:40'), awayCheckedUntil: at('10:40') });
+    const [saved] = await db('attendanceBreaks').where({ userId: emp.id });
+    expect([saved.startedAt, saved.endedAt]).toEqual([at('10:00'), at('10:40')]);
   });
 
   it('refuses an answer that no longer matches the away time', async () => {
@@ -209,6 +250,108 @@ describe('resolveAway', () => {
     expect((await caught(answer(away, 'keep', { user: pm }))).code).toBe('FORBIDDEN');
     await timers.stop({ user: emp });
     expect((await caught(answer(away, 'remove'))).code).toBe('CONFLICT');
+  });
+});
+
+describe('Put back', () => {
+  /** Removes the awayDay span and answers the entry and the away break's ids. */
+  async function removed() {
+    const id = await awayDay();
+    const { away } = await timers.getState({ user: emp });
+    const state = await answer(away, 'remove');
+    return { id, breakId: state.removed[0].breakId };
+  }
+
+  const breaks = () => db('attendanceBreaks').where({ userId: emp.id });
+
+  async function freshDay() {
+    await db('attendanceBreaks').del();
+    await db('timeEntries').del();
+    await db('activitySegments').del();
+    timers.forgetAway();
+  }
+
+  it('split: the tail starts where the break started, to the second; not asked again', async () => {
+    const { id, breakId } = await removed();
+    const state = await timers.putBackAway({ user: emp, breakId });
+    expect(state.answer).toEqual({ restored: true, minutes: 32, projectName: 'acme-app' });
+    const [head, tail] = await entriesOf(emp);
+    expect(head).toMatchObject({ id, endedAt: at('10:30') });
+    expect(tail).toMatchObject({ startedAt: at('10:30'), endedAt: null });
+    expect(state).toMatchObject({ away: null, removed: [], totalMinutes: 70 });
+    expect(await breaks()).toHaveLength(0);
+    const logged = await db('auditLogs').where({ action: 'attendance.away_put_back' });
+    expect(logged.at(-1)).toMatchObject({ actorId: emp.id, entityType: 'attendance' });
+  });
+
+  it('move and trim restore the entry', async () => {
+    await insertEntry(emp, acme, { from: '10:00' });
+    await addSegment(emp, 'locked', '09:50', '10:40');
+    await addSegment(emp, 'active', '10:41', '11:10');
+    const moved = await answer((await timers.getState({ user: emp })).away, 'remove');
+    await timers.putBackAway({ user: emp, breakId: moved.removed[0].breakId });
+    expect((await entriesOf(emp))[0].startedAt).toEqual(at('10:00'));
+    await freshDay();
+    await insertEntry(emp, acme, { from: '09:30', to: '10:40' });
+    await addSegment(emp, 'active', '09:30', '10:00');
+    await addSegment(emp, 'locked', '10:00', '10:40');
+    await addSegment(emp, 'active', '10:41', '11:10');
+    const trimmed = await answer((await timers.getState({ user: emp })).away, 'remove');
+    expect((await entriesOf(emp))[0].endedAt).toEqual(at('10:00'));
+    const state = await timers.putBackAway({ user: emp, breakId: trimmed.removed[0].breakId });
+    const [entry] = await entriesOf(emp);
+    expect(entry).toMatchObject({ endedAt: at('10:40'), awayCheckedUntil: at('10:40') });
+    expect(state.away).toBeNull();
+  });
+
+  it('a deleted entry or an overlapping manual row: the break goes, the timer stays', async () => {
+    const first = await removed();
+    await timers.removeEntry({ user: emp, id: first.id });
+    expect((await timers.getState({ user: emp })).removed[0].projectName).toBeNull();
+    const gone = await timers.putBackAway({ user: emp, breakId: first.breakId });
+    expect(gone.answer).toMatchObject({ restored: false });
+    expect(await breaks()).toHaveLength(0);
+    await freshDay();
+    const second = await removed();
+    await insertEntry(emp, beta, { from: '10:35', to: '10:50', source: 'manual' });
+    const blocked = await timers.putBackAway({ user: emp, breakId: second.breakId });
+    expect(blocked.answer.restored).toBe(false);
+    const head = (await entriesOf(emp)).find((row) => row.id === second.id);
+    expect(head.endedAt).toEqual(at('10:30'));
+  });
+
+  it('HR changed it: CONFLICT; someone else or unknown: NOT_FOUND; timers off', async () => {
+    const { breakId } = await removed();
+    await db('attendanceBreaks').where({ id: breakId }).update({ changedById: pm.id });
+    expect((await timers.getState({ user: emp })).removed).toEqual([]);
+    expect(await caught(timers.putBackAway({ user: emp, breakId }))).toMatchObject({
+      code: 'CONFLICT',
+      message: 'HR changed this break. Ask HR if it needs fixing.',
+    });
+    const other = await createUser({ name: 'Other Dev' });
+    expect(await caught(timers.putBackAway({ user: other, breakId }))).toMatchObject({
+      code: 'NOT_FOUND',
+      message: "We couldn't find that removed time.",
+    });
+    const unknown = await caught(timers.putBackAway({ user: emp, breakId: 999999 }));
+    expect(unknown.code).toBe('NOT_FOUND');
+    await setSettings({ timers_mode: 'off' });
+    expect((await caught(timers.putBackAway({ user: emp, breakId }))).code).toBe('TIMERS_OFF');
+  });
+
+  it('Add time over removed time is refused with its own message', async () => {
+    await removed();
+    const error = await caught(
+      timers.addEntry({
+        user: emp,
+        input: { projectId: beta.id, startClock: '10:35', endClock: '10:50' },
+      }),
+    );
+    expect(error).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      message:
+        'That overlaps time you removed from your timer from 10:30 to 11:02. Put it back first.',
+    });
   });
 });
 

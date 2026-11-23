@@ -7,7 +7,16 @@ import { db } from '@/lib/db';
 import { setNowForTests } from '@/lib/time';
 import { ai } from '@/modules/ai';
 import { resetDatabase } from '../helpers/db.js';
-import { createCompany, enableAsk, MONDAY, NOW, requests, TODAY, toolResult } from './aiAskKit.js';
+import {
+  createCompany,
+  enableAsk,
+  MONDAY,
+  NOW,
+  requests,
+  TODAY,
+  TUESDAY,
+  toolResult,
+} from './aiAskKit.js';
 
 const WEEK = { from: MONDAY, to: TODAY };
 let people;
@@ -245,5 +254,67 @@ describe('an Admin sees everything', () => {
     ]);
     const projects = await toolResult(people.chief, 'list_projects');
     expect(projects.projects.map((row) => row.project)).toEqual(['acme-app', 'acme-seo']);
+  });
+});
+
+describe("the person's day (CONTRACT 25)", () => {
+  const NOTE = 'Private note for HR only';
+
+  beforeAll(async () => {
+    await db('holidays').insert({ holidayDate: TUESDAY, name: 'Test festival' });
+    await db('leaveEntries').insert({
+      userId: people.amanG.id,
+      fromDate: MONDAY,
+      toDate: MONDAY,
+      part: 'full',
+      paid: false,
+      leaveType: 'sick',
+      note: NOTE,
+    });
+    // Vishal entered Monday's missing check-out himself; HR fixed Tuesday's.
+    await db('attendance')
+      .where({ userId: people.vishal.id, workDate: MONDAY })
+      .update({ checkoutStatus: 'corrected', checkoutEnteredBy: people.vishal.id });
+    await db('attendance')
+      .where({ userId: people.vishal.id, workDate: TUESDAY })
+      .update({ checkoutStatus: 'corrected', checkoutEnteredBy: people.neha.id });
+  });
+
+  afterAll(async () => {
+    await db('holidays').del();
+    await db('leaveEntries').del();
+    await db('attendance')
+      .where({ userId: people.vishal.id })
+      .update({ checkoutStatus: 'checked_out', checkoutEnteredBy: null });
+  });
+
+  it('never counts a holiday or leave as a day without a check-in, and lists them', async () => {
+    const result = await toolResult(people.neha, 'attendance_summary', WEEK);
+    const row = (name) => result.people.find((item) => item.person === name);
+    // Rohit missed Tuesday only, which is now a holiday; Aman Gupta was on leave on Monday.
+    expect(row('Rohit Verma')).toMatchObject({ workingDaysWithoutCheckIn: 0, leaveDays: 0 });
+    expect(row('Aman Gupta')).toMatchObject({ workingDaysWithoutCheckIn: 0, leaveDays: 1 });
+    expect(row('Aman Singh')).toMatchObject({ workingDaysWithoutCheckIn: 1, leaveDays: 0 });
+    expect(result.holidays).toEqual([{ date: TUESDAY, name: 'Test festival' }]);
+    expect(sent()).not.toMatch(/sick|unpaid|leaveType|"paid"/);
+    expect(sent()).not.toContain(NOTE);
+  });
+
+  it('reads a check-out the person entered as "Entered by the person"', async () => {
+    const result = await toolResult(people.neha, 'attendance_summary', {
+      ...WEEK,
+      personName: 'vishal',
+    });
+    expect(result.days.map((day) => [day.date, day.checkOutNote ?? null])).toEqual([
+      [MONDAY, 'Entered by the person'],
+      [TUESDAY, 'Corrected'],
+    ]);
+  });
+
+  it('tells Gemini that holidays and leave are not working days', async () => {
+    await toolResult(people.neha, 'attendance_summary', WEEK);
+    expect(requests[0].systemInstruction.parts[0].text).toContain(
+      'Company holidays and leave days are not working days.',
+    );
   });
 });

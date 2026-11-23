@@ -1,141 +1,83 @@
 // Loads and shapes the Attendance page (artboard 09). Server only (called from page.js). Every read
-// passes the viewer: HR and PMs never see an Admin's attendance (company rule). Durations read as
-// hours and minutes ("Late 1h 37m"), never a bare minute count past an hour. HR and Admins also
-// get the work-from-home requests card (CONTRACT 17, wfhCard.js). Rows the auto check-out closed
-// carry `autoOut` (CONTRACT 19).
+// passes the viewer: HR and PMs never see an Admin's attendance (company rule). HR and Admins also
+// get the work-from-home requests card (CONTRACT 17, wfhCard.js), and in 1.10 (CONTRACT 25) the
+// leave type and pay, reminders, "4th this month", Needs a look and the leave coming up. The rows
+// and number cards are built in dayRows.js.
 import { can } from '@/lib/permissions';
-import {
-  addDays,
-  formatDayShort,
-  formatDuration,
-  formatRelativeDay,
-  formatTime,
-  toLocal,
-  workDate as localDate,
-} from '@/lib/time';
-import { plural } from '@/lib/text';
+import { addDays, formatDayShort, isoWeekday, workDate as localDate } from '@/lib/time';
 import { attendance } from '@/modules/attendance';
+import { FILTERS } from '@/modules/attendance/schemas';
 import { settings } from '@/modules/settings';
+import { kpis, pillsFor, tableRow } from './dayRows';
+import { loadRemindData } from './remindData';
+import { clockValue } from './rowActions';
 import { handledSinceFor, wfhCard } from './wfhCard';
 
-export const FILTERS = ['all', 'late', 'wfh', 'not_checked_in', 'unverified'];
+export { FILTERS };
 
-/** 'HH:mm' in company time for a time input, or null. */
-function clockValue(at, tz) {
-  return at ? toLocal(at, tz).format('HH:mm') : null;
+const UPCOMING_DAYS = 7;
+const HOLIDAY_DAYS = 60;
+
+/** The side card "Missing check-outs": up to 5 rows, Fix for HR (not their own). */
+function missingCard(missing, { canCorrect, viewerId, tz, today }) {
+  return {
+    total: missing.total,
+    items: missing.items.map((row) => ({
+      id: row.id,
+      // Artboard 09 writes "Priya Sharma, Fri 13 Nov" here (CONTRACT 25, item 7).
+      title: `${row.user.name}, ${formatDayShort(row.workDate).replace(',', '')}`,
+      suggestedAt: row.suggestedAt ?? null,
+      pendingCorrection: row.pendingCorrection ?? null,
+      reminded: row.reminded ?? null,
+      action:
+        canCorrect && row.userId !== viewerId
+          ? {
+              kind: 'fix',
+              row: {
+                attendanceId: row.id,
+                userId: row.userId,
+                name: row.user.name,
+                workDate: row.workDate,
+                dayLabel: formatDayShort(row.workDate),
+                checkIn: clockValue(row.checkInAt, tz),
+                checkOut: row.suggestedAt ? clockValue(row.suggestedAt, tz) : null,
+                location: row.location,
+                isToday: row.workDate === today,
+              },
+            }
+          : null,
+    })),
+  };
 }
 
-function actionFor(item, { date, today, dayLabel, tz }) {
-  const base = {
-    userId: item.user.id,
-    name: item.user.name,
-    workDate: date,
-    dayLabel,
+/** The "Leave and holidays" side card (LeaveCard, builder F). */
+function leaveCard({ date, today, onLeave, upcoming, holiday, canCorrect, available }) {
+  return {
+    date,
     isToday: date === today,
-  };
-  const row = item.attendance;
-  if (!row) return { kind: 'add', row: { ...base, location: 'office' } };
-  const attendanceRow = {
-    ...base,
-    attendanceId: row.id,
-    checkIn: clockValue(row.checkInAt, tz),
-    checkOut: clockValue(row.checkOutAt, tz),
-    location: row.location,
-    note: row.note,
-    checkInText: formatTime(row.checkInAt, tz),
-  };
-  return { kind: item.where === 'unverified' ? 'confirm' : 'edit', row: attendanceRow };
-}
-
-/**
- * The Present cell (CONTRACT 15): present time, or worked time (present less breaks) with a
- * "Breaks 45m" line and an "Over 15m" tag past the daily allowance once the person took breaks
- * ("Breaks 1h 2m", "Over 1h 15m" past an hour).
- */
-function presentOf(item) {
-  const present = item.presentMinutes;
-  const breaks = item.breakMinutes ?? 0;
-  if (present === null || present === undefined) return { present: null };
-  if (breaks <= 0) return { present: formatDuration(present) };
-  const worked = item.workedMinutes ?? Math.max(0, present - breaks);
-  const over = item.overAllowanceMinutes ?? 0;
-  return {
-    present: formatDuration(worked),
-    breaks: `Breaks ${formatDuration(breaks)}`,
-    over: over > 0 ? `Over ${formatDuration(over)}` : null,
-    presentTitle: `Present ${formatDuration(present)}, breaks ${formatDuration(breaks)}, worked ${formatDuration(worked)}`,
+    title: date === today ? 'On leave today' : `On leave, ${formatDayShort(date)}`,
+    items: onLeave,
+    upcoming: canCorrect ? upcoming : [],
+    nextHoliday: holiday,
+    canCorrect,
+    available,
   };
 }
 
-function tableRow(item, ctx) {
-  const row = item.attendance;
-  return {
-    id: item.user.id,
-    user: item.user,
-    where: item.where,
-    checkIn: row ? formatTime(row.checkInAt, ctx.tz) : null,
-    late: row?.lateMinutes > 0 ? `Late ${formatDuration(row.lateMinutes)}` : null,
-    checkOut: row?.checkOutAt ? formatTime(row.checkOutAt, ctx.tz) : null,
-    // Checked out by the auto check-out (no activity after office hours, CONTRACT 19).
-    autoOut: Boolean(row?.checkOutAt) && row.checkoutStatus === 'auto',
-    missing: row?.checkoutStatus === 'missing',
-    ...presentOf(item),
-    note: row?.note ?? null,
-    // HR changes other people's rows; their own go through another HR person or an Admin.
-    action: ctx.canCorrect && item.user.id !== ctx.viewerId ? actionFor(item, ctx) : null,
-  };
-}
-
-/** "average 26 minutes" (the artboard's words), "average 1h 37m" from an hour up. */
-function averageLate(minutes) {
-  return minutes < 60 ? `${minutes} ${plural(minutes, 'minute')}` : formatDuration(minutes);
-}
-
-function kpis(summary, date) {
-  const total = summary.tracked || 0;
-  const pct = (count) => (total > 0 ? (count / total) * 100 : 0);
-  const people = (count) => plural(count, 'person', 'people');
-  // "1 from yesterday"; on a Monday "2 from Friday", or "3 since Friday" when the weekend had
-  // missing check-outs too.
-  const relative = formatRelativeDay(summary.missingFromDate, date) ?? 'Yesterday';
-  const when = relative === 'Yesterday' || relative === 'Today' ? relative.toLowerCase() : relative;
-  return [
-    {
-      label: 'Present',
-      value: summary.present,
-      sub: `of ${total} people`,
-      percent: pct(summary.present),
-      color: 'primary',
-    },
-    {
-      label: 'In office',
-      value: summary.inOffice,
-      sub: people(summary.inOffice),
-      percent: pct(summary.inOffice),
-      color: 'primary',
-    },
-    {
-      label: 'Working from home',
-      value: summary.wfh,
-      sub: people(summary.wfh),
-      percent: pct(summary.wfh),
-      color: 'violet',
-    },
-    {
-      label: 'Late',
-      value: summary.late,
-      sub: summary.late ? `average ${averageLate(summary.lateAverageMinutes)}` : people(0),
-      percent: pct(summary.late),
-      color: 'marigold',
-    },
-    {
-      label: 'Missing check-out',
-      value: summary.missingCheckouts,
-      sub: `${summary.missingDays > 1 ? 'since' : 'from'} ${when}`,
-      percent: pct(summary.missingCheckouts),
-      color: 'red',
-    },
-  ];
+/** The HR-only reads: reminders, Needs a look and the leave coming up. */
+function hrReads({ canCorrect, viewer, items, date, today, current }) {
+  if (!canCorrect) return [new Map(), null, []];
+  const tomorrow = addDays(today, 1);
+  return Promise.all([
+    loadRemindData({ items, date, today, viewer, settings: current }),
+    attendance.getNeedsLook({ viewer }),
+    attendance.listUpcomingLeave({
+      viewer,
+      from: tomorrow,
+      to: addDays(today, UPCOMING_DAYS),
+      limit: 5,
+    }),
+  ]);
 }
 
 /**
@@ -149,19 +91,38 @@ export async function loadAttendance({ user, date: asked, filter: askedFilter })
   const filter = FILTERS.includes(askedFilter) ? askedFilter : 'all';
   const canCorrect = can(user, 'attendance.correct');
   const viewer = user;
-  const items = await attendance.listDay(date, { viewer });
-  const [summary, corrections, missing, wfh, wfhWaiting] = await Promise.all([
-    attendance.getDaySummary(date, { items, viewer }),
-    canCorrect ? attendance.listCorrections({ status: 'pending', limit: 20, viewer }) : null,
-    attendance.listMissingCheckouts({ limit: 5, viewer }),
-    // Pending requests, then the ones handled in the last 7 days (whatever day is shown).
-    canCorrect
-      ? attendance.listWfhRequests({ viewer, handledSince: handledSinceFor(today), limit: 30 })
-      : null,
-    canCorrect ? attendance.countPendingWfh({ viewer }) : 0,
-  ]);
-  const dayLabel = formatDayShort(date);
-  const ctx = { date, today, dayLabel, tz, canCorrect, viewerId: user.id };
+  const calendar = await attendance.loadCalendar({ from: date, to: date, leaveDetail: canCorrect });
+  const items = await attendance.listDay(date, { viewer, calendar, leaveDetail: canCorrect });
+  const lateIds = items.filter((item) => item.lateMinutes > 0).map((item) => item.user.id);
+  const [summary, corrections, missing, wfh, wfhWaiting, lateCounts, onLeave, holiday, hr] =
+    await Promise.all([
+      attendance.getDaySummary(date, { items, viewer }),
+      canCorrect ? attendance.listCorrections({ status: 'pending', limit: 20, viewer }) : null,
+      attendance.listMissingCheckouts({ limit: 5, viewer, suggest: canCorrect }),
+      // Pending requests, then the ones handled in the last 7 days (whatever day is shown).
+      canCorrect
+        ? attendance.listWfhRequests({ viewer, handledSince: handledSinceFor(today), limit: 30 })
+        : null,
+      canCorrect ? attendance.countPendingWfh({ viewer }) : 0,
+      lateIds.length ? attendance.lateCountsFor({ date, userIds: lateIds }) : {},
+      attendance.listOnLeave(date, { viewer }),
+      attendance.nextHoliday(addDays(today, 1), { withinDays: HOLIDAY_DAYS }),
+      hrReads({ canCorrect, viewer, items, date, today, current }),
+    ]);
+  const [remind, needsLook, upcoming] = hr;
+  const ctx = {
+    date,
+    today,
+    dayLabel: formatDayShort(date),
+    tz,
+    canCorrect,
+    viewerId: user.id,
+    month: attendance.payrollMonthOf(date, current.payrollMonthStartDay),
+    lateCounts,
+    remind,
+    calendarAvailable: calendar.available,
+  };
+  const rows = attendance.filterDay(items, filter).map((item) => tableRow(item, ctx));
   return {
     tz,
     today,
@@ -170,37 +131,45 @@ export async function loadAttendance({ user, date: asked, filter: askedFilter })
     canCorrect,
     summary,
     kpis: kpis(summary, date),
-    rows: attendance.filterDay(items, filter).map((item) => tableRow(item, ctx)),
+    pills: pillsFor({ summary, date, today, filter }),
+    day: {
+      date,
+      weekday: current.workingDays.includes(isoWeekday(date)),
+      isWorkingDay: calendar.isWorkingDay(date),
+      holiday: calendar.holidayOn(date),
+    },
+    rows,
+    // Remind all (builder D) for the Not checked in and On break filters on today.
+    remindAll: remindAllFor({ rows, filter, isToday: date === today, canCorrect }),
     wfh: wfhCard(wfh, wfhWaiting, { viewer, tz, today }),
     corrections: corrections && {
       total: corrections.total,
       items: corrections.items.map((item) => ({ ...item, own: item.userId === user.id })),
     },
-    missing: {
-      total: missing.total,
-      items: missing.items.map((row) => ({
-        id: row.id,
-        title: `${row.user.name}, ${formatDayShort(row.workDate).replace(',', '')}`,
-        action:
-          canCorrect && row.userId !== user.id
-            ? {
-                kind: 'fix',
-                row: {
-                  attendanceId: row.id,
-                  userId: row.userId,
-                  name: row.user.name,
-                  workDate: row.workDate,
-                  dayLabel: formatDayShort(row.workDate),
-                  checkIn: clockValue(row.checkInAt, tz),
-                  checkOut: null,
-                  location: row.location,
-                  isToday: row.workDate === today,
-                },
-              }
-            : null,
-      })),
-    },
+    missing: missingCard(missing, { canCorrect, viewerId: user.id, tz, today }),
+    needsLook,
+    leave: leaveCard({
+      date,
+      today,
+      onLeave,
+      upcoming,
+      holiday,
+      canCorrect,
+      available: calendar.available,
+    }),
     prevDate: addDays(date, -1),
     nextDate: date < today ? addDays(date, 1) : null,
   };
+}
+
+const REMIND_ALL_KINDS = { not_checked_in: 'check_in', on_break: 'break' };
+
+/** The people "Remind all (3)" sends to: listed rows whose menu offers that remind now. */
+function remindAllFor({ rows, filter, isToday, canCorrect }) {
+  const kind = REMIND_ALL_KINDS[filter];
+  if (!canCorrect || !isToday || !kind) return null;
+  const users = rows
+    .filter((row) => row.menu?.remind?.kind === kind)
+    .map((row) => row.menu.remind.user);
+  return { kind, users };
 }

@@ -730,3 +730,74 @@ describe('users: changes that race each other', () => {
     expect(await db('users').where({ email: 'twice@example.com' })).toHaveLength(1);
   });
 });
+
+describe('users.listTrackedForRange (CONTRACT 25)', () => {
+  it('lists people who check in, joined by the end and not gone before the start', async () => {
+    const make = (name, overrides = {}) =>
+      createUser({
+        name,
+        email: `${name.replaceAll(' ', '.').toLowerCase()}@example.com`,
+        ...overrides,
+      });
+    // The company is on Asia/Kolkata (UTC+5:30): 1 Nov starts at 31 Oct 18:30 UTC.
+    const created = [
+      await make('Range Active'),
+      await make('Range Joined End', { joinedOn: '2026-11-25' }),
+      await make('Range Joined Later', { joinedOn: '2026-11-26' }),
+      await make('Range Untracked', { tracksAttendance: false }),
+      await make('Range Left First Day', {
+        status: 'deactivated',
+        deactivatedAt: new Date('2026-10-31T19:00:00Z'),
+      }),
+      await make('Range Left Before', {
+        status: 'deactivated',
+        deactivatedAt: new Date('2026-10-31T18:00:00Z'),
+      }),
+      await make('Range Left Unknown', { status: 'deactivated', deactivatedAt: null }),
+    ];
+    const ids = new Set(created.map((row) => row.id));
+    const listed = (
+      await users.listTrackedForRange({ from: '2026-11-01', to: '2026-11-25' })
+    ).filter((person) => ids.has(person.id));
+    expect(listed.map((person) => person.name)).toEqual([
+      'Range Active',
+      'Range Joined End',
+      'Range Left First Day',
+    ]);
+    expect(listed[0]).toMatchObject({
+      status: 'active',
+      deactivatedAt: null,
+      tracksAttendance: true,
+    });
+    expect(listed[2].deactivatedAt).toBeInstanceOf(Date);
+    expect(listed[2].deactivatedAt.toISOString()).toBe('2026-10-31T19:00:00.000Z');
+    expect(Object.keys(listed[0])).toEqual(
+      expect.arrayContaining(['initials', 'roleLabel', 'shiftStart']),
+    );
+
+    // A range that ends before someone joined leaves them out; one ending later lists them.
+    const october = await users.listTrackedForRange({ from: '2026-10-26', to: '2026-10-31' });
+    expect(october.filter((person) => ids.has(person.id)).map((person) => person.name)).toEqual([
+      'Range Active',
+      'Range Left Before',
+      'Range Left First Day',
+    ]);
+    const later = await users.listTrackedForRange({ from: '2026-11-26', to: '2026-12-25' });
+    expect(later.filter((person) => ids.has(person.id)).map((person) => person.name)).toEqual([
+      'Range Active',
+      'Range Joined End',
+      'Range Joined Later',
+    ]);
+  });
+
+  it('refuses dates that are not a range (a programming error)', async () => {
+    for (const range of [
+      { from: '2026-11-25', to: '2026-11-01' },
+      { from: '1 Nov', to: '2026-11-25' },
+      { from: '2026-11-01' },
+      {},
+    ]) {
+      await expectAppError(users.listTrackedForRange(range), 'VALIDATION_FAILED');
+    }
+  });
+});

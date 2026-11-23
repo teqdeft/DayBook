@@ -93,7 +93,12 @@ describe('sendHrNotes', () => {
     expect(byNumbers((row) => row.wfhDays === 1)).toEqual({
       person: 'Person 2',
       workingDays: 5,
+      expectedDays: 5,
       daysPresent: 5,
+      daysOffWorked: 0,
+      absentDays: 0,
+      holidays: 0,
+      leaveDays: 0,
       wfhDays: 1,
       lateDays: 2,
       totalLate: '35m',
@@ -104,9 +109,21 @@ describe('sendHrNotes', () => {
       missingReports: 1,
     });
     expect(data.people[0]).toMatchObject({ daysPresent: 5, lateDays: 0, missingReports: 0 });
-    expect(data.people[2]).toMatchObject({ workingDays: 5, daysPresent: 2, missingReports: 1 });
+    // Neha came Monday and Tuesday: Wednesday and Thursday are absent, today (Friday) never is.
+    expect(data.people[2]).toMatchObject({
+      workingDays: 5,
+      daysPresent: 2,
+      absentDays: 2,
+      missingReports: 1,
+    });
     // Arjun joined on Wednesday: three working days so far.
-    expect(data.people[3]).toMatchObject({ workingDays: 3, daysPresent: 2, missingReports: 1 });
+    expect(data.people[3]).toMatchObject({
+      workingDays: 3,
+      expectedDays: 3,
+      daysPresent: 2,
+      absentDays: 0,
+      missingReports: 1,
+    });
     expect(data.people.some((row) => row.totalLate === '5h')).toBe(false);
   });
 
@@ -229,6 +246,45 @@ describe('ai-hr-notes job', () => {
     }
   });
 
+  it('runs on Thursday when Friday is a company holiday (CONTRACT 25)', async () => {
+    await db('holidays').insert({ holidayDate: FRI, name: 'Test festival' });
+    try {
+      setNowForTests(at(WED, '19:30'));
+      expect(await aiHrNotesJob.tick()).toBeNull();
+      setNowForTests(at(THU, '19:30'));
+      expect(await aiHrNotesJob.tick()).toMatchObject({
+        status: 'done',
+        result: { written: true },
+      });
+      expect(sent().week).toBe('Mon, 28 Sep to Thu, 1 Oct');
+    } finally {
+      await db('holidays').del();
+    }
+  });
+
+  it('still writes the notes on Friday when that holiday is added on Friday morning', async () => {
+    setNowForTests(at(THU, '19:30'));
+    expect(await aiHrNotesJob.tick()).toBeNull();
+    await db('holidays').insert({ holidayDate: FRI, name: 'Test festival' });
+    try {
+      setNowForTests(at(FRI, '19:30'));
+      expect(await aiHrNotesJob.tick()).toMatchObject({
+        status: 'done',
+        result: { written: true },
+      });
+      // Friday counts as a holiday for everyone, never as a working day or an absence.
+      expect(sent().people.map((row) => [row.workingDays, row.holidays])).toEqual([
+        [4, 1],
+        [4, 1],
+        [4, 1],
+        [2, 1],
+      ]);
+      expect(sent().people[2].absentDays).toBe(2);
+    } finally {
+      await db('holidays').del();
+    }
+  });
+
   it('waits while HR notes are off', async () => {
     await setSettings({ ai_hr_notes_enabled: false });
     expect(await aiHrNotesJob.tick()).toBeNull();
@@ -278,5 +334,10 @@ describe('week helpers', () => {
     expect(aiSummaries.lastWorkingDayOfWeek(SAT, [1, 2, 3, 4, 5, 6])).toBe(SAT);
     expect(aiSummaries.lastWorkingDayOfWeek(MON, [1, 2, 3, 4])).toBe(THU);
     expect(aiSummaries.lastWorkingDayOfWeek(MON, [])).toBeNull();
+    // Company holidays are skipped (CONTRACT 25).
+    expect(aiSummaries.lastWorkingDayOfWeek(WED, [1, 2, 3, 4, 5], new Set([FRI]))).toBe(THU);
+    expect(aiSummaries.lastWorkingDayOfWeek(WED, [1, 2, 3, 4, 5], [THU, FRI])).toBe(WED);
+    const allOff = new Set([MON, '2026-09-29', WED, THU, FRI]);
+    expect(aiSummaries.lastWorkingDayOfWeek(WED, [1, 2, 3, 4, 5], allOff)).toBeNull();
   });
 });

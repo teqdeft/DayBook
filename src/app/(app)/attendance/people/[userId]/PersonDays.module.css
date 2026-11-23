@@ -1,0 +1,107 @@
+/* The person month's "Each day" cells (the day page's cell lines, CONTRACT 25). */
+.table table {
+  table-layout: fixed;
+}
+
+.table td {
+  padding-top: 10px;
+  padding-bottom: 8px;
+}
+
+.emptyLine {
+  padding: 16px 20px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.stack {
+  position: relative;
+  top: -1px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.checkInTime {
+  font-family: var(--font-heading-stack);
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.late {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 15px;
+  color: var(--marigold-text);
+  white-space: nowrap;
+}
+
+.mline {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--muted);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* "4th this month" at or over the late alert. */
+.mline.alert {
+  font-weight: 600;
+  color: var(--marigold-text);
+}
+
+.tagsWrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 6px;
+  margin-top: 3px;
+}
+
+.cellTag {
+  height: 20px;
+  margin-top: 3px;
+}
+
+.tagsWrap .cellTag {
+  margin-top: 0;
+}
+
+.time {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.missing {
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--red-text);
+}
+
+.dash {
+  color: var(--ink);
+}
+
+@media (max-width: 1023px) {
+  .table table {
+    table-layout: auto;
+  }
+
+  .table td {
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+}

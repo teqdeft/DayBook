@@ -178,7 +178,10 @@ reportReminderAt, reportLock, gapWarningMinutes, stuckTaskDays, allowUnverifiedO
 autoMarkMissingCheckout, slackEnabled, slackReportChannelId, slackReportChannelName,
 slackPostReports, slackRemind, slackUrgentNotify, slackRequestsNotify, activityTrackingEnabled,
 activityIdleMinutes, activityRetentionDays, pushEnabled, timersMode, timerAwayMinutes,
-timerReminderMinutes, breakAllowanceMinutes }` (sections 11, 14 and 15 describe the later keys; clock values
+timerReminderMinutes, breakAllowanceMinutes }` (sections 11, 14, 15 and 19 to 25 describe the later
+  keys; §25 adds halfDayUnderMinutes, shortDayUnderMinutes, leftEarlyGraceMinutes,
+  payrollMonthStartDay, hrMorningSummary, hrSummaryAt, hrEveningSummary, checkinReminderMinutes,
+  lateAlertDays, slackAttendanceRemind, slackHrSummary; clock values
   `'HH:mm'`; cached in-process ~30 s, cleared on save). Defaults come from `db/seeds/03_settings.js`.
 - `update({ user, values, ip })` → saves changed keys, audit `settings.update`, returns `getAll()`.
 - `listOfficeNetworks()`, `addOfficeNetwork({ user, name, ipAddress, ip })`,
@@ -194,6 +197,8 @@ timerReminderMinutes, breakAllowanceMinutes }` (sections 11, 14 and 15 describe 
 ### audit (owner: system)
 
 - `log({ actorId, action, entityType, entityId, before?, after?, reason?, ip? }, trx?)`.
+- `listForEntities({ entityType, entityIds, actions?, limit? })` and `listForType({ entityType,
+since, actions? })` (CONTRACT 25).
 
 ### slack (owner: system)
 
@@ -215,6 +220,7 @@ minutes, tasks: [{ title, status }] }] })` → the exact Slack text. Pure; the r
   by name); `listByRole(role)` (active); `getReportApproverIds(userId)` → the user's `reportsTo` if
   that user is an active PM, otherwise every active Admin; `listDepartments()` →
   `[{ id, name, activeCount }]`; `syncSlackUserIds()` → `{ updated }` (worker job).
+- `listTrackedForRange({ from, to })` → PublicUser[] with `deactivatedAt` (CONTRACT 25).
 
 ### attendance (owner: attendance)
 
@@ -224,6 +230,21 @@ checkInIp, checkOutIp, note, lateMinutes, isWorkingDay, checkoutStatus, source }
   `listForDate(workDate)`; `countPendingCorrections()`; `presentMinutes(row, at?)`;
   `markMissingCheckouts()` → `{ marked }` (worker 00:05; honours `autoMarkMissingCheckout`,
   notifies HR).
+- Daybook 1.10 (CONTRACT 25): the person's day (`personDay`, `presenceOf`, `dayCounts`,
+  `effectiveLateMinutes`, `loadCalendar({ leaveDetail })`, `getDay`, `companyDay`,
+  `clearCompanyDayCache`, `lastWorkingDayBefore`, `applyDayRules(scope, trx, write)`,
+  `recheckDayRules`), the calendar reads (`listHolidaysBetween`, `nextHoliday`, `listOnLeave`,
+  `listUpcomingLeave`, `getMyLeave`), breaks (`saveAwayBreak`, `breakTotalsIn`,
+  `noticeOverAllowance`, `lockAwayBreak`, `deleteAwayBreak`, `checkOutAtLeft`, `listAwayBreaks`,
+  `listBreakDetails`, `listBreaksForRow`, `changeBreakEnd`, `deleteBreak`), check-outs
+  (`listMyMissingCheckouts`, `fixMyMissingCheckout`, `hideMissingCheckoutPrompt`,
+  `listMissingCheckouts`, `missingCheckoutsFor`, `fixMissingCheckouts`, `suggestCheckoutTimes`,
+  `checkoutEnteredFor`), reminders (`remind`, `listReminders`, `remindKindFor`,
+  `sendCheckinReminders`), summaries (`sendHrMorningSummary`, `sendHrEveningSummary`), the month
+  (`summarizeRange`, `getMonth`, `exportMonth`, `getPersonMonth`, `getNeedsLook`,
+  `clearNeedsLookCache`, `lateCountsFor`, `sendLateAlerts`), holidays and leave writes;
+  `requestCorrection(input, trx?)`. AttendanceRow is unchanged: the new attendance columns are
+  never in ROW_COLUMNS.
 
 ### reports (owner: reports)
 
@@ -241,6 +262,8 @@ checkInIp, checkOutIp, note, lateMinutes, isWorkingDay, checkoutStatus, source }
 - `getMinutesByProject({ from, to, userId? })` → `{ [projectId]: minutes }` from submitted reports
   (Projects cards "Your hours this month", PM table hours column).
 - `getLastReportDateByProject(userId)` → `{ [projectId]: 'YYYY-MM-DD' }` ("Your last update").
+- `listSubmittedUserIds(userIds, workDate)`, `listSubmittedDays({ userIds, from, to })` →
+  `{ [userId]: string[] }` (CONTRACT 25).
 
 ### projects (owner: projects)
 
@@ -260,6 +283,20 @@ memberCount }]`; `getPickerFor(userId)` → `{ urgent, mine, others, requests }`
 - `getNavBadges(user)` → `{ requests, corrections }` (requests: pending report edits this user may
   approve + pending project requests; corrections: pending attendance corrections, only for people
   with `attendance.correct`).
+- `buildCalendar({ month, attendance, profile, ctx, range?, toneOf? })` (CONTRACT 25).
+
+### timers (owner: timers)
+
+- Section 15 "Module APIs" has the module. CONTRACT 25 adds `lastRanByUser({ workDate, userIds })`
+  → `Map<userId, Date | null>` (the last finished entry of that date per person, one query),
+  `listEntriesFor(userId, workDate)`, `putBackAway({ user, breakId })`, and the `getState` (`away`
+  for every one of today's timer entries, `removed`) and `resolveAway` (`decision: 'left'`,
+  `answer`) additions.
+
+### activity (owner: activity)
+
+- Section 11 has the module. CONTRACT 25 adds `anyoneSeenBetween({ workDate, from, to,
+exceptUserId })` → boolean.
 
 Until a module's owner finishes, `src/modules/<name>/` holds a stub with these signatures that
 returns empty data, so every page renders. Owners replace the stub completely.
@@ -281,13 +318,17 @@ projects → `projects/[id]/tasks`, `project-tasks/*` (13), system → `push/sub
 timers → `timers/*` and attendance → `attendance/break/start`, `attendance/break/end` (15),
 projects → `projects/[id]/phase`, `deadline`, `phases/[phase]/dates`, `documents`,
 `project-documents/*` and ai → `ai/projects/[id]/summary*` (22), reports → `me/todo/**`,
-`me/carry-suggestions/**` (24).
+`me/carry-suggestions/**` (24), timers → `timers/away/[breakId]/put-back` and attendance →
+`attendance/[id]/breaks/**`, `attendance/me/missing-checkouts/**`,
+`attendance/missing-checkouts/fix`, `attendance/reminders`, `attendance/month/**`,
+`attendance/people/**`, `attendance/needs-look`, `holidays/**`, `leave/**` (25).
 
 Downloads ("Download Excel" buttons) — each screen uses an endpoint its viewers are allowed to call:
 Team dashboard and Employee detail → `GET /api/exports/hours?from=&to=&userId=` (`export.hours`,
 dashboards); My log → `GET /api/me/log?month=YYYY-MM&format=xlsx` (`report.self`, own data only,
 reports); Attendance → `GET /api/attendance/export?date=YYYY-MM-DD` (`attendance.view_all`,
-attendance). All use `xlsxResponse` from `@/lib/excel`.
+attendance); Attendance month → `GET /api/attendance/month/export?month=YYYY-MM&userId=`
+(`attendance.correct`, attendance). All use `xlsxResponse` from `@/lib/excel`.
 
 Paths, permissions and bodies are in build guide section 9. Lists take `limit` (max 100) and
 `offset`. Dates in query strings are `YYYY-MM-DD`.
@@ -314,16 +355,20 @@ loading?, fullWidth?, ...buttonProps }`. 44 px high (40 compact), 10 px radius, 
 'violet' | 'red' | 'teal', trailing?: element, as?, href? }` (number card with an 8 px bar).
   `trailing` sits at the top right, level with the label (the label gets right padding); `as` and
   `href` pass through, so `<Kpi as={Link} href="/requests" ...>` makes the whole card the link
-  (CONTRACT 23).
+  (CONTRACT 23). An empty spacer before the footer grows (`flex: 1 0 0`), so in a grid row every
+  bar sits at the card's bottom (CONTRACT 25; a spacer, not a wrapper, so the pages' `.kpi > p`
+  child rules keep working).
 - `StatTile` — `{ value, label }` (the grey boxes in Today's "Your day").
 - `StatusCell` from `@/components/StatusCell` — `{ status, label?, size: 'cell' | 'pill' = 'cell',
 chevron?: boolean, as?: 'div' | 'button', ...rest }`. Status → fill: green (done, submitted,
   approved, created, active, connected), primary (in_progress, office), red (blocked, missing),
   marigold (urgent, pending, edit_requested, unverified), violet (wfh, edited), line/ink-2 (locked,
-  on_hold, declined, not_checked_in, deactivated, completed, draft). Default labels: 'Done',
+  on_hold, declined, not_checked_in, deactivated, completed, draft), teal (on_leave), green
+  (holiday), neutral (day_off) (CONTRACT 25). Default labels: 'Done',
   'In progress', 'Blocked', 'Submitted', 'Approved', 'Created', 'Active', 'Connected', 'Office',
   'Missing', 'Urgent', 'Pending', 'Edit requested', 'Unverified', 'WFH', 'Edited', 'Locked',
-  'On hold', 'Declined', 'Not checked in', 'Deactivated', 'Completed', 'Draft'. `cell` = 34 px high,
+  'On hold', 'Declined', 'Not checked in', 'Deactivated', 'Completed', 'Draft', 'On leave',
+  'Holiday', 'Day off'. `cell` = 34 px high,
   8 px radius, 13 px semibold, fills its column; `pill` = the smaller badge on cards/lists.
   Also exports `STATUS_LABELS`.
 - `Tag` — `{ tone: 'primary' | 'marigold' | 'green' | 'red' | 'violet' | 'teal' | 'neutral' | 'ink',
@@ -350,6 +395,8 @@ label }] }` or children), `Textarea` — 44 px, 10 px radius, 1 px `--line-stron
 - `FilterPills` (client when `onChange` is used) — `{ items: [{ value, label, href? }], value,
 onChange? }`: 36 px fully rounded; selected = `--ink` with white text. `Segmented` — same props,
   grey track with a white selected thumb (Week/Month). Both render links when items have `href`.
+  An item may set `disabled` (CONTRACT 25): the button is disabled, a link item renders as a span
+  with aria-disabled.
 - `SearchBox` (client) — `{ placeholder, value?, onChange?, name?, defaultValue? }`.
 - `DateSwitcher` — `{ label, prevHref, nextHref, prevLabel, nextLabel }` ("‹ Today ›").
 - `EmptyState` — `{ title, body?, action? }`; `Skeleton` — `{ width, height, radius }`.
@@ -380,54 +427,72 @@ onLeave }`: "Notification deleted" with Undo for 5 s; the time stops while the p
 - `Menu` (client) — `{ label (aria), items: [{ label, onSelect, tone?, disabled? }] }` (row "⋯").
 - `DataTable` (server-safe, no hooks) — `{ columns: [{ key, header, width?, align?, render?(row) }],
 rows, rowKey = 'id', groups?: [{ key, title, tone, count, rows, collapsed?, onToggle?, footer? }],
-empty?: node, dense? }`: 40 px header on `--surface-muted`, rows ≥ 54 px with a 1 px `--track`
-  divider; below 1024 px rows become stacked cards (use `data-label`).
+empty?: node, dense?, stackBelow?: 1024 | 1280 }`: 40 px header on `--surface-muted`, rows ≥ 54 px
+  with a 1 px `--track` divider; below 1024 px rows become stacked cards (use `data-label`).
+  `stackBelow={1280}` (CONTRACT 25, a table without groups) also makes each row a card from 1024
+  to 1279 px: the first cell across the top, the others in four columns, label above value.
 - `DayBar` — `{ checkInAt, checkOutAt, now, start, end, tz, variant: 'large' | 'compact', color?,
 labels? }` (large = Today's 18 px bar with marks; compact = table bar).
 - `HBarList` — `{ rows: [{ label, value, display, color }], max?, barHeight = 12 }`.
 - `WeekBars` — `{ days: [{ label, value, display?, max?, highlight?, segments?: [{ value, color }],
-faded? }], height }` (Today's "This week" and Overview's stacked "Attendance this week").
+faded?, title? }], height }` (Today's "This week" and Overview's stacked "Attendance this week"; a
+  day's `title` is its hover text, read out with the label, and `faded` also fades a stacked column,
+  CONTRACT 25).
 - `Donut` — `{ segments: [{ label, value, color }], centerValue, centerLabel, size = 190 }`.
 - `MonthCalendar` — `{ weeks: [[{ date, day, tone: 'office' | 'wfh' | 'late' | 'missing' |
-'future' | 'empty' | 'weekend', isToday }]] }` (Mon–Fri columns) with its legend.
+'future' | 'empty' | 'weekend' | 'leave' | 'holiday', isToday }]], legendItems? }` (Mon–Fri
+  columns) with its legend; the `leave` (teal) and `holiday` (green) tones and the optional
+  `legendItems` (default `CALENDAR_LEGEND`) are CONTRACT 25.
 
 ## 9. Pages and ownership
 
-| Owner        | Files                                                                                                                                                                    |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| shell        | `src/app/(app)/layout.js`, `(app)/no-access/page.js`, `(app)/error.js`, `(app)/loading.js`, `src/app/not-found.js`, `src/app/(auth)/login/page.js` (+ its client pieces) |
-| people-admin | `(app)/people/**`, `(app)/settings/**` (Settings and Roles)                                                                                                              |
-| attendance   | `(app)/today/**`, `(app)/attendance/**`                                                                                                                                  |
-| reports      | `(app)/report/**`, `(app)/log/**`                                                                                                                                        |
-| projects     | `(app)/projects/**`, `(app)/requests/**`                                                                                                                                 |
-| dashboards   | `(app)/team/**`, `(app)/overview/**`                                                                                                                                     |
-| ai           | `(app)/summaries/**`, `(app)/ask/**`, `api/ai/**` (CONTRACT 20)                                                                                                          |
-| preferences  | `(app)/my-settings/**`, `api/me/preferences/**`, `src/modules/preferences/**` (CONTRACT 21)                                                                              |
-| projects     | `src/modules/projectPlan/**`, `src/modules/projectSummaries/**`, `db/migrations/015_project_plan.js`, `(app)/projects/[id]/**` (CONTRACT 22)                             |
-| orchestrator | `db/migrations/016_project_color.js`, `src/lib/projectColors.js`, `src/app/globals.css` (yellow tokens), `src/config/version.js` (CONTRACT 23)                           |
-| dashboards   | `src/modules/dashboard/overview.js`, `src/modules/dashboard/requestsCard.js`, `(app)/overview/**`, `(app)/team/UrgentList.jsx` (+ css) (CONTRACT 23)                     |
-| projects     | `src/modules/projects/{schemas,repo}.js`, `(app)/projects/ColorSwatches.jsx` (+ css) and `ProjectDrawer.jsx`, `(app)/requests/AttendanceFixes.jsx` (CONTRACT 23)         |
-| reports      | `(app)/report/ProjectCard.jsx` (`colorVars`), `(app)/report/ProjectPicker.jsx` (+ css) (CONTRACT 23)                                                                     |
-| ui-kit       | `src/components/{Kpi,ProjectSquare,ProjectLabel,ProgressBar,chartColors,GlobalSearch}` (+ css) (CONTRACT 23)                                                             |
-| orchestrator | `db/migrations/017_todo.js`, `db/seeds/03_settings.js`, `src/config/version.js`, `db/demo/todo.js`, `tests/e2e/todo.spec.js` (CONTRACT 24)                               |
-| reports      | `src/modules/reports/{todo,todoRead,todoAdd,todoEdit,todoTimer,todoSlack,todoWrite,todoView,todoRepo}.js`, `api/me/todo/**`, `api/me/carry-suggestions/**` (CONTRACT 24) |
-| reports      | `src/modules/reports/{suggestions,carry,carryRepo,planned,todoText}.js` (+ `schemas`, `drafts`, `save`, `submit`, `timerCheck`, `repo`) (CONTRACT 24)                    |
-| reports      | `src/modules/reports/{writeTx,todoSchemas}.js` (the line-writing transaction, the to-do schemas) (CONTRACT 24)                                                           |
-| reports      | `(app)/report/{CarrySuggestions,SuggestionRows,StillOpenDialog,CardCarry,StillOpenReminder}.jsx` (+ css), `useSuggestionClose.jsx` (CONTRACT 24)                         |
-| reports      | `(app)/report/{useCarrySuggestions,reportCarry,reportPlanned}.js`, `ProjectCard.jsx`, `ProjectPicker.jsx` (+ css), `ReportEditor.jsx` (CONTRACT 24)                      |
-| attendance   | `(app)/today/{TodoProvider,TodoCard,TodoHeader,TodoGroup,TodoLine,TodoAddInput,TodoPasteDialog,TimerNoteField,TimerNow}.jsx` (+ css) (CONTRACT 24)                       |
-| attendance   | `(app)/today/{useTodoState,todoModel,todoPaste,todayTodo,todayData}.js`, `page.js`, `TodayCards.jsx`, `PriorityCard.jsx`, `TimerStartForm.jsx` (CONTRACT 24)             |
-| attendance   | `(app)/today/{todoSync,todoActions,useTodoSync,useSendBeforeLeave}.js` (the to-do's state, its writes, leaving with a delete waiting) (CONTRACT 24)                      |
-| dashboards   | `src/modules/dashboard/{todo,todoRepo,todoColumns}.js` (+ `team`, `employee`, `repo`), `(app)/team/{TodoPopover,TodoList}.jsx` (+ css) (CONTRACT 24)                     |
-| system       | `src/modules/slack/{todo,todoDelivery,enqueue}.js` (+ `format`, `service`, `outbox`, `schemas`, `repo`), `src/modules/settings/schemas.js` (CONTRACT 24)                 |
-| people-admin | `(app)/settings/SlackSection.jsx` ("Post to-dos to"), `settingsValues.js` (CONTRACT 24)                                                                                  |
-| preferences  | `(app)/my-settings/MySettingsSections.jsx`, `src/modules/preferences/schemas.js` (the `carryOver` label) (CONTRACT 24)                                                   |
+| Owner                                                    | Files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| shell                                                    | `src/app/(app)/layout.js`, `(app)/no-access/page.js`, `(app)/error.js`, `(app)/loading.js`, `src/app/not-found.js`, `src/app/(auth)/login/page.js` (+ its client pieces)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| people-admin                                             | `(app)/people/**`, `(app)/settings/**` (Settings and Roles)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| attendance                                               | `(app)/today/**`, `(app)/attendance/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| reports                                                  | `(app)/report/**`, `(app)/log/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| projects                                                 | `(app)/projects/**`, `(app)/requests/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| dashboards                                               | `(app)/team/**`, `(app)/overview/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ai                                                       | `(app)/summaries/**`, `(app)/ask/**`, `api/ai/**` (CONTRACT 20)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| preferences                                              | `(app)/my-settings/**`, `api/me/preferences/**`, `src/modules/preferences/**` (CONTRACT 21)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| projects                                                 | `src/modules/projectPlan/**`, `src/modules/projectSummaries/**`, `db/migrations/015_project_plan.js`, `(app)/projects/[id]/**` (CONTRACT 22)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| orchestrator                                             | `db/migrations/016_project_color.js`, `src/lib/projectColors.js`, `src/app/globals.css` (yellow tokens), `src/config/version.js` (CONTRACT 23)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| dashboards                                               | `src/modules/dashboard/overview.js`, `src/modules/dashboard/requestsCard.js`, `(app)/overview/**`, `(app)/team/UrgentList.jsx` (+ css) (CONTRACT 23)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| projects                                                 | `src/modules/projects/{schemas,repo}.js`, `(app)/projects/ColorSwatches.jsx` (+ css) and `ProjectDrawer.jsx`, `(app)/requests/AttendanceFixes.jsx` (CONTRACT 23)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| reports                                                  | `(app)/report/ProjectCard.jsx` (`colorVars`), `(app)/report/ProjectPicker.jsx` (+ css) (CONTRACT 23)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ui-kit                                                   | `src/components/{Kpi,ProjectSquare,ProjectLabel,ProgressBar,chartColors,GlobalSearch}` (+ css) (CONTRACT 23)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| orchestrator                                             | `db/migrations/017_todo.js`, `db/seeds/03_settings.js`, `src/config/version.js`, `db/demo/todo.js`, `tests/e2e/todo.spec.js` (CONTRACT 24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| reports                                                  | `src/modules/reports/{todo,todoRead,todoAdd,todoEdit,todoTimer,todoSlack,todoWrite,todoView,todoRepo}.js`, `api/me/todo/**`, `api/me/carry-suggestions/**` (CONTRACT 24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| reports                                                  | `src/modules/reports/{suggestions,carry,carryRepo,planned,todoText}.js` (+ `schemas`, `drafts`, `save`, `submit`, `timerCheck`, `repo`) (CONTRACT 24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| reports                                                  | `src/modules/reports/{writeTx,todoSchemas}.js` (the line-writing transaction, the to-do schemas) (CONTRACT 24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| reports                                                  | `(app)/report/{CarrySuggestions,SuggestionRows,StillOpenDialog,CardCarry,StillOpenReminder}.jsx` (+ css), `useSuggestionClose.jsx` (CONTRACT 24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| reports                                                  | `(app)/report/{useCarrySuggestions,reportCarry,reportPlanned}.js`, `ProjectCard.jsx`, `ProjectPicker.jsx` (+ css), `ReportEditor.jsx` (CONTRACT 24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| attendance                                               | `(app)/today/{TodoProvider,TodoCard,TodoHeader,TodoGroup,TodoLine,TodoAddInput,TodoPasteDialog,TimerNoteField,TimerNow}.jsx` (+ css) (CONTRACT 24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| attendance                                               | `(app)/today/{useTodoState,todoModel,todoPaste,todayTodo,todayData}.js`, `page.js`, `TodayCards.jsx`, `PriorityCard.jsx`, `TimerStartForm.jsx` (CONTRACT 24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| attendance                                               | `(app)/today/{todoSync,todoActions,useTodoSync,useSendBeforeLeave}.js` (the to-do's state, its writes, leaving with a delete waiting) (CONTRACT 24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| dashboards                                               | `src/modules/dashboard/{todo,todoRepo,todoColumns}.js` (+ `team`, `employee`, `repo`), `(app)/team/{TodoPopover,TodoList}.jsx` (+ css) (CONTRACT 24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| system                                                   | `src/modules/slack/{todo,todoDelivery,enqueue}.js` (+ `format`, `service`, `outbox`, `schemas`, `repo`), `src/modules/settings/schemas.js` (CONTRACT 24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| people-admin                                             | `(app)/settings/SlackSection.jsx` ("Post to-dos to"), `settingsValues.js` (CONTRACT 24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| preferences                                              | `(app)/my-settings/MySettingsSections.jsx`, `src/modules/preferences/schemas.js` (the `carryOver` label) (CONTRACT 24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| orchestrator                                             | `db/migrations/018_hr_tools.js` and `db/lib/removedSpans018.js` (the proposals in `scratch/design-1.10`), `db/seeds/03_settings.js` (11 keys, `settings-additions.js`), `src/config/version.js` ('1.10'), `src/lib/time.js` (`holidays` argument) and `tests/unit/time.test.js`, `src/lib/permissions.js` (`attendance.correct` text "Edit attendance, handle correction requests, mark leave and holidays"), `timers.lastRanByUser` (in `src/modules/timers/worker.js` and the `service.js` re-export; B owns both files afterwards), `tests/unit/migration018Away.test.js`, `docs/design/hr-tools-prototype.html`, `.github/workflows/migration-check.yml` (new: a `mysql:8.4` service container runs migrate up, down for 018, up, and `tests/services/migration018.test.js`; never touches the deploy branch, no npm dependency) (CONTRACT 25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| orchestrator                                             | `src/worker/cron.js` and `src/worker/index.js` (register `checkin-reminders`, `hr-summary`, `hr-evening-summary`, `late-alerts` in `MINUTE_JOBS` before `cleanupJob`, none in `SLOW_JOBS`; `closeOpenTimersJob` before `markMissingCheckoutsJob`), `README.md` ("Deployment notes" bullet and the 1.10 "Updating" steps below), `scripts/doctor.js` (a "Database" line from `db.migrate.list()`: "✓ Database is up to date" or "✗ 1 database update not run: 018_hr_tools.js. Run the migrate line in README Updating."), `db/demo/*` (a holiday, leave, an away break, a missing check-out with a reminder, a self-entered check-out past last seen, a person at 4 late days and a short day), `tests/e2e/{breaks,missing-checkout,attendance-month,holidays-leave}.spec.js`, `tests/services/migration018.test.js` (+ `migration018Kit.js`, `migration018World.js`), `docs/CONTRACT.md` (this section and the edits listed after Tests) (CONTRACT 25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| attendance                                               | `src/modules/attendance/{migration018,calendar,calendarReads,calendarRepo,dayRules,marks,payroll,dayExport,checkoutEntered,myToday,tellPerson,leaveReads}.js` (new), `day.js`, `rules.js`, `schemas.js` (`FILTERS`), `index.js` (+ the five barrel stubs), `service.js` (`checkIn`, `getMyToday` through `myToday.js`, `notifyMissing` body and link), `hr.js` (`getDay`, entered-by rule, `tellPerson` moved out), `decisions.js` (`getDay`, `clearCheckoutEntered`); `src/worker/clock.js` (`companyDay`); `api/attendance/route.js` (`lateCount`); `(app)/attendance/DayCells.jsx` (new), `{dayRows,rowActions}.js` (new), `AttendanceCards.jsx`, `attendanceData.js`, `page.js`, `page.module.css`, `loading.js` (+ css); `(app)/today/page.js` (`searchParams`, placing B, C and F's pieces), `todayData.js`, `page.module.css` (CONTRACT 25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| attendance, timers, activity, shell                      | `src/modules/attendance/{awayBreaks,breakFixes,breakView,breakRepo,breakSchemas,leftAt,breakExports}.js`, `breaks.js` (`breakTotalsIn`, `noticeOverAllowance`); `api/attendance/[id]/breaks/route.js`, `api/attendance/[id]/breaks/[breakId]/route.js`; `(app)/attendance/{BreaksButton,BreakListDialog,BreakListHost,BreakFixForm}.jsx` + `BreakListDialog.module.css`; `(app)/today/TimerRemovedRow.jsx` (new), `TimerEntries.jsx` (+ css), `TimerCard.jsx`, `timerData.js`, `useTimerActions.js`; `src/modules/timers/{awayRules,awayAnswer,awayPutBack}.js` (new), `away.js`, `rules.js` (re-exports), `state.js`, `shared.js`, `entries.js`, `schemas.js`, `service.js`, `worker.js` (`sendReminders` gate), `repo.js`; `api/timers/away/route.js`, `api/timers/away/[breakId]/put-back/route.js`; `src/modules/activity/{service,repo}.js` (`anyoneSeenBetween` only); `src/components/TimerAwayDialog.jsx` (+ css), `TimerChip.jsx`, `TimerChip.clock.js` (CONTRACT 25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| attendance                                               | `src/modules/attendance/{missingSelf,missingHr,missingRepo,missingRules,missingSchemas,checkoutSuggest,checkoutExports}.js`, `corrections.js` (optional `trx`); `api/attendance/me/missing-checkouts/[id]/fix/route.js`, `api/attendance/me/missing-checkouts/hide/route.js`, `api/attendance/missing-checkouts/fix/route.js`; `(app)/attendance/MissingCard.jsx` (+ css), `RowAction.jsx` (suggested prefill), `(app)/attendance/missing/{page,loading,missingData}.js`, `(app)/attendance/missing/{MissingTable,MissingFixDialog,missingCells}.jsx` (+ css); `(app)/today/{MissingCheckoutPrompt,MissingCheckoutDialog}.jsx` (+ css), `todayMissing.js` (CONTRACT 25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| attendance, system                                       | `src/modules/attendance/{reminders,reminderRepo,remindRules,reminderMessages,checkinReminders,hrSummary,hrSummaryData,hrSummaryText,hrSummaryRepo,reminderExports}.js`; `api/attendance/reminders/route.js`; `(app)/attendance/{ReminderNote,RemindAllButton,RemindSelectedButton}.jsx` (+ css), `{useRemind,remindItem,remindData}.js`; `src/worker/jobs/{checkinReminders,hrSummary,hrEveningSummary}.js` (new), `cleanup.js` (`oldReminders`) (CONTRACT 25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| attendance, system                                       | `src/modules/attendance/{monthRules,monthRepo,month,monthExport,personMonth,personChanges,needsLook,lateAlerts,monthSchemas,monthExports}.js`; `api/attendance/month/route.js`, `api/attendance/month/export/route.js`, `api/attendance/people/[userId]/month/route.js`, `api/attendance/needs-look/route.js`; `(app)/attendance/month/**`, `(app)/attendance/people/[userId]/**`, `(app)/attendance/NeedsLookCard.jsx` (+ css); `src/worker/jobs/lateAlerts.js` (new) (CONTRACT 25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| attendance                                               | `src/modules/attendance/{holidays,leave,leaveRules,calendarSchemas,calendarWriteRepo,calendarExports}.js` and `{holidayRules,holidayNotices,calendarEffects,leaveList,leavePreview}.js` (split out to stay under 300 lines); `api/holidays/route.js`, `api/holidays/[id]/route.js`, `api/leave/route.js`, `api/leave/[id]/route.js`, `api/leave/preview/route.js`, `api/leave/people/route.js`, `api/holidays/calendarRoute.js` (the shared rate limits and `:id`, not a route); `(app)/attendance/holidays/{page,loading,holidaysData}.js`, `(app)/attendance/holidays/{HolidayTable,HolidayDialog,HolidayDeleteDialog}.jsx` (+ css); `(app)/attendance/leave/{page,loading,leaveData}.js`, `(app)/attendance/leave/{LeaveTable,LeaveFilter}.jsx` (+ css); `(app)/attendance/{LeaveDialog,LeaveFields,LeaveDeleteDialog,LeaveCard,DayNotice,RowMenu}.jsx` (+ css), `{leaveForm,useLeavePreview}.js`; `(app)/today/TodayDayNotice.jsx` (new), `todayDay.js` (new: notices, week labels, "coming up" lines), `CheckInCard.jsx` (subtitle), `todayWfh.js`, `wfhOptions.js` (CONTRACT 25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| system, people-admin, reports, ui-kit, shell, dashboards | `src/modules/settings/{schemas,service}.js` (+ `crossChecks.js`, `officeNetworks.js`, `parse.js`, split out to stay under 300 lines; 11 keys, `checkHrSummary`, `checkDayMarks`, `CLOCK_KEYS`, `BOUNDED_KEYS`, `getAll` JSDoc); `src/modules/audit/{service,repo}.js` (`listForEntities`); `src/modules/users/{service,repo}.js` (`listTrackedForRange`); `src/modules/reports/{service,repo}.js` (export `listSubmittedUserIds`, new `listSubmittedDays`); `(app)/settings/{AttendanceMarksSection,HrUpdatesSection}.jsx` (new, + `HrUpdatesSection.module.css`), `(app)/settings/{SettingsForm,SettingsNav,SlackSection,TimersSection}.jsx` (two Slack switches, the timers help), `(app)/settings/{settingsValues,numberFields,page}.js` (`KEYS`, `HR_CLOCKS.hrSummaryAt` (not `CLOCKS`, whose keys `autoCheckoutSettings.test.js` pins), `SHOWN_WITH`, `NUMBERS`), `loading.js` (two more nav skeleton widths); `src/components/StatusCell.jsx` (+ css: `on_leave` "On leave" teal, `holiday` "Holiday" green, `day_off` "Day off" neutral), `Segmented.jsx` (+ css: an optional `disabled` per item; a button gets `disabled`, a link item renders as a span with `aria-disabled`, text `--muted` at 50%, no hover), `Kpi.jsx` (+ css: an empty spacer `span` with `flex: 1 0 0` before the footer, so in a grid row every bar sits at the card's bottom 8 px under the tallest content; a wrapper `div` would break the `.kpi > p:nth-child(2)` rules of `team/page.module.css` and `projects/[id]/HoursTab.module.css`; cards of equal height look as today), `MonthCalendar.jsx` (+ css: tones `leave` teal and `holiday` green, dots for both, optional `legendItems` prop, default `CALENDAR_LEGEND`); `src/modules/dashboard/{calendar,index}.js` (`buildCalendar` gains `range` and `toneOf`, `dayTone` takes `day` and answers `holiday` and `leave`, `dashboard.buildCalendar` exported) (CONTRACT 25) |
+| dashboards, reports, ai, activity                        | `src/modules/dashboard/{team,shared,overview,history,employee,service}.js` and new `{teamBoard,overviewWeek,employeeTasks}.js` (split out to stay under 300 lines), `repo.js` (`listCheckInsBetween(from, to)` replaces `countAttendanceByDay`; `listTrackedPeopleDay` adds the shift); `src/components/WeekBars.jsx` (+ css: a day's `title`, `faded` on a stacked column), `(app)/overview/page.js` (the Off legend item when `attendanceWeek.hasOff`), `src/modules/reports/logExport.js` (Day type and Leave columns); `(app)/team/**` except `[userId]/screenTime.js` (Off today group and tags, history Where and Report cells); `src/modules/reports/{monthLog,queries}.js` (My log, stuck tasks skip holidays); `(app)/log/**` except `screenTime.js` (status cells, KPI words, Day type and Leave columns); `src/modules/aiSummaries/{hrNotes,calendar}.js`, `src/modules/aiAsk/{attendance,prompt}.js`, `src/worker/jobs/aiHrNotes.js` (runs on or after the week's last working day, holidays skipped, within that ISO week); `(app)/screen-time/screenTimeView.js`, `(app)/log/screenTime.js`, `(app)/team/[userId]/screenTime.js` (no bar for a holiday without data) (CONTRACT 25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 Every page starts with `const user = await requirePage('<permission>')`, renders `<TopBar ... />`
 then its blocks, has a loading skeleton (`loading.js`) and empty states. Page permissions:
 /today `attendance.self`, /report and /log `report.self`, /projects `project.request`
 (`project.manage` holders see the PM view), /team `team.view`, /requests
-`project_request.handle`, /attendance `attendance.view_all`, /people `people.manage`, /overview
+`project_request.handle`, /attendance `attendance.view_all`, /attendance/missing and
+/attendance/holidays `attendance.view_all`, /attendance/month, /attendance/people/[userId] and
+/attendance/leave `attendance.correct` (CONTRACT 25), /people `people.manage`, /overview
 `overview.view`, /settings `settings.manage`, /settings/roles `roles.manage`, /my-settings any
 signed-in person (`requireUser()`).
 
@@ -439,6 +504,8 @@ signed-in person (`requireUser()`).
 - Each agent runs tests against **its own** database so parallel runs don't collide:
   `DB_NAME=daybook_test_<n> npx vitest run tests/services/<module>.test.js` (databases
   `daybook_test_1` … `daybook_test_8` exist; your prompt says which number is yours).
+- Migration checks that need MySQL 8.4 run in `.github/workflows/migration-check.yml` (a mysql:8.4
+  service container; CONTRACT 25).
 - Every business rule in guide section 7 that your module owns gets at least one service test.
 
 ## 11. Screen time (added after the build guide, at the company's request)
@@ -486,6 +553,10 @@ segments }` (currentState is offline when the last report is older than 150 s or
 - Screens: `/screen-time` (PM/Admin: one day for the whole team), a "Screen time" card on
   `/team/[userId]`, a "Screen time" card on My log, and a one-line "Screen time today" in Today's
   "Your day" card.
+- The away question (CONTRACT 25 A) also reads no-data gaps: more than 150 s between two `system`
+  segments, asked about only when someone else's screen time was recorded during it (more than
+  150 s from its ends, so a Daybook outage is never asked about). HR never sees
+  segments, only one suggested check-out time (CONTRACT 25 Words).
 
 ## 12. Project report (added after the build guide)
 
@@ -599,11 +670,14 @@ board, HR sees breaks on Attendance.
   Generated `running_user_id` (= user_id while `ended_at` IS NULL) is UNIQUE: at most one running
   timer per person — an insert that breaks it fails with errno 1062.
 - `attendance_breaks`: `user_id`, `attendance_id` (CASCADE), `work_date`, `started_at`, `ended_at`
-  (NULL = on break), `end_reason` self | checkout | timer | midnight, `paused_entry_id` (the timer
+  (NULL = on break), `end_reason` self | checkout | timer | midnight | away | hr, `source` self |
+  away, `away_entry_id` (SET NULL), `changed_by_id`, `changed_at` (CONTRACT 25; never in
+  BREAK_COLUMNS), `paused_entry_id` (the timer
   the break stopped, SET NULL), timestamps. Generated `open_user_id` UNIQUE: one open break per
   person.
 - Never insert or update the generated columns. Entries are unbroken stretches: pausing, switching
-  and "remove away time" end a row and start a new one.
+  and "remove away time" end a row and start a new one; since CONTRACT 25 a Remove also saves the
+  removed time as an away break.
 
 ### Rules
 
@@ -627,26 +701,23 @@ board, HR sees breaks on Attendance.
 - **Break end** (`attendance.endBreak`): `NOT_ON_BREAK` without an open break. Ends it (`self`);
   if it paused a timer and no timer runs now, `timers.resumeAfterBreak({ userId, entryId, at },
 trx)` starts a new entry with the same project, task and note (skipped when that project is no
-  longer active). After commit, if `breakAllowanceMinutes > 0` and this break took today's total
-  over the allowance, notify the person once (`attendance.break_over_allowance`, "Your breaks today
-  are over the 1h allowance" (hours and minutes, see 16), body "You've had 1h 15m of breaks today.", link `/today`).
+  longer active). Inside the transaction it works out whether this break took today's total over
+  the allowance (`breakTotalsIn`, CONTRACT 25); after commit, if it did and
+  `breakAllowanceMinutes > 0`, notify the person once, as a Remove does
+  (`attendance.break_over_allowance`, "Your breaks today are over the 1h allowance" (hours and
+  minutes, see 16), body "You've had 1h 15m of breaks today.", link `/today`).
 - **Check-out** (`attendance.checkOut`) becomes one transaction: close the row, end an open break
   (`checkout`, at the check-out time) and stop a running timer (`checkout`). The response adds
   `breakMinutes` and `workedMinutes`; `gapMinutes = |workedMinutes − loggedMinutes|`.
 - **Worked minutes** (pure, `attendance/rules.js`): `breakMinutesWithin(breaks, row, at, tz)` =
   total overlap of each break `[startedAt, endedAt ?? at]` with the present window `[checkInAt,
 checkOutAt ?? at]` (capped like `presentMinutes`); `workedMinutes(row, breaks, at, tz) =
-max(0, presentMinutes − breakMinutesWithin)`. A missing check-out counts 0. HR edits and
-  corrections never touch breaks; the overlap clips them.
-- **Away time**: while a timer runs, idle or locked Idle Detection screen-time segments (CONTRACT
-  11, `source: 'system'`; window-mode time never counts and a window segment ends a span) inside the
-  entry, merged when they follow each other within 150 s, that have **ended**, start after
-  `awayCheckedUntil` and last ≥ `timerAwayMinutes`, are offered once: "You were away 32 min
-  (1:10–1:42 PM) while your acme-app timer ran. Keep this time or remove it?" Keep → set
-  `awayCheckedUntil = to`. Remove → end the running entry at `from` (`away`) and start an identical
-  running entry at `to` with `awayCheckedUntil = to`. Only the running entry is checked.
-  The span sent back must match one the server computes now (else `CONFLICT`). No screen-time data
-  (tracking off, no Idle Detection) means no prompts.
+max(0, presentMinutes − breakMinutesWithin)`. A missing check-out counts 0. HR's
+  check-in and check-out edits and corrections never touch breaks (the overlap clips them). HR and
+  Admins may change a break's end or delete it, with a reason (CONTRACT 25 item 2).
+- **Away time**: see CONTRACT 25 A: every one of today's timer entries is asked about, no-data
+  gaps count for Idle Detection, Remove saves an away break, an away span after the day end offers
+  "I had left", and Today has Put back.
 - **Changing entries**: only the person's own entries of **today** (company date), else
   `BAD_REQUEST` "Only today's timers can be changed." Times are `'HH:mm'` clocks on the work date
   (`localToUtc`); start < end, end ≤ now, no overlap (to the minute) with the person's other entries or breaks
@@ -662,7 +733,10 @@ max(0, presentMinutes − breakMinutesWithin)`. A missing check-out counts 0. HR
   `stopRunning` then returns null). `onBreak` counts only today's break. `resumeAfterBreak` does
   nothing when timers are off, the person can no longer use timers or today's row is closed. Stop
   works even when timers are off. Removing away time that starts in the timer's first minute moves
-  its start instead. Today's entries stay editable after check-out.
+  its start instead. Today's entries stay editable after check-out. Remove locks the attendance
+  row of the timer's own date, then the entry by id; a break fix locks the attendance row by
+  primary key, then the break; holiday and leave day rules lock the changed rows in work_date,
+  user_id order (CONTRACT 25).
 - **Midnight** (worker `close-open-timers`, once per date after 00:05): entries still running from
   an earlier date end at the check-out time if the row has one, else at the person's last
   screen-time `lastActiveAt` that day if it is after the start, else at the start; never after the
@@ -799,7 +873,10 @@ color, note } | null` (read with one extra query each over `attendance_breaks` /
 - **Late grace.** Settings "Late after" (e.g. 9:35 with office start 9:30) is the late mark;
   someone with their own shift start gets the same grace (`attendance.lateMarkFor({ shiftStart,
 settings })`: shift start + (late after − office start)). Late minutes are stored at check-in,
-  so earlier rows keep their value.
+  so earlier rows keep their value. Since CONTRACT 25 the mark follows the person's day (none on a
+  holiday or with full-day leave; on first-half leave the split plus the grace). A holiday or
+  leave change rewrites the stored late minutes of only the days it changes (`applyDayRules`,
+  `recheckDayRules`, audited).
 - **Report due vs missing (Team board, Employee detail history, Overview "Needs attention").**
   Before today's `reportReminderAt` someone checked in without a submitted report is `due` ("Due
   6:30 PM", neutral) or `draft`; from that time on anything not submitted is `missing`. The
@@ -879,6 +956,8 @@ reason, status, handledBy: { id, name } | null, handledAt, declineReason, create
 - API: `POST /api/wfh-requests` (attendance.self, 201), `GET /api/wfh-requests?status=&limit=&offset=`
   (signed_in; scoped as above), `POST /api/wfh-requests/[id]/approve` and `/decline { reason }`
   (attendance.correct), `POST /api/wfh-requests/[id]/cancel` (attendance.self).
+- The request dialog's next working day skips company holidays. On Attendance, the "WFH approved"
+  line and `day.wfhApproved` are only for `attendance.correct` viewers (CONTRACT 25).
 
 ### Screens
 
@@ -940,7 +1019,9 @@ in company time (6:30 PM – 8:00 PM by default).
   after `officeEnd` are skipped), the person is **working late** — and left alone — when there is
   a sign of work after `officeEnd` and within the 60 minutes before the check. Signs of work:
   active screen time (any source), window-mode idle (no Idle Detection), a timer (now while it
-  runs) and break starts and ends. Otherwise they are checked out automatically:
+  runs) and break starts and ends. The same `lastSeenWorking` gives the suggested check-out time of
+  CONTRACT 25 (for a past date, the timer sign is the last finished entry,
+  `timers.lastRanByUser`). Otherwise they are checked out automatically:
   - check-out time = their latest sign of work if it is after check-in, else `officeEnd`;
   - `checkout_status = 'auto'` (migration 011), `check_out_ip` null; an open break ends there
     (`end_reason 'checkout'`) and a running timer stops there (`stop_reason 'checkout'`), in the
@@ -964,6 +1045,9 @@ workDate, at }, trx)` → Date | null; Employee detail history rows carry `check
   stay checked in as long as you're active." under the top bar (only while the row is open,
   after `officeEnd` and `autoCheckoutEnabled` is on).
 - CONTRACT 16 applies: notifications go to the person only.
+- The 00:05 missing check-out notification to the person reads "Add the time you left on Today."
+  and links `/today?checkout=missing`. The cron runs close-open-timers before
+  mark-missing-checkouts (CONTRACT 25).
 
 ### Timer reminder in optional and required mode
 
@@ -1043,14 +1127,15 @@ onToolCall? })` → `{ text, data }`: checks availability (`AI_OFF`), the compan
 
 ### Weekly HR notes (worker `ai-hr-notes`)
 
-- Once per ISO week (`runOnce` key `ai_hr_notes:<year>-W<week>`) on the week's last working day at
-  or after `aiHrNotesAt`: numbers per tracked, active, non-Admin person for Monday–today (days
-  present, WFH days, late days and total late minutes, missing check-outs, auto check-outs,
-  correction requests, days with breaks over the allowance, missing reports), sent as tokens; the
+- Once per ISO week (`runOnce` key `ai_hr_notes:<year>-W<week>`) on the week's last working day
+  (company holidays skipped, CONTRACT 25) at or after `aiHrNotesAt`: numbers per tracked, active,
+  non-Admin person for Monday–today (days present, WFH days, late days and total late minutes,
+  holidays and leave days, missing check-outs and auto check-outs (by the month rules of CONTRACT
+  25), correction requests, days with breaks over the allowance, missing reports), sent as tokens; the
   fast model writes neutral, factual notes (patterns, people HR may want to check in with,
   improvements) — never judgments or disciplinary language. Saved per recipient (`hr_weekly`),
   bell `ai.hr_notes` "This week's attendance notes", link `/summaries/<id>`. Recipients: active HR
-  people, or the Admins when there is no HR.
+  people, or the Admins when there is no HR. The leave type, pay and note are never sent.
 
 ### Summaries pages
 
@@ -1075,6 +1160,8 @@ onToolCall? })` → `{ text, data }`: checks availability (`AI_OFF`), the compan
   otherwise), hours as "2h 15m", short.
 - Page: a question box, example questions, the answers of this visit (not stored), and the note
   "Your question and the data needed to answer it are sent to Google Gemini."
+- Attendance wording (CONTRACT 25): `OUT_STATUS.corrected` reads 'Corrected'; a check-out the
+  person entered reads 'Entered by the person'.
 
 ### Version label
 
@@ -1224,6 +1311,10 @@ themselves only. Company rules stay in Settings (Admin).
      small swing every few seconds while you have unread ones." Then the existing desktop switch
      (`PushSwitch` "Show on this computer"), only while desktop notifications are on for the
      company.
+     Reminders from HR and from Daybook, and for HR the morning summary and the evening wrap-up
+     (CONTRACT 25), come to the bell and, where Show on this computer is on, as desktop
+     notifications. There is no per-type mute in this release; Slack DMs follow the company's
+     switches in Settings → Slack.
   4. **Appearance** (everyone): "Theme" (Segmented: Match my computer · Light · Dark).
 - Loading skeleton (`loading.js`) like Settings'. Desktop, < 1024 px and 375 px layouts, dark theme.
 
@@ -1706,3 +1797,2686 @@ Also update CONTRACT §7 ("Later sections add: ... reports → `me/todo/**`, `me
 4. **No preference** on "My tasks this week": the recommended option applies, the to-do replaces it on Today.
 
 Not choices, stated for the record: the to-do is optional (no reminder, no CEO alert in this release); PMs and Admins see it live, HR doesn't, as with reports.
+
+## 25. HR tools, breaks and missing check-outs (company request, Daybook 1.10)
+
+Twelve asks from the owner, approved for one release (scope of 19 Nov 2026), shipped as version
+'1.10' with **one** new migration, `db/migrations/018_hr_tools.js` (017 and earlier are never
+edited):
+
+- **A.** Time removed from a timer as away time is a break (a bug: HR never saw it).
+- **B.** A pop-up on Today for the person's own missing check-outs (promised to the company).
+- **1.** Morning HR summary and evening wrap-up. **2.** Breaks for HR: who is on a break, every
+  break of a day, fixing a break. **3.** Half day, short day and left early marks. **4.** Month view
+  and one Excel for the month. **5.** Automatic check-in reminder and Remind buttons (the "Nudge"
+  promised to the company). **6.** Company holidays. **7.** The full missing check-out list with
+  suggested times and bulk fix. **8.** One person's attendance month for HR. **9.** Leave days.
+  **10.** Late count this month, "Needs a look this month" and the late alert to HR.
+
+Written against the code at `bbb146e` (1.09). Names marked **new** don't exist yet; every other
+name is in the code. The proposed migration is `scratch/design-1.10/018_hr_tools.js` (with its pure
+backfill rule `scratch/design-1.10/removedSpans018.js`, for `db/lib/`) and the settings defaults
+`scratch/design-1.10/settings-additions.js`; all three are part of this section.
+
+**Design:** no artboard exists for these screens. The orchestrator first builds
+`docs/design/hr-tools-prototype.html` (standalone, the real tokens, as §23 and §24 did) from this
+section: Attendance day for HR with the new cells and side cards, Month, Person month, Missing
+check-outs, Holidays, Leave with Mark leave, the break list, and Today with the missing check-out
+pop-up and the removed-time row; light and dark, 1440 and 390 px. Its look, layout and copy bind
+every builder's new screens; where it and this section differ, this section wins and the prototype
+is fixed.
+The scope is approved, so builders don't wait for a sign-off on it. Everything is built from
+artboard 09 (Attendance: KPIs, side cards, the day table, `RowAction`) and artboard 01 (Today), with
+the existing components only (`Card`, `CardHeader`, `DataTable`, `Dialog`, `Field`, `Input`, `Select`,
+`Textarea`, `Toggle`, `Segmented`, `FilterPills`, `Menu`, `StatusCell`, `Tag`, `Badge`, `Kpi`,
+`Avatar`, `EmptyState`, `Skeleton`, `DateSwitcher`, `Breadcrumb`, `MonthCalendar`, `useToast`) and
+the design tokens; light and dark, desktop, below 1024 px and 390 px. Dialogs are bottom sheets at
+520 px and below (§24). Below 1024 px every `DataTable` becomes stacked cards (`data-label`). The
+wide tables (Missing check-outs, the month, the person month's "Each day") are cards from 1024 to
+1279 px too (`DataTable` `stackBelow={1280}`), and the person month's days take the full width
+below 1440 px, so no column hides behind a sideways scroll on a laptop. On a phone (640 px and
+below) HR's controls have a 44 px hit area: the row menus ("...", Attendance, Holidays, Leave) and
+their items, Fix and Remind on the Missing check-outs cards, the bulk bar's buttons, a missing
+check-out's Fix, and the leave sheet's "Delete leave" and `Segmented` items.
+
+**Copy:** short and plain, no dashes, except the ranges the existing helpers write
+(`formatDayRange` "Mon, 23 – Wed, 25 Nov", `clockRange` "1:10–1:42 PM"). **A day is always written
+with `formatDayShort`** ("Fri, 13 Nov"): the owner's "Fri 13 Nov" is written "Fri, 13 Nov", as §24
+wrote the owner's "Project— X" as "Project: X". Example people: Priya Sharma, Vishal Saini, Karan
+Mehta (employees), Neha Kapoor (HR).
+
+### Words
+
+**Days**
+
+- **Weekday** = a date whose ISO weekday is in Settings, Working days (`settings.workingDays`).
+- **Holiday** = one company-wide date with a name ("Guru Nanak Jayanti"), the same for everyone
+  (new table `holidays`). A festival of three days is three rows. A holiday on a date that isn't a
+  weekday is kept but changes nothing until that weekday becomes a working day.
+- **Working day** = a weekday **that is not a holiday**. Every place that asked
+  `isWorkingDay(date, workingDays)` now asks this (the table "Every place that decides a working
+  day").
+- **Leave** = a range of dates HR or an Admin marked for one person (new table `leave_entries`).
+  Only the working days inside the range are leave days: Friday to Monday is 2 days, and a holiday
+  inside a leave isn't a leave day. A half day (first or second half) is always one date.
+- **Half-day split** = the middle of the person's own shift (`users.shift_start`/`shift_end`, else
+  `officeStart`/`officeEnd`), rounded down to the minute: 9:30 to 6:30 gives **2:00 PM**. First
+  half = until the split; second half = from the split.
+- **The person's day** (`PersonDay`) = what Daybook expects of one person on one date. One pure
+  function decides it (`attendance.personDay`, below); every job and screen asks it.
+- **Expected** = 1 on a working day; 0.5 with half-day leave; 0 on a day that isn't a working day,
+  with full-day leave, before the person's `joined_on`, after the day they left (`leftOn`, the
+  company date of `users.deactivated_at`), or for someone who doesn't track attendance.
+- **Own late mark** = `PersonDay.lateMark`: `attendance.lateMarkFor({ shiftStart, settings })`
+  (§16), the split plus the company's grace on first-half leave, none when expected is 0.
+- **Day end** = `PersonDay.dayEnd`: the person's own shift end (`shiftEnd`, else `officeEnd`), or
+  the split on second-half leave. Left early, the "check out" and "check in" reminds, the evening
+  "still checked in" list and the away "I had left" offer all use it. The self-fix limit uses the
+  own shift end (`PersonDay.shiftEnd`, the owner's words), never the split.
+- **Off** = expected 0 and no check-in: "Holiday", "On leave" or "Day off" (a weekday the company
+  doesn't work).
+- **Presence** = what the Where column and every "Not checked in" count say about a person at a
+  moment: `office`, `wfh`, `unverified` (from the check-in, as today), else `holiday`, `day_off`,
+  `on_leave`, or `not_checked_in` only when the person is expected now.
+- **Colours** (one mapping everywhere: `StatusCell`, `MonthCalendar`, `Tag`s, the Team board): leave
+  = teal (`--label-teal-bg` / `--label-teal-text`), holiday = green (`--green-soft` /
+  `--green-text`), day off = neutral.
+- **Last working day** = the latest working day before a date, within 14 days
+  (`attendance.lastWorkingDayBefore`). The "Missing check-out" number covers `missingWindow`: from
+  the last working day to yesterday, so a weekend or holiday never hides Friday's.
+
+**Breaks**
+
+- **Break** = one `attendance_breaks` row. It now has a **source**: `self` (Start break on Today,
+  every row before 1.10) or `away` (time removed from a timer).
+- **Away break** = a finished break with source `away` and `end_reason 'away'`. It is saved when
+  the person answers "Remove, it was a break", and rebuilt by migration 018 for Removes since
+  1 Nov 2026. **It counts exactly like any other break everywhere**: one "Breaks" total, the
+  allowance, the Over tag, the notice, worked time, Excel, the month view, AI HR notes, Ask. Only
+  the break list (item 2) and Today's timer card tell it apart.
+- **Away span** = a stretch inside one of **today's timer entries** (`source 'timer'`, running or
+  finished) that the person is asked about. It is made of **pieces** that follow each other within
+  150 s (`MERGE_GAP_MS`): idle or locked Idle Detection segments (`source 'system'`, as in 1.09),
+  and **no-data gaps**. It has **ended** when a later segment of any state starts after it. Its
+  `kind` is `away` when it holds at least one idle or locked segment, else `no_data`.
+- **No-data gap** = more than 150 s (`CONTINUE_MS`, the heartbeat's limit) between the end of one
+  screen-time segment and the start of the next, **both with `source 'system'`** (laptop asleep,
+  browser closed). A gap next to a window-only segment never counts (window mode can't tell away
+  from working elsewhere, §11), and neither does the time before the day's first segment or after
+  its last one. It also counts only when **someone else's screen time was recorded during it,
+  more than 150 s from both its ends** (`activity.anyoneSeenBetween`): a failed heartbeat is
+  dropped, not queued (`ActivityTracker.track.js` answers `retry`), so while Daybook is down or
+  restarting nobody reports, and such a gap is never asked about. The 150 s are there because two
+  people's heartbeats are up to that far apart: a colleague's last beat before an outage, or first
+  beat after it, can fall just inside the person's gap although nobody reported during the outage.
+  So a gap of 300 s or less never counts.
+- **Put back** = the person's undo of a Remove, from Today: the away break goes and the time goes
+  back on the timer.
+- **Break fix** = HR (or an Admin) changes a break's end or deletes it, with a reason, audited.
+
+**Time and marks**
+
+- **Worked** = present minus breaks, exactly `attendance/rules.js workedMinutes(row, breaks, at,
+tz)` (§15). A missing check-out has no worked time.
+- **Finished day** = a row with `checkoutStatus` `checked_out`, `auto` or `corrected`.
+- **Marks** (item 3) are worked out when read, never stored: **Half day**, **Short day**, **Left
+  early**. A day has at most one of Half day and Short day; Left early can come with either.
+- **Effective late** = the late minutes a day counts with: `attendance.late_minutes` as stored
+  (kept right by `applyDayRules` when a holiday or leave changes), and 0 whenever the day has no
+  late mark (`PersonDay.lateMark` null: not a working day, full-day leave, not employed). Every
+  reader (the day list, the Late pill and KPI, marks, "4th this month", the month view, Needs a
+  look, the alert, the summaries, AI HR notes) uses it.
+- **Payroll month** = the period HR pays by. `payroll_month_start_day` 1 = the calendar month;
+  26 = the 26th to the 25th of the next month, **named after the month it ends in** ("November
+  2026" = 26 Oct to 25 Nov 2026). Its key is that month, `YYYY-MM`. "This month" in this section
+  means the payroll month.
+- **Present day** (month) = a working day with a check-in: 1, or 0.5 with half-day leave. It goes to
+  Office (office and unverified) or WFH by `location`, so Office + WFH = Present.
+- **Day off worked** = a check-in on a day that isn't a working day (weekend or holiday). Counted on
+  its own, never in "Days present", never marked, never late.
+- **Leave day** = full 1, first or second half 0.5, paid or unpaid; only on working days.
+- **Absent day** = a working day **before today** with no check-in: 1, or 0.5 with half-day leave,
+  0 with full-day leave. Today is never absent ("Not checked in yet"). Per person and past working
+  day: present + leave + absent = 1.
+- **Missing report** = a day with a check-in and no submitted report, for people with
+  `report.self`; today only from `reportReminderAt` (the HR notes rule, §20). HR only ever sees yes
+  or no, never the report.
+- **Needs a look** = someone whose payroll month so far has at least `late_alert_days` late days,
+  or that many short days (half and short together), or that many missing reports.
+
+**Check-outs and reminders**
+
+- **Missing check-out** = an `attendance` row with `checkout_status 'missing'` (set by the 00:05 job
+  `markMissingCheckouts`, `attendance/service.js:214`). **Unfixed** = still `'missing'`; the same
+  set `repo.listMissing` / `repo.countMissing` read (active people who track attendance; Admins'
+  rows hidden from non-Admins, §16). In the month view (item 4) a **missing check-out (month)** is a
+  row of the period that was marked missing at midnight, fixed since or not (audit action
+  `attendance.mark_missing` on the row, or still `'missing'`); **not fixed** = still `'missing'`.
+  An **auto check-out (month)** = audit action `attendance.auto_checkout` on the row, or
+  `checkoutStatus 'auto'` (a later fix turns `auto` into `corrected`; the audit row keeps it
+  counted).
+- **Suggested time** = the last moment Daybook saw the person working on that work date, computed
+  as auto check-out does: `lastSeenWorking({ segments, timerAt, breaks, at })`
+  (`attendance/autoCheckout.js:53`: active screen time of any source, window-mode idle, the timer's
+  last run, break starts and ends) with `at` = the earlier of now and the end of the work date;
+  used only when it is after the row's check-in (`autoCheckoutTime`'s rule), cut to the minute.
+  For a past work date `timerAt` is the end of the last **finished** timer entry
+  (`timers.lastRanByUser`): a timer still running from a past date gives no sign (`lastRanAt` would
+  answer "now"), so the pop-up and HR's list always show the same time. Otherwise there is **no
+  suggestion**. It is one time, never the segments: the only value derived from screen time that HR
+  ever sees.
+- **Self-fix limit** (the owner's rule) = max(own shift end (`PersonDay.shiftEnd`), suggested time
+  - 15 minutes) on a day the person was expected (`day.expected > 0`, half-day leave included). On a
+    day with expected 0 (not a working day, full-day leave, before joining) there is no shift, so it
+    is the suggested time + 15 minutes, and with no suggestion every time goes to HR. Never past 23:59
+    of the work date. A time after check-in and at or before the limit is **saved straight away**; a
+    later time **goes to HR** as a `check_out` correction request (the existing flow).
+- **Past last seen** = a check-out the person entered themselves that is more than 15 minutes after
+  the suggested time, or entered with no suggestion. HR sees a marigold "Check" tag beside "By
+  Priya" (items 5 and 8). Worked out from `attendance.checkout_suggested_at` when read, never
+  stored as a flag.
+- **Entered by** = who typed the check-out of a row that was missing: the person (pop-up), or HR
+  (Fix, bulk fix, and any later HR Edit of that check-out, so it always names whoever typed the time
+  shown). Stored on the row (new `attendance.checkout_entered_by`, `checkout_entered_at`, and
+  `checkout_suggested_at` = the suggestion the person saw, null for HR), shown as "By Priya". An
+  approved correction request clears all three (the row reads "Corrected" as today).
+- **Remind** = one message to one person about one **kind**, sent by HR or an Admin from
+  Attendance, or by Daybook (the automatic check-in reminder). Kinds (new ENUM):
+  - `check_in`: presence `not_checked_in` today, the own late mark has passed and the day end
+    hasn't (someone on second-half leave isn't asked after the split);
+  - `break`: on a break now and today's breaks are over `breakAllowanceMinutes` (never while the
+    allowance is 0);
+  - `check_out`: still checked in (open row today) after the day end, and not a `break` case;
+  - `missing_checkout`: has at least one unfixed missing check-out (any day) **without a pending
+    `check_out` correction** (the person already told HR a time: B's rule), and today is a working
+    day for them without full-day leave.
+    Every remind is one row in new `attendance_reminders`, and a bell notification (so a desktop push,
+    §14) plus a Slack DM.
+- **The 30-minute rule**: at most one remind per person per kind per 30 minutes, automatic ones
+  included (constant `REMIND_EVERY_MINUTES = 30`, not a setting).
+- **HR recipients** (summaries) = active people with role `hr`; the active Admins when there is no
+  HR (the rule of `aiSummaries/hrNotes.js:47 recipients()`). Each recipient's message only covers
+  people they may see (`showsAttendanceOf(recipient, person)`, §16) and never themselves. Alerts
+  about one person go to `pickRecipients(pools, person)` (`attendance/recipients.js`: HR, or the
+  Admins when there is no other HR; about an Admin, the other Admins only).
+
+### Company rules (owner, scope of 19 Nov 2026)
+
+> **Away time is a break (overrides §15 "Away time"):** removed away time is a break. "Remove" ends
+> the timer at the span's start and saves the span as an away break, in the same transaction. The
+> question is asked about every one of today's timer entries (not only the running one), also for
+> gaps with no screen time (Idle Detection only), and an away span that starts at or after the
+> person's day end (less the left early grace) offers "I had left, check me out at 6:42 PM" instead
+> of "Remove".
+>
+> **HR fixes breaks (overrides §15 "HR edits and corrections never touch breaks"):** HR and Admins
+> may change a break's end or delete it, with a reason. Their edits of check-in and check-out still
+> never touch breaks (the overlap clips them), and no HR change ever touches a timer.
+>
+> **Holidays (overrides build guide 7.2.4 and 7.10, §15 "Reminder", §16 "Late grace", §19 and §20
+> "Weekly HR notes"):** a company holiday is not a working day. On a holiday there are no late marks,
+> no "Not checked in", no timer, report or check-in reminders, no PM summary and no HR summary,
+> exactly as on a weekend. Someone who checks in on a holiday is working: the row is saved with
+> `is_working_day = 0` and `late_minutes = 0` (weekend work, migration 003), and the check-out
+> reminder, auto check-out and the midnight missing check-out rule apply to them as on any day.
+>
+> **Leave:** full-day leave = expected 0: not "Not checked in", no late mark, no check-in reminder.
+> First-half leave = expected from the split: late after the split plus the company's grace
+> (`lateAfter − officeStart`, as `lateMarkFor`). Second-half leave = expected until the split: the
+> late mark is the normal one and the day end is the split. A check-in on a leave day is always
+> allowed and counts as worked; the leave stays until HR changes it.
+>
+> **Half-day leave and the marks:** full-day leave: no marks, never absent. First-half leave: no Half
+> day mark; Short day when worked is under half the short-day time (240 min by default); Left early
+> against the day end as usual. Second-half leave: late as usual; no Half day mark; Short day under
+> half the short-day time; Left early against the split. A check-in on a full-day leave day counts
+> as a present day (the check-in wins, leave 0), is flagged "Checked in on a leave day" for HR, and
+> gets its marks as a full working day (Half day and Short day at full size, Left early against the
+> shift end), matching present 1.
+>
+> **Shorter shifts:** the half-day and short-day times are for the office day (`officeStart` to
+> `officeEnd`). For someone whose own shift is shorter, both scale by own shift ÷ office day (never
+> above 1): a 6-hour shift against the 9-hour office day marks Short day under 320 min and Half day
+> under 180.
+>
+> **Own check-out (overrides build guide 7.8, where only HR changes a past attendance row):** a
+> person may enter their own missing check-out from Today without HR, within the self-fix limit.
+> Later times still need HR (a correction request). Every such save is audited and shown to HR as
+> "By <name>". A time more than 15 minutes after Daybook last saw them working gets HR's "Check"
+> tag, and a save for a day in an earlier payroll month tells HR.
+>
+> **Privacy:** HR summaries, reminders, alerts, the month view, the person month and the Excel files
+> never contain report content or screen-time detail. They may say whether a report is submitted
+> and may show one suggested check-out time (the last time Daybook saw someone working, as auto
+> check-out uses). The leave type and pay go only to `attendance.correct` viewers and the person;
+> the note only to HR and Admins, and never to the person it is about (not even when they are HR).
+> Calendar reads leave the type, pay and note out unless the caller asks (`leaveDetail`), so PMs,
+> dashboards and Gemini never get them. No attendance IP leaves the screens that show it today.
+
+### The person's day (one rule)
+
+`src/modules/attendance/calendar.js` (**new**, pure, no database):
+
+```js
+PersonDay = {
+  date: 'YYYY-MM-DD',
+  weekday: boolean, // ISO weekday in settings.workingDays
+  holiday: { id, name } | null, // a holiday on this date (any weekday)
+  isWorkingDay: boolean, // weekday && !holiday; what attendance.is_working_day stores
+  employed: boolean, // tracksAttendance !== false && (!joinedOn || joinedOn <= date)
+  //   && (!leftOn || date <= leftOn)
+  leave: { id, part: 'full' | 'first_half' | 'second_half' } | null, // only when isWorkingDay &&
+  // employed; with leaveDetail also paid: boolean and
+  // leaveType: 'casual' | 'sick' | 'other'
+  wfhApproved: boolean, // an approved wfh_requests row covers the date
+  expected: 0 | 0.5 | 1,
+  shiftStart: 'HH:mm', // own shiftStart, else officeStart
+  shiftEnd: 'HH:mm', // own shiftEnd, else officeEnd
+  split: 'HH:mm', // halfDayAt()
+  expectedStart: 'HH:mm' | null, // shiftStart; split for first_half; null when expected 0
+  expectedEnd: 'HH:mm' | null, // shiftEnd; split for second_half; null when expected 0
+  dayEnd: 'HH:mm', // expectedEnd ?? shiftEnd
+  lateMark: 'HH:mm' | null, // lateMarkFor(); split + grace for first_half; null when expected 0
+  label: string | null, // 'Holiday: Guru Nanak Jayanti' | 'On leave' | 'On leave, first half'
+  // | 'On leave, second half' | 'Day off' | null
+};
+```
+
+- `personDay({ date, person, settings, holiday, leave, wfhApproved })` → PersonDay. `person` =
+  `{ id, role, tracksAttendance, joinedOn, leftOn, shiftStart, shiftEnd }` (`leftOn` = the company
+  date of `users.deactivated_at`, null while active). A leave on a date that isn't a
+  working day is ignored (`leave: null`). A shift whose end isn't after its start falls back to the
+  office hours for the split.
+- `halfDayAt({ person, settings })` → `'HH:mm'`.
+- `presenceOf({ day, row, at, tz })` → `'office' | 'wfh' | 'unverified' | 'not_checked_in' |
+'on_leave' | 'holiday' | 'day_off'`: (1) a row → `whereOf(row)` (`rules.js`, unchanged); (2)
+  `day.holiday && day.weekday` → `holiday`; `!day.isWorkingDay` → `day_off`; (3) `!day.employed` →
+  `day_off` (a guard: callers already leave out people who hadn't joined); (4) full leave →
+  `on_leave`; first-half leave and `at` (company clock, today only) before `expectedStart` →
+  `on_leave`; (5) otherwise `not_checked_in` (second-half leave included: they were expected in the
+  morning).
+- `leaveFraction(day)` → 0, 0.5 or 1.
+- `dayCounts({ day, row, past })` → `{ expected, present, office, wfh, dayOffWorked, holiday,
+leave, leavePaid, leaveUnpaid, absent, conflict }` (numbers, halves allowed; `past` = the date is
+  before today):
+  - not employed, or the person's `leftOn` without a row: all 0 (a leaver is never absent);
+  - not a working day: `dayOffWorked` 1 with a row; `holiday` 1 when `day.holiday && day.weekday`;
+  - working day, f = `leaveFraction(day)`: with a row, f = 1 gives `present` 1, `leave` 0 and
+    `conflict 'leave_and_checkin'`, else `present` 1 − f and `leave` f; without a row `leave` f
+    and `absent` = `past ? 1 − f : 0`. `office`/`wfh` split `present` by `row.location`
+    (`unverified` counts as office); `leavePaid`/`leaveUnpaid` split `leave` by `day.leave.paid`.
+    The month view, the person month and the AI HR notes count with it, so they agree.
+- `lateMinutesForDay({ checkInAt, day, settings })` → `day.lateMark === null ? 0 :
+lateMinutesFor({ checkInAt, date: day.date, lateAfter: day.lateMark, tz })` (whole minutes).
+- `effectiveLateMinutes({ row, day })` → `!row || day.lateMark === null ? 0 : row.lateMinutes`.
+- Constants: `LEAVE_PARTS`, `LEAVE_TYPES`, `LEAVE_TYPE_LABELS` (`{ casual: 'Casual', sick: 'Sick',
+other: 'Other' }`), `PART_LABELS` (`{ full: 'Full day', first_half: 'First half', second_half:
+'Second half' }`).
+
+`src/modules/attendance/dayRules.js` (**new**, the loaders; queries in **new** `calendarRepo.js`):
+
+- `loadCalendar({ from, to, userIds?, leaveDetail = false }, trx?)` → `Calendar`: one query for
+  holidays in the range, one for leave entries overlapping it (of `userIds` when given), one for
+  approved WFH requests overlapping it, `settings.getAll()` once. `Calendar` = `{ from, to,
+available, holidays: Map<date, { id, name }>, isWorkingDay(date), holidayOn(date),
+dayFor(person, date) → PersonDay, workingDaysBetween(a, b) }`. `available` is false before 018
+  (no holidays, no leave). Ranges up to 400 days (longer → `VALIDATION_FAILED`, a programming
+  error). **Without `leaveDetail` a PersonDay's `leave` is `{ id, part }` only.** Attendance passes
+  `leaveDetail: true` only for `attendance.correct` viewers; the person's own Today and My log pass
+  it; worker reads that write their own text pass it; dashboards, `aiAsk` and `aiSummaries` never do.
+- `getDay({ person, date, withWfh = false, leaveDetail = false }, trx?)` → PersonDay (two small
+  queries; three with WFH). Check-in, HR edits, corrections, Today and the away question use it.
+  `getDay` and `loadCalendar` always read `holidays` from the table, never the `companyDay` cache.
+- `companyDay(date)` → `{ date, weekday, holiday: { id, name } | null, isWorkingDay }`, cached in the
+  process for 30 s per date like settings; holiday writes clear the writing process's cache (other
+  processes, the worker included, catch up within 30 s).
+- `lastWorkingDayBefore(date)` → the last working day before `date` within 14 days, else the day
+  before.
+- `applyDayRules({ userIds?, from, to, reason, actorId }, trx, write)` → `{ result, changed: [{
+rowId, userId, workDate, before: { lateMinutes, isWorkingDay }, after }] }`: inside the caller's
+  transaction it loads the calendar for the range, runs `write(trx)` (the holiday or leave change;
+  `result` is what it returns), loads the calendar again, and compares each person's PersonDay
+  before and after. **Only rows whose day changed** (`isWorkingDay` or `lateMark` differs) are
+  touched: they are locked by primary key in **`work_date, user_id` order** (as
+  `repo.listOpenBefore`, so it never deadlocks with the 00:05 `markMissingCheckouts`, which has no
+  retry); late = `lateMinutesForDay` with the after-day and the stored `check_in_at`, flag =
+  `day.isWorkingDay`; a row is updated only when a value differs, and each update is audited
+  (`attendance.day_rules`, `before`/`after` = `{ lateMinutes, isWorkingDay }`, the reason). Rows
+  whose day didn't change keep their stored values even when Late after or the person's shift
+  changed since (§16 "Late minutes are stored at check-in" still holds). It never touches check-in
+  or check-out times, `checkout_status`, `source` or breaks. A leave update that changes only
+  `paid`, `leaveType` or `note` doesn't call it.
+- `recheckDayRules({ userIds?, from, to, since, reason }, trx)` → `{ changed }`: after a holiday or
+  leave write has committed, its writer runs this once in a new transaction for the same dates:
+  rows **created at or after `since`** (the write's start) whose stored flag or late minutes differ
+  from the calendar now are fixed the same way. So a check-in that committed while the write ran
+  (it read the calendar before the write) ends with the holiday's flag 0 and late 0.
+- `rules.js computeLateMinutes` and `workingDayFlag` take an optional `day` (PersonDay): late =
+  `lateMinutesForDay`, flag = `day.isWorkingDay`; without `day` they behave as before.
+- `day.js missingWindow(workDate, workingDays, holidays?)`: the window starts at
+  `lastWorkingDayBefore` (holidays skipped like non-working days), so the Tuesday after a Monday
+  holiday covers Friday to Monday.
+
+Calendar reads (A, new `calendarReads.js` over `calendarRepo.js`): `listHolidaysBetween(from, to)`
+→ `[{ date, name }]`; `nextHoliday(from, { withinDays })` → `{ date, name } | null`;
+`listOnLeave(date, { viewer })`, `listUpcomingLeave({ viewer, from, to, limit })` and
+`getMyLeave({ user, from, to })` (item 9 gives their shapes). The holiday and leave writes and the
+Holidays and Leave pages are F's.
+
+**Other modules call only the attendance service** (`attendance.loadCalendar`, `personDay`,
+`presenceOf`, `dayCounts`, `effectiveLateMinutes`, `companyDay`, `lastWorkingDayBefore`,
+`listOnLeave`, `listHolidaysBetween`), never `calendarRepo`. `modules/dashboard/repo.js`,
+`aiSummaries/repo.js` and `aiAsk/repo.js` don't read the new tables themselves, so the rule lives
+in one place.
+
+### Data (migration `018_hr_tools.js`, portable to MySQL 8.4; every length is also checked in zod)
+
+One file, owner orchestrator (proposed: `scratch/design-1.10/018_hr_tools.js`). It exports `config =
+{ transaction: false }` (knex 3 reads it per migration, `Migrator._useTransaction`), so `up` gets
+plain knex: DDL commits on its own on both servers anyway, and the backfill needs its own short
+transactions. (On a fresh database, as in tests and e2e, `migrate:latest` then runs 001 to 018
+without the batch transaction; DDL in them committed on its own already.)
+
+**Each table change is ONE SQL statement**, so on both servers it either happens or it doesn't.
+knex's `createTable` and `alterTable` send the unique keys and foreign keys as separate statements
+(checked with `toString()` on knex 3.3.0: `create table`, then `alter table ... add unique`, then
+`alter table ... add constraint ... foreign key`). A run the host stops ("Aborted") or an error only
+MySQL 8.4 raises could leave those out, the rerun's `hasTable` would skip them for good, and every
+1062-based rule of this section (the holiday clash, the once-a-day reminder, the once-a-month alert,
+the once-a-day summary) would stop working without an error. So each new table is one raw `CREATE
+TABLE` with inline `PRIMARY KEY`, `UNIQUE KEY`, `KEY` and `CONSTRAINT ... FOREIGN KEY` clauses and an
+explicit `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci` (raw DDL would otherwise
+get MySQL 8.4's `utf8mb4_0900_ai_ci`), guarded by `hasTable`; each existing table gets ONE raw `ALTER
+TABLE` with all its new columns, its ENUM change and its foreign keys, guarded by `hasColumn` on its
+first new column. Every identifier is backtick-quoted; constraint and index names are knex's defaults
+(`<table>_<column>_foreign`, `<table>_<columns>_unique`, `<table>_<columns>_index`). The schema
+statements run on one pinned connection (a `knex.transaction` used only to pin it) that first runs
+`SET SESSION lock_wait_timeout = 30` (both servers): an ALTER blocked by a long query fails with 1205
+after 30 s instead of queueing every check-in behind it; run the line again. The host stopping a run
+("Aborted") doesn't stop its CREATE or ALTER on the server, which finishes it on its own; a rerun
+that checked before it committed sends the same statement, which waits for it and fails with 1050
+or 1060. That error is "already there" when `hasTable` / `hasColumn` then says so, and the run goes
+on (any other error, or the check still saying no, fails as before).
+
+1. **`holidays`** (company-wide, one row per date): `id`; `holiday_date` DATE NOT NULL, UNIQUE
+   `holidays_holiday_date_unique` (company date); `name` VARCHAR(80) NOT NULL; `created_by`,
+   `updated_by` BIGINT UNSIGNED NULL FK `users`; `created_at`, `updated_at` (`CURRENT_TIMESTAMP`
+   defaults, as the `timestamps` helper of migrations 003 and 010).
+2. **`leave_entries`** ("leave" is a reserved word in MySQL): `id`; `user_id` NOT NULL FK `users` ON
+   DELETE CASCADE; `from_date`, `to_date` DATE NOT NULL (company dates, both included); `part`
+   ENUM('full','first_half','second_half') NOT NULL DEFAULT 'full'; `paid` TINYINT(1) NOT NULL
+   DEFAULT 1; `leave_type` ENUM('casual','sick','other') NOT NULL DEFAULT 'casual'; `note`
+   VARCHAR(300) NULL (HR and Admins only); `created_by`, `updated_by`; timestamps; KEY (`user_id`,
+   `from_date`), KEY (`from_date`, `to_date`). Overlap query: `user_id = ? AND from_date <= :to AND
+to_date >= :from` (no SQL date functions). Deletes are hard deletes, audited with the whole row in
+   `before`.
+3. **`attendance_reminders`** (one row per remind sent): `id`; `user_id` NOT NULL FK `users` ON DELETE
+   CASCADE (who was reminded); `kind` ENUM('check_in','break','check_out','missing_checkout') NOT
+   NULL; `work_date` DATE NOT NULL (company date it was sent); `sent_by` NULL FK `users` ON DELETE SET
+   NULL (null = Daybook); `sent_at` DATETIME NOT NULL; `auto_key` VARCHAR(40) NULL (automatic
+   reminders only, `'check_in:2026-11-19'`); timestamps. UNIQUE (`user_id`, `auto_key`) (NULLs never
+   collide on either server), KEY (`user_id`, `kind`, `sent_at`) (the 30-minute claim locks this
+   range), KEY (`work_date`) (every list and the cleanup filter on it first).
+4. **`attendance_alerts`** (one row per HR alert or summary per person and period): `id`; `user_id`
+   NOT NULL FK `users` (RESTRICT); `kind` VARCHAR(30) NOT NULL (`'late_days'`, `'hr_morning'`,
+   `'hr_evening'`; VARCHAR so later kinds need no ALTER); `period_key` VARCHAR(10) NOT NULL (the
+   payroll month `'2026-11'` for `late_days`, the date `'2026-11-19'` for a summary); `days` SMALLINT
+   UNSIGNED NOT NULL DEFAULT 0 (late days when sent; 0 for summaries); `created_at` DATETIME NOT NULL
+   DEFAULT CURRENT_TIMESTAMP; UNIQUE (`user_id`, `kind`, `period_key`). **For the summary kinds
+   `user_id` is the recipient.**
+5. **`attendance`**, one ALTER: `checkout_entered_by` BIGINT UNSIGNED NULL FK `users` ON DELETE SET
+   NULL, `checkout_entered_at` DATETIME NULL, `checkout_suggested_at` DATETIME NULL (the suggested
+   time the person saw when they entered their own check-out; null for HR's) and
+   `checkout_prompt_hidden_on` DATE NULL ("Not now" on the pop-up). **Never added to `ROW_COLUMNS`**
+   (`attendance/repo.js:35`, every attendance read uses it); read by new `checkoutEntered.js` and
+   `missingRepo.js`. `is_working_day` and `late_minutes` keep their meaning and are rewritten only by
+   `applyDayRules` and `recheckDayRules`.
+6. **`attendance_breaks`**, one ALTER: `MODIFY end_reason ENUM('self','checkout','timer','midnight',
+'away','hr') NULL` (values added at the end, as migration 011 did for `checkout_status`) **in the
+   same statement as** `source` ENUM('self','away') NOT NULL DEFAULT 'self' (existing rows become
+   `self`), `away_entry_id` BIGINT UNSIGNED NULL FK `time_entries.id` **ON DELETE SET NULL** (the
+   entry the time came off: the head of a split, or the moved or trimmed entry; Put back uses it),
+   `changed_by_id` BIGINT UNSIGNED NULL FK `users` (RESTRICT) and `changed_at` DATETIME NULL (the last
+   HR or Admin fix). Neither new FK column is a base column of `open_user_id`, so MySQL error 3192
+   doesn't apply (as `paused_entry_id`). Every 1.10 write of `end_reason 'away'` or `'hr'` also
+   writes `source` or `changed_by_id`, so before this statement it fails with 1054 (caught), never
+   with 1265 on a strict server or a silent '' on a lenient one (`knexfile.js` sets no `sql_mode`).
+   **Never added to `BREAK_COLUMNS`.**
+7. **Backfill of away breaks** (after the schema; the pure rule `removedSpans({ entries, breaks, row
+})` → `{ spans, skipped }` lives in new `db/lib/removedSpans018.js`, no `@/` imports, imported by
+   the migration with a relative path (knex loads only `db/migrations`), unit tested):
+   1. Plain reads (no locks) pick the person-days: `time_entries` with `work_date >= '2026-11-01'`,
+      `source 'timer'`, and `stop_reason 'away'` or `started_at = away_checked_until AND created_at <
+started_at`; distinct `user_id, work_date`, oldest first.
+   2. Each person-day runs in its own short READ COMMITTED transaction (retried up to 3 times on 1213
+      or 1205): find that day's attendance row and lock it **by primary key** (`SELECT id FROM
+attendance WHERE id = ? FOR UPDATE`, §15's first lock, so a live 1.10 Remove or check-out of
+      that person and day waits instead of racing it); then read the person-day's `time_entries`,
+      then its `attendance_breaks`.
+   3. **Split Removes:** each timer entry P with `stop_reason 'away'`; R = P's next entry that day by
+      start (ties by id). R must have P's project, `source 'timer'`, and **`R.created_at =
+P.updated_at` to the second**: 1.09's `removeAwayTime` wrote P's `updated_at` and R's
+      `created_at` from the same `at`, and MySQL's rounding or MariaDB's truncation treats both the
+      same way. A fresh timer (`running.js start`: `createdAt = startedAt`), a resumed one
+      (`resumeAfterBreak`: `createdAt = nowDate()`) or a hand-added one never matches. Span =
+      `[P.ended_at, R.started_at]` whether R was kept or moved on by a later Remove,
+      `away_entry_id = P.id`.
+   4. **Moved starts:** each timer entry R that step 3 didn't pair, with `away_checked_until IS NOT
+NULL AND started_at = away_checked_until AND created_at < started_at` (a timer row is created at
+      its first start). Span = `[R.created_at, R.started_at]`, exactly what the move took off the
+      timer; `away_entry_id = R.id`.
+   5. Skip a span under 1 minute, without an attendance row that day, not inside the row's present
+      window (`[check_in_at, check_out_at]`; an open or missing row has no end), or overlapping a
+      break of the person (an open one has no end), an entry of the person, or a span already chosen.
+      Overlap is half-open, to the second (`a.start < b.end && b.start < a.end`; touching isn't
+      overlap).
+   6. Insert each span: `source 'away'`, `end_reason 'away'`, `attendance_id` of that day's row,
+      `paused_entry_id` null, `away_entry_id`, `created_at = updated_at = now`; and one `audit_logs`
+      row: actor null, `action 'attendance.away_backfill'`, `entity_type 'attendance'`, `entity_id` the
+      row, `after { breakId, startedAt, endedAt }`, reason "Removed timer time counted as a break
+      (1.10)". Daily reports are never read or written. A second run inserts nothing (every span then
+      overlaps the break it made).
+   7. At the end one line on stdout (not under `NODE_ENV=test`): `018: rebuilt 12 away breaks (3
+skipped)`, which the lean migrate line shows. Cost: one short transaction per person-day with a
+      Remove since 1 Nov (tens to a few hundred), a few seconds.
+   8. Not found, on purpose: a Remove before 1 Nov; a moved start later answered Keep (its
+      `away_checked_until` moved on); a split whose tail the person deleted; a split head changed by
+      hand since (its `updated_at` moved on); a Remove that the still-running 1.09 web process answers
+      after its person-day was read (Risks: Restart right after migrate).
+8. **The deploy day's late alerts are claimed:** `job_runs` rows `late_alerts:<company date now>`,
+   `late_alerts:<date>#2` and `#3` (the three `runAttempts` keys of item 10) with `job 'late-alerts'`,
+   `status 'done'`, `started_at = finished_at = created_at = updated_at = now`, errno 1062 ignored.
+   The company date comes from the `timezone` settings row (JSON), else
+   `process.env.DEFAULT_TIMEZONE`, else 'Asia/Kolkata', through `Intl.DateTimeFormat('en-CA', {
+timeZone })`. So HR's first late alerts come at office end of the next working day, after the
+   Admin has set Settings → Attendance marks; that run alerts once for everyone already at the limit
+   this payroll month.
+9. No other table changes, no `time_entries` change, no new index elsewhere, no new permission key
+   (viewing is `attendance.view_all`, changing is `attendance.correct`).
+
+`down` (each object checked first, so a stopped `down` runs again): deletes `attendance_breaks` rows
+with `source 'away'` (worked time goes back to the 1.09 numbers) and the `attendance.away_backfill`
+audit rows; sets `end_reason 'hr'` to `'self'`; drops the two `attendance_breaks` foreign keys (each
+checked in `information_schema.TABLE_CONSTRAINTS`); then **one** ALTER drops the four columns and
+shrinks the ENUM together, so on the way back too a 1.10 write fails with 1054, never 1265; drops the
+`attendance` foreign key, then its four columns in one ALTER; then drops `attendance_alerts`,
+`attendance_reminders`, `leave_entries` and `holidays`. The claimed `job_runs` rows stay (they are
+run records).
+
+**Settings** (11 new keys, `db/seeds/03_settings.js` by the orchestrator, proposed in
+`scratch/design-1.10/settings-additions.js`; a missing row reads as the default through
+`settings/service.js normalizeValue`, since the live server never seeds): see "Settings" below.
+
+**Notification types** (all new): `attendance.checkin_reminder` (automatic),
+`attendance.remind_check_in`, `attendance.remind_break`, `attendance.remind_check_out`,
+`attendance.remind_missing_checkout`, `attendance.hr_summary`, `attendance.hr_evening_summary`,
+`attendance.late_alert`, `attendance.self_checkout_past` (item B), `holiday.past_changed` (item 6),
+`leave.marked`, `leave.changed`, `leave.removed`. Reused: `attendance.edited` (break fixes, HR's
+missing check-out fixes, a late mark a holiday changed), `attendance.break_over_allowance` (now also
+after Remove). Slack outbox rows are `kind 'dm'` with `related_type 'attendance_reminder'` (id = the
+reminder) or `'hr_summary'` (id = the recipient's user id).
+
+**Audit actions** (all new). Every action about one person's day uses `entityType 'attendance'`
+and `entityId` = the attendance row id, so the person month's "Changes" reads them in one query:
+`attendance.away_checkout`, `attendance.away_put_back`, `attendance.away_backfill` (migration 018),
+`attendance.break_change`, `attendance.break_delete` (before and after carry `breakId`),
+`attendance.self_checkout`, `attendance.fix_missing`, `attendance.day_rules`. Others:
+`attendance.remind` (`entityType 'attendance_reminder'`), `holiday.create`, `holiday.update`,
+`holiday.delete` (`entityType 'holiday'`), `leave.create`, `leave.update`, `leave.delete`
+(`entityType 'leave'`, before/after = `{ userId, fromDate, toDate, part, paid, leaveType, note }`,
+`reason` on update and delete). Remove, Keep, automatic reminders, summaries and alerts are not
+audited (like `timer.reminder`).
+
+### Deploy before migrate (errno 1054 and 1146)
+
+The code ships before the migrate line runs (README "Updating": `git pull` and `npm ci`, then
+migrate, then Restart; lsnode may respawn the web process with 1.10 code before Restart, and the
+worker cron runs 1.10 from the next minute). Every existing screen and job keeps working as 1.09, and
+every new feature either reads as empty or answers one sentence.
+
+- **One guard**, new `src/modules/attendance/migration018.js` (the `projectPlan/migrationGuard.js`
+  pattern): `isMissing018(error)` (errno 1146 or 1054); `guard018Read(area, read, fallback)`;
+  `guard018Write(area, write)` throws `new AppError('UPDATE_NEEDED', { status: 503, message: 'This
+needs the latest database update. Ask an Admin.' })`; `try018Write(area, write)` swallows the
+  error and returns null (for an extra statement inside a transaction: MySQL and MariaDB roll back
+  only that statement, so the transaction goes on). One warning per area per process: "The 1.10
+  database update is missing (run npm run migrate); <area> is off". Areas: `calendar` (holidays and
+  leave), `breaks` (away breaks and break fixes), `checkouts` (entered by, the pop-up), `reminders`,
+  `alerts`. **`UPDATE_NEEDED` is the only new error code for this**; there is no
+  `BREAKS_UNAVAILABLE`, `CALENDAR_UNAVAILABLE` or other per-feature code.
+- Nothing caches "missing" longer than the 30 s `companyDay` cache, so everything works once
+  migrated, without a restart.
+
+| Feature                                               | Before 018                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The person's day                                      | holiday and leave reads answer "none" (`available: false`): `personDay` falls back to the weekday rule, check-in saves late minutes as 1.09, the worker's `companyNow` says `holiday: null`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| A. Remove                                             | `resolveAway` works out `planRemoval` first, then calls `saveAwayBreak` **before** the timer change; it catches 1054 (`try018Write`) and returns null. Null on a finished entry, whatever its plan (1.09 only ever asked about the running one) → `UPDATE_NEEDED` and the transaction rolls back, so nothing changes. On the running entry (always a `split` or a `move`) it goes ahead as 1.09 (the split writes the head's `updated_at` and the copy's `created_at` from one `at`), no notice, `savedAsBreak: false`, and 018 rebuilds it. While `removed` reads as unavailable, `getState` asks only about the running entry, as 1.09 (whose plan is always a split or a move), so a finished entry's question isn't offered before 018. Keep, Left, no-data spans and the accuracy rule need no column and work |
+| A. Put back, 2. Change end, Delete                    | `UPDATE_NEEDED` 503; `state.removed` is `[]`; the break list reads with `needsUpdate: true` and shows that sentence instead of the buttons                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| A and 2. Reads                                        | new break columns are read only through `breakRepo.readWithBreakColumns(read)`: on 1054 it reads again without them (every row `source 'self'`, no `changedBy`). "On break since", the `on_break` filter and the Present button use existing columns                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ENUM safety                                           | 018 widens `end_reason` in the same statement that adds `source` and `changed_by_id`, and every write of `'away'` or `'hr'` also writes one of them, so before 018 such a write fails with 1054 (caught), never 1265 or a silent ''                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| B. Pop-up                                             | `listMyMissingCheckouts` answers `{ items: [], autoOpen: false }`: no pop-up, no line; "Request a correction" still works; Save and Not now answer `UPDATE_NEEDED`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 7. Missing list                                       | the KPI link, the full list, the pending-correction marks and the suggestions work (existing tables); "By" and "Reminded" lines are empty; HR's Fix, bulk fix, Edit and approved corrections write the entered-by columns with `try018Write` (one warning)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 5. Remind, Remind selected, Remind all                | `UPDATE_NEEDED` 503 (the buttons and menu items stay, as §24); the check-in reminder job first reads today's `check_in` reminders through `guard018Read('reminders', read, () => null)` and on null returns `{ reminded: 0, unavailable: true }` before any claim (one warning per process, no error per person)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 1. Summaries                                          | sent as usual (holidays and leave count 0); the once-a-day claim (`attendance_alerts`) falls back to `notifications.hasRecent` on 1146                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 3, 4, 8, 10. Marks, month, person month, Needs a look | work; holidays and leave count 0, and the month view and the person month show one muted notice: "Holidays and leave aren't counted yet. This needs the latest database update. Ask an Admin."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 10. Late alert                                        | 018 claims the deploy day's run (Data step 8); a run before 018 catches 1146 on its first insert, logs one warning, sends nothing and returns `{ alerted: 0, unavailable: true }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 6, 9. Holidays and leave                              | `GET /api/holidays` answers `available: false`; the Holidays and Leave pages and the "Leave and holidays" card show the sentence in a muted `Card` with an Info icon instead of their buttons; the row menu leaves out Mark leave and Edit leave (no menu at all when nothing else is in it); every write and the preview answer `UPDATE_NEEDED`                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Day Excel                                             | the "Check-out entered by" column stays empty                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Cleanup                                               | the old-reminders step counts 0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Checking                                              | `npm run doctor` shows "✗ 1 database update not run: 018_hr_tools.js. Run the migrate line in README Updating." until it has run                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+### A. Away time counts as a break
+
+Root cause (verified with `scratch/bug-away/awayVsBreaks.test.js`): `src/modules/timers/away.js`
+`removeAwayTime` (called by `resolveAway`) only splits the timer (`time_entries`) and never writes
+`attendance_breaks`, which every HR screen reads (`attendance/day.js listDay`, `exportDay`, AI HR
+notes, Ask). A person who answered "Remove" for a 45 minute lunch showed "Present 5h, no breaks, no
+Over tag", while a colleague who pressed Start break showed "Worked 4h 15m, Breaks 45m, Over 15m".
+
+#### Finding the span (timers, new `timers/awayRules.js`, pure; `rules.js` re-exports `awaySpans` and `findAwaySpan` so every import keeps working)
+
+- `awaySpans(segments)` builds pieces from one work date's segments in time order: an idle or locked
+  `system` segment is a piece; the gap between two `system` segments more than 150 s apart is a
+  piece; an `active` segment or any `window` segment ends a span. Pieces within 150 s merge. Each
+  span carries `ended`, `kind` and `startsIdle` (its first piece is an idle segment).
+- `findAwaySpan({ segments, startedAt, endedAt, checkedUntil, at, minMinutes, idleMinutes })`: the
+  entry's window is `[max(startedAt, checkedUntil), min(endedAt ?? at, at)]`. The first ended span
+  that overlaps it is clipped to it. **Accuracy:** when the span `startsIdle`, its start moves back
+  by `activityIdleMinutes` (Idle Detection only says "idle" that long after the last input), never
+  before the window's start; a locked or no-data start doesn't move. The length check (at least
+  `timerAwayMinutes`) uses the moved span. Returns `{ from, to, minutes, kind }` or null.
+- `getState` asks about **today's timer entries, oldest first**, the running one included: the
+  first entry with a span wins (one question at a time). Manual entries are never asked about. It
+  is worked out when `blocked` is `null` **or `'checked_out'`** (the question survives Stop, Switch
+  project, Start break and Check out; it goes at midnight, since only today counts). One
+  `activity.getDay` read per state; none while screen time is off or today has no timer entry. A
+  `no_data` piece counts only when new `activity.anyoneSeenBetween({ workDate, from, to,
+exceptUserId })` (activity; the gap less `CONTINUE_MS` (150 s) at each end, then one query on
+  the `work_date` index: `started_at < to - 150 s AND ended_at > from + 150 s AND user_id <> ?
+LIMIT 1`, read only when such a gap was found and is longer than 300 s, else false) says someone
+  else's screen time was recorded during it, away from its edges. **Before 018** (`listAwayBreaks`
+  reads as unavailable) only the running entry is asked about, as 1.09.
+- **Cost.** In 1.09 the screen-time read ran only while a timer ran; now it runs on every 60 s chip
+  poll for every timer user with an entry today, until midnight. With no running entry and today's
+  row closed, the `away` part of the state is kept per process for 5 minutes per person (a `Map` by
+  user id in `state.js`, cleared by any timer or attendance write of that person in the process),
+  so after check-out it is read at most every 5 minutes.
+- **Left offer:** `away.left = { clock, shiftEndClock }` (both `'HH:mm'`; `shiftEndClock` = the day
+  end) instead of the Remove choice when all hold: the span's `from` is at or after the person's
+  **day end minus `leftEarlyGraceMinutes`** (`attendance.getDay`, read only when such a span was
+  found; the idle accuracy rule can move a 6:28 PM start before a 6:30 PM day end); its entry is the person's
+  latest entry today (by `startedAt`); no break of the day starts at or after `from`; today's row
+  is open, or closed by the person's own check-out (`checkout_status 'checked_out'`) at or after
+  `to`.
+
+#### Answers (`timers.resolveAway`, new `timers/awayAnswer.js`)
+
+- One `repo.transaction` (READ COMMITTED, 3 tries on 1213). **Lock order (§15):** the entry is read
+  first without a lock; then `attendance.lockDay({ userId, workDate: entry.workDate })` (the
+  timer's own date); then always `repo.lockById(entryId)`: whether it runs is read from the locked
+  row and its id must match, so a Stop or Switch that committed in between is seen (never a false
+  `CONFLICT` or the wrong row). Under the lock: the entry must be the person's, `source 'timer'`, and its
+  `workDate` must be today's company date, else `BAD_REQUEST` "Only today's timers can be changed."
+  The span is worked out again and must equal the one sent, to the second, else `CONFLICT` "That
+  away time changed. Refresh and try again." (as 1.09). Locking the row first matters now: the
+  break insert takes a shared lock on the attendance row (foreign key), which would deadlock with a
+  check-out holding the row and waiting for the timer.
+- **keep**: the entry's `away_checked_until = to` (finished entries too).
+- **remove**: `planRemoval({ entry, from, to })` (pure) picks one of four changes. The head is kept
+  when it has at least 1 minute (`from − startedAt`); the tail when the entry runs, or has at least
+  1 minute after `to`:
+  - **split** (head and tail): the entry ends at `from` (`stop_reason 'away'`, `away_checked_until
+= from`); a copy (project, task, note, source) starts at `to` with `away_checked_until = to`,
+    running when the entry ran (end it first, the running index is unique), else ending at the old
+    end with the old stop reason (so Today's `pausedEntry` still finds a timer a break paused).
+    **The head's `updated_at` and the copy's `created_at` come from one `at`**, so a split made
+    before 018 is found by the backfill;
+  - **move** (no head): the entry starts at `to` (`away_checked_until = to`), as 1.09 did;
+  - **trim** (finished, no tail): the entry ends at `from` and keeps its stop reason;
+  - **drop** (finished, nothing left): the entry is deleted.
+    **First**, in the same transaction, `attendance.saveAwayBreak({ userId, attendanceId, workDate,
+startedAt, endedAt, awayEntryId }, trx)` saves **the time the timer loses**, in whole seconds
+    (`wholeSecond`): split `[from, to]`; move `[entry.startedAt, to]`; trim `[from, entry.endedAt]`;
+    drop `[entry.startedAt, entry.endedAt]`; `source 'away'`, `end_reason 'away'`, `paused_entry_id`
+    null, `away_entry_id` = the entry (null for drop). Then the timer change. Before 018 it returns
+    null: a trim or drop then throws `UPDATE_NEEDED` and the transaction rolls back; a split or move
+    goes ahead as 1.09. A span that overlaps an existing break of the day (only possible after an HR
+    fix) is refused: `CONFLICT` "That time overlaps a break. Keep it, or ask HR." Still under the
+    attendance row lock, after the insert, `attendance.breakTotalsIn({ userId, workDate, breakId },
+trx)` works out the day's break minutes `before` (without this break) and `total` and returns
+    `crossed` (`allowance > 0 && before <= allowance && total > allowance`). **After commit** (the
+    transaction may run again), `attendance.noticeOverAllowance({ userId, crossed, total })` sends the
+    1.09 notice (`attendance.break_over_allowance`) only when `crossed`. The row lock orders a Remove
+    against an End break or another Remove of that person and day, so exactly one of them sees the
+    crossing.
+- **left** (only when the state offered `left`; checked again under the locks, else `CONFLICT`
+  "That away time changed. Refresh and try again."): locks row, open break, entry;
+  `attendance.checkOutAtLeft({ userId, workDate, at: from, ip }, trx)` (new `attendance/leftAt.js`)
+  closes the open row at `from` (`checked_out`, `check_out_ip` = the request's) or moves the
+  person's own check-out back to `from`; audit `attendance.away_checkout` (actor = the person,
+  before and after `auditView`). The entry ends at `from` with `stop_reason 'checkout'` (running or
+  not), `away_checked_until = from`. No break is saved. After commit, `emit('attendance.checked_out')`
+  when the row was open.
+- Remove and Keep are not audited (start and stop aren't, §15).
+
+#### Put back (`timers.putBackAway`, new `timers/awayPutBack.js`)
+
+- Only an away break of the person, of today, that nobody else changed (`changed_by_id` null). Lock
+  order: `attendance.lockDay` (today), `attendance.lockAwayBreak({ userId, breakId }, trx)`, then
+  `repo.lockForUserDate` (every entry of the day). Let E = the `away_entry_id` entry:
+  - E ends at the break's start (split or trim): the entry of the same project starting at the
+    break's end (the tail) starts at the break's start instead; with no tail, E ends at the break's
+    end again (`away_checked_until = end`);
+  - E starts at the break's end (move): E starts at the break's start again;
+  - otherwise (E deleted or changed by hand since), or when any other entry overlaps the span: the
+    timer is not changed (`restored: false`).
+- The break is exactly the time the timer lost, so Put back restores the entry to the break's start
+  and end, to the second. The break is always deleted (`attendance.deleteAwayBreak(breakId, trx)`;
+  the person says they were working, as Keep would have). Audit `attendance.away_put_back` (entity the attendance row, the
+  break in `before`). No notice.
+- Timers off: `TIMERS_OFF`. Not the person's, not away, not today: `NOT_FOUND` "We couldn't find
+  that removed time." Changed by HR: `CONFLICT` "HR changed this break. Ask HR if it needs fixing."
+  Before 018: `UPDATE_NEEDED`.
+
+#### Other timer rules that change
+
+- `timers/entries.js checkOverlap` reads `attendance.listBreakDetails` (detail columns, with the
+  1054 fallback): Add time or an edit over an away break says "That overlaps time you removed from
+  your timer from 1:00 to 1:45. Put it back first." (other breaks keep their message).
+- `lockOwnToday` moves from `entries.js` to `shared.js` (exported) so the away files share it.
+- `schemas.AWAY_DECISIONS` adds `'left'`.
+
+#### Readers that count away breaks
+
+| Reader                                 | File                                                                 | How away breaks count                                              | Change                                                                           |
+| -------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Break and worked minutes               | `attendance/rules.js` `breakMinutesWithin`, `workedMinutes`          | every row of the day, clipped to the present window, overlaps once | none                                                                             |
+| HR day list, Present cell, Over tag    | `attendance/day.js listDay` (`repo.listBreaksByDate`)                | every row                                                          | adds `onBreakSince`, `breakCount`; `on_break` filter; `summary.onBreak` (item 2) |
+| Day Excel                              | `exportDay` (moves to `dayExport.js`)                                | "Breaks (minutes)", "Worked (hours)" through `listDay`             | none (no separate away column: one total)                                        |
+| Month view, month Excel, person month  | `attendance/month.js summarizeRange` (`monthRepo.listBreaksByRange`) | every row, through `breakMinutesWithin`                            | new (item 4)                                                                     |
+| Check-out answer, Today tile and toast | `checkout.js`, `service.getMyToday`                                  | every row                                                          | none                                                                             |
+| Report gap notice                      | `(app)/report/page.js workedFor`                                     | `attendance.listBreaks`                                            | none                                                                             |
+| Allowance notice                       | `breaks.js` → `noticeOverAllowance`                                  | every row                                                          | also called after Remove                                                         |
+| HR evening wrap-up, Remind `break`     | `hrSummaryData.js`, `remindRules.js`                                 | `overAllowanceMinutes` from `listDay`                              | new (items 1 and 5)                                                              |
+| AI HR notes                            | `aiSummaries/hrNotes.js countWeek`                                   | `overAllowanceMinutes` from `listDay`                              | none for breaks                                                                  |
+| Ask Daybook                            | `aiAsk/attendance.js`, `aiAsk/repo.listBreaks`                       | every row                                                          | none                                                                             |
+| Team board "On break"                  | `dashboard/repo.listOpenBreaks`                                      | open rows only; away rows are never open                           | none                                                                             |
+| Timer reminder                         | `timers/worker.js breaksByUser`                                      | a break's end counts as "since"                                    | none                                                                             |
+| Auto check-out and the suggested time  | `autoCheckout.lastSeenWorking`                                       | start and end; the end is when the person came back                | none                                                                             |
+| Add time defaults                      | `today/timerData.addTimeDefaults` (breaks from `getMyToday`)         | every row                                                          | none                                                                             |
+
+New readers count with `breakMinutesWithin` over every row and label breaks with `breakView.js`.
+
+#### The away question (shell: `TimerAwayDialog.jsx`, `TimerChip.jsx`, `TimerChip.clock.js`)
+
+- Still asked by the sidebar chip only. New: the chip also asks about `initialState.away` on mount
+  (page visible), so a question survives a page load after Stop or Check out; it waits while another
+  `[role="dialog"][aria-modal="true"]` is open (the check-out dialog) and asks on the next load. It
+  already loads on `daybook:timers-changed` and every 60 s. It always wins over Today's missing
+  check-out pop-up (B), which waits for it.
+- Title (unchanged): "Your timer kept running".
+- Text (`awayQuestion(away)`):
+  - `away`: "You were away 32 min (1:10–1:42 PM) while your acme-app timer ran."
+  - `no_data`: "Daybook didn't hear from your computer for 40 min (1:10–1:50 PM) while your
+    acme-app timer ran."
+  - with `left`: "You were away from 6:42 PM to 8:52 PM while your acme-app timer ran, after your
+    shift ended at 6:30 PM." (`no_data`: "Daybook didn't hear from your computer from 6:42 PM to
+    8:52 PM while your acme-app timer ran, after your shift ended at 6:30 PM.")
+- Muted line under it (`awayHelp(away)`): "Remove takes this time off your timer and counts it as a
+  break." / with `left`: "Checking out ends your day at 6:42 PM and stops your timer there."
+- Buttons: "Keep, I was working" (secondary, `data-autofocus`, so Enter never removes time) and
+  "Remove, it was a break" (primary); with `left` the second is "I had left, check me out at 6:42
+  PM" (primary). They stack full width at 520 px and below. Escape and × put the question away
+  until the page is shown again (1.09).
+- Toasts: Keep "Kept as work"; Remove "Counted as a break", body "32 min came off your acme-app
+  timer." (before 018: "Away time removed", same body); Left "Checked out at 6:42 PM", body "Your
+  acme-app timer stopped then too."; error "Couldn't save your answer" with the API's message.
+
+#### Today: removed time and Put back (attendance: `TimerCard`, `TimerEntries`, new `TimerRemovedRow.jsx`)
+
+- Today's away breaks (`state.removed`) sit in the "Working on" entry list in time order, as a muted
+  row: the range ("1:00–1:45", `entryRange`), "Away, removed from your acme-app timer" ("Away,
+  removed from your timer" when that entry is gone), the duration ("45m") and a text button "Put
+  back" (compact; `aria-label` "Put back 1:00 to 1:45 PM on your timer", "to" rather than the dash,
+  which screen readers read badly; 44 px hit area at 640 px and below; loading while it works). Shown after check-out too (the card already shows "You've checked
+  out. You can still fix today's times below."); not shown while timers are off or for a break HR
+  changed.
+- Put back goes through `useTimerActions.run` (state, `daybook:timers-changed`, refresh). Toasts:
+  "Time put back", body "45 min went back on your acme-app timer."; not restored: "Break removed",
+  body "We couldn't put the time back on your timer. Add it with Add time."
+- "Tracked today" and the "Your day" tile ("Worked so far · 45m break") follow.
+
+#### Settings (people-admin: `TimersSection.jsx`)
+
+- "Ask about away time after (minutes)" help becomes: "Idle, locked or no screen time this long
+  while a timer runs: people keep it as work or count it as a break." No new setting
+  (`timerAwayMinutes`, `activityIdleMinutes`, `breakAllowanceMinutes` stay as they are).
+
+### 2. Breaks for HR
+
+#### Rules (attendance, new `attendance/breakFixes.js`)
+
+- **On break now** (`listDay`): `onBreakSince` = the start of the person's open break of that date,
+  only when the date is today and the row is open; else null. Away breaks are never open, so they
+  never show "On break". `breakCount` = the day's breaks. `FILTERS`/`MATCHES` add `on_break`
+  (`onBreakSince !== null`); `summarize` adds `onBreak`.
+- **Break fix**: permission `attendance.correct`; the actor may change the person
+  (`showsAttendanceOf`: an Admin's row is `NOT_FOUND` for HR) and is not the person (`assertNotSelf`:
+  "You can't change your own attendance. Ask another HR person or an Admin."). The break must belong
+  to the row in the URL. One `repo.transaction`: lock the attendance row by primary key, then the
+  break `FOR UPDATE`, then read the day's other breaks.
+  - **Change end** `{ endClock, reason }`: `clockOn(workDate, endClock)`; at least 1 minute after
+    the start ("End must be after the start." / "Add at least 1 minute."); not in the future ("That
+    time hasn't come yet."); by the row's check-out when it has one ("The break must end by the
+    check-out (6:30 PM)."); not the current end ("That's already the end time."); no overlap, to
+    the minute, with another break of the day ("That overlaps another break (2:00 to 2:15 PM).");
+    not after the start of a timer entry that starts after the break's start ("A timer started at
+    2:00 PM. Pick 2:00 PM or earlier.", read with new `timers.listEntriesFor(userId, workDate)` after
+    the locks; no timer lock is needed), so a break never runs into tracked work.
+    Saves `ended_at`, `end_reason 'hr'`, `changed_by_id`, `changed_at`; the source stays. An open
+    break ends there (this is how HR fixes a forgotten End break still running); its paused timer
+    is not resumed.
+  - **Delete** `{ reason }`: deletes the row (an open one too).
+  - Reason required, at most 500 (`requireReason`). Audit `attendance.break_change` /
+    `attendance.break_delete` (entity the attendance row; before and after `{ breakId,
+startedAt, endedAt, endReason, source }`), reason, ip. The person is told with the existing
+    `tellPerson` (moved from `hr.js` to `tellPerson.js` by A, type `attendance.edited`): "Neha Kapoor changed a break in
+    your attendance for Thu, 19 Nov" / "Neha Kapoor deleted a break from your attendance for Thu,
+    19 Nov", link `/log?month=2026-11`.
+- **Notice**: `endBreak` and Remove work out `before`, `total` and `crossed` inside their
+  transaction, under the attendance row lock, after the end or the insert (`breakTotalsIn`, which
+  replaces the after-commit read of `breaks.js breakTotals`); after commit `noticeOverAllowance({
+userId, crossed, total })` sends it only when `crossed`, so two breaks that end close together send
+  it exactly once. HR fixes never send it.
+
+#### UI (attendance: new `BreaksButton.jsx`, `BreakListDialog.jsx`, `BreakListHost.jsx`, `BreakFixForm.jsx` + `BreakListDialog.module.css`)
+
+- **Present cell** (layout in "The Attendance day screen"): while on a break today, a marigold `Tag`
+  "On break" (`padX={6}`, `dot`, as on the Team board, `TeamBoardCells.jsx:32`) and a muted "since
+  1:10" (`formatTime`, the Today pill's words) under the
+  worked time. When the row has a break (finished or open), the whole cell is a button
+  (`BreaksButton`: no border, `--ink` text, underline on hover, the focus ring of `Button`), its
+  name the visible text plus a visually hidden " See breaks". It opens the break list. Everyone who
+  sees Attendance (`attendance.view_all`: PM read-only, HR, Admin) can open it.
+- **Filter pill** "On break (2)" (`?filter=on_break`, `summary.onBreak`) last, only when the date is
+  today; the date switcher's links drop `on_break`. Empty: "Nobody is on a break" / "People on a
+  break show up here."
+- **Break list** (`Dialog`, 480 px): title "Priya Sharma's breaks"; description "Thu, 19 Nov ·
+  Breaks 1h 5m · Over 5m" ("On break since 1:10 · " before "Breaks" while on one; " · Over" only
+  when over). One row per break, oldest first:
+  - the range "1:10–1:45 PM" (`clockRange`), "Since 1:10 PM" while open; the duration on the right
+    ("35m", "25m so far");
+  - a muted line: "Break", "Away, removed from timer" or "On break now", then " · " and a note when
+    there is one: "Ended at check-out", "Ended when a timer started", "Closed at midnight", "Changed
+    by Neha Kapoor";
+  - for someone who may fix it: text buttons "Change end" ("End break" while open) and "Delete"
+    (danger tone);
+  - **Change** opens under the row (`BreakFixForm`): `Field` "Ends at" (`Input type="time"`, the
+    current end; for an open break empty, help "When did the break end?"),
+    `Field` "Reason" (`Textarea` rows 2, help "Saved in the audit log."), "Save" (primary, compact)
+    and "Cancel" (text). Errors show under their field (`fields.endClock`, `fields.reason`);
+  - **Delete** opens under the row: "Delete this break? Its time counts as worked again.", the
+    Reason field, "Delete break" (danger, compact) and "Cancel".
+  - Muted foot line: HR or Admin: "Fix a break someone forgot to end. Your reason is saved with
+    every change."; their own row: "Your own breaks. Another HR person or an Admin can change
+    them."; before 018: "Fixing breaks needs the latest database update. Ask an Admin."; a PM sees
+    no foot line and no buttons. Footer: "Close" (secondary).
+  - Loading: three 44 px `Skeleton` rows; failed: "Couldn't load the breaks." and "Try again"
+    (secondary); no rows left: "No breaks on this day."
+  - After a save the list is replaced by the answer and the page refreshes (`router.refresh`).
+    Toasts "Break changed" / "Break deleted"; other errors toast "Couldn't save the break" with the
+    API's message. On Attendance the list is held outside the rows (`BreakListHost` around the
+    Everyone table), so when the refresh takes the row out of the On break filter the list stays
+    open with its answer; closed, focus goes to the card's title when that row is gone.
+  - **Focus**: Change end, End break and Delete move focus to the form's first field; Cancel returns
+    it to that button; after a save or delete focus goes to the dialog's title (`tabIndex -1`) and a
+    visually hidden `role="status"` says "Break changed" / "Break deleted". The Present cell button,
+    Change end, End break and Delete have a 44 px hit area at 640 px and below.
+- HR never sees the project, the kind of away span or any screen time here: only times and the
+  label "Away, removed from timer". The same dialog opens from the person month's Breaks cell
+  (item 8).
+
+### B. Missing check-out pop-up on Today
+
+#### Who and which rows
+
+- People with `attendance.self` who track attendance (`user.tracksAttendance`), on `/today`.
+- Rows: the person's own, `checkout_status 'missing'`, `work_date` from today minus 30 days to
+  yesterday, with **no pending `check_out` correction** for that date (those already show in
+  "Waiting for HR: Check-out time on ..."). Newest first, at most 30.
+- **Auto-open**: once per page load, when there is a row whose `checkout_prompt_hidden_on` is not
+  today. It opens 1.5 s after hydration and only while no other modal is open (no element
+  `[aria-modal="true"]` in the document; the away question of A wins), checking again every 2 s
+  for up to a minute. AutoRefresh's `router.refresh` never reopens it. **Opened from the bell or
+  Slack** (`/today?checkout=missing`: the midnight `notifyMissing` notification and the
+  `missing_checkout` reminder link there), Today's page passes `openMissing` and the dialog opens on
+  load even when the rows were hidden today (still after the away question), then the address
+  becomes `/today` (`router.replace`). The bell on Today itself (and a desktop notification
+  clicked while Today is open) follows the link without loading the page again: `openMissing`
+  turning true asks once more, so the dialog opens then too.
+
+#### The dialog (new `MissingCheckoutDialog.jsx`, `Dialog` width 440)
+
+- Title "You didn't check out on Fri, 13 Nov"; description "What time did you leave?".
+- Body:
+  - muted 14 px: "You checked in at 9:32 AM."
+  - `Field` label "Time you left", `Input type="time"` (44 px, `data-autofocus`), prefilled with
+    the suggested time; help with a suggestion "Daybook last saw you working at 6:41 PM.", without
+    "Daybook has nothing to suggest for that day."
+  - **Over the limit** (live, as soon as the typed time is after the row's `limitClock`): a box
+    (`role="status"`, `--marigold-soft`, text `--marigold-text`, radius 10, padding 10 12) "After
+    7:00 PM, HR checks the time first." and a `Field` "Reason for HR" with `Textarea` (rows 3, max
+    500), help "It goes to HR as a correction request." A row with no limit (a day off with no
+    suggestion, `limitAt` null) shows the box from the start: "That wasn't a working day for you, so
+    HR checks the time first."
+- Footer: muted "1 of 3" at the left (only with two or more rows), "Not now" (secondary), primary
+  "Save", or "Send to HR" while over the limit.
+- Field errors (under the field, from the API's `fields`): "Enter the time you left.", "The
+  check-out must be after the check-in.", "That time hasn't come yet.", "Add a reason for HR."
+- **Save** → `POST /api/attendance/me/missing-checkouts/[id]/fix`. Saved: toast "Check-out saved",
+  body "Fri, 13 Nov, 6:41 PM."; sent: toast "Sent to HR", body "HR will check your check-out for
+  Fri, 13 Nov."; then the next row (the answer's `missing.items`), or the dialog closes and the
+  page refreshes. Error: toast "Couldn't save your check-out" with the message, tone error.
+- **Focus**: the body is keyed by `attendanceId`, so `data-autofocus` focuses the time again on
+  the next row; a visually hidden `role="status"` says "Saved. Next: Mon, 16 Nov."
+- **Not now**, Escape and the close button → `POST /api/attendance/me/missing-checkouts/hide`
+  (sets today on every listed row) and close; no toast. The rows come back tomorrow, and a new
+  missing day comes up the morning after it is marked.
+- **The line** (new `MissingCheckoutPrompt.jsx`, first line of the `.help` box above
+  `CorrectionLinks`, shown while rows exist, hidden or not): one row "You didn't check out on Fri,
+  13 Nov." + text button "Add the time"; several "You have 3 missing check-outs." + "Add the times".
+  It opens the dialog at the first row.
+- The midnight notification to the person (`notifyMissing`, `service.js:246`) changes its body to
+  "Add the time you left on Today." (was: 'Send HR the time you left from Today, under "Request a
+  correction".') and its link to `/today?checkout=missing`.
+
+#### Saving (attendance, new `missingSelf.js`)
+
+- `fixMyMissingCheckout({ user, attendanceId, checkOut, reason, ip })`: `checkOut` 'HH:mm' on the
+  row's work date (`resolveTimes`, so never in the future). In `repo.transaction` (READ COMMITTED,
+  deadlock retry): lock the row by primary key (`repo.findById(id, trx, { forUpdate: true })`, the
+  first lock of §15's order; nothing else is locked: breaks and timers of that day were closed by
+  the midnight rules). A row that isn't the person's own, or is older than 30 days → `NOT_FOUND`
+  "We couldn't find that missing check-out." (ids can't be probed). The person's own row read under
+  the lock that is no longer `'missing'` → `CONFLICT` "This check-out was just fixed. Refresh to see
+  it." (so of two parallel saves one saves and the other gets this); one that has a pending
+  `check_out` correction → `REQUEST_ALREADY_PENDING`. Check-out must be after check-in
+  (`assertOrder`).
+  - **Within the limit** (`selfFixLimit` with `attendance.getDay` for the row's date):
+    `closeMissingRow` updates with `WHERE checkout_status = 'missing'` (0 rows → the same
+    `CONFLICT`) to `check_out_at`, `checkout_status 'corrected'`, `checkout_entered_by = user.id`,
+    `checkout_entered_at = now`, `checkout_suggested_at = suggestedAt` (null without one); audit
+    `attendance.self_checkout` (before/after `auditView`, `after.suggestedClock`, `after.limitClock`,
+    `after.pastLastSeen`, reason "Entered from Today", the request's `ip`). No notification, except:
+    when the row's work date is before the current payroll month's `from`
+    (`payrollPeriod(payrollMonthOf(today, startDay), startDay).from`), after commit
+    `pickRecipients(pools, person)` get a bell `attendance.self_checkout_past`: title "Priya Sharma
+    entered a check-out for Fri, 23 Oct", body "6:30 PM. That day is in the October 2026 payroll
+    month.", link `/attendance/people/12?month=2026-10`.
+  - **Over the limit**: no reason → `VALIDATION_FAILED` on `reason` "Add a reason for HR."; with a
+    reason (2 to 500) `attendance.requestCorrection({ user, type: 'check_out', workDate, checkOut,
+reason }, trx)` runs **inside the transaction that holds the row lock** (`requestCorrection`
+    gains an optional `trx`: with it, it reads the pending request `FOR UPDATE`, inserts and tells
+    HR in that transaction; HR is told in the app and by Slack DM, `slackRequestsNotify`, as today).
+    A double tap on "Send to HR" waits on the row lock, then finds the first request and gets
+    `REQUEST_ALREADY_PENDING`: one request, one HR notification. The row stays missing and leaves
+    the pop-up.
+  - The limit and the suggestion are computed again inside the request (never trusted from the
+    page).
+- `hideMissingCheckoutPrompt({ user })` → `{ hiddenOn }`: one UPDATE of the listed rows'
+  `checkout_prompt_hidden_on`.
+- Timers and breaks of that day are not changed; worked time follows the new check-out
+  (`breakMinutesWithin` clips breaks). A check-out after midnight can't be entered (as for
+  corrections today).
+
+### 7. Missing check-outs for HR: the full list, suggested times, bulk fix, Remind selected
+
+#### The number card and the list agree
+
+- KPI "Missing check-out" (`kpis`) keeps its value and sub ("from yesterday", "since Friday": rows
+  in `missingWindow`, holidays skipped). It becomes a link to the list, written out as §23 did:
+  `<Kpi as={Link} href="/attendance/missing" className={styles.kpiLink}
+trailing={<ChevronRight size={18} strokeWidth={1.8} className={styles.kpiChevron} />} ...>`,
+  with `.kpiLink` and `.kpiChevron` copied from `overview/page.module.css` (colour inherit,
+  `--line-dashed` border on hover, no underline, the global focus ring). When the total still to fix
+  is larger than its value it gets `footer` "12 to fix in all" (`getDaySummary` adds
+  `missingTotal`); every KPI's bar stays level with the others (G's `Kpi` change: the body above the
+  bar grows, so each bar sits at the card's bottom). So the card says "new since the last working
+  day" and the list says "all still to fix", with the same total.
+- The month view's "Missing check-outs" counts rows **marked** missing in the period, with "not
+  fixed" beside it; the labels stay distinct (item 4).
+
+#### Side card on Attendance (`MissingCard`, moves to its own file `MissingCard.jsx`)
+
+- Header "Missing check-outs" with `Badge` "12 to fix" (label "12 to fix") when the total is above 0.
+- Up to 5 rows as today, as artboard 09: title "Priya Sharma, Fri 13 Nov" (`attendanceData.js:183`
+  keeps removing the comma; the `formatDayShort` copy rule doesn't apply to this artboard text); sub
+  on two lines, "Marked at midnight" and "Suggested 6:41 PM" (when there is one), then the
+  `ReminderNote` (item 5). One action, as the artboard: Fix (the existing `RowAction kind="fix"`, its
+  check-out field now prefilled with the suggestion and a help line "Suggested: 6:41 PM, the last
+  time Daybook saw them working."). Remind is on the full list. A row with a pending `check_out`
+  correction shows muted "Asked HR for 7:10 PM" instead of Fix.
+- Footer: text link "See all 12" to `/attendance/missing` (replaces "N more to fix."), shown whenever
+  the total is above 0.
+
+#### The list page `/attendance/missing` (new, `requirePage('attendance.view_all')`)
+
+- `TopBar` title "Missing check-outs", subtitle "12 to fix, newest first" ("Nothing to fix" when
+  empty), breadcrumb "Attendance" (`/attendance`) › "Missing check-outs".
+- For `attendance.correct` (HR, Admin), a muted `Card` (Info icon, as §24's report notice):
+  "Suggested times come from the last time Daybook saw each person working. Check before you save."
+- `Card padding="none"` with a `DataTable` (new `MissingTable.jsx`, client), 50 rows a page, newest
+  day first, then name. The card's head row (always visible, above the table) has the title "Still
+  to fix" and, for `attendance.correct`, a labelled checkbox "Select all on this page"
+  (indeterminate when some are selected). The column header has no checkbox: `DataTable` hides
+  `thead` below 1280 px (`stackBelow={1280}`, `DataTable.module.css`).
+
+  | Column    | Content                                                                                                                                  |
+  | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+  | (select)  | 18 px checkbox, 44 px hit area, `aria-label` "Select Priya Sharma, Fri, 13 Nov"                                                          |
+  | Person    | `Avatar` 34, name, designation                                                                                                           |
+  | Day       | "Fri, 13 Nov", muted "Yesterday" or "Monday" (`formatRelativeDay`), else nothing                                                         |
+  | Check-in  | "9:32"                                                                                                                                   |
+  | Suggested | "6:41 PM", or muted "None"; with a pending `check_out` correction, muted "Asked HR for 7:10 PM" under it                                 |
+  | Check-out | `Input type="time"` 120 px, prefilled with the suggestion, `aria-label` "Check-out for Priya Sharma on Fri, 13 Nov"; row errors under it |
+  | Reminded  | `ReminderNote` (D): "10:05 by Neha" (today) or "Tue, 17 Nov by Neha", else "—"                                                           |
+  | Action    | "Fix" and "Remind" (text buttons, small; 44 px hit area at 640 px and below)                                                             |
+
+  PMs (`attendance.view_all` without `attendance.correct`) get Person, Day and Check-in only: no
+  selection, suggestions, inputs or actions. The viewer's own rows: checkbox and input disabled,
+  Action reads muted "Your own. Fix it from Today." A row with a pending `check_out` correction:
+  checkbox, input and Fix disabled, Action reads muted "Handle it under Corrections", and it is never
+  reminded (B's rule). Admins' rows are not listed for HR (§16).
+
+- **Bulk bar** (replaces the head row's right side while one or more rows are selected): "3 selected"
+  in a `role="status"` span, D's `RemindSelectedButton` ("Remind selected", secondary, compact,
+  `BellRing`), "Fix selected" (primary, compact), "Clear" (text). Below 1024 px it is sticky at the
+  bottom of the viewport (16 px gutter, `--surface`, `--line` top border); at 640 px and below
+  "Clear" sits at the end of the count's line and the other two buttons share one full-width row,
+  each 44 px to tap.
+- **A row's Fix** opens the existing `RowAction kind="fix"` dialog with Check-out prefilled from the
+  row's input (the suggestion): one dialog for one fix, everywhere.
+- **Fix selected**: selected rows without a time get the input's error state with "Add a time." and
+  focus moves to the first; otherwise new `MissingFixDialog.jsx` (`Dialog` 520) opens: title "Fix 3
+  check-outs" (one row: "Fix Priya Sharma's check-out"), description "Each one is saved with the time
+  in its row. The person is told.", a list "Priya Sharma, Fri, 13 Nov: 6:41 PM, suggested" / "Karan
+  Mehta, Mon, 16 Nov: 7:00 PM", `Field` "Reason" (`Textarea`, required, 2 to 500; prefilled "Used
+  Daybook's suggested time." when every row keeps its suggestion), help "Saved with each change in
+  the audit log." Footer Cancel and "Fix 3 check-outs" (one row: "Save"). Done: toast "Fixed 3
+  check-outs"; partly: "Fixed 2 check-outs", body "1 couldn't be saved. See the row.", the row shows
+  its message in red under the input and **focus moves to the first failed row's input**; then
+  `router.refresh()`.
+- **Remind selected** (D's button): one remind `missing_checkout` per distinct person (no dialog).
+  Toast "Reminded 3 people"; partly "Reminded 2 people" with the first skip message as body ("Karan
+  Mehta was reminded at 10:05. You can remind again at 10:35."), plus "1 more not sent." when there
+  are more.
+- Paging footer: "Showing 1 to 50 of 72" with "Previous" and "Next" text links (`?page=2`).
+- Empty: `EmptyState` "No missing check-outs" / "Everyone's check-outs are in."
+- `loading.js`: a header bar and six 54 px rows. Below 1280 px the table becomes cards
+  (`stackBelow={1280}`; stacked label and value below 1024 px), the checkbox at the card's top
+  left.
+
+#### Rules (attendance, new `missingHr.js`)
+
+- `listMissingCheckouts` moves from `day.js` to `missingHr.js` and gains `{ offset = 0, suggest =
+false }`; the index keeps its name. `suggest` is passed only for `attendance.correct` viewers.
+  Items gain `pendingCorrection: { id, checkOutClock } | null` (one query on pending `check_out`
+  corrections for the listed rows) and `reminded`.
+- `missingCheckoutsFor(userIds)` (new) → `Map<userId, [{ attendanceId, workDate }]>`: unfixed rows
+  without a pending `check_out` correction, newest first (D's `missing_checkout` kind and messages).
+- `fixMissingCheckouts({ actor, items, reason, ip })`: `requireReason`; 1 to 50 items; each item in
+  its own `repo.transaction`: lock the row (`findRowForUpdate`'s rules: an Admin's row is
+  `NOT_FOUND` for non-Admins, the actor's own is refused with "You can't change your own
+  attendance. Ask another HR person or an Admin."), still `'missing'` (else "Already fixed."), no
+  pending `check_out` correction (else "Handle it under Corrections.", so HR never saves over the
+  person's own request, which approving later would overwrite),
+  `resolveTimes` and `assertOrder` (messages as `hr.updateRow`); update with `WHERE checkout_status
+= 'missing'` to `check_out_at` and `'corrected'`, then `checkoutEntered.markCheckoutEntered` (a
+  separate statement through `try018Write`, so bulk fix works before 018); audit `attendance.fix_missing` (before/after, reason, `after.suggested`
+  true when the time equals the suggestion); notify the person (`attendance.edited`) "Neha Kapoor
+  entered your check-out for Fri, 13 Nov", body "6:41 PM.", link `/log?month=2026-11`. Returns `{
+fixed: [{ attendanceId, checkOutAt }], failed: [{ attendanceId, field, message }] }`; one failure
+  never stops the others.
+- `hr.updateRow` (HR's Edit and Fix on the day page): a new check-out on a row that was `'missing'`
+  **or has `checkout_entered_by` set** sets `checkout_entered_by = actor.id`, `checkout_entered_at =
+now` and `checkout_suggested_at = null` (`checkoutEntered.markCheckoutEntered`, through
+  `try018Write`), so a row never says "By Priya" for a time Neha typed. `decisions.applyCorrection`
+  for `check_out` clears all three (`checkoutEntered.clearCheckoutEntered`). As the bulk fix, it
+  refuses a row still `'missing'` (read under its row lock) that has a pending `check_out`
+  correction, whatever it changes: `CONFLICT` "Handle it under Corrections." with `fields.checkOut`
+  the same sentence, which `RowAction` shows under Check-out.
+- `decisions.applyCorrection` reads the person's day (`getDay`) only after it has locked the row,
+  so an approval that waited on a holiday or leave write's `applyDayRules` counts late minutes from
+  the calendar that write committed (a new `missing_day` row is covered by `recheckDayRules`).
+- **Suggestions** (new `checkoutSuggest.js`, `suggestCheckoutTimes(rows)`): per row
+  `activity.getDay(userId, workDate)` (the read auto check-out already uses, `autoCheckout.js:170`;
+  never `getTeamDay`, which loads every person's segments of the day, `activity/service.js:195`) and
+  that day's breaks (`repo.listBreaksByUserDate`); per date one `timers.lastRanByUser({ workDate,
+userIds })` (wraps the existing `timers/repo.lastEndedByUser`: finished entries only); then the
+  pure `suggestedCheckoutAt` per row. A past day's suggestion doesn't change, so it is kept in a
+  per-process `Map` by attendance id (at most 1,000 entries, the oldest dropped first; a break fix of
+  that row clears it: `checkoutSuggest.js` listens for `attendance.break_fixed`, which
+  `breakFixes.js` emits after commit). A cold `/attendance/missing` page makes at most 50 small
+  per-person reads; B's pop-up uses the same function, so both always show the same time.
+
+### 5. Reminders: one Remind mechanism, the automatic check-in reminder, Remind buttons
+
+#### The mechanism (attendance, new `reminders.js`, `reminderRepo.js`, `remindRules.js`, `reminderMessages.js`)
+
+- `claimAndSend({ person, kind, actor, since, autoKey }, details)` (internal) is **the only way a
+  reminder is sent**. In `repo.transaction(run, { isolationLevel: 'repeatable read' })` (the WFH
+  request pattern, `findOverlappingWfh` with `forUpdate`): `SELECT … FROM attendance_reminders
+WHERE user_id = ? AND kind = ? AND sent_at >= ? FOR UPDATE` (the index range and its gap are
+  locked, so two sends at once wait or deadlock, and the retry sees the first). A row found →
+  skipped (`too_soon`, with `nextAt` = its `sent_at` + 30 min). Else insert the reminder,
+  `notifications.notify` (bell, so also the desktop push), `slack.queueDm({ slackUserId, text,
+settingKey: 'slackAttendanceRemind', relatedType: 'attendance_reminder', relatedId })` and, for
+  HR, audit `attendance.remind`, all in that transaction. errno 1062 on `auto_key` → skipped. Three
+  deadlocks → skipped with "Something else changed at the same moment. Try again."
+  - `since` = now − 30 minutes for HR; the start of today (company) for the automatic check-in
+    reminder, so it never comes after any check-in reminder of that day.
+  - Reminders never lock attendance, breaks or timers (§15's order is untouched); the state is read
+    just before the claim, so one that crosses a check-in by a second is accepted.
+- `remind({ actor, kind, userIds, ip })` (HR, Admin): distinct ids, 1 to 50. Per person, in this
+  order (so HR learns nothing about an Admin from which message comes back): exists and active,
+  `showsAttendanceOf(actor, person)` (else skipped `not_allowed` "We couldn't find that person."),
+  not the actor ("You can't remind yourself."), tracks attendance, and the kind applies now
+  (`remindKindFor` on a fresh `listDay` item of today with its PersonDay; `missingCheckoutsFor` for
+  `missing_checkout`), else skipped `not_needed`. Returns `{ sent: [{ userId, name, sentAt }], skipped: [{ userId, name,
+reason: 'too_soon' | 'not_needed' | 'not_allowed', message, nextAt? }] }`.
+- `remindKindFor(item, ctx)` (pure) → kind or null, for a `listDay` item (with `item.day`) plus
+  `ctx = { now, today, date, settings, missing }`: the first three kinds only on today's view;
+  `missing_checkout` on any date's missing row. Order: `break` first, then `check_out`, then
+  `check_in`. By the Words above: `check_in` needs `where === 'not_checked_in'`, now at or after
+  `day.lateMark` and before `day.dayEnd`, so holidays, days off and full-day leave never qualify
+  (skip message after the day end: "Priya Sharma's day has ended."). `missing_checkout` needs a row
+  from `missingCheckoutsFor` and today's PersonDay a working day without full-day leave (skip
+  messages "Priya Sharma is on leave today." / "Today isn't a working day.").
+- `listReminders({ since, userIds?, kinds? })` → `[{ userId, kind, sentAt, sentBy: { id, name } |
+null }]` newest first (`[]` before 018): it filters `work_date >= <company date of since>` (KEY
+  `work_date`) before `sent_at >= since`, so the 60 s refresh never scans 180 days.
+  `deleteOldReminders(before)` deletes `WHERE work_date < ?` (the company date 180 days back).
+- Constants `REMIND_KINDS`, `REMIND_EVERY_MINUTES = 30`.
+
+**Messages** (`reminderMessages.js`, pure; bell title, bell body, Slack DM; names and the sender
+escaped with `escapeSlackText`; link `/today`, and `/today?checkout=missing` for `missing_checkout`
+so the pop-up opens even after "Not now"; "Neha Kapoor" = the sender's full name):
+
+| Kind                  | Bell title                                | Bell body                                                                                  | Slack DM                                                                                                   |
+| --------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `check_in`, automatic | You haven't checked in yet                | Your day started at 9:30 AM. Check in on Today when you start work.                        | You haven't checked in yet. Your day started at 9:30 AM. `<origin/today\|Check in on Today>`               |
+| `check_in`, HR        | Neha Kapoor reminded you to check in      | You haven't checked in today. Check in on Today when you start work.                       | \*Neha Kapoor\* reminded you to check in. You haven't checked in today. `<…\|Check in on Today>`           |
+| `break`               | Neha Kapoor reminded you about your break | You've been on a break since 1:10 PM. Your breaks today are 1h 20m, over the 1h allowance. | \*Neha Kapoor\* reminded you about your break. (bell body) `<…\|End your break on Today>`                  |
+| `check_out`           | Neha Kapoor reminded you to check out     | You're still checked in. Check out on Today if you're done for the day.                    | \*Neha Kapoor\* reminded you to check out. You're still checked in. `<…\|Open Today>`                      |
+| `missing_checkout`    | Neha Kapoor asked for your check-out time | You didn't check out on Fri, 13 Nov. Add the time you left on Today.                       | \*Neha Kapoor\* asked for your check-out time. You didn't check out on Fri, 13 Nov. `<…\|Add it on Today>` |
+
+Notification types: `attendance.checkin_reminder` (automatic), else `attendance.remind_<kind>`.
+`missing_checkout` with two days: "You didn't check out on Fri, 13 Nov and Mon, 16 Nov. Add the times
+you left on Today."; three or more: "You have 3 missing check-outs, the latest on Mon, 16 Nov. Add
+the times you left on Today." "Your day started at" = `day.expectedStart` (`formatClock`; the split
+on first-half leave). Durations `formatDuration`.
+
+#### The automatic check-in reminder (worker `checkin-reminders`, new; `attendance/checkinReminders.js`)
+
+- `attendance.sendCheckinReminders(today)` → `{ reminded }`. Every minute while
+  `checkinReminderMinutes > 0`; returns at once when `companyDay(today).isWorkingDay` is false (a
+  weekend or a holiday). Due: active, tracked, `attendance.self`, presence `not_checked_in` (no row
+  today, employed, not on full-day leave, not before the split on first-half leave), now at or after
+  `day.lateMark + checkinReminderMinutes`, before `day.lateMark + checkinReminderMinutes + 60
+minutes` (a worker that was down sends nothing more than an hour late, like checkout-reminder's
+  rule) and before `day.dayEnd`. It first reads today's `check_in` reminders through
+  `guard018Read('reminders', read, () => null)`; null (before 018) → `{ reminded: 0, unavailable:
+true }` before any claim. Each due person goes through
+  `claimAndSend` with `kind 'check_in'`, no actor, `since` = start of today and `autoKey
+'check_in:<date>'` (its run key per person; no `job_runs` row, like timer reminders).
+- Reads per tick when something can be due: active tracked people, today's rows, today's `check_in`
+  reminders, one `loadCalendar` for today. An HR "Remind to check in" earlier that day stops it (the
+  `since` range covers it).
+
+#### Remind on Attendance (`attendance.correct` only; HR and Admin)
+
+- **Action cell** (layout in "The Attendance day screen"): the remind lives in the row's `RowMenu`
+  ("...", F), never as a separate button, so the Action column keeps one line. When `remindKindFor`
+  gives a kind, the row isn't the viewer's own and the 30 minutes have passed, the menu's first item
+  is the remind (`remindMenuItem` from D's `remindItem.js`, `BellRing` 14 px): "Remind to check in" /
+  "Remind about the break" / "Remind to check out" / "Ask for the check-out time", so on touch HR
+  can tell which one it sends. Under the line, the muted `ReminderNote` (D, 12 px, `--muted`, at
+  most 2 lines): "Reminded 10:05 by Neha" (sender's first name; "by Daybook" for the automatic one;
+  an earlier day "Reminded Tue, 17 Nov by Neha"). Within the 30 minutes the item isn't in the menu
+  and the line gets `title` "You can remind again at 10:35". The line shows the person's latest
+  reminder of the row's kind: sent today for the first three kinds, sent on or after the row's date
+  for `missing_checkout`.
+- **Remind all** (new `RemindAllButton.jsx`, D): in the Everyone card head, for `canCorrect` on
+  today, when the filter is `not_checked_in` or `on_break`: "Remind all (3)" (secondary, compact,
+  `BellRing`). It sends one `POST /api/attendance/reminders { kind, userIds }` for the listed rows
+  whose `remindKindFor` gives that kind and that aren't within the 30 minutes; toasts as for
+  "Remind selected"; hidden when the count is 0.
+- **Sending** (`useRemind()` from D's `useRemind.js`, used by the menu item, Remind all, Remind
+  selected and the list's Remind) → `POST /api/attendance/reminders { kind, userIds }`. Sent: toast
+  "Reminder sent", body "Sent to Priya Sharma."; skipped `not_needed`: toast "No reminder needed",
+  body the message; `too_soon`: "Not sent yet", body the message (both in the toast's default tone:
+  ToastProvider has only `success` and `error`); API errors (`UPDATE_NEEDED` included): "Couldn't
+  send the reminder" with the API's message, tone error; then `router.refresh()`. Skip messages:
+  "Priya Sharma was reminded at 10:05. You can remind again at 10:35.", "Priya Sharma has checked
+  in.", "Priya Sharma isn't over the break allowance now.", "Priya Sharma has checked out.", "Priya
+  Sharma's day hasn't ended yet.", "Priya Sharma's day has ended.", "Priya Sharma has no missing
+  check-outs now.", "Priya Sharma is on leave today.", "Today isn't a working day.", "Priya
+  Sharma isn't late yet." (`check_in` before their late mark), "Priya Sharma hasn't checked in."
+  (`check_out` without a row), "Priya Sharma is on a break now." (`check_out` while it is a break
+  case), "Rahul Verma doesn't check in." (not tracked)
+- **Out cell**: under the time, muted "By Priya" (first name of `checkout_entered_by`) with a
+  visually hidden "Check-out entered " before it (screen readers hear "Check-out entered by Priya")
+  and `title` "Priya Sharma entered this check-out on Thu, 19 Nov". Shown to every Attendance viewer
+  (PMs included); it is not screen-time data. **For `attendance.correct` viewers**, when the person
+  entered it themselves and it is past last seen, a marigold `Tag` "Check" (`padX={6}`) follows it,
+  `title` "Priya entered 6:30 PM. Daybook last saw them working at 1:05 PM." (no suggestion:
+  "Daybook had no sign of work after the check-in."). This is the one allowed derived time.
+- PMs see no remind, no reminder lines and no Check tag.
+
+### 1. Morning HR summary and evening wrap-up (attendance, new `hrSummary.js`, `hrSummaryData.js`, pure `hrSummaryText.js`)
+
+#### When and to whom
+
+- **Morning** (worker `hr-summary`, new): on working days (`companyDay(today).isWorkingDay`, so not
+  on holidays), at or after `hrSummaryAt`, before `officeEnd` (a summary that would arrive after
+  office hours is not sent), while `hrMorningSummary` is on. `runAttempts('hr-summary',
+'hr_summary:<date>', …)` (3 attempts, 10 minutes apart, `worker/runOnce.js:95`; attempts 2 and 3
+  always run, which the claim below makes safe).
+- **Evening wrap-up** (worker `hr-evening-summary`, new): same days, while `hrEveningSummary` is on,
+  at or after `officeEnd` + 30 minutes (23:59 at the latest), key `hr_evening_summary:<date>`, type
+  `attendance.hr_evening_summary`.
+- **Once per recipient per day**: each recipient's send is one transaction that first inserts
+  `attendance_alerts (user_id = the recipient, kind 'hr_morning' | 'hr_evening', period_key = the
+date 'YYYY-MM-DD', days 0)`, then the bell row and the Slack DM. Errno 1062 = already sent: skip.
+  A failed send rolls its claim back, so a later attempt sends it. Deleting the bell notification
+  (the bell's Delete and swipe hard-delete it, `notifications.remove`) never brings it back. Before
+  018 (errno 1146 on the claim) it falls back to `notifications.hasRecent` since the start of today.
+- To each HR recipient: one bell notification (so a desktop push on every browser where they turned
+  on "Show on this computer", while `pushEnabled`) and one Slack DM (`settingKey 'slackHrSummary'`,
+  skipped without a `slackUserId`). Daybook has no per-person mute per notification type; these are
+  the existing per-person channel choices. Link: morning `/attendance?filter=not_checked_in` when
+  that count is above 0, else `/attendance`; evening `/attendance`.
+- Data is read once with no viewer (`listDay(today)` with its calendar), then filtered per recipient
+  (`showsAttendanceOf`, and never the recipient). The waiting counts come from new
+  `hrSummaryRepo.countWaiting({ hideAdmins, excludeUserId: recipient.id })` → `{ corrections, wfh }`
+  (two counts): the recipient's own requests are left out, since `decisions.loadPending` and
+  `wfhDecisions.loadPending` answer `FORBIDDEN` to them.
+- Every name in the Slack text is escaped with `escapeSlackText` (as `reminderMessages.js`).
+
+#### Morning content
+
+- **Not checked in**: presence `not_checked_in` at send time, the Attendance pill's set (leave,
+  holidays and days off are already out), so the summary and the screen agree. Someone whose own
+  late mark hasn't passed is listed with "(starts 11:00)" (`day.expectedStart`).
+- **Late**: rows today with effective `lateMinutes > 0`, most late first, "Vishal Saini 22m".
+- **On leave**: `listOnLeave(today)`, "Meera Nair, first half" / "second half" / the name only for a
+  full day.
+- **Working from home**: rows today with `location 'wfh'`, plus people not checked in yet whose
+  `day.wfhApproved` is true.
+- **Waiting for you**: pending correction requests and pending WFH requests (counts, never the
+  recipient's own).
+- **Missing check-outs from <day>**: rows still missing in `missingWindow(today)` (holidays
+  skipped); "from yesterday" / "since Friday" as the KPI.
+- Bell title (200 max): "Morning attendance: 3 not checked in, 2 late"; when both are 0 "Morning
+  attendance: everyone has checked in"; only one part when the other is 0 ("Morning attendance: 2
+  late").
+- Bell body (shown on 2 lines): the other counts above 0, count first, joined with " · ": "1 on
+  leave · 2 WFH · 3 waiting for you · 1 missing check-out from yesterday"; none: "Nothing is waiting
+  for you."
+- Slack (lines with nothing are left out; at most 15 names a line, then "and 4 more"):
+
+```
+*Morning attendance, Thu, 19 Nov* (10:00 AM)
+*Not checked in (3):* Priya Sharma, Karan Mehta, Rohit Verma (starts 11:00)
+*Late (2):* Vishal Saini 22m, Ankit Rana 8m
+*On leave (1):* Meera Nair, first half
+*Working from home (2):* Neha Kapoor, Sam Lee
+*Waiting for you:* 1 correction request, 2 work from home requests
+*Missing check-outs from yesterday (1):* Karan Mehta
+<https://daybook.example/attendance|Open Attendance>
+```
+
+With every list empty the second line is "Everyone has checked in and nothing is waiting for you."
+
+#### Evening content
+
+- **Still checked in**: open rows today whose day end has passed, "Priya Sharma (since 9:32)". Open
+  rows whose day end hasn't passed are counted as "1 still on their shift".
+- **Reports not in**: checked in today, `report.self`, no submitted report today (yes or no only,
+  `reports.listSubmittedUserIds`).
+- **Over the break allowance**: `overAllowanceMinutes > 0` today (away breaks included), "Karan
+  Mehta, over by 25m".
+- **Auto check-outs since <last working day>**: rows of `missingWindow(today)` (the last working day
+  to yesterday, so weekend and holiday ones show too) with an `attendance.auto_checkout` audit row
+  (`audit.listForEntities`, the month rule, so a row fixed since still counts), plus today's when
+  `autoCheckoutAt` is before the send time; "Rohit Verma at 6:12 PM on Fri, 13 Nov".
+- Bell title: "Evening attendance: 4 still checked in"; when that is 0 but rows are open "Evening
+  attendance: 1 still on their shift"; with no open row "Evening attendance: everyone has checked
+  out". Body, count first: "3 reports not in · 2 over the break allowance · 1 auto check-out since
+  Fri, 13 Nov" / "Nothing else to look at."
+- Slack: `*Evening attendance, Thu, 19 Nov* (7:00 PM)` then `*Still checked in (4):*` (ending with
+  "and 1 still on their shift" when some are), `*Reports not in (3):*`, `*Over the break allowance
+(2):*`, `*Auto check-outs since Fri, 13 Nov (2):*` lines as above, and the Attendance link; all
+  empty: "Everyone has checked out and every report is in."
+- `attendance.sendHrMorningSummary(today)` and `sendHrEveningSummary(today)` → `{ sent }`.
+
+### 3. Half day, short day, left early
+
+Pure rule `dayMarks({ row, day, worked, settings })` in new `src/modules/attendance/marks.js`:
+
+- Only on a **finished** row of a working day of the person with `day.expected > 0` (so never on
+  weekends, holidays or before joining). Open rows (today, still checked in) and missing check-outs:
+  no marks. **One exception:** on a day where `dayCounts` gives `conflict 'leave_and_checkin'`
+  (full-day leave with a check-in), the marks use expected 1: Half day and Short day at full size,
+  Left early against `shiftEnd`, matching present 1.
+- `factor = min(1, ownShiftMinutes / officeMinutes)` (1 without an own shift); `half =
+round(halfDayUnderMinutes × factor)`; `short = round(shortDayUnderMinutes × factor ×
+day.expected)`. With half-day leave (`expected` 0.5) the Half day mark is off.
+- **Half day** = `half > 0`, no half-day leave and worked `< half`. **Short day** = not Half day,
+  `short > 0` and worked `< short`. At the defaults: 269 min is Half day, 270 to 479 Short day, 480
+  none; on half-day leave Short day under 240.
+- **Left early** = check-out (company time) more than `leftEarlyGraceMinutes` before `day.dayEnd`
+  (own shift end, or the split on second-half leave); `leftEarlyMinutes` = how much before. An auto
+  check-out counts (its time is the last sign of work, §19).
+- Returns `{ halfDay, shortDay, leftEarly, leftEarlyMinutes }`.
+
+**Attendance day page** (`listDay` items gain `marks` and an item-level `lateMinutes` = effective
+late; `MATCHES.late` and `summarize` use `item.lateMinutes`, so the Late pill and KPI follow it;
+`attendance.lateMinutes` on the row stays as stored):
+
+- Present cell: a marigold `Tag` "Half day" or "Short day" (`padX={6}`) last, `title` "Worked 3h
+  50m, under 4h 30m".
+- Out cell: under the time (and the "Auto" tag), a marigold `Tag` reading "Early" with a visually
+  hidden "Left 25m " before it (screen readers hear "Left 25m early", so keyboard and touch users
+  get the minutes too), `title` "Left 25m before their shift ended at 6:30 PM". The person month
+  (wider) shows the tag as "Early 25m".
+- Day Excel: see "The Attendance day screen".
+
+### 4. Month view and one Excel for the month
+
+#### Payroll month (new `attendance/payroll.js`, pure)
+
+- `payrollPeriod(month, startDay)` → `{ month, from, to, label, rangeLabel }`: start 1 → the
+  calendar month, `rangeLabel` null; start d → from = day d of the month before, to = day d−1 of
+  `month`. `label` "November 2026" (`formatMonth`), `rangeLabel` "26 Oct to 25 Nov"
+  (`formatDayMonthShort`).
+- `payrollMonthOf(date, startDay)` → start 1: `monthOf(date)`; else the next month from day d on.
+  So 25 Nov 2026 → '2026-11', 26 Nov 2026 → '2026-12', 26 Dec 2026 → '2027-01'.
+- `resolvePayrollMonth(month, settings)` → the asked month, or the current one when not `YYYY-MM` or
+  after the current one (like `resolveDate`); `period.isCurrent`, `prevMonth`, `nextMonth` (null for
+  the current one). **Without `month`**, while today is within the first 3 days of a new period, it
+  answers the **previous** payroll month (`defaulted: 'previous'`): the month page, its export, the
+  person month and the Leave page then open the period that just closed, the DateSwitcher label
+  reads "Last month" and the next arrow leads to the current one. Needs a look and the late alert
+  always use the current period.
+
+#### One month function (every reader reuses it)
+
+`attendance.summarizeRange({ from, to, viewer?, userIds?, withDays? })` (new, `attendance/month.js`;
+pure core in new `monthRules.js`: `summarizePerson`, `classifyDay`, `needsLookReasons`, `ordinal`).
+Readers: the month view, the month Excel, the person month, Needs a look, the late alert. The HR
+summaries and the AI HR notes keep reading `listDay` per day (a single day each), with the same
+rules.
+
+- **Reads** (about 8 queries plus one per 500 attendance rows of the period, the audit chunks; no
+  per-day loop): people `users.listTrackedForRange({ from, to })` (new, people-admin: tracked, active
+  or deactivated on or after `from`, joined by `to`; `leftOn` = the company date of `deactivatedAt`,
+  passed to `personDay`), then `showsAttendanceOf(viewer, person)`; rows
+  `monthRepo.listRowsByRange({ userIds, from, to })` (`ROW_COLUMNS` plus the three entered-by
+  columns, the `user_id, work_date` unique index); breaks `monthRepo.listBreaksByRange({ userIds,
+from, to })` (same filter as `repo.listBreaksByDate`; every break, away ones included); history
+  `audit.listForEntities({ entityType: 'attendance', entityIds: rowIds, actions:
+['attendance.mark_missing', 'attendance.auto_checkout'] })` (new, system; ids in chunks of 500);
+  report days `reports.listSubmittedDays({ userIds, from, to })` (new, reports); `loadCalendar({ from,
+to, userIds, leaveDetail: true })` (holidays, leave, approved WFH); settings.
+- **Returns** `{ from, to, through, today, holidays: [{ date, name }], available: { holidays, leave
+}, people: MonthPerson[] }`, `through = min(to, today)`, people in id order (as `listDay`).
+- `MonthPerson` = `{ user: { id, name, initials, avatarUrl, role, status, designation,
+departmentName, email }, joinedOn, leftOn, workingDays, workingDaysSoFar, holidays, presentDays,
+officeDays, wfhDays, daysOffWorked, leave: { paid, unpaid, total, planned }, absentDays, lateDays,
+lateMinutes, halfDays, shortDays, leftEarlyDays, workedMinutes, breakMinutes, overAllowanceDays,
+missingCheckouts, missingNotFixed, autoCheckouts, selfEnteredCheckouts, selfEnteredPastLastSeen,
+reports: { expected, submitted, missing } | null, needsLook: [{ key, count, label }], days? }`. Day
+  counts may be halves (0.5).
+- `MonthDay` (only with `withDays`) = `{ date, kind: 'working' | 'day_off' | 'holiday' | 'future',
+employed, isToday, day: PersonDay, holiday: { name } | null, leave: { part, paid, type, note } |
+null, row: { id, checkInAt, checkOutAt, location, officeVerified, note, lateMinutes,
+checkoutStatus, source } | null, where: 'office' | 'unverified' | 'wfh' | 'not_checked_in' |
+'absent' | 'on_leave' | 'holiday' | 'day_off', present, leaveDays, absent, lateMinutes,
+presentMinutes, breakMinutes, workedMinutes, overAllowanceMinutes, marks, checkout: { wasMissing,
+auto, notFixed, enteredBy, pastLastSeen, suggestedAt }, report: 'submitted' | 'not_submitted' |
+'due' | null, conflict: 'leave_and_checkin' | null }`. `row` never carries `checkInIp` or
+  `checkOutIp` (not in the month view, the person month or the month Excel). `leave.note` is null
+  when the viewer is the person it is about.
+- Rules: the Words, `dayCounts`, `effectiveLateMinutes`, `dayMarks`. **Every count covers days up to
+  `through`, except `workingDays` and `holidays`, which cover the whole period** (`workingDaysSoFar`
+  stops at `through`). Leave on days after `through` is `leave.planned`, never in `leave.total`.
+  Per person, present + `leave.total` + absent = working days so far while employed. Worked, breaks
+  and over allowance over every row (days off included); an open row of **today** counts live (as
+  `listDay`); **an open row from a day before today counts like a missing check-out** (no present
+  or worked time, and "not fixed" under Check-outs), whether or not `auto_mark_missing_checkout` has
+  run, so a forgotten check-out never adds 14 hours to the payroll Excel. `overAllowanceDays` = days
+  with breaks over `breakAllowanceMinutes` (0 = none). Holidays counted per person = holidays on a
+  working weekday while employed. Working days follow **today's** `workingDays` setting for past
+  months too. `selfEnteredCheckouts` = rows whose `checkout_entered_by` is the person;
+  `selfEnteredPastLastSeen` = those past last seen.
+
+#### `getMonth` and the page `/attendance/month`
+
+- `attendance.getMonth({ viewer, month?, filter? })` (new) → `{ period, filter, counts: { all,
+needs_look, late, short, absent, leave, missing }, totals: { workingDays, workingDaysSoFar,
+holidays, lateDays, latePeople, lateAverageMinutes, shortDays, leftEarlyDays, leaveDays,
+unpaidLeaveDays, absentDays, absentPeople }, rules: { halfDayUnderMinutes, shortDayUnderMinutes,
+leftEarlyGraceMinutes, lateAlertDays }, available, people }`. Filters: `all`, `needs_look`,
+  `late` (at least 1 late day), `short` (half or short at least 1), `absent`, `leave`, `missing`
+  (missing check-outs at least 1).
+- **Page** (new `(app)/attendance/month/page.js`, `monthData.js`, `MonthTable.jsx`,
+  `page.module.css`, `loading.js`): `requirePage('attendance.correct')` (HR and Admin; a PM gets
+  `/no-access`). `TopBar` title "Attendance", subtitle "November 2026 so far" / "November 2026"
+  (start day 1) or "November 2026, 26 Oct to 25 Nov" (" so far" while current). Actions: `Segmented`
+  "Day" (`/attendance`) / "Month" (`/attendance/month`), `label="View"`; `DateSwitcher` label "This
+  month" or "Oct 2026", `prevLabel` "October 2026", `nextLabel` "December 2026" or "No later
+  months"; `Button variant="secondary"` "Download Excel" → `/api/attendance/month/export?month=2026-11`,
+  `download="attendance-2026-11.xlsx"`, `prefetch={false}`. No `AutoRefresh`.
+- **KPIs** (5 `Kpi`s, the day page's `.kpis` grid): "Working days" value 22, sub "14 so far, 1
+  holiday" (or "no holidays"), percent so far ÷ all, primary; "Late days" value 9, sub "by 4
+  people", percent late people ÷ people, marigold; "Short days" value 5, sub "3 left early",
+  marigold; "Leave" value 6.5, sub "1 unpaid" (or "all paid"), teal; "Absent" value 2, sub "by 2
+  people", red.
+- **The table** (`Card padding="none"`, head like `EveryoneCard`): title "Everyone, November 2026",
+  `FilterPills` "All (24)", "Needs a look (3)", "Late (9)", "Short days (5)", "Absent (2)", "On
+  leave (4)", "Missing check-outs (3)" (`?filter=`, the month kept). `DataTable` columns (numbers in
+  `--font-heading-stack`, tabular; a muted line is 12 px `--muted`; "—" when there is nothing):
+  - "Person": `Avatar` 34, the name as a link to `/attendance/people/[id]?month=2026-11`,
+    designation; a marigold `Tag` "Needs a look" when it applies, with a muted line under it naming
+    the reasons joined with " · " ("5 late days · 4 short days"; no `title`, so keyboard and touch
+    users read them too); muted "Joined Wed, 4 Nov" / "Left Tue, 10 Nov" inside the period.
+  - "Present": "19.5", muted "of 21 days" (a past month: `workingDays` while employed) or "of 14
+    days so far" (the current month: `workingDaysSoFar`), muted "18 office · 1.5 WFH", muted "+1 day
+    off" when `daysOffWorked > 0`, muted "1 holiday" when `holidays > 0`.
+  - "Leave": "1.5", muted "1 paid, 0.5 unpaid", muted "1 day planned" for leave after today.
+  - "Absent": "1" in `--red-text`.
+  - "Late": "4", muted "1h 12m".
+  - "Short days": half + short, muted "1 half day", muted "2 left early" ("0" instead of "—" when a
+    muted line shows).
+  - "Worked": "152h 30m" (`formatDuration`), muted "Breaks 18h 10m", red `Tag` "Over on 3 days".
+  - "Check-outs": "2 missing" in `--red-text`, muted "1 not fixed", muted "1 auto", muted "2 entered
+    themselves" and, when some are past last seen, marigold "1 to check".
+  - "Reports": "18 of 20", "2 missing" in `--red-text`; "—" without `report.self`.
+- Empty states (`EmptyState compact`, "Show everyone" link off `all`): all "Nobody tracks attendance
+  yet" / "People who check in show up here."; needs_look "Nothing stands out" / "Nobody reached 4
+  late days, short days or missing reports."; late "Nobody was late"; short "No short days"; absent
+  "Nobody was absent"; leave "Nobody took leave"; missing "No missing check-outs".
+- Foot under the table, muted 13 px, from `rules`: "Half day: worked under 4h 30m. Short day: worked
+  under 8h. Left early: out more than 15m before their shift ended. Worked is present time less
+  breaks. Holidays and leave are never absent." ("Half days are off." / "Short days are off." when
+  0.)
+- Before 018: the notice above the table (Deploy before migrate).
+- Narrow: TopBar actions wrap; KPIs as on the day page; below 1280 px each person is a card
+  (`stackBelow={1280}`). Skeleton: the KPI row and 8 rows of 64 px.
+
+#### The month Excel (new `attendance/monthExport.js`)
+
+- `attendance.exportMonth({ viewer, month?, userId? })` → `xlsxResponse` input,
+  `summarizeRange({ withDays: true })`. Filename `attendance-2026-11.xlsx`, one person
+  `attendance-2026-11-vishal-saini.xlsx`. `xlsxResponse` builds the whole workbook in memory
+  (`writeBuffer`), so one file covers at most 200 people (more: 400 "Too many people for one file.
+  Download one person's month instead.") and one month export is built at a time per process (a
+  module flag; a second one answers 429 "An export is being built. Try again in a minute."). Numbers stay numbers (halves as 0.5, hours `0.00`),
+  clocks 24-hour `HH:mm` (as `exportDay`). Never report text, never screen time.
+- Sheet 1 "Summary 26 Oct to 25 Nov" (start day 1: "Summary November 2026"), one row per person:
+  Name, Email, Designation, Department, Working days, Days present, Office days, WFH days, Worked
+  on days off, Paid leave days, Unpaid leave days, Holidays, Absent days, Late days, Late (minutes),
+  Half days, Short days, Left early (days), Worked (hours), Breaks (hours), Days over break
+  allowance, Missing check-outs, Not fixed yet, Auto check-outs, Check-outs entered themselves,
+  Entered after last seen, Reports submitted, Missing reports, Joined, Left, Planned leave days
+  (last, so the payroll columns stay together).
+- Sheet 2 "Days 26 Oct to 25 Nov", one row per person per listed day, **up to `through` only**
+  (every working day while employed, every day with a check-in, every holiday on a working weekday,
+  every leave day): Name, Email, Date (`YYYY-MM-DD`), Day ("Mon"), Day type ("Working day", "Day off",
+  "Holiday: Diwali"), Where ("Office", "Office (unverified)", "WFH", "On leave", "Absent", "Not
+  checked in", blank), Leave ("Full day", "First half", "Second half"), Leave paid ("Paid",
+  "Unpaid"), Leave type ("Casual", "Sick", "Other"), Leave note, Check-in, Check-out, Check-out
+  status (`CHECKOUT_WORDS`), Check-out entered by, Entered after last seen ("Yes" or blank), Late
+  (minutes), Present (hours), Breaks
+  (minutes), Worked (hours), Over allowance (minutes), Half day, Short day, Left early (minutes),
+  Absent (0, 0.5, 1), Report ("Submitted", "Not submitted", blank), Note (the attendance note).
+
+### 8. One person's attendance month for HR
+
+- `attendance.getPersonMonth({ viewer, userId, month? })` (new, `attendance/personMonth.js`, titles
+  in new `personChanges.js`) → `{ period, person: { id, name, initials, avatarUrl, email,
+designation, departmentName, role, status, tracksAttendance, joinedOn, leftOn, shift: "Shift 9:30
+AM to 6:30 PM" }, totals: MonthPerson (no days), days: MonthDay[] (oldest first, the listed days
+of the month Excel), tones: { [date]: tone }, changes: [{ id, at, actor: { id, name } | null,
+action, title, details: string[], reason, note }], changesMore, canChange, available }`.
+  `NOT_FOUND` "We couldn't find that person." for an unknown id or an Admin when the viewer isn't
+  one (§16). Someone who doesn't track attendance and has no row in the month gets the page with
+  "Their attendance isn't tracked." Own month: viewable, no actions (`assertNotSelf`).
+- **Changes** = `audit.listForEntities({ entityType: 'attendance', entityIds: the month's row ids,
+actions, limit: 51 })` with the allow-list `attendance.create`, `attendance.edit`,
+  `attendance.correct`, `attendance.confirm_office`, `attendance.self_checkout`,
+  `attendance.fix_missing`, `attendance.break_change`, `attendance.break_delete`,
+  `attendance.away_checkout`, `attendance.away_put_back`, `attendance.day_rules`,
+  `attendance.away_backfill` (never `mark_missing` and `auto_checkout`, which show as tags on the
+  day, nor `attendance.unverified_office`, whose reason is the person's check-in note; a future
+  action never shows untitled), plus `audit.listForEntities({ entityType: 'leave', entityIds: the leave entries
+touching the month })`, merged by audit id with the `audit.listForType({ entityType: 'leave', since: 400
+days before the month starts, actions })` rows whose `before` or `after` has the person's `userId`
+  and dates touching the month (a deleted leave, or one moved to another month, keeps its rows here),
+  and `attendance.listLeave({ viewer, userId, from, to })` for leave without
+  an audit change (a change's `note` is null when the viewer is the person it is about); newest first, at most 50 (`changesMore`). Actor names from `users.findByIds`.
+  Never the audit `ip`. Titles and details (`formatDayShort`, `formatTimeAmPm`):
+  - `attendance.create`: "Neha Kapoor added Mon, 9 Nov", detail "In 9:40 AM, out 6:30 PM, Office".
+  - `attendance.edit`: "Neha Kapoor changed Fri, 13 Nov", one detail per changed field: "Check-in
+    9:58 AM to 9:30 AM", "Check-out none to 7:10 PM", "Place WFH to Office".
+  - `attendance.correct`: "Neha Kapoor approved a correction for Fri, 13 Nov", the same details;
+    `reason` = the person's reason, `note` = `after.handlerNote`.
+  - `attendance.confirm_office`: "Neha Kapoor confirmed the office check-in on Tue, 3 Nov".
+  - `attendance.self_checkout`: "Priya Sharma entered the check-out for Fri, 13 Nov", detail
+    "Check-out 6:41 PM"; past last seen: "Check-out 6:30 PM, Daybook last saw them at 1:05 PM" (no
+    suggestion: "Check-out 6:30 PM, no sign of work after the check-in").
+  - `attendance.fix_missing`: "Neha Kapoor entered the check-out for Fri, 13 Nov", detail
+    "Check-out 6:41 PM, suggested" (", suggested" only when `after.suggested`).
+  - `attendance.break_change`: "Neha Kapoor changed a break on Thu, 19 Nov", detail "Break from
+    1:10 PM, end 3:40 PM to 1:55 PM".
+  - `attendance.break_delete`: "Neha Kapoor deleted a break on Thu, 19 Nov", detail "Break 1:10 PM
+    to 1:45 PM".
+  - `attendance.away_checkout`: "Priya Sharma checked out from the timer question on Thu, 19 Nov",
+    detail "Check-out none to 6:42 PM".
+  - `attendance.away_put_back`: "Priya Sharma put back time removed from a timer on Thu, 19 Nov",
+    detail "Break 1:00 PM to 1:45 PM removed".
+  - `attendance.day_rules`: "Late mark updated on Fri, 13 Nov", detail "Late 22m to none" (or
+    "Working day to not a working day") and "Because: Holiday added: Diwali" (the audit reason); the
+    time line reads "by Neha Kapoor, Thu, 19 Nov, 10:02 AM".
+  - `attendance.away_backfill`: "Daybook counted time removed from a timer as a break on Mon, 2
+    Nov", detail "Break 1:00 PM to 1:45 PM" (no actor: the time line reads "by Daybook").
+  - Leave: "Neha Kapoor marked leave for Mon, 2 – Tue, 3 Nov" (`formatDayRange`), detail "Casual,
+    paid, full day", `note` = the leave note; `leave.update` "Neha Kapoor changed leave for …",
+    `leave.delete` "Neha Kapoor removed leave for …", with their reason.
+- **Page** (new `(app)/attendance/people/[userId]/page.js`, `personMonthData.js`,
+  `PersonDays.jsx`, `PersonChanges.jsx`, `page.module.css`, `loading.js`):
+  `requirePage('attendance.correct')`; the id through a new `userIdParamSchema` (`notFound()` when
+  invalid or NOT_FOUND).
+  - `TopBar` breadcrumb "Attendance" (`/attendance`), "November 2026" (`/attendance/month?month=`),
+    the name; title the name; subtitle "November 2026 so far, 26 Oct to 25 Nov" (rules as the month
+    page). Actions: `DateSwitcher` (payroll months, the same labels), "Download Excel"
+    (`/api/attendance/month/export?month=2026-11&userId=12`).
+  - **Profile card** (as Employee detail's): `Avatar` 64, designation and department, the shift
+    line, "Joined 4 March 2024" or "Left on Tue, 10 Nov"; six stats: "19.5 of 21" "Days present"
+    ("10 of 14 so far" in the current month, the month table's rule);
+    "1.5" "Leave days"; "1" "Absent days"; "4" "Late days, 1h 12m"; "3" "Short days, 2 left early";
+    "152h 30m" "Worked".
+  - **"Each day"** card, subtitle "Weekends show only when they checked in.": `DataTable` columns
+    "Day" ("Thu, 19 Nov", muted "Today" or the holiday name), "Where" (`StatusCell`: office, wfh,
+    unverified; "Absent" with status `missing`; "Not checked in" for today; `on_leave` and
+    `holiday`; "Day off"), "Check-in" (time, "Late 22m", "4th this month"), "Out" (time, "Auto" and
+    "Early 25m" tags, "Missing" in red, "By Priya" and, past last seen, the "Check" tag), "Breaks" ("45m", red "Over 15m"; a
+    `BreaksButton` that opens item 2's break list), "Worked" ("7h 40m", "Half day" / "Short day"
+    tags), "Report" ("Submitted", "Not submitted" in `--red-text`, "Due 6:30 PM", "—"; yes or no
+    only, never the content), and for `canChange` the existing `RowAction` (add, edit, fix,
+    confirm) built by `actionFor` (moved from `attendanceData.js` to a shared
+    `(app)/attendance/rowActions.js`). A leave conflict row shows muted "Checked in on a leave day".
+  - **Calendar** card: `MonthCalendar` from `dashboard.buildCalendar({ range: { from, to }, toneOf
+})`, tones from `tones`: office, wfh, late, missing (absent), `leave` (new tone), `holiday` (new
+    tone), future, weekend; legend "Office, WFH, Late, Absent, Leave, Holiday".
+  - **"Changes this month"** card, subtitle "By HR, Admins and the person, with their reasons.":
+    each change: title (14 px semibold), details (13 px), "Reason: …", "HR note: …", the time muted
+    ("Thu, 19 Nov, 10:02 AM"). Empty: "No changes this month." More: "Showing the latest 50."
+  - Layout: profile card full width; then a 2-column grid (days left, calendar and changes in a 340
+    px right column) at 1440 px and up; below 1440 px the days take the full width with the
+    calendar and changes side by side under them, and below 1280 px each day is a card
+    (`stackBelow={1280}`); one column below 1024 px (profile, calendar, days, changes). Skeleton:
+    profile bar, a 46 px calendar grid, 10 day rows.
+- Links in: the day table's names (`canCorrect` only; PMs see plain names), the month table's names,
+  Needs a look, the late alert.
+
+### 10. Late count this month, Needs a look, the late alert
+
+#### "4th this month" (day page, new `attendance/needsLook.js`)
+
+- `attendance.lateCountsFor({ date, userIds })` → `{ [userId]: { nth, label, title, alert } }` for
+  the people late that day: `nth` = effective late days in the payroll month of `date` from its
+  first day up to `date`, this day included. One query (`monthRepo.listLateDays({ userIds, from,
+to })`: rows with `late_minutes > 0`) plus `loadCalendar`, then `effectiveLateMinutes` (the same
+  rule as the month summary, so the two always agree).
+- Check-in cell: a third line under "Late 22m", 12 px `--muted`: "4th this month" ("1st", "2nd",
+  "3rd", "11th", "12th", "13th", "21st"…; shown for every late day, the first included). At or over
+  `lateAlertDays` it is `--marigold-text`, semibold. `title`: "4th late day in November 2026" (start
+  day 1) or "4th late day in November 2026 (26 Oct to 25 Nov)". Shown to every viewer of Attendance
+  (PMs too: it only counts late marks they can already see day by day). `GET /api/attendance` items
+  gain `lateCount` the same way.
+
+#### Needs a look this month
+
+- `attendance.getNeedsLook({ viewer })` → `{ period, threshold, total, items: [{ user, href,
+reasons: [{ key: 'late' | 'short' | 'reports', count, label }] }] }` for the **current** payroll
+  month through today, from `summarizeRange`. Sorted by the sum of the counts, then name. Admins
+  only for an Admin viewer (§16). The day page refreshes every 60 s (`today/AutoRefresh.jsx`), so
+  the answer is kept per process for 5 minutes, keyed by the payroll month and whether the viewer
+  is an Admin (like settings' 30 s cache); a leave or holiday write clears it in that process.
+- Labels, count first: "5 late days", "4 short days" (half days and short days together), "4
+  missing reports" (`plural`). Only the reasons at or over the threshold are listed.
+- **Card** (new `(app)/attendance/NeedsLookCard.jsx` + css), HR and Admin only (`canCorrect`), in the
+  day page's side column under "Missing check-outs", whatever day is shown: `CardHeader` title
+  "Needs a look this month", subtitle "November 2026 so far" (start day 1) or "26 Oct to 25 Nov so
+  far". Up to 6 rows: `Avatar` 30, the name as a link to the person month, then the reasons as
+  `Tag`s (late and short marigold, reports red), wrapping under the name below 1024 px. Empty:
+  "Nothing stands out this month." Foot, muted: "Listed at 4 late days, short days or missing
+  reports." More: "3 more in the month view." (link `/attendance/month?filter=needs_look`).
+
+#### The late alert to HR (worker `late-alerts`, new; `attendance/lateAlerts.js`)
+
+- Every minute; on a working day at or after `officeEnd` (company time): `runAttempts('late-alerts',
+'late_alerts:<date>', () => attendance.sendLateAlerts(date))` (3 attempts, 10 minutes apart; safe,
+  since `attendance_alerts` is unique). Not on a holiday (`sendLateAlerts` returns `{ alerted: 0,
+holiday: true }`). No upper time: a worker that was down all evening still sends it that day.
+  **Migration 018 claims the deploy day's three keys** (Data step 8), so the first alerts come on
+  the next working day, after the Admin has set the payroll month.
+- `attendance.sendLateAlerts(today)`: `summarizeRange` over the current payroll month through today,
+  no viewer (everyone); for each **active** person with `lateDays >= lateAlertDays`, one
+  transaction with its own try/catch (one failing person never stops the others): insert
+  `attendance_alerts (user, 'late_days', periodKey, lateDays)`; errno 1062 = already told this
+  period, skip; else `notifications.notify` to `pickRecipients(pools, person)`. **On the first
+  working day of a payroll period** it also checks the previous period through its last day (its
+  own `period_key`), so a run missed on a period's last day still alerts: that alert reads
+  "Vishal Saini was late 5 times last month", "5 late days in October 2026, 1h 30m in all.".
+  Type `attendance.late_alert`; title "Vishal Saini was late 4 times this month"; body "4 late days
+  so far in November 2026, 1h 12m in all."; link `/attendance/people/12?month=2026-11`. Desktop
+  push comes with the bell row (§14). No Slack DM. **The person is not told.** Returns `{ alerted,
+checked }`.
+- Once per person per payroll month even if the setting changes: lowering it alerts at the next
+  run; raising it after an alert sends nothing more that month. Changing the payroll start day
+  re-cuts the periods (a new key), documented, not prevented.
+
+### 6. Company holidays (attendance, new `attendance/holidays.js`)
+
+#### Holidays page (`/attendance/holidays`, `requirePage('attendance.view_all')`)
+
+- **TopBar**: title "Holidays", subtitle "Days the office is closed. Nobody is expected in, so there
+  are no late marks or reminders.", breadcrumb "Attendance" (`/attendance`) › "Holidays". Actions: a
+  year `DateSwitcher` (label "2026", prev "2025", next "2027"; `?year=`; years from last year to next
+  year, the arrow past them is disabled with label "No earlier years" / "No later years"), and for
+  `attendance.correct` "Add holiday" (primary, Plus).
+- **Card** (`padding="none"`): `CardHeader` title "2026", subtitle "3 holidays, 1 still to come"
+  ("1 holiday", "No holidays"). `DataTable` columns: **Date** ("Tue, 24 Nov", `formatDayShort`),
+  **Name**, **Status** (`Tag` sm: "Today" primary, "Past" neutral, "Not a working day" neutral when
+  the weekday isn't in `workingDays`; nothing for days to come), and for `attendance.correct` a
+  `Menu` "Actions for Guru Nanak Jayanti" with "Edit" and "Delete" (tone danger).
+- **Empty**: `EmptyState` "No holidays in 2026" / "Add the days the office is closed." with "Add
+  holiday" (secondary); for PMs the body is "HR adds the days the office is closed." and no button.
+- **Add / Edit dialog** (`Dialog`, 480 px, so the three footer buttons fit on one line): title
+  "Add holiday" / "Edit holiday". `Field` "Date" (`Input type="date"`); `Field` "Name" (`Input`,
+  placeholder "Diwali", help "Shown on Attendance
+  and on everyone's Today."). The Date starts empty (`min` and `max` from Limits). Live muted line
+  when the date is before today: "This day has passed. Late marks of anyone who checked in that day
+  are removed, and Admins are told." (today: "This is today. Late marks of anyone who checked in
+  today are removed, and Admins are told."). Footer: Cancel, "Save and add another" (secondary, Add
+  only: saves, clears Name and Date, focus to Date) and "Add holiday" / "Save" (primary, `loading`
+  while saving). Toast "Holiday added" / "Holiday saved", body "Guru
+  Nanak Jayanti, Tue, 24 Nov". Errors show under their field.
+- **Delete dialog**: title "Delete Guru Nanak Jayanti?", description "Tue, 24 Nov becomes a working
+  day again. Late marks of anyone who checked in that day are worked out again." (for today or an
+  earlier day " Admins are told." is added). Footer Cancel and "Delete" (danger). Toast "Holiday
+  deleted".
+- Skeleton `holidays/loading.js`: the top bar, a header bar and four 54 px rows.
+
+#### Rules
+
+- `listHolidays({ year })` → `{ year, available, items: [{ id, date, name, dayLabel, weekday, past,
+today }], upcoming }` (`listHolidaysBetween` and `nextHoliday` are A's calendar reads);
+  `createHoliday({ actor, date, name, ip })`,
+  `updateHoliday({ actor, id, date?, name?, ip })` → the holiday; `deleteHoliday({ actor, id, ip })`
+  → `{ id }`.
+- Each write: one `repo.transaction` (READ COMMITTED): `applyDayRules({ from, to, reason, actorId },
+trx, write)` around the holiday row's insert, update or delete (the old and new date on a move;
+  reasons "Holiday added: Diwali", "Holiday moved: Diwali", "Holiday removed: Diwali"), audit
+  `holiday.*`; after commit the `companyDay` and Needs a look caches are cleared in this process and
+  `recheckDayRules({ from, to, since: the write's start, reason })` runs once in its own transaction.
+  The unique key refuses a second holiday on a date (errno 1062 → `CONFLICT`). Report reminders,
+  summaries and notices already sent are not sent again or taken back.
+- **A write that touches today or an earlier date and changed at least one row**, after commit:
+  the active Admins other than the actor get a bell `holiday.past_changed`: title "Neha Kapoor added
+  a holiday on Fri, 13 Nov" / "Neha Kapoor moved a holiday to Fri, 13 Nov" / "Neha Kapoor deleted a
+  holiday on Fri, 13 Nov", body "12 attendance rows changed." plus " Neha Kapoor's own row is one of
+  them." when it is (the one write path where HR changes their own late mark), link
+  `/attendance/holidays?year=2026`; and each person whose late minutes changed gets
+  `attendance.edited` "Your late mark for Fri, 13 Nov changed", body "Holiday removed: Diwali.",
+  link `/log?month=2026-11`.
+- **Check-in** on a holiday: allowed; `is_working_day = 0`, `late_minutes = 0` (`getDay` in
+  `checkIn`).
+- **Attendance** (any day shown): on a holiday a muted notice `Card` (new `DayNotice.jsx`, compact,
+  Info icon, `role="status"`) above the table: "Holiday: Guru Nanak Jayanti. Nobody is expected in,
+  so there are no late marks or reminders." On a weekday the company doesn't work: "Not a working
+  day. Nobody is expected in." Everyone without a check-in shows "Holiday" (or "Day off") in Where
+  and is not counted in "Not checked in".
+- **Today** (the person): notice "Today is a holiday: Guru Nanak Jayanti. Check in only if you're
+  working."; the Check in card subtitle "Office hours 9:30 to 6:30. No late mark today." (instead of
+  "Late after 9:30."). Under the help links, a muted line "Next holiday: Guru Nanak Jayanti, Tue, 24
+  Nov." when one is within 14 days.
+- Every other place: the table "Every place that decides a working day".
+
+### 9. Leave days (attendance, new `attendance/leave.js`, checks in `leaveRules.js`)
+
+No employee leave requests and no balances in this release.
+
+#### Leave page (`/attendance/leave`, `requirePage('attendance.correct')`: HR and Admins only, since the type and the note are theirs)
+
+- **TopBar**: title "Leave", subtitle "Leave HR has marked. People on leave aren't counted absent or
+  reminded.", breadcrumb "Attendance" › "Leave". Actions: a `DateSwitcher` that walks **payroll
+  months** (`resolvePayrollMonth`, the month page's labels: "November 2026"; `?month=YYYY-MM`, from
+  January of last year to December of next year; the subtitle adds "26 Oct to 25 Nov" when the start
+  day isn't 1), so the Leave card and the month view's Leave count the same days; and "Mark leave"
+  (primary, Plus).
+- **Filter**: `Select` "Person" ("Everyone", then the tracked, active people the viewer may see, by
+  name), kept in `?userId=`.
+- **Card**: `CardHeader` title "November 2026", subtitle "5 people, 7.5 working days" ("1 person,
+  0.5 day", "No leave"). `DataTable` columns: **Person** (Avatar 34 + name + designation), **Days**
+  (`formatDayRange`, plus muted ", first half" / ", second half"), **Working days** ("2 days", "1
+  day", "0.5 day": the entry's leave days inside this payroll period; muted "of 5" when the entry has
+  more outside it; muted "1 day checked in" when some of them have a check-in, since those count as
+  present in the month view),
+  **Type** ("Casual", "Sick", "Other"), **Pay** (`Tag` green "Paid" / neutral "Unpaid"), **Note**
+  (one line, full text in `title`, "—" when empty or when the entry is about the viewer), **Marked
+  by** (muted "Neha Kapoor, 12 Nov"), and
+  a `Menu` "Actions for Priya Sharma's leave" with "Edit" and "Delete" (danger). An entry shows in
+  every month it touches. Newest first by `from_date`, 50 a page with the usual pager.
+- **Empty**: "No leave in November" / "Mark leave when someone tells HR they'll be away." with "Mark
+  leave" (secondary).
+- Skeleton `leave/loading.js`.
+
+#### Mark leave dialog (new `(app)/attendance/LeaveDialog.jsx`, shared by the Leave page, the Attendance row menu and the "Leave and holidays" card)
+
+- `Dialog` (520 px), title "Mark leave" / "Edit leave" (description "Priya Sharma" when editing).
+- `Field` "Person" (`Select`, required): tracked, active people the viewer may change (never the
+  viewer; never an Admin for a non-Admin). Preset and disabled when opened from an Attendance row or
+  when editing.
+- `Field` "First day" and `Field` "Last day" (`Input type="date"`; from the Leave page or the card
+  both start at today, from a row at the row's date); Last day follows First day until
+  the person picks one of its own (the WFH dialog's rule, `wfhOptions.js`), and never stays before
+  it.
+- `Field` "Part of the day", rendered without `htmlFor` (a `<label>` can't name a group): `Segmented
+label="Part of the day"` (the group's `aria-label`) with the help tied to the group by
+  `aria-describedby`: "Full day", "First half", "Second half". The halves are disabled (Segmented's
+  new per-item `disabled`, G) while the days differ, with help "Half days are for one day."; with one day the help
+  reads "First half: until 2:00. Second half: from 2:00." (the person's split, from the preview).
+- `Field` "Type" (`Select`): "Casual", "Sick", "Other". `Field` "Pay" (`Segmented label="Pay"`, as
+  above): "Paid" (default), "Unpaid".
+- `Field` "Note" (`Textarea`, rows 2, optional, max 300), help "Only HR and Admins see the note."
+- Editing only: `Field` "Reason for the change" (`Textarea`, required), help "Saved in the audit
+  log."
+- **Live preview** (`role="status"`, from `GET /api/leave/preview`, sent 300 ms after the last
+  change; while waiting, muted "Counting working days…"; on an error, muted "Couldn't check these
+  dates. Saving checks them again." and Save stays enabled): "2 working days: Mon, 23 – Wed, 25 Nov." / "Half a working day." / "1 working day." Then
+  muted notes, one per line: "Tue, 24 Nov is a holiday (Guru Nanak Jayanti) and isn't counted." /
+  "Sat, 28 Nov isn't a working day and isn't counted." (at most 3, then "and 2 more days off"),
+  marigold "Priya checked in on Mon, 23 Nov. The check-in stays.", red "Priya already has leave on
+  Mon, 23 Nov." and red "No working days in these dates."
+- Footer: Cancel and "Mark leave" / "Save" (primary; disabled while the preview shows an overlap or
+  no working days). When editing, a "Delete leave" text button (danger) at the footer's start opens
+  the **delete dialog** (new `LeaveDeleteDialog.jsx`): title "Delete this leave?", description
+  "Priya Sharma, Mon, 23 – Wed, 25 Nov. These days count as working days again.", `Field` "Reason"
+  (required), footer Cancel and "Delete" (danger).
+- Toasts: "Leave saved" / "Leave deleted", body "Priya Sharma, Mon, 23 – Wed, 25 Nov". Errors toast
+  the API's message, field errors show under their field; `router.refresh()` after a save.
+
+#### Rules
+
+- F: `listLeave({ viewer, month?, from?, to?, userId?, limit, offset })` → `{ items: LeaveEntry[],
+total }` (`month` = the payroll period); `previewLeave({ actor, userId, fromDate, toDate?, part,
+excludeId? })` → `{ workingDays, split, offDays: [{ date, why: 'holiday' | 'not_working', name?
+}], checkIns: [date], overlap: { fromDate, toDate } | null }`; `createLeave({ actor, userId,
+fromDate, toDate?, part, paid, leaveType, note?, ip })`, `updateLeave({ actor, id, ...changes,
+reason, ip })` → LeaveEntry; `deleteLeave({ actor, id, reason, ip })` → `{ id }`.
+- `LeaveEntry` = `{ id, user: { id, name, initials, designation, role, status }, fromDate, toDate,
+days, part, partLabel, paid, leaveType, typeLabel, note, workingDays, createdBy: { id, name } |
+null, createdAt, updatedBy, updatedAt }`. `note` is null when the entry is about the viewer (an HR
+  person's own leave on the Leave page, the person month and the month Excel). `workingDays` counts
+  the entry's leave days inside the asked payroll period, with `checkedInDays` beside it.
+- A's reads have fixed shapes: `listOnLeave(date, { viewer })` → `[{ user, part, checkedIn,
+leaveType?, paid? }]` (type and pay only for `attendance.correct`); `listUpcomingLeave({ viewer,
+from, to, limit })` → the same items plus `fromDate`, `toDate`; `getMyLeave({ user, from, to })`
+  → `[{ id, fromDate, toDate, part, partLabel, paid, leaveType, typeLabel, markedBy: { name } }]`,
+  **never `note`**; `getMyToday.upcoming.leave` is that shape and the My log day's `leave` is `{
+part, paid, leaveType }`.
+- `previewLeave` runs the write flow's person checks first, in the same order (below), with
+  `NOT_FOUND` "We couldn't find that person." for a missing or inactive person **and** for one the
+  actor may not see (`showsAttendanceOf`), so HR can't read an Admin's check-in dates, shift or
+  leave through it; `excludeId` is used only when that entry belongs to `userId`.
+- **Write flow**: check the input (Limits) and the person, in this order (so HR learns nothing about
+  an Admin from which error comes back): exists and active (`users.findById`, else `NOT_FOUND`),
+  `showsAttendanceOf(actor, person)` (else `FORBIDDEN` "Only an Admin can mark an Admin's leave."),
+  `assertNotSelf`, tracks attendance (else `CONFLICT`); `updateLeave` and `deleteLeave` check the
+  same with the entry's `userId`; count working days with `loadCalendar` (0 → `VALIDATION_FAILED`); then one
+  `repo.transaction(fn, { isolationLevel: 'repeatable read' })` (the WFH pattern: the overlap read
+  `FOR UPDATE` locks the gap a double tap would use; a deadlock retries up to 3 times): find an
+  overlapping entry of the person (excluding this one) → `CONFLICT`; the insert or update inside
+  `applyDayRules({ userIds: [userId], from, to, reason, actorId }, trx, write)` over the old and new
+  days (an update that changes only `paid`, `leaveType` or `note` skips it); audit `leave.*`; notify
+  the person; after commit `recheckDayRules` for that person and those days, and the Needs a look
+  cache is cleared. An Admin's leave is `NOT_FOUND` by id for non-Admins (§16).
+- Bell to the person (link `/today` for today or later, else `/log?month=YYYY-MM`): `leave.marked`
+  "Neha Kapoor marked leave for you: Mon, 23 – Wed, 25 Nov" (", first half" for a half), body
+  "Casual, paid."; `leave.changed` "Neha Kapoor changed your leave: Mon, 23 – Tue, 24 Nov", same
+  body; `leave.removed` "Neha Kapoor removed your leave on Mon, 23 – Wed, 25 Nov". The note is never
+  in the notification. No Slack.
+
+#### On Attendance (`/attendance`)
+
+- **Where cell**: `on_leave` → `StatusCell` "On leave" and, for a half, a muted line under it "First
+  half" / "Second half" (the "Late 38m" line's style). `holiday` → "Holiday". `day_off` → "Day off".
+  Someone on leave who checked in keeps their Office/WFH cell with the muted line "On leave" / "On
+  leave, first half". A not-checked-in person with approved WFH gets the muted line "WFH approved"
+  (`attendance.correct` viewers only: WFH requests are the approvers' and the person's, §17, so
+  `day.wfhApproved` is false for PMs).
+  For `attendance.correct` viewers the cell's `title` adds "Sick leave, unpaid"; PMs see "On leave"
+  and the part only.
+- **Filter pill** "On leave (2)" (`?filter=on_leave`, after "Not checked in", shown only when the
+  count is above 0 or it is selected): everyone with leave that day, checked in or not. Empty state: "Nobody is on leave" / "Leave HR marks shows here." "Not
+  checked in" counts `presence === 'not_checked_in'` only.
+- **"Leave and holidays" card** (new `LeaveCard.jsx`, side column, last; everyone with
+  `attendance.view_all`): title "On leave today" (or "On leave, Mon, 9 Nov" for an earlier day);
+  rows: Avatar 30, name, muted part ("Full day", "First half", "Second half"), for HR and Admins " ·
+  Sick, paid", and muted "Checked in" when they did. Empty: "Nobody is on leave." Then, for HR and
+  Admins, "Coming up" with the leave starting in the next 7 days (at most 5 rows: "Rahul Verma, Mon,
+  23 – Wed, 25 Nov"). Then muted "Next holiday: Guru Nanak Jayanti, Tue, 24 Nov" (within 60 days).
+  Footer text buttons: "Mark leave" (HR, Admin; opens the dialog), "All leave" (HR, Admin;
+  `/attendance/leave`), "Holidays" (`/attendance/holidays`).
+- **Row menu** (`RowMenu`, F; HR and Admin, rows other than their own): after D's remind item,
+  "Mark leave" (person and date preset), or "Edit leave" when the person has leave that day. Before
+  018 these items are left out (no menu at all when nothing else is in it).
+
+#### On Today (the person)
+
+- A notice `Card` in the "Still working?" slot (new `TodayDayNotice.jsx`, compact, CalendarDays
+  icon, `role="status"`; the "Still working?" line shows under it when both apply):
+  - full day: "You're on leave today. Check in only if you're working." and a muted second line
+    "Casual leave, paid. Marked by Neha Kapoor."
+  - first half: "You're on leave for the first half of today, until 2:00." (muted second line as
+    above)
+  - second half: "You're on leave for the second half of today, from 2:00."
+  - holiday: see item 6.
+- **Check in card** subtitle uses `day.lateMark`: "Office hours 9:30 to 6:30. Late after 2:00." on
+  first-half leave; "No late mark today." on full-day leave.
+- **This week** bars (`todayData.weekDays`): a past or current holiday or full-leave day without
+  hours shows `display` "Holiday" / "Leave", `faded`.
+- Under the help links: muted "Leave coming up: Mon, 23 – Wed, 25 Nov." (the next own leave starting
+  tomorrow to 14 days ahead, part added for a half day).
+
+#### Other screens
+
+- **Team board** (PM, Admin; `dashboard/team.js`, `shared.summarizeDay`): a new last group `{ key:
+'off', title: 'Off today', tone: 'teal' }` (the tone of its bar segment, as every other group's,
+  `team.js:28-30` and `223-225`) holding everyone whose presence is `on_leave`, `holiday` or
+  `day_off`, each with a `Tag` "On leave" / "On leave, first half" (teal), "Holiday" (green) or "Day
+  off" (neutral), never the type. "Not checked in" (group, KPI, segment) counts only `not_checked_in`; the
+  attendance bar gains a segment `{ key: 'off', label: 'Off today', color: 'teal' }`.
+  `checkedInKpi` sub "of 26 people, 2 off" when some are off. On a holiday the subtitle ends " ·
+  Holiday: Guru Nanak Jayanti".
+- **Overview** (`dashboard/overview.js`): "Attendance this week" asks the calendar per day: "Not
+  checked in" = for today `presenceOf` at now (first-half leave before the split counts as Off, as
+  on Attendance and the Team board), for past days expected people without a check-in; a new segment "Off" (teal) = people on full-day
+  leave; a holiday column is `faded` with its `title` "Holiday: Guru Nanak Jayanti". "Hours this
+  week" counts only working days so far.
+- **Employee detail** (`dashboard/history.js`, `calendar.js`): history rows also for holiday and
+  leave days; Where "On leave" / "Holiday" without a check-in, Report "—" (`'off'`) on a day with
+  expected 0 and no report. The month calendar gets tones `holiday` and `leave` (legend "Holiday",
+  "Leave"), shown for days to come too, so planned leave is visible. PMs never see the type.
+- **My log** (`reports/monthLog.js`, the person's own): each day carries `holiday` and `leave` (own
+  type and pay); `rowStatus` answers `holiday` or `on_leave` for an off day with no check-in and no
+  report (`StatusCell` "Holiday" / "On leave"); a half day adds the muted line "First half on
+  leave". KPIs: "of N working days" = working days while employed, leave included (the month view's
+  "of 21 days"); "not checked in" = absent from `dayCounts` (a half-leave no-show counts 0.5). The
+  My log Excel gets "Day type" and "Leave" columns like Attendance's (the person's own type and pay,
+  never the note).
+
+### Every place that decides a working day (and how each changes)
+
+| Place (today)                                                                                                                  | Decides                                      | 1.10                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/time.js` `isWorkingDay(date, workingDays)`, `workingDaysBetween(from, to, workingDays)`                               | weekday only                                 | optional last argument `holidays` (a `Set` or array of dates): skipped when given. Old calls unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `src/lib/time.js` `lateMinutesFor({ ..., workingDays })`                                                                       | 0 off weekdays                               | unchanged; callers pass `day.lateMark` through `lateMinutesForDay`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `src/worker/clock.js` `companyNow().workingDay`                                                                                | weekday                                      | `workingDay = (await attendance.companyDay(date)).isWorkingDay`; the result adds `holiday`. So `report-reminder`, `ai-pm-summary`, `timer-reminders` and the new jobs (`checkin-reminders`, `hr-summary`, `hr-evening-summary`, `late-alerts`) skip holidays.                                                                                                                                                                                                                                                                                                          |
+| `src/modules/timers/worker.js:125` `sendReminders` re-check                                                                    | weekday                                      | `(await attendance.companyDay(today)).isWorkingDay`. People who checked in on leave are working: reminded as usual.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `src/worker/jobs/aiHrNotes.js:16`, `aiSummaries/calendar.js:38` `lastWorkingDayOfWeek`                                         | last weekday of the week                     | holidays skipped (`lastWorkingDayOfWeek(date, workingDays, holidays)`), and the job runs when `date >=` that day inside the same ISO week (a Friday holiday added on Friday morning still gets the notes that day; `runAttempts` keeps it to once a week).                                                                                                                                                                                                                                                                                                             |
+| `aiSummaries/hrNotes.js:73` `countWeek`                                                                                        | `workingDays += 1` per weekday               | `workingDays` counts working days; each person adds `holidays`, `leaveDays` (0.5 steps) and `expectedDays` from `dayCounts`, and late days use effective late. `missingCheckOuts` and `autoCheckOuts` follow the month rules (marked missing by audit or still missing; auto by audit or status; `loadWeek` reads `audit.listForEntities` once for the week's row ids). The prompt adds: "holidays are company holidays; leaveDays are days HR marked as leave (a half day is 0.5). Neither is an absence." The leave type, pay and note are **never** sent to Gemini. |
+| `aiAsk/attendance.js:56-65` `daysWithoutCheckIn`                                                                               | weekday without a row                        | the sum of `expected` on days without a row (holidays and full leave out, a half-leave no-show 0.5). `attendance_summary` adds per person `leaveDays` and a top-level `holidays: [{ date, name }]` (at most 50). `aiAsk/prompt.js` adds "Company holidays and leave days are not working days." Type and pay never. `OUT_STATUS.corrected` becomes 'Corrected' (a person may now enter their own); with `attendance.checkoutEnteredFor(rowIds)` a row whose `checkout_entered_by` is its own person reads `checkOutNote: 'Entered by the person'`.                     |
+| `attendance/rules.js` `computeLateMinutes`, `workingDayFlag`                                                                   | weekday                                      | take an optional `day` (PersonDay).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `attendance/service.js:156` `checkIn`                                                                                          | weekday                                      | `getDay({ person: user, date })` before the insert; late and flag from it. `getMyToday` adds `day`, `upcoming: { leave, holiday }` and `missing` (`listMyMissingCheckouts`).                                                                                                                                                                                                                                                                                                                                                                                           |
+| `attendance/hr.js:182` `createForUser`, `updateRow` (new check-in)                                                             | weekday                                      | `getDay` for the row's person and date.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `attendance/decisions.js:64` `applyCorrection` (missing day, check-in)                                                         | weekday                                      | `getDay`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `attendance/day.js:121` `missingWindow`                                                                                        | last weekday before                          | `lastWorkingDayBefore` (holidays skipped).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `attendance/day.js` `listDay`, `filterDay`, `summarize`, `exportDay`                                                           | "Not checked in" = no row (even at weekends) | items add `day` (type and pay only with `leaveDetail`) and `where = presenceOf(...)`; filters add `on_leave`, `on_break`; summary adds `onLeave`, `off`, `holiday`, `onBreak`. `listDay(date, { viewer, calendar?, leaveDetail? })` takes a preloaded calendar (HR notes read 7 days).                                                                                                                                                                                                                                                                                 |
+| `attendance/service.js` `markMissingCheckouts`, `autoCheckout.js`, `checkoutReminder` job                                      | open rows only                               | unchanged: they act only on people who checked in, holiday or leave alike.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `reports/reminders.js` `sendReportReminders`                                                                                   | job gate + checked in today                  | unchanged code: the gate skips holidays; people on leave have no check-in so aren't reminded; someone who checks in on leave is.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `reports/monthLog.js:75,107,177`                                                                                               | weekday                                      | the calendar for the month (My log).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `reports/queries.js:52` `listStuckTasks`, `dashboard/employee.js:61-91` `daysInProgress`, `isStuckTask`                        | working days since first reported            | holidays skipped (`workingDaysBetween(..., holidays)`); leave doesn't change task age.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `dashboard/employee.js:120` `periodStats`                                                                                      | stored `isWorkingDay`                        | unchanged code; holiday rows now store 0, so they leave the average check-in.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `dashboard/overview.js:51` `hoursKpi`, `:172` `attendanceWeek`                                                                 | weekday                                      | the calendar (Overview).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `dashboard/history.js:170` `buildHistory` expected                                                                             | weekday                                      | `day.expected > 0`, plus holiday and leave days shown.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `dashboard/calendar.js:36` `buildCalendar`, `dayTone`                                                                          | weekday columns                              | columns stay the working weekdays; `dayTone({ date, row, profile, today, day })` adds `holiday`, `leave`; `buildCalendar` takes optional `range` and `toneOf` (item 8).                                                                                                                                                                                                                                                                                                                                                                                                |
+| `dashboard/team.js:34`, `shared.js:97` `summarizeDay`                                                                          | no row = Not checked in                      | `presenceOf` (Team board).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `(app)/today/todayData.js:83` `weekDays`                                                                                       | weekday                                      | holiday and leave labels.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `(app)/today/wfhOptions.js:200` `nextWorkingDay`, `todayWfh.js:35`                                                             | next weekday                                 | holidays skipped (passed from `todayWfh.js`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `(app)/screen-time/screenTimeView.js:170` `rangeSummary`, `(app)/log/screenTime.js:21`, `(app)/team/[userId]/screenTime.js:43` | weekday bars                                 | a holiday without data draws no bar (pass `holidays`). Averages are per day with data, unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `dashboard/repo.js:285`, `aiAsk/repo.js:226`, `attendance/repo.js:47` (`is_working_day` column)                                | stored flag                                  | unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `db/demo/calendar.js`, `settings` (Working days)                                                                               | weekday                                      | unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+### The Attendance day screen, all together (`/attendance`)
+
+Every item adds to the same page; this is the one layout (builder A puts it together, the others
+supply their pieces; see "Files and owners").
+
+- **TopBar actions**: HR and Admin get the `Segmented` "Day" (`/attendance`) / "Month"
+  (`/attendance/month`), `label="View"`, value "day", first; then the `DateSwitcher` and "Download
+  Excel" as today. PMs see what they see today.
+- **KPIs**: the five of today. "Present": sub "of 24 people, 2 off" when `summary.off > 0` (leave,
+  holiday or day off without a check-in) and percent = present ÷ (tracked − off), so HR's number
+  matches the Team board's `checkedInKpi`; "In office", "WFH" and "Late" keep their percent over the
+  same expected count. "Late" counts effective late. "Missing check-out" is item 7's link with
+  `footer` "12 to fix in all".
+- **Day notice** (`DayNotice.jsx`, item 6) under the KPIs on a holiday or a day that isn't a working
+  day; then the WFH requests card (unchanged).
+- **Everyone card pills**: "All", "Late", "WFH", "Not checked in", "On leave", "Unverified", "On
+  break" (today only). "On leave" and "On break" show only when their count is above 0 or they are
+  the selected filter, so the pills fit beside the title at 1440 as artboard 09's five do. `FILTERS
+= ['all', 'late', 'wfh', 'not_checked_in', 'on_leave', 'unverified', 'on_break']`. New empty
+  states: on_leave "Nobody is on leave" / "Leave HR marks shows here."; on_break "Nobody is on a
+  break" / "People on a break show up here." For `canCorrect` on today with the `not_checked_in` or
+  `on_break` filter, D's `RemindAllButton` follows the pills.
+- **Cells** (new `DayCells.jsx`: `WhereCell`, `CheckInCell`, `OutCell`, `PresentCell`, `ActionCell`;
+  `AttendanceCards.jsx` keeps the cards; column widths as artboard 09 except Action, below; each line
+  shows only when it applies). **Every new muted line** (12 px, line height 15) uses `white-space:
+normal; overflow-wrap: anywhere` and may take 2 lines, never the `nowrap` of `.late` and `.breaks`
+  (Check-in has about 73 px of content, Where about 90, Out about 57, Present about 65):
+  - **Person**: `Avatar`, the name (a link to the person month for `canCorrect`), designation.
+  - **Where**: `StatusCell` (`office`, `wfh`, `unverified`, `not_checked_in`, `on_leave`,
+    `holiday`, `day_off`); muted line "First half" / "Second half" (on leave), "On leave" / "On
+    leave, first half" (checked in on a leave day), "WFH approved" (not checked in;
+    `attendance.correct` viewers only); `title` "Sick leave, unpaid" for `attendance.correct`
+    viewers.
+  - **Check-in**: the time; "Late 22m" (effective); "4th this month".
+  - **Out**: the time; "Auto" tag; "Early" tag; muted "By Priya" (with the hidden "Check-out entered
+    " before it); HR's "Check" tag; or red "Missing".
+  - **Present** (the whole cell is the `BreaksButton` when the row has a break): the worked time (or
+    present time without breaks); marigold "On break" tag (with `dot`) and muted "since 1:10";
+    muted "Breaks 45m"; red "Over 15m"; marigold "Half day" or "Short day" tag.
+  - **Note**: as today; for `canCorrect` viewers it takes what the wider Action column leaves (at
+    least 96 px at 1440).
+  - **Action** (`canCorrect`, not the viewer's own row, as today): **one line** with the existing
+    `RowAction` button and F's `RowMenu` ("...", label "More for Priya Sharma"), which holds, in
+    order, D's remind item (item 5) and "Mark leave" / "Edit leave" (item 9); under the line D's
+    `ReminderNote` (at most 2 lines). The Action column widens from 95.66 to 120 px for `canCorrect`
+    viewers (the Note column gives it up). Rows without a reminder line stay 54 px. A checks it with
+    `shot.mjs` and `compare.py` against `09-attendance` at 1440 and 1280 px.
+- **Side column** is two wrappers. `.sideAct` holds Corrections (HR, Admin) and Missing check-outs
+  (`MissingCard`) and keeps today's rule (above the table below 1440 px, `order: -1`, the 280 px
+  auto-fit grid). `.sideInfo` holds Needs a look this month (HR, Admin) and Leave and holidays
+  (`LeaveCard`) and goes **after** the table below 1440 px (`order: 1`, the same grid), so on a 1366
+  or 1280 px laptop the day table stays near the top. At 1440 and up both stack in the 340 px column
+  in this order.
+- **`listDay` item** (one shape for every reader): `{ user, attendance, day: PersonDay, where,
+presentMinutes, breakMinutes, workedMinutes, overAllowanceMinutes, lateMinutes (effective),
+marks, onBreakSince, breakCount, checkoutEnteredBy: { id, name, at, self, pastLastSeen,
+suggestedAt } | null }`. `listDay(date, { viewer, calendar?, leaveDetail })`: `day.leave` carries
+  `leaveType` and `paid` only with `leaveDetail` (Attendance passes it for `attendance.correct`
+  viewers; worker reads with no viewer pass it), and `day.wfhApproved` is false for viewers without
+  `attendance.correct`. `checkoutEnteredBy` comes from `checkoutEntered.checkoutEnteredFor(rowIds)`
+  (empty before 018); `pastLastSeen` and `suggestedAt` are only filled for `attendance.correct`
+  viewers. `listForDay` items add `lateCount`. `summarize` adds `onLeave`, `off`, `holiday` (`{ name
+} | null`), `onBreak`; `getDaySummary` adds `missingTotal`.
+- **Day Excel** (`dayExport.js`): Where words add "On leave", "Holiday", "Day off"; "Late
+  (minutes)" is effective late; seven columns are added **at the end**, so existing column positions
+  don't move: "Day type" ("Working day", "Holiday: Diwali", "Day off"), "Leave" ("Full day", "First
+  half", "Second half", plus ", casual, paid" for `attendance.correct` viewers; the month Days
+  sheet's words), "Late this month" (the nth, blank when not late), "Half day" ("Yes" or blank),
+  "Short day", "Left early (minutes)", "Check-out entered by" (name, or empty).
+- Page data: `attendanceData.js` keeps `loadAttendance`; `tableRow`, `presentOf` and `kpis` move to
+  new `dayRows.js`, `actionFor` to new `rowActions.js` (shared with the person month). The loader
+  adds, for HR and Admin, `remindData.js` (D: `listReminders` and `remindKindFor`), `lateCountsFor`
+  and `getNeedsLook` (E), `listOnLeave`, `listUpcomingLeave` and `nextHoliday` (A's calendar reads).
+- **`loading.js`**: a 130 px `Segmented` skeleton before the DateSwitcher for HR and Admin, and four
+  side skeletons split as the side column (two above, two after the table below 1440 px), so nothing
+  jumps when the page loads.
+
+### Today, all together (`/today`)
+
+- Notices slot (under the top bar): `TodayDayNotice` (holiday or leave), then the "Still working?"
+  line when it applies.
+- Check in card subtitle from `day.lateMark` (item 9); This week bars with "Holiday" / "Leave".
+- "Working on": the removed-time rows with "Put back" (A).
+- The `.help` box, top to bottom: `MissingCheckoutPrompt` (B), `CorrectionLinks` (as today), muted
+  "Next holiday: …" and "Leave coming up: …" lines (items 6 and 9).
+- Dialogs: the away question (the sidebar chip, A) always first; the missing check-out pop-up (B)
+  waits until no modal is open. `TodayPage` now takes `{ searchParams }` (async) and passes
+  `openMissing` (`?checkout=missing`) to `MissingCheckoutPrompt`.
+- `getMyToday` (`GET /api/attendance/me/today`) adds `day` (with `leaveDetail`), `upcoming: {
+leave, holiday }` (the `getMyLeave` shape: never the note) and `missing`
+  (`listMyMissingCheckouts`).
+
+### Settings (Admin, Settings)
+
+Eleven new keys (snake_case in `db/seeds/03_settings.js`, camelCase in `settings.getAll()`;
+`settings/schemas.js` `settingsUpdateSchema`, `settings/service.js` `CLOCK_KEYS` / `BOUNDED_KEYS`,
+`settingsValues.js` `KEYS`, `numberFields.js` `NUMBERS`):
+
+| Key                        | Default | Rule and message                                                                      | Where            |
+| -------------------------- | ------- | ------------------------------------------------------------------------------------- | ---------------- |
+| `half_day_under_minutes`   | 270     | 0 to 720, 0 = off: "Half day must be between 0 and 720 minutes (0 turns it off)."     | Attendance marks |
+| `short_day_under_minutes`  | 480     | 0 to 720, 0 = off: "Short day must be between 0 and 720 minutes (0 turns it off)."    | Attendance marks |
+| `left_early_grace_minutes` | 15      | 0 to 240: "The left early grace must be between 0 and 240 minutes."                   | Attendance marks |
+| `payroll_month_start_day`  | 1       | 1 to 28: "The payroll month must start on a day from 1 to 28."                        | Attendance marks |
+| `hr_morning_summary`       | true    | boolean                                                                               | HR updates       |
+| `hr_summary_at`            | '10:00' | clock; while the summary is on, at or after `lateAfter` and before `officeEnd`        | HR updates       |
+| `hr_evening_summary`       | false   | boolean; sent at `officeEnd` + 30 min (not a setting)                                 | HR updates       |
+| `checkin_reminder_minutes` | 30      | 0 to 240, 0 = off: "The reminder must be between 0 and 240 minutes (0 turns it off)." | HR updates       |
+| `late_alert_days`          | 4       | 1 to 31: "Late days must be between 1 and 31." Also the Needs a look threshold        | HR updates       |
+| `slack_attendance_remind`  | true    | boolean, the `queueDm` setting key of every remind                                    | Slack            |
+| `slack_hr_summary`         | true    | boolean, the `queueDm` setting key of both HR summaries                               | Slack            |
+
+- Cross checks (new, in `settings/schemas.js`, like `checkAutoCheckout`): `checkDayMarks(current,
+parsed)`: while both are above 0, half must be below short, else `VALIDATION_FAILED` on
+  `halfDayUnderMinutes` "Half day must be less than the short day time."; `checkHrSummary(current,
+parsed)`: when `hrMorningSummary`, `hrSummaryAt`, `lateAfter` or `officeEnd` is sent and the
+  summary is on, `hrSummaryAt` must be at or after `lateAfter` ("Pick a time at or after the late
+  mark (9:30).": an earlier summary would list everyone) and before `officeEnd` ("Pick a time before
+  office hours end."), `VALIDATION_FAILED` on `hrSummaryAt`.
+- **Section "Attendance marks"** (`id="attendance-marks"`, new `AttendanceMarksSection.jsx`, after
+  "Check-in" in `SettingsNav.SECTIONS`), subtitle "How Attendance marks half days, short days and
+  early check-outs, and when the payroll month starts." Four `NumberField`s, `grid2`:
+  - "Half day when worked under (minutes)", help "Worked time is present time less breaks. 270 is
+    4h 30m. 0 turns it off."
+  - "Short day when worked under (minutes)", help "480 is 8h. 0 turns it off."
+  - "Left early grace (minutes)", help "Checking out more than this before their shift ends shows
+    Left early."
+  - "Payroll month starts on day", help "1 for calendar months. 26 runs from the 26th to the 25th
+    and is named after the month it ends in."
+- **Section "HR updates"** (`id="hr-updates"`, new `HrUpdatesSection.jsx`, after "Attendance
+  marks"), subtitle "Reminders people get, and what HR hears from Daybook each day.":
+  - Toggle "Morning summary for HR", help "Who isn't in, who's late or away, and what's waiting. On
+    working days, not on holidays."; `ClockField` "Send at" (`hrSummaryAt`, shown with the toggle,
+    `SHOWN_WITH`).
+  - Toggle "Evening wrap-up for HR", help "At 7:00 PM, half an hour after office hours end: who's
+    still in, reports not in and long breaks." (the time follows `officeEnd`).
+  - `NumberField` "Remind people who haven't checked in after (minutes)", help "Counted from each
+    person's late mark. 0 turns it off."
+  - `NumberField` "Tell HR after this many late days", help "Once per person each payroll month.
+    People with this many late days, short days or missing reports also show under Needs a look."
+- **Slack section** `SWITCHES` gains `slackAttendanceRemind` "Send attendance reminders", help
+  "Check-in reminders and the ones HR sends from Attendance." and `slackHrSummary` "Send HR the
+  daily summaries", help "The morning summary and the evening wrap-up, as a direct message."
+- **Timers and breaks**: the help text in A.
+
+### Modules
+
+- `@/modules/attendance` (owner attendance). `repo.js` (436 lines), `hr.js` (307), `day.js` (292)
+  and `service.js` (291) are at the size limit, so new code goes into new files (`hr.js` and
+  `service.js` only gain calls; `getMyToday`'s new fields are built in new `myToday.js`; `exportDay`
+  and `listMissingCheckouts` leave `day.js`; `tellPerson` moves from `hr.js` to new
+  `tellPerson.js`, exported); the new files with queries are `calendarRepo.js`,
+  `calendarWriteRepo.js`, `breakRepo.js`, `missingRepo.js`, `reminderRepo.js`, `hrSummaryRepo.js`,
+  `monthRepo.js` and `checkoutEntered.js` (precedent: `reports/todoRepo.js`). Exported from
+  `index.js`:
+  - **The person's day**: `personDay`, `presenceOf`, `leaveFraction`, `dayCounts`, `halfDayAt`,
+    `lateMinutesForDay`, `effectiveLateMinutes`, `LEAVE_PARTS`, `LEAVE_TYPES`, `LEAVE_TYPE_LABELS`,
+    `PART_LABELS`; `loadCalendar`, `getDay`, `companyDay`, `clearCompanyDayCache()` (F's holiday
+    writes call it), `lastWorkingDayBefore`, `applyDayRules`,
+    `recheckDayRules`; the calendar reads `listHolidaysBetween`, `nextHoliday`, `listOnLeave`,
+    `listUpcomingLeave`, `getMyLeave`; `dayMarks`; `payrollPeriod`, `payrollMonthOf`,
+    `resolvePayrollMonth`; `checkoutEnteredFor`.
+  - **Day list**: `listDay(date, { viewer, calendar?, leaveDetail? })`, `filterDay`, `listForDay`,
+    `summarize`, `getDaySummary`, `missingWindow(workDate, workingDays, holidays?)`, `exportDay` (now in
+    `dayExport.js`), `resolveDate` (items as in "The Attendance day screen").
+  - **A and 2 (breaks)**, for timers inside its transaction after `lockDay`: `saveAwayBreak({ userId,
+attendanceId, workDate, startedAt, endedAt, awayEntryId }, trx)` → BreakRow | null (null before
+    018), `breakTotalsIn({ userId, workDate, breakId }, trx)` → `{ before, total, crossed,
+overAllowanceMinutes }`, `lockAwayBreak({ userId, breakId }, trx)` →
+    BreakDetail | null (`UPDATE_NEEDED` before 018), `deleteAwayBreak(breakId, trx)`,
+    `checkOutAtLeft({ userId, workDate, at, ip }, trx)` → AttendanceRow; reads
+    `listAwayBreaks(userId, workDate)`, `listBreakDetails(userId, workDate)` → BreakDetail[]
+    (BreakRow + `source`, `awayEntryId`, `changedById`, `changedAt`; 1054 fallback);
+    `noticeOverAllowance({ userId, crossed, total })` (after commit; sends only when `crossed`); HR `listBreaksForRow({ viewer, attendanceId })`, `changeBreakEnd({
+actor, attendanceId, breakId, endClock, reason, ip })`, `deleteBreak({ actor, attendanceId,
+breakId, reason, ip })` → BreakList `{ attendanceId, workDate, dayLabel, isToday, person: { id,
+name }, breakMinutes, overAllowanceMinutes, onBreakSince, canChange, ownRow, needsUpdate,
+breaks: [{ id, startedAt, endedAt, startClock, endClock, minutes, open, source, endReason,
+label, note, changedBy: { id, name } | null }] }`; pure `breakView.js` `breakLabel(item)`,
+    `breakNote(item, changedByName)`, `toBreakView(item, ctx)`. BreakList also carries `description`
+    ("Thu, 19 Nov · On break since 1:10 · Breaks 1h 5m · Over 5m", the dialog's subtitle) and
+    `canCorrect`; `breakTotalsIn` counts finished breaks only (an open break counts once it ends,
+    so a Remove and an End break that cross the allowance together send one notice);
+    `getOpenBreak(userId, trx, { forUpdate })` gains the lock option (Left locks the open break).
+  - **B and 7 (check-outs)**: `listMyMissingCheckouts({ user })` → `{ items: [{ attendanceId,
+workDate, checkInAt, location, suggestedAt: Date | null, limitAt: Date | null }], autoOpen }`;
+    `fixMyMissingCheckout({ user, attendanceId, checkOut, reason?, ip })` → `{ outcome: 'saved',
+row } | { outcome: 'sent', correction }`, both with `missing` (the fresh list);
+    `hideMissingCheckoutPrompt({ user })` → `{ hiddenOn }`; `listMissingCheckouts({ limit = 20,
+offset = 0, viewer, suggest = false })` → `{ items: [AttendanceRow & { user, suggestedAt?,
+pendingCorrection: { id, checkOutClock } | null, reminded: { sentAt, sentBy } | null, own }],
+total }`; `missingCheckoutsFor(userIds)` → `Map<userId, [{ attendanceId, workDate }]>`; `fixMissingCheckouts({ actor, items: [{
+attendanceId, checkOut }], reason, ip })` → `{ fixed, failed }`; `suggestCheckoutTimes(rows)` →
+    `Map<attendanceId, Date | null>`; pure `missingRules.js` `suggestedCheckoutAt({ row, segments,
+timerAt, breaks, tz })` and `selfFixLimit({ row, day, suggestedAt })` → `{ limitAt: Date | null,
+basis: 'shift_end' | 'suggestion' | 'none' }` (reusing the exported `lastSeenWorking`);
+    `checkoutEntered.js` (A) `checkoutEnteredFor(rowIds)` → `Map<attendanceId, { by: { id, name },
+at, self, suggestedAt, pastLastSeen }>`, `markCheckoutEntered({ rowId, userId, suggestedAt =
+null }, trx)`, `clearCheckoutEntered(rowId, trx)`; corrections: `requestCorrection(input, trx?)`.
+    `listMyMissingCheckouts` items also carry `checkInClock`, `suggestedClock` and `limitClock`
+    ('HH:mm' company time, or null); `missingCheckoutsFor` keys only people who have rows.
+  - **5 (reminders)**: `remind({ actor, kind, userIds, ip })`, `listReminders({ since, userIds?,
+kinds? })`, `remindKindFor(item, ctx)`, `REMIND_KINDS`, `REMIND_EVERY_MINUTES`,
+    `deleteOldReminders(before)`, worker `sendCheckinReminders(today)`.
+    `remindKindFor`'s `ctx` also takes `todayDays: Map<userId, PersonDay>` (a past date's
+    `missing_checkout` needs today's day); `ReminderNote` takes `tz?` (else `reminded.tz`) and
+    `bare?` (no "Reminded ", for the missing list's Reminded column).
+  - **1 (summaries)**: worker `sendHrMorningSummary(today)`, `sendHrEveningSummary(today)`;
+    `hrSummaryRepo.countWaiting({ hideAdmins, excludeUserId, today })` → `{ corrections,
+wfh }` (`today`: a WFH request whose last day has passed isn't counted).
+  - **4, 8, 10 (month)**: `summarizeRange`, `getMonth`, `exportMonth`, `getPersonMonth`,
+    `getNeedsLook`, `clearNeedsLookCache()` (F's writes call it), `lateCountsFor`, worker
+    `sendLateAlerts(today)`; pure `monthRules.js`
+    `summarizePerson`, `classifyDay`, `needsLookReasons`, `ordinal`; `monthRepo.js`
+    `listRowsByRange`, `listBreaksByRange`, `listLateDays`. Also
+    `exportMonthResponse(input)` → the download `Response` (it holds this process's one export
+    slot while the file is written, so the 429 is honest; the route uses it); `summarizeRange` and
+    `getMonth` also return `through` and `today`; `getPersonMonth` also returns `untracked`, and
+    each change a `byLine`.
+  - **6 and 9 (calendar writes and pages, F)**: `listHolidays`, `createHoliday`, `updateHoliday`,
+    `deleteHoliday`; `listLeave`, `previewLeave`, `createLeave`, `updateLeave`, `deleteLeave`;
+    `getLeaveEntry(id, { viewer })`, `listLeavePeople({ viewer, forChange = true })` → `[{ id,
+name, designation }]` (the dialog's Person list). LeaveEntry also carries
+    `entryWorkingDays` (the whole entry; `workingDays` = its days inside the period) and
+    `checkedInDays` (full-day entries only); `listHolidays` also returns `today`, `firstYear` and
+    `lastYear`, and its `upcoming` is a count (the holidays after today).
+  - Schemas: `schemas.js` keeps the existing ones and `FILTERS`; new schemas live in
+    `breakSchemas.js` (`breakChangeSchema`, `breakDeleteSchema`), `missingSchemas.js` (self fix,
+    hide, bulk fix, `reminderSchema`), `monthSchemas.js` (`monthQuerySchema` `{ month?, filter? }`,
+    `monthExportQuerySchema` `{ month?, userId? }`, `personMonthQuerySchema`,
+    `userIdParamSchema`; month "Use a month like 2026-11.", the regex of `reports/schemas.js
+isoMonth`) and `calendarSchemas.js` (holiday and leave bodies and queries).
+- `@/modules/timers` (owner timers): `getState({ user })` adds `away.kind: 'away' | 'no_data'`,
+  `away.running`, `away.left: { clock, shiftEndClock } | null` and `removed: [{ breakId, from, to,
+fromClock, toClock, minutes, projectName | null }]` (today's away breaks no one else changed,
+  oldest first; `[]` with no entries, timers off or before 018); `resolveAway({ user, entryId, from,
+to, decision: 'keep' | 'remove' | 'left', ip? })` → state + `answer: { decision, minutes,
+projectName, savedAsBreak, breakId, checkedOutAt }`; `putBackAway({ user, breakId })` → state +
+  `answer: { restored, minutes, projectName }`; pure `awayRules.js` `awaySpans`, `findAwaySpan`,
+  `planRemoval({ entry, from, to })` → `{ kind: 'split' | 'move' | 'trim' | 'drop' }`,
+  `leftOffer(...)`; `shared.lockOwnToday`; new `listEntriesFor(userId, workDate)` → bare entries
+  oldest first (the break fix's check); `lastRanByUser({ workDate, userIds })` → `Map<userId, Date |
+null>` (one query, `repo.lastEndedByUser`, finished entries only; added by the orchestrator
+  before the builders start, so C needn't wait for B). `forgetAway(userId?)` clears the
+  5-minute away cache; Put back is audited `attendance.away_put_back` with `before` the break and
+  `after { breakId, restored }`; Left deletes an entry it would leave with under 1 minute.
+- `@/modules/activity` (owner activity; B): new `anyoneSeenBetween({ workDate, from, to,
+exceptUserId })` → boolean (screen time more than 150 s inside [from, to]; `repo.existsOtherBetween`
+  on the shrunk stretch, one query on the `work_date` index, `LIMIT 1`; none for 300 s or less).
+- `@/modules/reports` (owner reports): export `listSubmittedUserIds(userIds, workDate)` (the existing
+  `repo.listSubmittedUserIds`, `reports/repo.js:89`); new `listSubmittedDays({ userIds, from, to })`
+  → `{ [userId]: string[] }` (one query on `daily_reports`, `status 'submitted'`; dates only).
+- `@/modules/users` (owner people-admin): new `listTrackedForRange({ from, to })` → PublicUser[] with
+  `deactivatedAt`.
+- `@/modules/audit` (owner system): new `listForEntities({ entityType, entityIds, actions?, limit? })`
+  → rows as `listForEntity` (before/after parsed), newest first; ids chunked by 500; uses the
+  `entity_type, entity_id` index. New `listForType({ entityType, since, actions? })` → the same rows
+  of one type written on or after `since`, newest first (the person month's deleted or moved leave).
+- `@/modules/dashboard` (owner dashboards; G owns `calendar.js` and `index.js`, H the rest):
+  `buildCalendar({ month, attendance, profile, ctx, range?, toneOf? })` exported as
+  `dashboard.buildCalendar`; the person month's data loader (app layer)
+  calls it, never the attendance module (no module cycle). `dayTone` takes `day`.
+- `MonthCalendar` (owner shell): tones `leave` and `holiday`, and an optional `legendItems` prop
+  (default `CALENDAR_LEGEND`, unchanged for Employee detail). `StatusCell` (owner ui-kit): statuses
+  `on_leave`, `holiday`, `day_off`.
+- Worker (`src/worker/jobs/`, new): `checkinReminders.js` (`checkin-reminders`, every minute, no run
+  key), `hrSummary.js` (`hr-summary`, `runAttempts`), `hrEveningSummary.js` (`hr-evening-summary`,
+  `runAttempts`), `lateAlerts.js` (`late-alerts`, `runAttempts` keys `late_alerts:<date>`, `#2`,
+  `#3`); O adds all four to `MINUTE_JOBS` in `cron.js` before `cleanupJob` (none is in `SLOW_JOBS`)
+  and to `JOBS` in `index.js`; `cleanup.js` gains `oldReminders` (`attendance.deleteOldReminders`, 180 days). Each
+  tick is a few indexed reads when nothing is due, so the one-process-per-minute cron stays lean.
+  In `cron.js` `closeOpenTimersJob` moves before
+  `markMissingCheckoutsJob`, so a timer still running from yesterday is closed before its row is
+  marked missing.
+- **Client imports**: `BreakListDialog` uses `clockRange` from `@/components/TimerChip.clock`
+  (client-safe, already shared with Today). Client components may import the pure
+  `@/modules/attendance/calendar` constants (`PART_LABELS`, `LEAVE_TYPE_LABELS`), an exception to
+  §2 like `@/modules/reports/todoText`.
+
+### API
+
+| Route                                                               | Permission            | Body / returns                                                                                                     | Errors and limits                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| existing `GET /api/timers/current`                                  | `report.self`         | state with `away.kind`, `away.left`, `removed`                                                                     | unchanged                                                                                                                                                                                                                                                   |
+| existing `POST /api/timers/away`                                    | `report.self`         | `{ entryId, from, to, decision: 'keep' \| 'remove' \| 'left' }` → state + `answer`                                 | `CONFLICT`, `BAD_REQUEST`, `TIMERS_OFF`, `VALIDATION_FAILED`; 60 a minute                                                                                                                                                                                   |
+| `POST /api/timers/away/[breakId]/put-back`                          | `report.self`         | no body → state + `answer`                                                                                         | `NOT_FOUND`, `CONFLICT`, `TIMERS_OFF`, `UPDATE_NEEDED`; 60 a minute                                                                                                                                                                                         |
+| existing `GET /api/attendance/me/today`                             | `attendance.self`     | adds `day`, `upcoming`, `missing`                                                                                  | unchanged                                                                                                                                                                                                                                                   |
+| `POST /api/attendance/me/missing-checkouts/[id]/fix`                | `attendance.self`     | `{ checkOut, reason? }` → `{ outcome, row \| correction, missing }`                                                | own missing row of the last 30 days, else `NOT_FOUND`; `VALIDATION_FAILED` (`checkOut`, `reason`), `CONFLICT`, `REQUEST_ALREADY_PENDING`, `UPDATE_NEEDED`; 20 a minute                                                                                      |
+| `POST /api/attendance/me/missing-checkouts/hide`                    | `attendance.self`     | no body → `{ hiddenOn }`                                                                                           | `UPDATE_NEEDED`; 10 a minute                                                                                                                                                                                                                                |
+| existing `GET /api/attendance?date=&filter=`                        | `attendance.view_all` | `filter` adds `on_leave`, `on_break`; items as in "The Attendance day screen" plus `lateCount`                     | unchanged                                                                                                                                                                                                                                                   |
+| existing `GET /api/attendance/summary`                              | `attendance.view_all` | adds `onLeave`, `off`, `holiday`, `onBreak`, `missingTotal`                                                        | unchanged                                                                                                                                                                                                                                                   |
+| existing `GET /api/attendance/export?date=`                         | `attendance.view_all` | Where words, effective late, six columns at the end                                                                | unchanged                                                                                                                                                                                                                                                   |
+| existing `PATCH /api/attendance/[id]`                               | `attendance.correct`  | also stores `checkout_entered_by` for a new check-out on a missing row                                             | unchanged                                                                                                                                                                                                                                                   |
+| `GET /api/attendance/[id]/breaks`                                   | `attendance.view_all` | BreakList of attendance row `id` (at most 50 breaks)                                                               | `NOT_FOUND` (no row, an Admin's for a non-Admin); 120 a minute                                                                                                                                                                                              |
+| `PATCH /api/attendance/[id]/breaks/[breakId]`                       | `attendance.correct`  | `{ endClock: 'HH:mm', reason }` → BreakList                                                                        | `FORBIDDEN` (own row), `NOT_FOUND`, `VALIDATION_FAILED`, `UPDATE_NEEDED`; 60 a minute                                                                                                                                                                       |
+| `DELETE /api/attendance/[id]/breaks/[breakId]`                      | `attendance.correct`  | `{ reason }` → BreakList (a body on DELETE, as `push/subscriptions`)                                               | same                                                                                                                                                                                                                                                        |
+| `POST /api/attendance/missing-checkouts/fix`                        | `attendance.correct`  | `{ items: [{ attendanceId, checkOut }], reason }` → `{ fixed, failed }` (per-row messages, 200 even when all fail) | 1 to 50 items, reason 2 to 500; reads its own body, over 16 KB → 413; 10 a minute                                                                                                                                                                           |
+| `POST /api/attendance/reminders`                                    | `attendance.correct`  | `{ kind, userIds }` → `{ sent, skipped }`                                                                          | kind one of the four, 1 to 50 ids; `UPDATE_NEEDED`; 30 a minute                                                                                                                                                                                             |
+| `GET /api/attendance/month?month=&filter=`                          | `attendance.correct`  | `getMonth` (a later month reads as the current one)                                                                | 60 a minute                                                                                                                                                                                                                                                 |
+| `GET /api/attendance/month/export?month=&userId=`                   | `attendance.correct`  | the month Excel                                                                                                    | `userId` unknown or a hidden Admin → `NOT_FOUND`; over 200 people → 400 "Too many people for one file. Download one person's month instead."; another export building in this process → 429 "An export is being built. Try again in a minute."; 10 a minute |
+| `GET /api/attendance/people/[userId]/month?month=`                  | `attendance.correct`  | `getPersonMonth`                                                                                                   | `NOT_FOUND`; 60 a minute                                                                                                                                                                                                                                    |
+| `GET /api/attendance/needs-look`                                    | `attendance.correct`  | `getNeedsLook` (current payroll month)                                                                             | 60 a minute                                                                                                                                                                                                                                                 |
+| `GET /api/holidays?year=`                                           | `attendance.view_all` | `{ year, available, items, upcoming }`                                                                             | 120 a minute                                                                                                                                                                                                                                                |
+| `POST /api/holidays`                                                | `attendance.correct`  | `{ date, name }` → 201 the holiday                                                                                 | `CONFLICT` same date, `VALIDATION_FAILED`, `UPDATE_NEEDED`                                                                                                                                                                                                  |
+| `PATCH /api/holidays/[id]`, `DELETE /api/holidays/[id]`             | `attendance.correct`  | `{ date?, name? }` → the holiday; DELETE → `{ id }`                                                                | `NOT_FOUND`; a move runs the day rules on both dates                                                                                                                                                                                                        |
+| `GET /api/leave?month=&from=&to=&userId=&limit=&offset=`            | `attendance.correct`  | `listResult` of LeaveEntry                                                                                         | Admins' leave only for Admins                                                                                                                                                                                                                               |
+| `POST /api/leave`                                                   | `attendance.correct`  | `{ userId, fromDate, toDate?, part, paid, leaveType, note? }` → 201 LeaveEntry                                     | `CONFLICT`, `FORBIDDEN`, `VALIDATION_FAILED`, `UPDATE_NEEDED`                                                                                                                                                                                               |
+| `PATCH /api/leave/[id]`                                             | `attendance.correct`  | `{ fromDate?, toDate?, part?, paid?, leaveType?, note?, reason }` → LeaveEntry                                     | reason required                                                                                                                                                                                                                                             |
+| `DELETE /api/leave/[id]`                                            | `attendance.correct`  | `{ reason }` → `{ id }`                                                                                            | reason required                                                                                                                                                                                                                                             |
+| `GET /api/leave/people`                                             | `attendance.correct`  | `{ today, people: [{ id, name, designation }] }` (Mark leave's Person list)                                        | 120 a minute (the calendar reads)                                                                                                                                                                                                                           |
+| `GET /api/leave/preview?userId=&fromDate=&toDate=&part=&excludeId=` | `attendance.correct`  | the dialog's live line; never writes                                                                               | `NOT_FOUND` (also a person the actor may not see), `FORBIDDEN`, `CONFLICT`, `UPDATE_NEEDED`                                                                                                                                                                 |
+
+- **Rate limits are per person** (the office shares one IP): each handler calls
+  ``checkRateLimit(PER_PERSON, ROUTE, `user:${user.id}`)`` as `api/me/preferences/route.js` does.
+  Holidays and leave share 60 writes and 120 reads a minute (the preview included).
+- Zod messages: `endClock` with `clockString('Enter the end time.')`, `reason` with
+  `reasonText('a reason', 500)`, ids plain digits (else 404); `month` "Use a month like 2026-11.",
+  `filter` "Pick a filter: needs_look, late, short, absent, leave or missing.", `userId` "That id is
+  not valid."; `FORBIDDEN` for PMs and employees on `attendance.correct` routes (`withRoute`).
+- New static segments (`me`, `month`, `people`, `needs-look`, `missing-checkouts`, `reminders`) sit
+  beside the existing dynamic `api/attendance/[id]`; Next.js matches a static segment first, and
+  `attendanceAdminRoutes.test.js` gets a case that `PATCH /api/attendance/12` still reaches `[id]`.
+  `api/leave/preview` sits beside `api/leave/[id]` the same way.
+- **Pages**: `/attendance/missing` (`attendance.view_all`; actions for `attendance.correct`),
+  `/attendance/month` and `/attendance/people/[userId]` (`attendance.correct`),
+  `/attendance/holidays` (`attendance.view_all`; changes for `attendance.correct`),
+  `/attendance/leave` (`attendance.correct`). Pages read through the services. The sidebar's
+  Attendance item already lights up for every `/attendance/*` path (longest-prefix match in
+  `navigation.js`); no new sidebar item.
+
+### Limits
+
+- Remind: 1 to 50 people a call; at most one per person per kind per 30 minutes; reminder rows kept
+  180 days. Bell titles at most 200 characters, bodies at most 500; Slack summary lines at most 15
+  names, then "and 4 more".
+- Pop-up: rows of the last 30 days, at most 30; reason 2 to 500. Missing list: 50 rows a page; bulk
+  fix 1 to 50 items, body at most 16 KB.
+- Break list: at most 50 breaks; break fix reason at most 500.
+- Month: at most 500 people in one summary (more: the first 500 by id and one warning); months from
+  2020-01, a later one reads as the current one; Changes the latest 50; Needs a look card 6 rows;
+  the month Excel at most 200 people (the Days sheet at most 200 × 31 rows), one export built at a
+  time per process. `loadCalendar` ranges at most 400 days.
+- Holidays: dates from 1 January of last year to 31 December of next year: "Pick a date from 1 Jan
+  2025 to 31 Dec 2027."; name trimmed, 2 to 80 characters: "Name the holiday (2 to 80
+  characters)."; at most 60 a year: "A year can have up to 60 holidays." Clash: `CONFLICT` "There's
+  already a holiday on Tue, 24 Nov." (`fields.date`).
+- Leave: "Pick the first day."; "The last day can't be before the first day."; at most 366 days in
+  one entry: "Mark up to a year at a time."; a half day needs one day: "Half days are for one day.
+  Pick the same first and last day."; "No working days in these dates."; note at most 300: "Keep
+  the note to 300 characters or fewer."; reason (update, delete) 2 to 500: "Add a reason."; part,
+  type and pay from their lists. Overlap: `CONFLICT` "Priya Sharma already has leave on Mon, 23
+  Nov." (`fields.fromDate`; the first overlapping day). Own leave: `FORBIDDEN` "You can't mark your
+  own leave. Ask another HR person or an Admin." An Admin's, for HR: `FORBIDDEN` "Only an Admin can
+  mark an Admin's leave." Not tracked: `CONFLICT` "Rahul Verma doesn't check in, so there's no
+  leave to mark." Missing: `NOT_FOUND` "We couldn't find that person." / "That leave no longer
+  exists." / "That holiday no longer exists."
+- Cost, honestly: the day page refreshes every 60 s while visible. For HR it adds the calendar,
+  `lateCountsFor`, reminders and entered-by reads (small, indexed), plus `getNeedsLook`, a
+  month-wide `summarizeRange` that is cached 5 minutes per process. The Missing check-outs card and
+  page read one person-day of screen time per row without a cached suggestion (at most 50 on a cold
+  page). `getState` makes one `activity.getDay` read and one away-breaks query per 60 s poll for
+  every timer user with an entry today, until midnight (1.09: the screen-time read only while a
+  timer ran); after check-out the away part is cached 5 minutes per person.
+
+### Files and owners
+
+Eight builders, A to H, so no file has two owners; O is the orchestrator. A file listed for one
+builder is edited only by that builder. Where a builder's page or component needs another builder's
+piece that doesn't exist yet, it adds a stub with the props below (the §6 stub rule) and the owner
+replaces it. `attendance/index.js` (A) spreads five barrels, one per builder: `breakExports.js` (B),
+`checkoutExports.js` (C), `reminderExports.js` (D), `monthExports.js` (E), `calendarExports.js` (F);
+A creates each as a stub and its owner fills it. A moves code another builder will own as that file's
+starting content (the stub rule): the 1.09 `listMissingCheckouts` from `day.js` into C's
+`missingHr.js`, and `MissingCard` from `AttendanceCards.jsx` into C's `MissingCard.jsx`, so the page
+works before C lands.
+
+| Owner                                                    | Builder                  | Files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| orchestrator                                             | O (first)                | `db/migrations/018_hr_tools.js` and `db/lib/removedSpans018.js` (the proposals in `scratch/design-1.10`), `db/seeds/03_settings.js` (11 keys, `settings-additions.js`), `src/config/version.js` ('1.10'), `src/lib/time.js` (`holidays` argument) and `tests/unit/time.test.js`, `src/lib/permissions.js` (`attendance.correct` text "Edit attendance, handle correction requests, mark leave and holidays"), `timers.lastRanByUser` (in `src/modules/timers/worker.js` and the `service.js` re-export; B owns both files afterwards), `tests/unit/migration018Away.test.js`, `docs/design/hr-tools-prototype.html`, `.github/workflows/migration-check.yml` (new: a `mysql:8.4` service container runs migrate up, down for 018, up, and `tests/services/migration018.test.js`; never touches the deploy branch, no npm dependency)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| orchestrator                                             | O (last)                 | `src/worker/cron.js` and `src/worker/index.js` (register `checkin-reminders`, `hr-summary`, `hr-evening-summary`, `late-alerts` in `MINUTE_JOBS` before `cleanupJob`, none in `SLOW_JOBS`; `closeOpenTimersJob` before `markMissingCheckoutsJob`), `README.md` ("Deployment notes" bullet and the 1.10 "Updating" steps below), `scripts/doctor.js` (a "Database" line from `db.migrate.list()`: "✓ Database is up to date" or "✗ 1 database update not run: 018_hr_tools.js. Run the migrate line in README Updating."), `db/demo/*` (a holiday, leave, an away break, a missing check-out with a reminder, a self-entered check-out past last seen, a person at 4 late days and a short day), `tests/e2e/{breaks,missing-checkout,attendance-month,holidays-leave}.spec.js`, `tests/services/migration018.test.js` (+ `migration018Kit.js`, `migration018World.js`), `docs/CONTRACT.md` (this section and the edits listed after Tests)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| attendance                                               | A (core)                 | `src/modules/attendance/{migration018,calendar,calendarReads,calendarRepo,dayRules,marks,payroll,dayExport,checkoutEntered,myToday,tellPerson,leaveReads}.js` (new), `day.js`, `rules.js`, `schemas.js` (`FILTERS`), `index.js` (+ the five barrel stubs), `service.js` (`checkIn`, `getMyToday` through `myToday.js`, `notifyMissing` body and link), `hr.js` (`getDay`, entered-by rule, `tellPerson` moved out), `decisions.js` (`getDay`, `clearCheckoutEntered`); `src/worker/clock.js` (`companyDay`); `api/attendance/route.js` (`lateCount`); `(app)/attendance/DayCells.jsx` (new), `{dayRows,rowActions}.js` (new), `AttendanceCards.jsx`, `attendanceData.js`, `page.js`, `page.module.css`, `loading.js` (+ css); `(app)/today/page.js` (`searchParams`, placing B, C and F's pieces), `todayData.js`, `page.module.css`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| attendance, timers, activity, shell                      | B (breaks)               | `src/modules/attendance/{awayBreaks,breakFixes,breakView,breakRepo,breakSchemas,leftAt,breakExports}.js`, `breaks.js` (`breakTotalsIn`, `noticeOverAllowance`); `api/attendance/[id]/breaks/route.js`, `api/attendance/[id]/breaks/[breakId]/route.js`; `(app)/attendance/{BreaksButton,BreakListDialog,BreakListHost,BreakFixForm}.jsx` + `BreakListDialog.module.css`; `(app)/today/TimerRemovedRow.jsx` (new), `TimerEntries.jsx` (+ css), `TimerCard.jsx`, `timerData.js`, `useTimerActions.js`; `src/modules/timers/{awayRules,awayAnswer,awayPutBack}.js` (new), `away.js`, `rules.js` (re-exports), `state.js`, `shared.js`, `entries.js`, `schemas.js`, `service.js`, `worker.js` (`sendReminders` gate), `repo.js`; `api/timers/away/route.js`, `api/timers/away/[breakId]/put-back/route.js`; `src/modules/activity/{service,repo}.js` (`anyoneSeenBetween` only); `src/components/TimerAwayDialog.jsx` (+ css), `TimerChip.jsx`, `TimerChip.clock.js`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| attendance                                               | C (check-outs)           | `src/modules/attendance/{missingSelf,missingHr,missingRepo,missingRules,missingSchemas,checkoutSuggest,checkoutExports}.js`, `corrections.js` (optional `trx`); `api/attendance/me/missing-checkouts/[id]/fix/route.js`, `api/attendance/me/missing-checkouts/hide/route.js`, `api/attendance/missing-checkouts/fix/route.js`; `(app)/attendance/MissingCard.jsx` (+ css), `RowAction.jsx` (suggested prefill), `(app)/attendance/missing/{page,loading,missingData}.js`, `(app)/attendance/missing/{MissingTable,MissingFixDialog,missingCells}.jsx` (+ css); `(app)/today/{MissingCheckoutPrompt,MissingCheckoutDialog}.jsx` (+ css), `todayMissing.js`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| attendance, system                                       | D (reminders, summaries) | `src/modules/attendance/{reminders,reminderRepo,remindRules,reminderMessages,checkinReminders,hrSummary,hrSummaryData,hrSummaryText,hrSummaryRepo,reminderExports}.js`; `api/attendance/reminders/route.js`; `(app)/attendance/{ReminderNote,RemindAllButton,RemindSelectedButton}.jsx` (+ css), `{useRemind,remindItem,remindData}.js`; `src/worker/jobs/{checkinReminders,hrSummary,hrEveningSummary}.js` (new), `cleanup.js` (`oldReminders`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| attendance, system                                       | E (month)                | `src/modules/attendance/{monthRules,monthRepo,month,monthExport,personMonth,personChanges,needsLook,lateAlerts,monthSchemas,monthExports}.js`; `api/attendance/month/route.js`, `api/attendance/month/export/route.js`, `api/attendance/people/[userId]/month/route.js`, `api/attendance/needs-look/route.js`; `(app)/attendance/month/**`, `(app)/attendance/people/[userId]/**`, `(app)/attendance/NeedsLookCard.jsx` (+ css); `src/worker/jobs/lateAlerts.js` (new)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| attendance                                               | F (holidays, leave)      | `src/modules/attendance/{holidays,leave,leaveRules,calendarSchemas,calendarWriteRepo,calendarExports}.js` and `{holidayRules,holidayNotices,calendarEffects,leaveList,leavePreview}.js` (split out to stay under 300 lines); `api/holidays/route.js`, `api/holidays/[id]/route.js`, `api/leave/route.js`, `api/leave/[id]/route.js`, `api/leave/preview/route.js`, `api/leave/people/route.js`, `api/holidays/calendarRoute.js` (the shared rate limits and `:id`, not a route); `(app)/attendance/holidays/{page,loading,holidaysData}.js`, `(app)/attendance/holidays/{HolidayTable,HolidayDialog,HolidayDeleteDialog}.jsx` (+ css); `(app)/attendance/leave/{page,loading,leaveData}.js`, `(app)/attendance/leave/{LeaveTable,LeaveFilter}.jsx` (+ css); `(app)/attendance/{LeaveDialog,LeaveFields,LeaveDeleteDialog,LeaveCard,DayNotice,RowMenu}.jsx` (+ css), `{leaveForm,useLeavePreview}.js`; `(app)/today/TodayDayNotice.jsx` (new), `todayDay.js` (new: notices, week labels, "coming up" lines), `CheckInCard.jsx` (subtitle), `todayWfh.js`, `wfhOptions.js`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| system, people-admin, reports, ui-kit, shell, dashboards | G (platform)             | `src/modules/settings/{schemas,service}.js` (+ `crossChecks.js`, `officeNetworks.js`, `parse.js`, split out to stay under 300 lines; 11 keys, `checkHrSummary`, `checkDayMarks`, `CLOCK_KEYS`, `BOUNDED_KEYS`, `getAll` JSDoc); `src/modules/audit/{service,repo}.js` (`listForEntities`); `src/modules/users/{service,repo}.js` (`listTrackedForRange`); `src/modules/reports/{service,repo}.js` (export `listSubmittedUserIds`, new `listSubmittedDays`); `(app)/settings/{AttendanceMarksSection,HrUpdatesSection}.jsx` (new, + `HrUpdatesSection.module.css`), `(app)/settings/{SettingsForm,SettingsNav,SlackSection,TimersSection}.jsx` (two Slack switches, the timers help), `(app)/settings/{settingsValues,numberFields,page}.js` (`KEYS`, `HR_CLOCKS.hrSummaryAt` (not `CLOCKS`, whose keys `autoCheckoutSettings.test.js` pins), `SHOWN_WITH`, `NUMBERS`), `loading.js` (two more nav skeleton widths); `src/components/StatusCell.jsx` (+ css: `on_leave` "On leave" teal, `holiday` "Holiday" green, `day_off` "Day off" neutral), `Segmented.jsx` (+ css: an optional `disabled` per item; a button gets `disabled`, a link item renders as a span with `aria-disabled`, text `--muted` at 50%, no hover), `Kpi.jsx` (+ css: an empty spacer `span` with `flex: 1 0 0` before the footer, so in a grid row every bar sits at the card's bottom 8 px under the tallest content; a wrapper `div` would break the `.kpi > p:nth-child(2)` rules of `team/page.module.css` and `projects/[id]/HoursTab.module.css`; cards of equal height look as today), `MonthCalendar.jsx` (+ css: tones `leave` teal and `holiday` green, dots for both, optional `legendItems` prop, default `CALENDAR_LEGEND`); `src/modules/dashboard/{calendar,index}.js` (`buildCalendar` gains `range` and `toneOf`, `dayTone` takes `day` and answers `holiday` and `leave`, `dashboard.buildCalendar` exported) |
+| dashboards, reports, ai, activity                        | H (readers)              | `src/modules/dashboard/{team,shared,overview,history,employee,service}.js` and new `{teamBoard,overviewWeek,employeeTasks}.js` (split out to stay under 300 lines), `repo.js` (`listCheckInsBetween(from, to)` replaces `countAttendanceByDay`; `listTrackedPeopleDay` adds the shift); `src/components/WeekBars.jsx` (+ css: a day's `title`, `faded` on a stacked column), `(app)/overview/page.js` (the Off legend item when `attendanceWeek.hasOff`), `src/modules/reports/logExport.js` (Day type and Leave columns); `(app)/team/**` except `[userId]/screenTime.js` (Off today group and tags, history Where and Report cells); `src/modules/reports/{monthLog,queries}.js` (My log, stuck tasks skip holidays); `(app)/log/**` except `screenTime.js` (status cells, KPI words, Day type and Leave columns); `src/modules/aiSummaries/{hrNotes,calendar}.js`, `src/modules/aiAsk/{attendance,prompt}.js`, `src/worker/jobs/aiHrNotes.js` (runs on or after the week's last working day, holidays skipped, within that ISO week); `(app)/screen-time/screenTimeView.js`, `(app)/log/screenTime.js`, `(app)/team/[userId]/screenTime.js` (no bar for a holiday without data)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+
+Stub props and contracts the others code against: `BreaksButton({ row, children })` and
+`BreakListDialog({ attendanceId, open, onClose, personName? })` (B); `MissingCard({ missing })`
+and, on Today, `MissingCheckoutPrompt({ missing, openMissing })` (C); `ReminderNote({ reminded,
+nextAt, tz?, bare? })`, `RemindAllButton({ kind, users })`, `RemindSelectedButton({ users, onDone,
+className? })`, `useRemind()` → `{ send(kind, users: [{ id, name }]) → Promise<{ sent, skipped }>,
+busy }` and `remindMenuItem({ kind, user, send })` → a `Menu` item (D); `NeedsLookCard({ data })`
+(E); `RowMenu({ person, date, leave, remind, canMarkLeave })`, `DayNotice({ day })`,
+`LeaveCard({ data })` and, on Today, `TodayDayNotice({ day, upcoming })` (F).
+
+**README** (O). (a) A "Deployment notes" bullet: "Daybook 1.10 (HR tools): run the migrate line
+before the restart; nothing new to install. Migration 018 adds four tables, adds columns to
+attendance and attendance_breaks (each table is copied once: a few seconds in which check-ins wait),
+and rebuilds away breaks for timer Removes since 1 Nov 2026, so Breaks and Worked for those days
+change on Attendance and in the Excel files. Tell HR before payroll. If the line stops with Aborted,
+run the unlock line, then the migrate line again (Updating, 1.10 step 2); it continues where it
+stopped." (b) "Updating", as numbered copy-paste steps: "For 1.10: 1. phpMyAdmin → Export a
+backup. 2. The three lines as usual (it prints `018: rebuilt N away breaks`); if it stops with
+Aborted (a stopped run leaves `knex_migrations_lock` locked, so the same line alone answers
+"Migration table is already locked"), the migrate line with `migrate:unlock` in place of
+`migrate:latest` once, then the migrate line again, each in its own code block. 3. Press Restart
+right away. 4. As Admin, before the next working morning: Settings →
+Attendance marks (Payroll month starts on day), Settings → HR updates (the morning summary at 10:00
+and check-in reminders after 30 minutes are on by default), Settings → Slack (two new switches),
+Attendance → Holidays (add this year's). 5. Tell the team that check-in reminders start the next
+working day. HR's first late alerts come at office end of the next working day."
+
+### Tests and version
+
+- **Unit**:
+  - `tests/unit/attendanceCalendar.test.js` (A): `personDay` on a weekday, a weekend, a holiday on a
+    weekday and on a weekend, before `joined_on`, after `leftOn` and on `leftOn` itself (employed;
+    `dayCounts` all 0 without a row), for an untracked person, with full, first-half and
+    second-half leave, and with leave on a holiday (ignored); without `leaveDetail` `leave` is `{
+id, part }` only; `halfDayAt` (9:30 to 6:30 → 14:00; own 10:00 to 19:00 → 14:30; a shift ending
+    before it starts → office hours); `lateMark` (full day = `lateMarkFor`; first half with Late
+    after 9:35 and office 9:30 → 14:05; second half = the normal mark; null when expected 0);
+    `dayEnd` (shift end, the split on second-half leave); `presenceOf` every branch (first half
+    before and after the split, today and a past day); `dayCounts` (half-leave no-show: leave 0.5,
+    absent 0.5; half leave with a check-in: present 0.5, leave 0.5; full leave with a check-in:
+    present 1, leave 0, `conflict`; holiday with a check-in: `dayOffWorked` 1, holiday 1, present 0);
+    `effectiveLateMinutes`; `lastWorkingDayBefore` and `missingWindow` (Tuesday after a Monday
+    holiday → Friday to Monday). `tests/unit/time.test.js` (O): `isWorkingDay` and
+    `workingDaysBetween` with and without `holidays`.
+  - `tests/unit/attendanceMarks.test.js` (A): 269 Half day, 270 and 479 Short day, 480 none; 0 turns
+    each off; out 6:14 PM with shift end 6:30 and grace 15 is Left early (16m), 6:15 is not; own
+    shift end 7:00 PM; auto check-out counts; open row, missing, weekend, holiday, full leave without
+    a check-in: none; **full leave with a 10:00 to 11:00 check-in: present 1 and Half day**;
+    first-half leave: no Half day, Short day under 240, Left early against the shift end;
+    second-half leave: Left early against the split; a 10:00 to 4:00 shift scales to 180 and 320.
+  - `tests/unit/attendancePayroll.test.js` (A): start 1 is the calendar month (February 2028 has 29
+    days); start 26: November 2026 = 2026-10-26 to 2026-11-25, January 2027 = 2026-12-26 to
+    2027-01-25; `payrollMonthOf` 25 Nov → 2026-11, 26 Nov → 2026-12, 26 Dec 2026 → 2027-01; start
+    28; `resolvePayrollMonth` clamps a later month and bad input, and **without a month on the first
+    3 days of a period answers the previous one** (`defaulted: 'previous'`), from the 4th the
+    current one.
+  - `tests/unit/attendanceMonthRules.test.js` (E): present + leave.total + absent = 1 on every past
+    working day; joined and deactivated mid-period: no absent outside; today never absent; **leave
+    after today is `leave.planned`, not in `total`**; office + WFH = present; over allowance days;
+    missing via audit (fixed) and via status (not fixed); **an open row from yesterday counts as a
+    missing check-out, not fixed, with no worked time**; auto via audit after a correction; missing
+    reports only from `reportReminderAt` today, `null` without `report.self`; `selfEnteredCheckouts`
+    and `selfEnteredPastLastSeen`; `needsLookReasons` at and under the threshold, labels count
+    first; `ordinal` 1st, 2nd, 3rd, 4th, 11th, 12th, 13th, 21st, 22nd, 23rd, 101st, 111th.
+  - `tests/unit/timerAwayRules.test.js` (B): a `system` gap over 150 s is a piece, 150 s or less is
+    not; a gap next to a `window` segment never; gap merged with idle and locked neighbours into one
+    span (`kind 'away'`); a gap alone is `no_data`; ended only with a later segment; idle start moved
+    back by `activityIdleMinutes`, never before the entry start or `away_checked_until`, not for
+    locked or gap starts; the length check uses the moved span (21 min idle + 5 asks at 25); a
+    finished entry's window ends at its end; `planRemoval` split, move, trim, drop at the 1 minute
+    edges, **and the lost-time span of each** (move `[startedAt, to]`, trim `[from, endedAt]`, drop
+    the whole entry); `leftOffer` (before and at the day end, **6:28 PM with a 6:30 PM day end and
+    grace 15 is offered, 6:14 PM is not**, own `shiftEnd` over `officeEnd`, the split on second-half
+    leave, a later entry, a later break, a row HR corrected). `tests/unit/timerCardClock.test.js`
+    (B): the three texts, the help line and the button labels. `tests/unit/breakView.test.js` (B):
+    labels and notes. `tests/unit/timersRules.test.js` (B): unchanged imports through the re-exports.
+  - `tests/unit/migration018Away.test.js` (O, `removedSpans` from `db/lib/removedSpans018.js`): split, moved start, Keep after a
+    split still found, moved start then Keep not found, tail deleted, **tail deleted then a fresh
+    same-project timer answered Keep gives nothing, a resumed timer gives nothing, a tail moved by a
+    second Remove gives one span `[P.ended_at, R.started_at]`, a split head edited by hand since
+    (`updated_at` moved) gives nothing**, an overlapping manual row and an overlapping break skipped,
+    touching is not overlapping, a span outside the row's present window skipped, no row skipped, 31
+    Oct ignored, under a minute skipped.
+  - `tests/unit/attendanceMissingRules.test.js` (C): `suggestedCheckoutAt` (active, window idle and
+    timer signs; system idle and locked are not; before check-in → null; cut to the minute; `at`
+    capped at the end of the work date); `selfFixLimit` (the own shift end, **also on second-half
+    leave, never the split**; suggestion + 15 min; 23:59 cap; no suggestion on a working day →
+    shift end; **a Saturday, a holiday and full-day leave: suggestion + 15 only, and no suggestion →
+    `limitAt` null, basis `none`**).
+  - `tests/unit/attendanceRemindRules.test.js` (D): `remindKindFor` (late mark not passed, holiday,
+    full-day leave, first-half leave before and after the split mark, second-half leave reminds
+    **before the split and not after**; break over and within the allowance, allowance 0; open row
+    before and after the day end; missing on a past date, **not with a pending `check_out`
+    correction, not while today is full-day leave or not a working day**; break wins over
+    check-out). `reminderMessages` (every row of the table, one, two and three missing days, the
+    `?checkout=missing` link, Slack escaping of "<Neha & co>"); `hrSummaryText` (the exact Slack
+    blocks with "Not checked in" and "(starts 11:00)", empty lines left out, the all-clear lines,
+    count-first bell bodies, "1 still on their shift", "Auto check-outs since Fri, 13 Nov", 15 names
+    then "and 4 more", **a person named "<Neha & co>" comes out escaped**, title under 200 and body
+    under 500 characters).
+  - Settings (G): `checkHrSummary` (before the late mark, after office end, the summary off),
+    `checkDayMarks`, the ranges; `Segmented` with a disabled item (button and link);
+    `buildCalendar` with `range` and `toneOf`, `dayTone` holiday and leave. The leave form model
+    (F): Last day follows First day, halves disabled across days, the preview's waiting and error
+    lines.
+- **Services** (`DB_NAME=daybook_test_<n>`, fake Slack transport):
+  - `tests/services/timersAwayBreak.test.js` (B): **the `bug-away` scenario turns green**: after
+    Remove, Vishal's Attendance row shows Present 5h, worked 4h 15m, "Breaks 45m", "Over 15m", the
+    Excel says Breaks 45 and Worked 4.25, his timer split is unchanged from 1.09 (the head's
+    `updated_at` equals the copy's `created_at`), and he gets one `attendance.break_over_allowance`;
+    a second break later sends no second notice. Remove on a finished entry after Stop, Switch
+    project, Start break (End break still resumes) and Check out; trim and drop; **a move saves
+    `[startedAt, to]`**; Keep on a finished entry; a no-data gap offered for Idle Detection only,
+    **and only when someone else's screen time was recorded during it (`anyoneSeenBetween`)**,
+    never for a Daybook outage whose neighbours' heartbeats are staggered around it (real beats,
+    daytime and after the day end, `timersAwayOutage.test.js`);
+    Remove of an entry not of today `BAD_REQUEST`; a span over an HR-changed break `CONFLICT`.
+    **Races**: Remove and Check out at once (both finish, no deadlock, the break is inside the row);
+    two Removes of one span give one break (the other `CONFLICT`); **a Stop that commits between
+    the read and the lock gives no false `CONFLICT`** (`lockById`); **a Remove and an End break that
+    cross the allowance together send exactly one notice** (`crossed` in the transaction); a
+    deadlock retried once sends one notice. Left: open row checked out at `from` with the timer, a
+    closed own check-out moved back, audit row, not offered with a later entry or a corrected row.
+    Put back for split, move, trim (exact seconds restored, not asked again), a deleted entry
+    (`restored: false`, break gone), an overlapping manual row, HR-changed `CONFLICT`, someone
+    else's `NOT_FOUND`. Add time over an away break refused with the new message. After check-out
+    the away part of the state is read at most every 5 minutes (query counter). Rewrites:
+    `timersAway.test.js` (Remove now saves a break; finished entries are asked about),
+    `attendance.breaks.test.js` (the notice is decided in the transaction), `timersRoutes.test.js`
+    (`left`, put-back route), `activity.test.js` (`anyoneSeenBetween`).
+  - `tests/services/attendanceBreakFixes.test.js` (B): change a forgotten open break (ends, `hr`, no
+    timer resumed), shorten a check-out-ended break, every validation message **including "A timer
+    started at 2:00 PM. Pick 2:00 PM or earlier."**, delete, audit rows on the attendance entity, the
+    person's notification, own row `FORBIDDEN`, an Admin's row `NOT_FOUND` for HR (an Admin may), PM
+    `GET` allowed and `PATCH` `FORBIDDEN`, an employee `FORBIDDEN`; `listDay` `onBreakSince`,
+    `on_break`, `summary.onBreak`; per-person rate limit.
+  - `tests/services/attendance.missingSelf.test.js` (C): within the limit saves `'corrected'` with
+    the three entered-by columns, audit and no HR notification; **last seen 1:05 PM, entered 6:30
+    PM: saved, `after.pastLastSeen` true, and `listDay` gives HR the Check tag data (a PM's item has
+    none)**; after the limit without reason → `VALIDATION_FAILED` on `reason`, with reason → a pending
+    `check_out` correction, HR notified and the row leaves the pop-up; **a double tap on Send to HR
+    gives one correction and `REQUEST_ALREADY_PENDING`**; **a Saturday check-in of 20 minutes: 6:30
+    PM goes to HR**; **start day 26, a save for Fri, 23 Oct on 19 Nov tells HR
+    (`attendance.self_checkout_past`)**; before check-in refused; someone else's row and an
+    older-than-30-days row → `NOT_FOUND`, an already fixed own row → `CONFLICT`; **two parallel saves
+    give one save and one `CONFLICT`**; HR fixing at the same moment; Not now hides until tomorrow
+    (`setNowForTests` the next day shows it again); no screen time → no suggestion and the limit is
+    the shift end; a timer still running from that date gives no sign. Rewrite:
+    `attendance.corrections.test.js` (`requestCorrection` with a `trx`).
+  - `tests/services/attendance.missingHr.test.js` (C): full list paging, `total` equals the rows
+    listed and the KPI footer total; suggestions only for `attendance.correct`, read per row with
+    `activity.getDay` and kept per process; **a row with a pending `check_out` correction:
+    `pendingCorrection` set, bulk fix puts it in `failed` with "Handle it under Corrections.", and
+    `missingCheckoutsFor` leaves it out**; bulk fix with suggested and typed times, a row without a
+    time, the actor's own row, an Admin's row for HR, partial failures; audit, `attendance.edited`
+    notification, the entered-by columns; `updateRow` on a missing row sets them, **a self-fix then
+    an HR Edit reads "By Neha" with `checkout_suggested_at` null**, and an approved correction clears
+    them; `missingWindow` skips a holiday Friday.
+  - `tests/services/attendance.reminders.test.js` (D): each kind sent and refused when it no longer
+    applies; **five parallel reminds of one person and kind send one**; a second after 31 minutes is
+    sent; another kind is not blocked; self, Admin for HR (`not_allowed`, the same message whether
+    the Admin is active or tracked) and deactivated are skipped; `check_in` after the day end
+    skipped; `missing_checkout` with a pending correction or on a leave day skipped; Slack DM only
+    with `slackAttendanceRemind` on and a `slackUserId`; a notification row (push) every time; audit
+    for HR only. `tests/services/attendance.checkinReminders.test.js` (D): due at late mark + 30 for
+    the company and for an own shift; once a day (two ticks, two processes); none on a weekend, a
+    holiday or full-day leave; first-half leave reminded after the split mark + 30; an HR remind
+    earlier that day stops it; 0 turns it off; after the day end none; **a worker down until the
+    afternoon sends nothing more than an hour late**; before 018 one warning and no error per person.
+  - `tests/services/attendance.hrSummary.test.js` (D): HR recipients, Admins when there is no HR;
+    Admins' attendance hidden from HR and shown to Admins; the recipient left out, **and the
+    recipient's own pending correction not counted under Waiting**; leave excluded and not-yet-late
+    people listed with "(starts …)" under Not checked in; approved WFH listed; a failed attempt
+    resends only to those without one; **deleting the morning bell row before attempt 2 sends
+    nothing again** (the `attendance_alerts` claim); not on a holiday or weekend, not after office
+    end; the link carries `?filter=not_checked_in`; evening off by default, its lists (an away break
+    counts over the allowance; a weekend auto check-out shows on Monday; an open row before its day
+    end counts as "still on their shift"); Slack per `slackHrSummary`, names escaped.
+  - `tests/services/attendance.month.test.js` (E: `summarizeRange` with a 26 start, holidays and
+    leave; HR never sees an Admin, an Admin does; a leaver is listed up to their last day and never
+    absent after it; **the query budget "8 plus one per 500 attendance rows"** with a query counter;
+    away breaks counted; planned leave apart; an open row from yesterday as missing);
+    `attendance.monthExport.test.js` (two sheets and their names, every header, numbers are numbers,
+    one person's file, the Days sheet stops at today, **201 people → 400, a second export while one
+    builds → 429**, no report task title, screen-time value or IP anywhere in the workbook);
+    `attendance.personMonth.test.js` (an HR edit with its reason, a correction with its note, a
+    confirm, a break change, a self check-out with "Daybook last saw them at", a leave record, an
+    `away_backfill` row, `mark_missing`, `auto_checkout` and `unverified_office` not listed, **no
+    `ip`, `checkInIp` or `checkOutIp` in the body**, an Admin's month `NOT_FOUND` to HR, own month
+    without actions and with leave notes null); `attendance.lateAlerts.test.js` (3 late days nothing;
+    the 4th → one bell row to HR, none to the person; a second attempt the same day nothing; a 5th day
+    nothing; the next payroll month alerts again; **one person whose notify fails doesn't stop the
+    others**; **on the first working day of a period the previous one is checked through its last
+    day**; an Admin's late days go to the other Admins; a holiday date sends nothing; first-half
+    leave late only after the split mark; `job_runs` late-alerts rows are deleted in `beforeEach`,
+    since migration 018 claims today's); `attendance.lateCount.test.js` (4th; holiday and full-day
+    leave skipped; across the 26th); `attendanceMonthRoutes.test.js` (HR and Admin 200, PM and
+    employee `FORBIDDEN`, bad month 400, export content type and filename, per-person rate limit).
+    `attendancePage.test.js` additions (A: marks and "4th this month" in rows, Needs a look only for
+    `canCorrect`, the Present KPI "2 off", the On leave and On break pills only when above 0).
+  - `tests/services/attendanceHolidays.test.js`, `attendanceLeave.test.js` (F): holiday create,
+    edit, move, delete, audit rows; same date → `CONFLICT`; the 61st of a year refused; a date
+    outside the window refused; PM `FORBIDDEN` on writes, employee `FORBIDDEN` on GET. **Check-in on
+    a holiday** → `is_working_day 0`, late 0. **Adding a holiday for a past day with a late row** →
+    late 0 and flag 0, one `attendance.day_rules` audit, the person told, **and the Admins told with
+    " Neha Kapoor's own row is one of them." when HR's own late row was in it**; **deleting it**
+    restores the late minutes. **A check-in that commits while a holiday for today is being added
+    ends with flag 0 and late 0** (`recheckDayRules`). `listDay` on a holiday: nobody
+    `not_checked_in`, summary `notCheckedIn 0`. Worker on a holiday (`setNowForTests`):
+    `companyNow().workingDay` false, no report reminder, no timer reminder, no PM summary, no HR
+    summary, no check-in reminder, no late alert; HR notes run on Thursday when Friday is a holiday.
+    Leave: full multi-day across a weekend and a holiday counts the working days only; a half needs
+    one day; **5 parallel creates for the same person and day save one** (the others `CONFLICT`);
+    own leave and HR marking an Admin's `FORBIDDEN`; an Admin may; untracked person `CONFLICT`; no
+    working days `VALIDATION_FAILED`; update and delete need a reason; the person is notified (title,
+    no note). **HR's preview of an Admin → `NOT_FOUND` and no `checkIns`**. **First-half leave,
+    check-in at 14:10** → late 10m (Late after 9:30); full leave → late 0; **first-half leave added
+    after a 13:45 check-in** recomputes late 4h 15m to 0, and deleting the leave restores it;
+    **Late after changed since a check-in, then a leave note edit leaves the late minutes
+    unchanged**. `listDay`: full leave → `on_leave`, not in Not checked in; first half → `on_leave`
+    before 14:00 and `not_checked_in` after; filter `on_leave`; a PM viewer gets `day.leave` without
+    `leaveType` and `paid` and `day.wfhApproved` false. The Leave page with start day 26 lists 26 Oct
+    to 25 Nov. **`GET /api/attendance/me/today` and the My log Excel contain no note text; HR's own
+    entry has `note: null`.**
+  - Readers (H): Team board Off today group (teal) and counts, **a PM's `/team` and `/team/[userId]`
+    payloads contain no `leaveType` or `paid`**; Overview "Not checked in" today with first-half
+    leave; My log days and KPIs ("of N working days" counts leave days); HR notes numbers include
+    `holidays` and `leaveDays`, missing and auto by the month rules, and **the prompt never contains
+    the leave type, paid or unpaid, or the note**; Ask Daybook skips holidays and leave and reads a
+    self-entered check-out as "Entered by the person". Rewrites: `aiSummariesHr.test.js` (the new
+    numbers), `dashboard*.test.js` where "Not checked in" counted weekend days, `reportsMyLog.test.js`.
+  - Platform (G): `settings.test.js` (the 11 keys, ranges, `checkHrSummary`, `checkDayMarks`,
+    defaults with the rows missing), `settingsValues.test.js`, `users.test.js`
+    (`listTrackedForRange`), audit `listForEntities` (chunks of 500, actions filter, newest first),
+    reports `listSubmittedDays`.
+  - `tests/services/migration018.test.js` (O; a test database migrated to 017, then to 018): every
+    UNIQUE key and FK of 018 exists (`information_schema.TABLE_CONSTRAINTS` and `STATISTICS`);
+    COLUMN_TYPE, IS_NULLABLE and COLLATION_NAME of every new column and TABLE_COLLATION
+    `utf8mb4_unicode_ci` of every new table (as `todoMigration.test.js`); **after dropping
+    `attendance_alerts` by hand, `up` creates it again and skips the rest**; before 018, Today
+    without the pop-up and with `removed: []`; **a Remove on a finished entry answers 503
+    `UPDATE_NEEDED` and the entry is unchanged; only the running entry is asked about**; a Remove of
+    the running entry falls back to the 1.09 split with one warning and `savedAsBreak: false`; the
+    break list reads with `needsUpdate: true`; Put back, Change and Delete, the reminders route, the
+    pop-up's writes, holiday and leave writes and the preview answer 503 `UPDATE_NEEDED` with the
+    sentence; HR's Fix and bulk fix work without the entered-by columns; Attendance, the month view,
+    Today, the Excel files, the Team board and the worker clock read as 1.09; the check-in reminder
+    job sends nothing and logs once; the late alert returns `unavailable`. **Migration**: 1.09-style
+    Removes on 31 Oct and 2 Nov give one away break (2 Nov) and one `attendance.away_backfill` audit
+    row; a second `up` inserts nothing; today's three `late_alerts` keys are claimed;
+    `daily_reports`, `report_entries` and `report_tasks` are byte for byte unchanged; `down` removes
+    the away rows, their audit rows and every 018 table and column. After migrating, everything works
+    without a restart. The workflow runs this file on MySQL 8.4 too.
+- **E2E** (O; the e2e browser can't run Idle Detection, so the breaks spec uses a seeded split and
+  away break):
+  - `tests/e2e/breaks.spec.js`: the employee sees "Away, removed from your acme-app timer" on Today
+    and puts it back; HR opens Priya's Present cell, sees "Away, removed from timer", changes a
+    forgotten break's end with a reason and sees "Changed by"; a PM opens the list read-only.
+  - `tests/e2e/missing-checkout.spec.js`: an employee with a missing row sees the dialog, keeps the
+    suggested time and saves; another types a late time, adds a reason and it shows under "Waiting
+    for HR"; HR opens the KPI link, selects two rows with the head-row checkbox, fixes them with one
+    reason, reminds a third with Remind selected and sees "Reminded 10:05 by Neha" on Attendance; a
+    PM sees the list without actions.
+  - `tests/e2e/attendance-month.spec.js`: HR opens Attendance, switches to Month, sees a row with its
+    numbers and a "Needs a look" tag with its reasons line, filters Late, opens Vishal's month, sees
+    each day and an HR change with its reason, downloads the Excel (filename checked); the PM sees
+    no Month switch and `/attendance/month` is no-access.
+  - `tests/e2e/holidays-leave.spec.js`: HR adds a holiday for today; Attendance shows "Holiday: …"
+    and no one "Not checked in"; an employee's Today shows "Today is a holiday: …" and "No late mark
+    today."; HR deletes it, then marks first-half leave for another employee from the row's "..."
+    menu; that employee's Today shows "You're on leave for the first half of today, until 2:00."
+    and "Late after 2:00."; a PM sees "On leave" on Attendance without the type and gets the
+    no-access page on `/attendance/leave`.
+- **Screens** (every builder with UI): `shot.mjs` and `compare.py` against the prototype, and A's
+  day page against `09-attendance` at 1440 and 1280 px, light and dark, 390 px.
+- `APP_VERSION` '1.10'.
+
+Also update the other CONTRACT sections as listed in "Other sections" below (O, with this section).
+
+### Other sections
+
+- **§6**: settings `getAll` gains the 11 keys; attendance gains the exports listed in "Modules"; timers
+  `lastRanByUser`, `listEntriesFor`, `putBackAway`, the `getState` and `resolveAway` additions;
+  reports `listSubmittedUserIds`, `listSubmittedDays`; users `listTrackedForRange`; audit
+  `listForEntities`; dashboard `buildCalendar`; activity `anyoneSeenBetween`.
+- **§7**, "Later sections add": "timers → `timers/away/[breakId]/put-back`; attendance →
+  `attendance/[id]/breaks/**`, `attendance/me/missing-checkouts/**`,
+  `attendance/missing-checkouts/fix`, `attendance/reminders`, `attendance/month/**`,
+  `attendance/people/**`, `attendance/needs-look`, `holidays/**`, `leave/**` (25)". Downloads: add
+  Attendance month → `GET /api/attendance/month/export?month=YYYY-MM&userId=` (`attendance.correct`,
+  attendance).
+- **§8**: `StatusCell` statuses `on_leave`, `holiday`, `day_off`; `Segmented` items take `disabled`;
+  `Kpi` keeps its bar at the card's bottom; `MonthCalendar` tones `leave` and `holiday` and the
+  `legendItems` prop.
+- **§9**: the owner rows of "Files and owners" with "(CONTRACT 25)"; page permissions add
+  `/attendance/missing` and `/attendance/holidays` `attendance.view_all`, `/attendance/month`,
+  `/attendance/people/[userId]` and `/attendance/leave` `attendance.correct`.
+- **§10**: service tests that need MySQL 8.4 run in `.github/workflows/migration-check.yml`.
+- **§11**: no-data gaps (Idle Detection only, someone else's screen time recorded in them) are read
+  for the away question; HR still never sees segments, only one suggested check-out time.
+- **§15**: Data: `end_reason` adds `away` and `hr`; `attendance_breaks` adds `source`,
+  `away_entry_id`, `changed_by_id`, `changed_at`. "Break end": the allowance notice is decided in
+  the transaction (`breakTotalsIn`) and also follows a Remove. "HR edits and corrections never touch
+  breaks" becomes: their check-in and check-out edits never touch breaks; HR may change a break's
+  end or delete it with a reason (§25 item 2). "Away time": replaced by §25 A (every one of today's
+  timer entries, no-data gaps, Remove saves an away break, Left, Put back). "Locks and races": Remove
+  locks the timer's own date's attendance row, then the entry by id; a break fix locks the
+  attendance row by primary key, then the break.
+- **§16**: late marks follow the person's day (holidays, leave, the split), rewritten only by
+  `applyDayRules` and `recheckDayRules`.
+- **§17**: `nextWorkingDay` skips holidays; "WFH approved" on Attendance is for approvers only.
+- **§19**: `lastSeenWorking` is shared by the suggested check-out time (finished timers only for a
+  past date); `notifyMissing`'s new body and `/today?checkout=missing` link; the 00:05 jobs close
+  timers before marking missing check-outs.
+- **§20**: HR notes count holidays and leave and read missing and auto check-outs by the month rules;
+  `lastWorkingDayOfWeek` skips holidays; Ask Daybook's "Corrected" wording.
+- **§21**, "3. Notifications": add "Reminders from HR and from Daybook, and for HR the morning
+  summary and the evening wrap-up (CONTRACT 25), come to the bell and, where Show on this computer is
+  on, as desktop notifications. There is no per-type mute in this release; Slack DMs follow the
+  company's switches in Settings → Slack."
+
+### Order of work
+
+1. **O first**: migration 018 from the proposal, with `removedSpans` and its unit test; the 11
+   settings keys in the seeds; `src/lib/time.js` `holidays` argument; `timers.lastRanByUser`;
+   version '1.10'; the permissions text; the prototype; the MySQL 8.4 workflow. Run migrate up,
+   down for 018, up again on a copy (a `daybook_test_<n>` database), never the live "daybook"
+   database, and once on MySQL 8.4 through the workflow.
+2. **A and G in parallel.** A: `migration018.js`, the person's day (`calendar.js`, `dayRules.js`,
+   `calendarRepo.js`, `calendarReads.js`), `marks.js`, `payroll.js`, `checkoutEntered.js`, the
+   `day.js` split (`dayExport.js`, the merged `listDay` item, `FILTERS`, `summarize`), `getDay` in
+   check-in, HR edits and corrections, the worker clock, and the shared layout (`DayCells.jsx`,
+   `dayRows.js`, `rowActions.js`, the Attendance and Today pages) with the barrels and stubs. G: the
+   settings keys and screens, `listForEntities`, `listTrackedForRange`, `listSubmittedUserIds` and
+   `listSubmittedDays`, `StatusCell`, `Segmented`, `Kpi`, `MonthCalendar`, `buildCalendar`.
+3. **Then B, C, E, F and H in parallel**, each in its own files: B (A and item 2), C (B and 7), E (3
+   on screens, 4, 8, 10; needs G), F (6, 9), H (Team board, Overview, Employee detail, My log, AI,
+   screen time; needs G).
+4. **D once C and G are in** (5 and 1: it needs `missingCheckoutsFor`, `listSubmittedUserIds` and
+   `listForEntities`). C and F code against D's stubs meanwhile.
+5. **O last**: register the four jobs in `src/worker/{cron,index}.js` and move
+   `closeOpenTimersJob` before `markMissingCheckoutsJob`; replace any stub left; demo data; the four
+   e2e specs; `migration018.test.js` across every feature; README; doctor; the CONTRACT updates;
+   then the build.
+
+### Choices made in this section (for the owner to confirm)
+
+1. **Day format**: every new string writes a day as "Fri, 13 Nov" (the app's format), including the
+   owner's pop-up text "You didn't check out on Fri 13 Nov"; only the Missing check-outs side card
+   keeps artboard 09's "Priya Sharma, Fri 13 Nov".
+2. **Away**: with the "I had left" offer the dialog shows Keep and "I had left" only (no third
+   button), offered from 15 minutes (the left early grace) before the day end; Put back always
+   deletes the away break and restores the timer when it safely can; the idle accuracy rule always
+   applies (no setting); a no-data gap is asked about only when someone else's screen time was
+   recorded during it (so a Daybook restart never asks); the backfill starts on 1 Nov 2026 and
+   leaves alone the cases it can't tell apart from a person's own edits.
+3. **Break fixes**: HR changes only a break's end (as asked), not its start, and never past a timer
+   that started later; PMs see the break list read-only, like the rest of Attendance.
+4. **Missing check-outs**: a page (`/attendance/missing`), not a drawer; closing the pop-up (Escape,
+   ×) counts as "Not now"; HR's fixes and later edits are marked "By" too, and an approved correction
+   clears the mark. **On a day off, full-day leave or before joining there is no shift, so the
+   self-fix limit is the suggested time + 15 minutes, and with no suggestion the time goes to HR.**
+   A self-entered time more than 15 minutes after Daybook last saw the person gets HR's "Check" tag
+   (the owner's max() rule is kept). A self-save for a day in an earlier payroll month tells HR.
+5. **Reminders**: two new Slack switches instead of reusing `slackRemind` (whose label is about
+   reports); the 30-minute rule is a constant and counts Daybook's own reminder; the check-in
+   reminder starts at the person's late mark (on first-half leave, the split plus the grace) and is
+   never sent more than an hour late; on Attendance the remind is an item in the row's "..." menu,
+   with "Remind all" for the Not checked in and On break filters; the Action column widens from
+   95.66 to 120 px for HR so the row stays one line.
+6. **Summaries**: HR only (Admins when there is no HR), like the weekly HR notes; "Not checked in"
+   is the Attendance pill's set (the owner's "not checked in yet, excluding people on leave"); the
+   morning time can't be before Late after and the summary isn't sent once office hours have ended;
+   the evening wrap-up (7:00 PM) lists the auto check-outs since the last working day.
+7. **Month**: the month view, the month Excel and the person month are for HR and Admins only;
+   "4th this month" and the marks show to every viewer of the day page; a payroll month is named
+   after the month it ends in, and on the first 3 days of a period the month screens open the one
+   that just closed; one number (`late_alert_days`) for late days, short days and missing reports;
+   the late alert goes out once a day at office end, bell and desktop only, starting the working day
+   after the deploy; "Missing check-outs" in the month counts days marked at midnight, fixed later or
+   not; the month Excel covers up to 200 people.
+8. **Half-day leave**: the split is the middle of the person's shift (not a setting); on second-half
+   leave Left early is measured against the split; a check-in on a full-day leave day counts present
+   (leave 0) with the marks of a full day, and is flagged, with no automatic change.
+9. **Holidays**: one holiday per date, one date per row (no half-day or department holidays);
+   weekends now read "Day off" on Attendance and the Team board instead of "Not checked in";
+   changing a holiday or leave rewrites the late minutes of the days it changes with today's late
+   mark and the person's current shift, audited per row; a change to today or a past day tells the
+   Admins and the people whose late mark changed.
+10. **Privacy**: PMs see who is on leave and the part of the day, never the type, pay or note, and
+    don't see "WFH approved"; the person never sees HR's leave note.
+11. **Design**: the orchestrator's prototype binds the new screens; with the scope approved, builders
+    don't wait for a separate sign-off on it.
+
+### Risks to watch
+
+- No-data gaps: Chrome Memory Saver or frozen background tabs can stop Idle Detection heartbeats
+  while someone works in other apps, which brings more questions (Keep answers them). Checking every
+  one of today's entries asks, on deploy day, about earlier spans of that day. In a team where only
+  one person's screen time is recorded at a time, laptop-asleep gaps are never asked about.
+- The `attendance` and `attendance_breaks` ALTERs each copy their table once (adding a foreign key
+  with `foreign_key_checks` on is `ALGORITHM=COPY` on both servers): check-ins and breaks wait a few
+  seconds; a blocked ALTER gives up after 30 s (`lock_wait_timeout`) and the line is run again.
+  Deploy after 7 PM.
+- Removes that the still-running 1.09 web process answers between the backfill's read of that
+  person-day and the restart are not rebuilt: press Restart right after migrate.
+- The backfill changes Breaks and Worked for days since 1 Nov, which HR may already have exported;
+  the README note says to tell HR before payroll.
+- The production engine is still unconfirmed; 018 is checked on MySQL 8.4 only in CI (the
+  workflow), never on the host before the live migrate.
+- HR ending a forgotten open break doesn't resume the paused timer; Put back after the entry was
+  deleted or edited only removes the break (`restored: false`).
+- The 30-minute rule and leave writes rely on REPEATABLE READ gap locks with deadlock retry (the
+  WFH pattern); many parallel clicks can end in "Something else changed at the same moment. Try
+  again."
+- Working days for past months follow today's `workingDays`; changing `payroll_month_start_day`
+  re-cuts periods and can send a second late alert in the overlapping days.
+- Month counts of missing and auto check-outs depend on the audit rows `attendance.mark_missing` and
+  `attendance.auto_checkout`; deleted leave doesn't show in the person month's Changes except
+  through its `leave.delete` audit row, and rows of a deleted or moved leave written more than 400
+  days before the month starts aren't looked for.
+- `companyDay` is cached 30 s per process, so the worker may lag a holiday edit by up to 30 s;
+  `getDay` and `loadCalendar` read holidays directly, and `recheckDayRules` fixes a check-in that
+  committed during a holiday or leave write.
+- A self-entered time can be as late as the person's shift end even when Daybook last saw them
+  much earlier; HR sees "By" with a "Check" tag when it is more than 15 minutes after the last time
+  Daybook saw them working, and the month view counts those days.
+- Per-process caches (Needs a look 5 minutes, suggestions, the away part of the timer state) are
+  cleared only in the process that wrote; on a host with more than one web process another may
+  show the old value for up to 5 minutes.

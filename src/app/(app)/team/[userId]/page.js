@@ -1,14 +1,15 @@
 // Employee detailed view (artboard 06): a person's numbers for a range, their month calendar,
 // hours by project, tasks to watch, today's to-do (CONTRACT 24, read-only) and report history.
 // PM and Admin; an Admin's page is 404 for anyone but another Admin (their attendance is
-// Admin-only).
+// Admin-only). Holidays and leave (CONTRACT 25) tint the calendar; the legend adds "Leave" and
+// "Holiday" when the month has them.
 import { notFound } from 'next/navigation';
 import Avatar from '@/components/Avatar';
 import Button from '@/components/Button';
 import Card, { CardHeader } from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
 import HBarList from '@/components/HBarList';
-import MonthCalendar from '@/components/MonthCalendar';
+import MonthCalendar, { CALENDAR_LEGEND, OFF_LEGEND } from '@/components/MonthCalendar';
 import ProjectLabel from '@/components/ProjectLabel';
 import Segmented from '@/components/Segmented';
 import Tag from '@/components/Tag';
@@ -48,6 +49,12 @@ async function loadDetail(userId, options, viewer) {
     if (isAppError(error) && error.code === 'NOT_FOUND') notFound();
     throw error;
   }
+}
+
+/** The calendar's legend: the usual four, plus Leave and Holiday when the month shows them. */
+function legendOf(calendar) {
+  const tones = new Set(calendar.weeks.flat().map((cell) => cell.tone));
+  return [...CALENDAR_LEGEND, ...OFF_LEGEND.filter((item) => tones.has(item.tone))];
 }
 
 /** The profile card's numbers; someone who doesn't check in gets logged hours and a note. */
@@ -154,6 +161,7 @@ export default async function EmployeePage({ params, searchParams }) {
                   weeks={calendar.weeks}
                   weekdays={calendar.weekdays}
                   label={calendar.title}
+                  legendItems={legendOf(calendar)}
                 />
               </div>
             )}

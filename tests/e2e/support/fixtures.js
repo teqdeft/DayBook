@@ -88,6 +88,42 @@ export async function cellUnder(table, row, header) {
   return row.getByRole('cell').nth(index);
 }
 
+/**
+ * The controls of a table that sit outside its own box (cut off at the side, or behind a sideways
+ * scroll nothing hints at), by name, plus a note when the table scrolls sideways at all; empty when
+ * every column is in view.
+ * @param {import('@playwright/test').Locator} table
+ * @returns {Promise<string[]>}
+ */
+export async function cutControls(table) {
+  return table.evaluate((element) => {
+    const wrap = element.parentElement;
+    const box = wrap.getBoundingClientRect();
+    const cut = [...element.querySelectorAll('a, button, input')]
+      .filter((control) => {
+        const rect = control.getBoundingClientRect();
+        return rect.width > 0 && (rect.right > box.right + 1 || rect.left < box.left - 1);
+      })
+      .map((control) => control.getAttribute('aria-label') || control.textContent.trim());
+    if (wrap.scrollWidth > wrap.clientWidth + 1) cut.unshift('the table scrolls sideways');
+    return cut;
+  });
+}
+
+/**
+ * Checks a control is at least 44 by 44 px, the touch target the release aims for (CONTRACT 25).
+ * Measured until it settles: a sheet still popping in (scale 0.98) is a pixel short.
+ * @param {import('@playwright/test').Locator} control
+ * @param {string} [name] the control in the failure message
+ */
+export async function expectTapSize(control, name) {
+  const label = name ?? (await control.textContent())?.trim();
+  await expect(control, `${label} is on screen`).toBeVisible();
+  const side = (key) => async () => Math.round((await control.boundingBox())?.[key] ?? 0);
+  await expect.poll(side('width'), { message: `${label}: width` }).toBeGreaterThanOrEqual(44);
+  await expect.poll(side('height'), { message: `${label}: height` }).toBeGreaterThanOrEqual(44);
+}
+
 /** The sidebar's links. */
 export function sidebarLinks(page) {
   return page.getByRole('navigation', { name: 'Main' }).getByRole('link');

@@ -1,0 +1,85 @@
+/* Needs a look this month (CONTRACT 25, item 10; the prototype's side card). */
+.card {
+  min-width: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.avatar {
+  flex: none;
+  margin-top: 1px;
+}
+
+.text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  padding-top: 5px;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 6px;
+}
+
+.empty {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.foot {
+  margin-top: 16px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.more {
+  display: inline-flex;
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+/* The reasons wrap under the name below 1024 px. */
+@media (max-width: 1023px) {
+  .text {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

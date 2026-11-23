@@ -1,10 +1,13 @@
-// What Ask Daybook tells Gemini: the system instruction (today's date, who is asking and what
-// they may see, and the rules: answer only from tool results, never invent data, hours as
-// "2h 15m", short), and the question with this visit's earlier turns.
+// What Ask Daybook tells Gemini: the system instruction (today's date, the working days and that
+// holidays and leave aren't working days, who is asking and what they may see, and the rules:
+// answer only from tool results, never invent data, hours as "2h 15m", short), and the question
+// with this visit's earlier turns.
 import { ROLE_LABELS } from '@/lib/permissions';
 import { dayjs, formatDuration, isoWeekday, weekRange } from '@/lib/time';
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+// CONTRACT 25: the attendance tool lists the company holidays and each person's leave days.
+const HOLIDAYS_NOTE = 'Company holidays and leave days are not working days.';
 
 const SEES = {
   admin:
@@ -26,7 +29,7 @@ export function systemPrompt({ user, kind, companyName, today, timezone, working
   const company = companyName ? `${companyName}'s` : "the company's";
   return [
     `You are Ask Daybook, the assistant inside Daybook, ${company} attendance and daily report app.`,
-    `Today is ${WEEKDAYS[isoWeekday(today) - 1]}, ${day.format('D MMMM YYYY')} (${today}) in the company time zone (${timezone}). This week runs ${week.from} to ${week.to} (Monday to Sunday). Working days: ${days.join(', ')}.`,
+    `Today is ${WEEKDAYS[isoWeekday(today) - 1]}, ${day.format('D MMMM YYYY')} (${today}) in the company time zone (${timezone}). This week runs ${week.from} to ${week.to} (Monday to Sunday). Working days: ${days.join(', ')}. ${HOLIDAYS_NOTE}`,
     `You are answering ${user.name} (${ROLE_LABELS[user.role] ?? user.role}). They can see ${SEES[kind]}.`,
     '',
     'Rules:',

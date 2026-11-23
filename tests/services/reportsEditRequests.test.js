@@ -393,7 +393,7 @@ describe('My log', () => {
       reportsSubmitted: 2,
       reportsExpected: 2,
     });
-    expect(log.attendance).toEqual({ office: 2, wfh: 1, late: 1, notCheckedIn: 2 });
+    expect(log.attendance).toEqual({ office: 2, wfh: 1, late: 1, notCheckedIn: 2, leave: 0 });
     expect(log.hoursByProject).toEqual([
       { projectId: internal.id, name: 'internal-tool', color: 'blue', minutes: 930 },
     ]);

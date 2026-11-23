@@ -11,6 +11,8 @@ import { audit } from '@/modules/audit';
 import { notifications } from '@/modules/notifications';
 import { settings } from '@/modules/settings';
 import { users } from '@/modules/users';
+import { getDay } from './calendarReads';
+import { myTodayExtras } from './myToday';
 import { loadRecipientPools, pickRecipients, recipientsAbout } from './recipients';
 import * as repo from './repo';
 import {
@@ -63,19 +65,23 @@ export function listForDate(workDate) {
  *   allowUnverifiedOffice: boolean, presentMinutes: number, breaks: BreakRow[],
  *   openBreak: BreakRow | null, breakMinutes: number, workedMinutes: number,
  *   officeAnywhere: boolean, wfh: { required: boolean, approved: object | null,
- *   pending: object[] }, wfhNeedsApproval: boolean }>} breaks are today's, oldest first;
+ *   pending: object[] }, wfhNeedsApproval: boolean, day: PersonDay, upcoming: object,
+ *   missing: { items: object[], autoOpen: boolean } }>} breaks are today's, oldest first;
  *   breakMinutes counts only break time inside the present window and workedMinutes =
  *   presentMinutes - breakMinutes (CONTRACT 15); officeAnywhere is the officeCheckinAnywhere
- *   setting, wfh is getWfhForDay() for today and wfhNeedsApproval = wfh.required (CONTRACT 17)
+ *   setting, wfh is getWfhForDay() for today and wfhNeedsApproval = wfh.required (CONTRACT 17);
+ *   day, upcoming and missing come from myToday.js (CONTRACT 25: the person's own leave type and
+ *   pay, never HR's note)
  */
 export async function getMyToday({ user, ip }) {
   const current = await settings.getAll();
   const workDate = todayFor(current);
-  const [row, onOfficeNetwork, breaks, wfh] = await Promise.all([
+  const [row, onOfficeNetwork, breaks, wfh, extras] = await Promise.all([
     getForUserOnDate(user.id, workDate),
     settings.isOfficeIp(ip),
     repo.listBreaksByUserDate(user.id, workDate),
     getWfhForDay(user.id, workDate, { user, current }),
+    myTodayExtras({ user, workDate }),
   ]);
   const at = now();
   const tz = current.timezone;
@@ -92,6 +98,7 @@ export async function getMyToday({ user, ip }) {
     officeAnywhere: current.officeCheckinAnywhere,
     wfh,
     wfhNeedsApproval: wfh.required,
+    ...extras,
   };
 }
 
@@ -117,8 +124,9 @@ function decideLocation({ onOfficeNetwork, location, unverifiedOffice, current }
  * is WFH, and Office needs unverifiedOffice = true and the allow_unverified_office setting, is
  * saved with office_verified = 0 and notifies HR (an Admin's: the other Admins, recipients.js).
  * With wfh_requires_approval, WFH needs an approved request covering today unless the person has
- * attendance.correct (wfh.js). Late minutes follow the person's shift start or late_after on
- * working days.
+ * attendance.correct (wfh.js). Late minutes and the working-day flag follow the person's day
+ * (CONTRACT 25: their shift start or late_after; none on a holiday or full-day leave, the split
+ * plus the grace on first-half leave).
  * @param {{ user: { id: number, name: string, role: string, status?: string,
  *   shiftStart?: string | null }, ip?: string | null, location?: 'office' | 'wfh',
  *   unverifiedOffice?: boolean, note?: string | null }} input
@@ -137,6 +145,7 @@ export async function checkIn({ user, ip, location, unverifiedOffice = false, no
     current,
   });
   if (placed.location === 'wfh') await assertWfhAllowed({ user, workDate, current });
+  const day = await getDay({ person: user, date: workDate });
   const at = nowDate();
   const cleanNote = note ? String(note).trim().slice(0, 255) || null : null;
   const row = {
@@ -152,8 +161,9 @@ export async function checkIn({ user, ip, location, unverifiedOffice = false, no
       workDate,
       shiftStart: user.shiftStart,
       settings: current,
+      day,
     }),
-    isWorkingDay: workingDayFlag(workDate, current),
+    isWorkingDay: workingDayFlag(workDate, current, day),
     checkoutStatus: 'open',
     source: 'self',
     createdAt: at,
@@ -261,8 +271,8 @@ async function notifyMissing({ row, person, hr }, trx) {
         userIds: [row.userId],
         type: 'attendance.missing_checkout',
         title: `You didn't check out on ${day}`,
-        body: 'Send HR the time you left from Today, under "Request a correction".',
-        link: '/today',
+        body: 'Add the time you left on Today.',
+        link: '/today?checkout=missing', // opens the missing check-out pop-up (CONTRACT 25)
       },
       trx,
     );

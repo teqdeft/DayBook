@@ -1,7 +1,8 @@
 'use client';
 // Today's timer entries on the Working on card (CONTRACT 15): time range, project, task or note,
 // duration and a menu (Edit, Delete), with "Add time" under the list. Edit and Add open
-// TimerEntryDialog; Delete asks first.
+// TimerEntryDialog; Delete asks first. Time removed from a timer sits in the list in time order
+// as a muted row with Put back (TimerRemovedRow, CONTRACT 25 A).
 import { useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import Button from '@/components/Button';
@@ -10,8 +11,9 @@ import Menu from '@/components/Menu';
 import PriorityTag from '@/components/PriorityTag';
 import ProjectLabel from '@/components/ProjectLabel';
 import { liveEntryMinutes } from '@/components/TimerChip.clock';
-import { entryRange, shortDuration } from './timerData';
+import { entryRange, shortDuration, timeline } from './timerData';
 import TimerEntryDialog from './TimerEntryDialog';
+import TimerRemovedRow from './TimerRemovedRow';
 import styles from './TimerEntries.module.css';
 
 /**
@@ -48,23 +50,53 @@ export function EntryText({ entry, empty = null, className = '' }) {
   );
 }
 
+/** One entry's row: range, project, task or note, minutes and its menu. */
+function EntryRow({ entry, serverMs, busy, onEdit, onRemove }) {
+  const range = entryRange(entry);
+  return (
+    <li className={styles.row}>
+      <span className={styles.range}>{range}</span>
+      <span className={styles.project}>
+        <ProjectLabel project={{ name: entry.projectName, color: entry.projectColor }} />
+      </span>
+      <EntryText entry={entry} className={styles.what} />
+      <span className={styles.minutes}>{shortDuration(liveEntryMinutes(entry, serverMs))}</span>
+      <Menu
+        label={`Change ${entry.projectName} ${range}`}
+        className={styles.menu}
+        width={160}
+        items={[
+          { label: 'Edit', onSelect: () => onEdit(entry), disabled: busy },
+          { label: 'Delete', tone: 'danger', onSelect: () => onRemove(entry), disabled: busy },
+        ]}
+      />
+    </li>
+  );
+}
+
 /**
- * @param {{ entries: object[], serverMs: number, busy: boolean, deleting: boolean,
- *   picker: object, tasks: Record<string, object[]>, addDefaults: () => object,
+ * @param {{ entries: object[], removed?: object[], serverMs: number, busy: boolean,
+ *   deleting: boolean, puttingBack?: number | null, picker: object,
+ *   tasks: Record<string, object[]>, addDefaults: () => object,
  *   onSave: (entry: object | null, body: object) => Promise<object | null>,
- *   onDelete: (entry: object) => Promise<object | null> }} props
- *   addDefaults: the From/To an Add time dialog starts with
+ *   onDelete: (entry: object) => Promise<object | null>,
+ *   onPutBack?: (item: object) => Promise<object | null> }} props
+ *   addDefaults: the From/To an Add time dialog starts with; removed: today's away breaks
+ *   (state.removed); puttingBack: the break id being put back
  */
 export default function TimerEntries({
   entries,
+  removed = [],
   serverMs,
   busy,
   deleting,
+  puttingBack = null,
   picker,
   tasks,
   addDefaults,
   onSave,
   onDelete,
+  onPutBack,
 }) {
   // null, { entry: null } (Add time) or { entry } (Edit).
   const [editing, setEditing] = useState(null);
@@ -79,41 +111,41 @@ export default function TimerEntries({
     requestAnimationFrame(() => addRef.current?.focus());
   }
 
+  async function putBack(item) {
+    const done = await onPutBack?.(item);
+    // The row (and its button) is gone: focus moves to Add time.
+    if (done) requestAnimationFrame(() => addRef.current?.focus());
+  }
+
+  const rows = timeline(entries, removed);
+
   return (
     <div className={styles.entries}>
       <h3 className={styles.heading}>Today&apos;s time</h3>
-      {entries.length === 0 ? (
+      {rows.length === 0 ? (
         <p className={styles.empty}>No time tracked yet today.</p>
       ) : (
         <ul className={styles.list} aria-label="Today's time">
-          {entries.map((entry) => {
-            const range = entryRange(entry);
-            const minutes = shortDuration(liveEntryMinutes(entry, serverMs));
-            return (
-              <li key={entry.id} className={styles.row}>
-                <span className={styles.range}>{range}</span>
-                <span className={styles.project}>
-                  <ProjectLabel project={{ name: entry.projectName, color: entry.projectColor }} />
-                </span>
-                <EntryText entry={entry} className={styles.what} />
-                <span className={styles.minutes}>{minutes}</span>
-                <Menu
-                  label={`Change ${entry.projectName} ${range}`}
-                  className={styles.menu}
-                  width={160}
-                  items={[
-                    { label: 'Edit', onSelect: () => setEditing({ entry }), disabled: busy },
-                    {
-                      label: 'Delete',
-                      tone: 'danger',
-                      onSelect: () => setRemoving(entry),
-                      disabled: busy,
-                    },
-                  ]}
-                />
-              </li>
-            );
-          })}
+          {rows.map((row) =>
+            row.kind === 'removed' ? (
+              <TimerRemovedRow
+                key={`removed-${row.item.breakId}`}
+                item={row.item}
+                busy={busy}
+                loading={puttingBack === row.item.breakId}
+                onPutBack={putBack}
+              />
+            ) : (
+              <EntryRow
+                key={row.entry.id}
+                entry={row.entry}
+                serverMs={serverMs}
+                busy={busy}
+                onEdit={(entry) => setEditing({ entry })}
+                onRemove={setRemoving}
+              />
+            ),
+          )}
         </ul>
       )}
       <div className={styles.footer}>

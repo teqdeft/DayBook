@@ -1,5 +1,5 @@
-// Pure timer rules (CONTRACT 15): entry minutes, stop times, away spans, overlaps, the day summary
-// and the input schemas.
+// Pure timer rules (CONTRACT 15): entry minutes, stop times, away spans (now in awayRules.js and
+// re-exported by rules.js, CONTRACT 25), overlaps, the day summary and the input schemas.
 import { describe, expect, it } from 'vitest';
 import { localToUtc } from '@/lib/time';
 import {
@@ -14,6 +14,7 @@ import {
   wholeSecond,
 } from '@/modules/timers/rules';
 import {
+  routeBreakId,
   routeId,
   timerAwaySchema,
   timerEntryCreateSchema,
@@ -57,36 +58,45 @@ describe('entry minutes and stop times', () => {
   });
 });
 
-describe('away spans', () => {
-  it('merges idle and locked segments within 150 s; active or a longer gap ends a span', () => {
-    const spans = awaySpans([
-      seg('active', '10:00', '10:30'),
-      seg('idle', '10:30', '10:45'),
-      seg('locked', '10:47', '11:02'), // 2 min later: same span
-      seg('active', '11:03', '11:10'),
-      seg('idle', '11:10', '11:20'),
-      seg('idle', '11:23', '11:40'), // 3 min later: a new span
-    ]);
+describe('away spans (CONTRACT 25 A, through the rules.js re-exports)', () => {
+  it('merges idle and locked segments within 150 s; active ends a span', () => {
+    const spans = awaySpans(
+      [
+        seg('active', '10:00', '10:30'),
+        seg('idle', '10:30', '10:45'),
+        seg('locked', '10:47', '11:02'), // 2 min later: same span
+        seg('active', '11:03', '11:10'),
+        seg('idle', '11:10', '11:20'),
+        seg('idle', '11:23', '11:40'), // 3 min later: a new span when the gap doesn't count
+      ],
+      { gapCounts: () => false },
+    );
     expect(spans).toEqual([
-      { from: at('10:30'), to: at('11:02'), ended: true },
-      { from: at('11:10'), to: at('11:20'), ended: true },
-      { from: at('11:23'), to: at('11:40'), ended: false },
+      { from: at('10:30'), to: at('11:02'), ended: true, kind: 'away', startsIdle: true },
+      { from: at('11:10'), to: at('11:20'), ended: true, kind: 'away', startsIdle: true },
+      { from: at('11:23'), to: at('11:40'), ended: false, kind: 'away', startsIdle: true },
     ]);
   });
 
   it('offers the earliest ended span that is long enough, clipped to the entry', () => {
     const segments = [
-      seg('idle', '09:00', '09:50'), // before the entry: only 10 min of it count
+      seg('locked', '09:00', '09:50'), // before the entry: only 10 min of it count
       seg('active', '09:51', '10:20'),
       seg('locked', '10:20', '10:50'),
       seg('active', '10:51', '11:00'),
     ];
     const input = { segments, startedAt: at('09:40'), at: at('11:00'), minMinutes: 25 };
-    expect(findAwaySpan(input)).toEqual({ from: at('10:20'), to: at('10:50'), minutes: 30 });
+    expect(findAwaySpan(input)).toEqual({
+      from: at('10:20'),
+      to: at('10:50'),
+      minutes: 30,
+      kind: 'away',
+    });
     expect(findAwaySpan({ ...input, minMinutes: 10 })).toEqual({
       from: at('09:40'),
       to: at('09:50'),
       minutes: 10,
+      kind: 'away',
     });
     // Already answered up to 10:50: nothing left to ask.
     expect(findAwaySpan({ ...input, checkedUntil: at('10:50') })).toBeNull();
@@ -101,7 +111,9 @@ describe('away spans', () => {
         seg('active', '11:01', '11:05', 'window'),
         seg('idle', '11:05', '11:40', 'window'),
       ]),
-    ).toEqual([{ from: at('10:30'), to: at('11:00'), ended: true }]);
+    ).toEqual([
+      { from: at('10:30'), to: at('11:00'), ended: true, kind: 'away', startsIdle: false },
+    ]);
   });
 
   it('never offers a span that may still be going on, or no screen time at all', () => {
@@ -234,5 +246,15 @@ describe('schemas', () => {
     expect(routeId({ id: '42' })).toBe(42);
     expect(routeId({ id: 'abc' })).toBeNull();
     expect(routeId({ id: '007' })).toBeNull();
+    expect(routeBreakId({ breakId: '9' })).toBe(9);
+    expect(routeBreakId({ breakId: 'x' })).toBeNull();
+  });
+
+  it('takes left as an answer (CONTRACT 25)', () => {
+    const iso = '2026-09-30T05:00:00.000Z';
+    const body = { entryId: '3', from: iso, to: iso, decision: 'left' };
+    expect(timerAwaySchema.parse(body)).toMatchObject({ entryId: 3, decision: 'left' });
+    const wrong = timerAwaySchema.safeParse({ ...body, decision: 'later' });
+    expect(wrong.error.issues[0].message).toBe('Choose keep, remove or left.');
   });
 });

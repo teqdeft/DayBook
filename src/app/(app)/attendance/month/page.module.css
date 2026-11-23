@@ -1,0 +1,237 @@
+/* Attendance, Month (CONTRACT 25, item 4; the prototype's month view): the day page's KPI grid and
+   Everyone card head, a table whose cells stack a number and its muted lines. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--block-gap);
+  min-width: 0;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+}
+
+/* The muted notice before migration 018. */
+.notice {
+  --card-pad: 14px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.noticeIcon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--muted);
+}
+
+.noticeText {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+
+.everyone {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.everyoneHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  min-height: 69px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cardTitle {
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.headTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.pills {
+  justify-content: flex-end;
+}
+
+/* Each cell stacks its lines from the top. */
+.table table {
+  table-layout: auto;
+}
+
+.table td {
+  padding-top: 12px;
+  padding-bottom: 10px;
+  vertical-align: top;
+}
+
+.person {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.personText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.personName {
+  overflow: hidden;
+  max-width: 100%;
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--ink);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personName:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.personRole {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: var(--text-small);
+  line-height: 17px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stack {
+  position: relative;
+  top: -1px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.num {
+  font-family: var(--font-heading-stack);
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.numRed {
+  color: var(--red-text);
+}
+
+/* A muted line: 12 px, may take 2 lines. */
+.mline {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--muted);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.mline.red {
+  font-weight: 600;
+  color: var(--red-text);
+}
+
+.mline.marigold {
+  font-weight: 600;
+  color: var(--marigold-text);
+}
+
+.tagsWrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 6px;
+  margin-top: 3px;
+}
+
+.lookTag {
+  margin-top: 1px;
+}
+
+.cellTag {
+  height: 20px;
+}
+
+.missing {
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--red-text);
+}
+
+.dash {
+  color: var(--ink);
+}
+
+.emptyLink {
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.foot {
+  padding: 14px 20px 16px;
+  border-top: 1px solid var(--line);
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+@media (max-width: 1279px) {
+  .kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1023px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .everyoneHead {
+    padding: 14px 16px;
+  }
+
+  .pills,
+  .headTools {
+    justify-content: flex-start;
+  }
+
+  .table td {
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
+  .foot {
+    padding: 14px 16px 16px;
+  }
+}

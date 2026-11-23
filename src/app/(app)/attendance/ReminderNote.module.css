@@ -1,0 +1,21 @@
+/* "Reminded 10:05 by Neha" under the Action line: 12 px muted, at most 2 lines (CONTRACT 25). */
+.note {
+  display: -webkit-box;
+  margin-top: 1px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* The Missing check-outs list's Reminded column sets the size itself. */
+.bare {
+  margin-top: 0;
+  font-size: inherit;
+  line-height: inherit;
+}

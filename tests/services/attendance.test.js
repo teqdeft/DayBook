@@ -431,7 +431,94 @@ describe('the day view', () => {
       where: 'Not checked in',
       checkIn: '',
       presentHours: null,
+      dayType: 'Working day',
+      leave: '',
+      enteredBy: '',
     });
+    // CONTRACT 25: seven columns at the end, so the earlier ones keep their positions.
+    expect(sheet.columns.slice(0, 13).map((column) => column.header)).toEqual([
+      'Name',
+      'Email',
+      'Designation',
+      'Department',
+      'Where',
+      'Check-in',
+      'Check-out',
+      'Present (hours)',
+      'Breaks (minutes)',
+      'Worked (hours)',
+      'Late (minutes)',
+      'Check-out status',
+      'Note',
+    ]);
+    expect(sheet.columns.slice(13).map((column) => column.header)).toEqual([
+      'Day type',
+      'Leave',
+      'Late this month',
+      'Half day',
+      'Short day',
+      'Left early (minutes)',
+      'Check-out entered by',
+    ]);
+  });
+});
+
+describe("the day view and the person's day (CONTRACT 25)", () => {
+  it('reads a weekend as a day off, never "Not checked in"', async () => {
+    const date = '2026-09-26'; // a Saturday
+    await db('attendance').where({ workDate: date }).delete();
+    const weekend = await person({ name: 'Weekend Worker' });
+    await db('attendance').insert({
+      userId: weekend.id,
+      workDate: date,
+      checkInAt: new Date(at('11:00', date)),
+      location: 'wfh',
+      lateMinutes: 0,
+      isWorkingDay: false,
+    });
+    const items = await attendance.listDay(date);
+    const others = items.filter((item) => item.user.id !== weekend.id);
+    expect(others.length).toBeGreaterThan(0);
+    expect(new Set(others.map((item) => item.where))).toEqual(new Set(['day_off']));
+    expect(items.find((item) => item.user.id === weekend.id)).toMatchObject({
+      where: 'wfh',
+      day: { weekday: false, isWorkingDay: false, expected: 0, label: 'Day off' },
+    });
+    const summary = await attendance.getDaySummary(date, { items });
+    expect(summary).toMatchObject({ notCheckedIn: 0, present: 1, off: others.length });
+    expect((await attendance.listForDay({ date, filter: 'not_checked_in' })).total).toBe(0);
+  });
+
+  it('counts late from the item (effective late), not the stored minutes', async () => {
+    const date = '2026-09-25'; // Friday
+    await db('attendance').where({ workDate: date }).delete();
+    const late = await person({ name: 'Late On Leave' });
+    const [rowId] = await db('attendance').insert({
+      userId: late.id,
+      workDate: date,
+      checkInAt: new Date(at('10:30', date)),
+      location: 'office',
+      lateMinutes: 60,
+    });
+    let item = (await attendance.listDay(date)).find((entry) => entry.user.id === late.id);
+    expect(item).toMatchObject({ lateMinutes: 60, attendance: { id: rowId, lateMinutes: 60 } });
+    // Full-day leave marked later: the day has no late mark, so it counts 0 everywhere.
+    const [leaveId] = await db('leaveEntries').insert({
+      userId: late.id,
+      fromDate: date,
+      toDate: date,
+      part: 'full',
+    });
+    const items = await attendance.listDay(date);
+    item = items.find((entry) => entry.user.id === late.id);
+    expect(item).toMatchObject({ lateMinutes: 0, attendance: { lateMinutes: 60 } });
+    expect(attendance.filterDay(items, 'late').map((entry) => entry.user.id)).not.toContain(
+      late.id,
+    );
+    expect(attendance.filterDay(items, 'on_leave').map((entry) => entry.user.id)).toEqual([
+      late.id,
+    ]);
+    await db('leaveEntries').where({ id: leaveId }).delete();
   });
 });
 

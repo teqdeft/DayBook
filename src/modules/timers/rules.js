@@ -1,9 +1,10 @@
-// Pure timer rules (CONTRACT 15): entry minutes, away spans from screen time, overlaps, and the
-// day summary that fills the daily report. No database access here; unit tested.
+// Pure timer rules (CONTRACT 15): entry minutes, overlaps, and the day summary that fills the
+// daily report. No database access here; unit tested. The away-time rules live in awayRules.js
+// (CONTRACT 25 A); awaySpans, findAwaySpan and MERGE_GAP_MS are re-exported here so every import
+// keeps working.
 import { addDays, dayjs, localToUtc, minutesBetween, now } from '@/lib/time';
 
-/** Idle or locked stretches at most this far apart are one away span (the heartbeat's gap). */
-export const MERGE_GAP_MS = 150_000;
+export { awaySpans, findAwaySpan, MERGE_GAP_MS } from './awayRules';
 
 const ms = (value) => dayjs(value).valueOf();
 const toDate = (value) => dayjs(value).toDate();
@@ -45,66 +46,6 @@ export function stopTime(entry, at, tz) {
   const start = ms(entry.startedAt);
   const dayEnd = ms(endOfWorkDate(entry.workDate, tz));
   return toDate(Math.min(Math.max(ms(at), start), Math.max(dayEnd, start)));
-}
-
-/**
- * Idle or locked for the whole computer. Window-only screen time (no Idle Detection) can't tell
- * being away from working in another app, so it never counts as away.
- */
-function isAway(segment) {
-  return segment.source === 'system' && (segment.state === 'idle' || segment.state === 'locked');
-}
-
-/**
- * Idle and locked screen-time segments (Idle Detection only, source 'system') as away spans:
- * segments that follow each other within 150 s are merged; an active segment, or a window-only
- * one, ends a span. A span has `ended` only when a later segment (any state) starts after it;
- * until then the person may still be away.
- * @param {Array<{ state: string, source: string, startedAt: Date, endedAt: Date }>} segments one
- *   work date
- * @returns {Array<{ from: Date, to: Date, ended: boolean }>} in time order
- */
-export function awaySpans(segments) {
-  const sorted = [...(segments ?? [])].sort((a, b) => ms(a.startedAt) - ms(b.startedAt));
-  const spans = [];
-  let current = null;
-  for (const segment of sorted) {
-    const away = isAway(segment);
-    const apart = current && ms(segment.startedAt) - ms(current.to) > MERGE_GAP_MS;
-    if (current && (!away || apart)) {
-      spans.push({ ...current, ended: true });
-      current = null;
-    }
-    if (!away) continue;
-    if (!current) {
-      current = { from: toDate(segment.startedAt), to: toDate(segment.endedAt) };
-    } else if (ms(segment.endedAt) > ms(current.to)) {
-      current.to = toDate(segment.endedAt);
-    }
-  }
-  if (current) spans.push({ ...current, ended: false });
-  return spans;
-}
-
-/**
- * The away time to ask about for a running entry: the earliest ended span, clipped to
- * [max(startedAt, checkedUntil), at], that lasts at least `minMinutes`.
- * @param {{ segments: Array<{ state: string, startedAt: Date, endedAt: Date }>, startedAt: Date,
- *   checkedUntil?: Date | null, at: Date | import('dayjs').Dayjs, minMinutes: number }} input
- * @returns {{ from: Date, to: Date, minutes: number } | null}
- */
-export function findAwaySpan({ segments, startedAt, checkedUntil, at, minMinutes }) {
-  const lower = Math.max(ms(startedAt), checkedUntil ? ms(checkedUntil) : -Infinity);
-  const upper = ms(at);
-  for (const span of awaySpans(segments)) {
-    if (!span.ended) continue;
-    const from = Math.max(ms(span.from), lower);
-    const to = Math.min(ms(span.to), upper);
-    if (to <= from) continue;
-    const minutes = minutesBetween(from, to);
-    if (minutes >= minMinutes) return { from: toDate(from), to: toDate(to), minutes };
-  }
-  return null;
 }
 
 /** Same moment to the second. */

@@ -1,7 +1,7 @@
 // The Attendance page's data (artboard 09): durations read as hours and minutes ("Late 1h 37m",
 // "Breaks 1h 2m", "Over 1h 15m", "average 1h 37m"), and HR never gets an Admin's row, correction
 // request or missing check-out while an Admin gets everyone.
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { setNowForTests } from '@/lib/time';
 import { attendance } from '@/modules/attendance';
@@ -126,5 +126,136 @@ describe('Attendance page data', () => {
     expect(forAdmin.summary).toMatchObject({ tracked: 5, present: 4, missingCheckouts: 2 });
     expect(forAdmin.corrections.items.map((item) => item.own)).toEqual([true]);
     expect(forAdmin.missing.total).toBe(2);
+  });
+});
+
+describe('Attendance page data in 1.10 (CONTRACT 25)', () => {
+  it('rows carry the marks, "4th this month" and the person month link for HR', async () => {
+    const counts = vi.spyOn(attendance, 'lateCountsFor').mockResolvedValue({
+      [vishal.id]: {
+        nth: 4,
+        label: '4th this month',
+        title: '4th late day in September 2026',
+        alert: true,
+      },
+      [kavya.id]: {
+        nth: 1,
+        label: '1st this month',
+        title: '1st late day in September 2026',
+        alert: false,
+      },
+    });
+    try {
+      const data = await loadAttendance({ user: hr, date: DAY });
+      const row = (user) => data.rows.find((item) => item.user.id === user.id);
+      expect(row(vishal)).toMatchObject({
+        lateCount: { label: '4th this month', alert: true },
+        mark: { label: 'Short day', title: 'Worked 6h 51m, under 8h' },
+        personHref: `/attendance/people/${vishal.id}?month=2026-09`,
+      });
+      expect(row(kavya)).toMatchObject({
+        lateCount: { label: '1st this month', alert: false },
+        early: { minutes: '30m', title: 'Left 30m before their shift ended at 6:30 PM' },
+      });
+      expect(row(karan).lateCount).toBeNull();
+      expect(counts).toHaveBeenCalledWith({
+        date: DAY,
+        userIds: expect.arrayContaining([vishal.id, kavya.id]),
+      });
+    } finally {
+      counts.mockRestore();
+    }
+  });
+
+  it('Needs a look and the row actions only for HR and Admins; a PM sees plain names', async () => {
+    const needs = vi.spyOn(attendance, 'getNeedsLook');
+    try {
+      const pm = await createUser({ name: 'Pam Mehta', role: 'pm', tracksAttendance: false });
+      const forPm = await loadAttendance({ user: pm, date: DAY });
+      expect(forPm.needsLook).toBeNull();
+      expect(forPm.rows.every((row) => !row.personHref && !row.action && !row.menu)).toBe(true);
+      expect(needs).not.toHaveBeenCalled();
+      const forHr = await loadAttendance({ user: hr, date: DAY });
+      expect(needs).toHaveBeenCalledTimes(1);
+      expect(forHr.needsLook).not.toBeNull();
+      const vishalRow = forHr.rows.find((item) => item.user.id === vishal.id);
+      expect(vishalRow.menu).toMatchObject({ person: { id: vishal.id }, date: DAY, leave: null });
+    } finally {
+      needs.mockRestore();
+    }
+  });
+
+  it('the Present card says "2 off" and the On leave and On break pills show only above 0', async () => {
+    const monday = '2026-09-28';
+    const [first, second] = [vishal, karan];
+    const ids = await db('leaveEntries').insert([
+      { userId: first.id, fromDate: monday, toDate: monday, part: 'full' },
+    ]);
+    const [secondId] = await db('leaveEntries').insert({
+      userId: second.id,
+      fromDate: monday,
+      toDate: monday,
+      part: 'full',
+    });
+    try {
+      const data = await loadAttendance({ user: hr, date: monday });
+      const present = data.kpis.find((kpi) => kpi.label === 'Present');
+      expect(present.sub).toBe('of 4 people, 2 off');
+      expect(data.summary).toMatchObject({ onLeave: 2, off: 2, notCheckedIn: 2 });
+      expect(data.pills.map((pill) => pill.value)).toEqual([
+        'all',
+        'late',
+        'wfh',
+        'not_checked_in',
+        'on_leave',
+        'unverified',
+      ]);
+      expect(data.pills.find((pill) => pill.value === 'on_leave').label).toBe('On leave (2)');
+      const row = data.rows.find((item) => item.user.id === first.id);
+      expect(row).toMatchObject({
+        where: 'on_leave',
+        whereLine: null,
+        whereTitle: 'Casual leave, paid',
+      });
+
+      const day = await loadAttendance({ user: hr, date: DAY });
+      expect(day.pills.map((pill) => pill.value)).not.toContain('on_leave');
+      expect(day.pills.map((pill) => pill.value)).not.toContain('on_break'); // not today
+      // A PM sees "On leave" without the type and pay.
+      const pm = await createUser({ name: 'Pat Rao', role: 'pm', tracksAttendance: false });
+      const forPm = await loadAttendance({ user: pm, date: monday });
+      const pmRow = forPm.rows.find((item) => item.user.id === first.id);
+      expect(pmRow).toMatchObject({ where: 'on_leave', whereTitle: null });
+    } finally {
+      await db('leaveEntries')
+        .whereIn('id', [...ids, secondId])
+        .delete();
+    }
+  });
+
+  it('the On break pill shows on today while someone is on a break', async () => {
+    const today = '2026-10-01';
+    setNowForTests(at('13:30', today));
+    const id = await addRow(karan, today, { checkIn: '09:30' });
+    await db('attendanceBreaks').insert({
+      userId: karan.id,
+      attendanceId: id,
+      workDate: today,
+      startedAt: at('13:10', today),
+    });
+    try {
+      const data = await loadAttendance({ user: hr });
+      expect(data.date).toBe(today);
+      expect(data.pills.find((pill) => pill.value === 'on_break').label).toBe('On break (1)');
+      expect(data.rows.find((item) => item.user.id === karan.id)).toMatchObject({
+        onBreakSince: '1:10',
+        attendanceId: id,
+      });
+      const filtered = await loadAttendance({ user: hr, filter: 'on_break' });
+      expect(filtered.rows.map((item) => item.user.id)).toEqual([karan.id]);
+    } finally {
+      await db('attendanceBreaks').where({ attendanceId: id }).delete();
+      await db('attendance').where({ id }).delete();
+    }
   });
 });

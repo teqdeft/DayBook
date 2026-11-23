@@ -4,6 +4,8 @@
 import { db, parseJson } from '@/lib/db';
 import { initials } from '@/lib/text';
 import { locksAtFor, minutesBetween, now } from '@/lib/time';
+import { dayCounts, effectiveLateMinutes } from '@/modules/attendance/calendar';
+import { listHolidaysBetween, loadCalendar } from '@/modules/attendance/calendarReads';
 import { createUser } from '../helpers/db.js';
 
 function publicUser(row) {
@@ -55,6 +57,11 @@ export const fakeAttendance = {
   presentMinutes(row, at) {
     return minutesBetween(row.checkInAt, row.checkOutAt ?? at ?? now());
   },
+  // The person's day (CONTRACT 25): the real calendar reads and rules (My log, stuck tasks).
+  loadCalendar,
+  listHolidaysBetween,
+  dayCounts,
+  effectiveLateMinutes,
 };
 
 // The timers service as the report module uses it (CONTRACT 15): canUse and getDaySummary. Tests

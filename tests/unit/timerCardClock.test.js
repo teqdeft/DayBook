@@ -1,8 +1,11 @@
 // The timer clock shared by Today's Working on card and the sidebar chip (CONTRACT 15): the
 // running-time format, clock skew between the browser and the server, live minutes, which state
-// is newer, and the away question.
+// is newer, and the away question with its help line, buttons and toasts (CONTRACT 25 A).
 import { describe, expect, it } from 'vitest';
 import {
+  awayAnswerToast,
+  awayChoices,
+  awayHelp,
   awayKey,
   awayLength,
   awayQuestion,
@@ -16,6 +19,7 @@ import {
   liveEntryMinutes,
   liveTotalMinutes,
 } from '@/components/TimerChip.clock';
+import { putBackToast, removedView, timeline } from '@/app/(app)/today/timerData';
 
 const ms = (iso) => Date.parse(iso);
 
@@ -136,15 +140,54 @@ describe('the away question', () => {
     projectName: 'acme-app',
   };
 
-  it('reads as CONTRACT 15 writes it', () => {
+  const left = { clock: '18:42', shiftEndClock: '18:30' };
+  const evening = { ...away, minutes: 130, fromClock: '18:42', toClock: '20:52', left };
+
+  it('reads as CONTRACT 25 writes it: away, no screen time, and after the day end', () => {
     expect(awayQuestion(away)).toBe(
-      'You were away 32 min (1:10–1:42 PM) while your acme-app timer ran. Keep this time or remove it?',
+      'You were away 32 min (1:10–1:42 PM) while your acme-app timer ran.',
     );
+    expect(awayQuestion({ ...away, kind: 'no_data', minutes: 40, toClock: '13:50' })).toBe(
+      "Daybook didn't hear from your computer for 40 min (1:10–1:50 PM) while your acme-app timer ran.",
+    );
+    expect(awayQuestion(evening)).toBe(
+      'You were away from 6:42 PM to 8:52 PM while your acme-app timer ran, after your shift ended at 6:30 PM.',
+    );
+    expect(awayQuestion({ ...evening, kind: 'no_data' })).toBe(
+      "Daybook didn't hear from your computer from 6:42 PM to 8:52 PM while your acme-app timer ran, after your shift ended at 6:30 PM.",
+    );
+  });
+
+  it('has the help line and the button labels', () => {
+    expect(awayHelp(away)).toBe('Remove takes this time off your timer and counts it as a break.');
+    expect(awayHelp(evening)).toBe(
+      'Checking out ends your day at 6:42 PM and stops your timer there.',
+    );
+    expect(awayChoices(away)).toEqual({
+      keep: 'Keep, I was working',
+      other: 'Remove, it was a break',
+    });
+    expect(awayChoices(evening).other).toBe('I had left, check me out at 6:42 PM');
+  });
+
+  it('toasts each answer', () => {
+    expect(awayAnswerToast(away, { decision: 'keep' })).toEqual({ title: 'Kept as work' });
+    expect(awayAnswerToast(away, { decision: 'remove', savedAsBreak: true })).toEqual({
+      title: 'Counted as a break',
+      body: '32 min came off your acme-app timer.',
+    });
+    expect(awayAnswerToast(away, { decision: 'remove', savedAsBreak: false }).title).toBe(
+      'Away time removed',
+    );
+    expect(awayAnswerToast(evening, { decision: 'left' })).toEqual({
+      title: 'Checked out at 6:42 PM',
+      body: 'Your acme-app timer stopped then too.',
+    });
   });
 
   it('says hours and minutes from an hour on', () => {
     expect(awayQuestion({ ...away, minutes: 75, fromClock: '12:30', toClock: '13:45' })).toBe(
-      'You were away 1h 15m (12:30–1:45 PM) while your acme-app timer ran. Keep this time or remove it?',
+      'You were away 1h 15m (12:30–1:45 PM) while your acme-app timer ran.',
     );
     expect(awayLength(59)).toBe('59 min');
     expect(awayLength(60)).toBe('1h');
@@ -204,5 +247,48 @@ describe('which away spans the chip asks about', () => {
     asks.shouldAsk(a);
     asks.retry(a);
     expect(asks.shouldAsk(a)).toBe(true);
+  });
+});
+
+describe("Today's removed time (CONTRACT 25 A)", () => {
+  const item = {
+    breakId: 4,
+    from: '2026-11-19T07:30:00.000Z',
+    to: '2026-11-19T08:15:00.000Z',
+    fromClock: '13:00',
+    toClock: '13:45',
+    minutes: 45,
+    projectName: 'acme-app',
+  };
+
+  it('reads as a muted row with an accessible Put back', () => {
+    expect(removedView(item)).toEqual({
+      range: '1:00–1:45',
+      text: 'Away, removed from your acme-app timer',
+      label: 'Put back 1:00 to 1:45 PM on your timer',
+    });
+    expect(removedView({ ...item, projectName: null }).text).toBe('Away, removed from your timer');
+    expect(removedView({ ...item, fromClock: '11:50', toClock: '12:20' }).label).toBe(
+      'Put back 11:50 AM to 12:20 PM on your timer',
+    );
+  });
+
+  it('sits among the entries in time order', () => {
+    const entries = [
+      { id: 1, startedAt: '2026-11-19T04:00:00.000Z' },
+      { id: 2, startedAt: '2026-11-19T08:15:00.000Z' },
+    ];
+    expect(timeline(entries, [item]).map((row) => row.kind)).toEqual(['entry', 'removed', 'entry']);
+  });
+
+  it('toasts Put back', () => {
+    expect(putBackToast({ restored: true, minutes: 45, projectName: 'acme-app' })).toEqual({
+      title: 'Time put back',
+      body: '45 min went back on your acme-app timer.',
+    });
+    expect(putBackToast({ restored: false, minutes: 45 })).toEqual({
+      title: 'Break removed',
+      body: "We couldn't put the time back on your timer. Add it with Add time.",
+    });
   });
 });
