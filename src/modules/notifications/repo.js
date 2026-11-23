@@ -28,11 +28,30 @@ export async function countUnread(userId, trx = db) {
   return Number(row?.count ?? 0);
 }
 
-export function markAllRead(userId, readAt, trx = db) {
+/**
+ * A person's notifications with an id above `afterId`, newest first by id, read or not (the live
+ * check, CONTRACT 26). A primary key range over the rows newer than the cursor.
+ */
+export function listAfter(userId, afterId, limit, trx = db) {
   return trx('notifications')
     .where({ userId })
-    .whereNull('readAt')
-    .update({ readAt, updatedAt: readAt });
+    .where('id', '>', afterId)
+    .orderBy('id', 'desc')
+    .limit(limit)
+    .select(COLUMNS);
+}
+
+/** The person's highest notification id, or 0 when they have none. */
+export async function maxId(userId, trx = db) {
+  const row = await trx('notifications').where({ userId }).max({ latest: 'id' }).first();
+  return Number(row?.latest ?? 0);
+}
+
+/** Marks a person's unread notifications read: all of them, or only `ids` when given. */
+export function markAllRead(userId, readAt, ids = null, trx = db) {
+  const query = trx('notifications').where({ userId }).whereNull('readAt');
+  if (ids) query.whereIn('id', ids);
+  return query.update({ readAt, updatedAt: readAt });
 }
 
 export function deleteReadBefore(before, trx = db) {

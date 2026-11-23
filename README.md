@@ -124,7 +124,7 @@ npm run test:e2e
   projects table shows each project's all-time hours under "Hours this week".
 - **AI with Gemini, version label, notification center** (CONTRACT 20): see
   [AI with Gemini](#ai-with-gemini) below. The sidebar and sign-in page show the version, now
-  "Daybook v1.09" (`src/config/version.js`, raised with each release). In the bell, clicking a
+  "Daybook v1.11" (`src/config/version.js`, raised with each release). In the bell, clicking a
   notification marks it read; each one can be marked unread or deleted (swipe left on touch
   screens, with Undo), and the bell swings gently while there are unread ones.
 - **My settings** (company request, CONTRACT 21): every person has a **My settings** page (last
@@ -132,8 +132,9 @@ npm run test:e2e
   only that person: which submit buttons the daily report shows (both, only Submit and check out,
   or only Submit report; a report can always be sent), whether new tasks start as In progress or
   Done, carrying unfinished tasks into the next report, the Slack preview, the three AI polish
-  switches, the bell's swing, and the theme (match the computer, light or dark). People who
-  don't write reports (PMs, an Admin who isn't tracked) see only Notifications and Appearance.
+  switches, the bell's swing, its sound and which sound plays, the preview cards (CONTRACT 26),
+  and the theme (match the computer, light or dark). People who don't write reports (PMs, an Admin
+  who isn't tracked) see only Notifications and Appearance.
   Stored in `user_preferences` (migration 013); until `npm run migrate` has run, everyone gets the
   defaults and changes can't be saved.
 - **Timer lines remember their note** (fix, CONTRACT 21): a task line written by "Fill report from
@@ -253,6 +254,10 @@ delivered within an hour is dropped rather than shown late.
    the Daybook site in the browser's site settings (the lock icon in the address bar). Signing out
    turns it off for that browser; it comes back on by itself when the same person signs in there
    again, never for someone else. While Daybook is open, a new notification also lights the bell.
+   While a Daybook window is in front and Show a preview is on (My settings), Daybook shows its
+   own card instead of the pop-up (Safari still shows the pop-up). Until someone clicks in a
+   Daybook window, the browser doesn't let it play a sound, so the pop-up still shows, with its
+   sound.
 4. To get notifications while every Daybook window is closed, Chrome or Edge must keep running in
    the background: Chrome → **Settings → System → Continue running background apps when Google
    Chrome is closed**; Edge → **Settings → System and performance → Continue running background
@@ -336,6 +341,9 @@ hold the text of files and notes, and Ask Daybook never reads it.
   since 1 Nov 2026, so Breaks and Worked for those days change on Attendance and in the Excel
   files. Tell HR before payroll. If the line stops with Aborted, run the unlock line, then the
   migrate line again (Updating, 1.10 step 2); it continues where it stopped.
+- Daybook 1.11 (bell sound and preview): no database update and nothing new to install. People
+  choose the sound and the preview in My settings; the default is a chime for important
+  notifications only. Each person can also pick the sound: Chime, Soft bell, Ding or Pop.
 
 ## Deploying on cPanel (Setup Node.js App)
 
@@ -461,6 +469,20 @@ For 1.10 (HR tools), step by step:
    this year's).
 5. Tell the team that check-in reminders start the next working day. HR's first late alerts come
    at office end of the next working day.
+
+For 1.11 (bell sound and preview), step by step:
+
+1. Wait for the green "Build for cPanel" run on GitHub. Then in Terminal, after the `source`
+   command (it also goes to `~/daybook`):
+
+   ```bash
+   git pull origin deploy
+   ```
+
+2. Press Restart in Setup Node.js App. There is no migrate line this time, and nothing new to
+   install.
+
+Pages that are already open keep working as in 1.10 until they are loaded again.
 
 **Checking** — `NODE_ENV=production npm run doctor` (after the `source` command, in `~/daybook`)
 shows whether every database update has run ("✓ Database is up to date"), whether the worker cron

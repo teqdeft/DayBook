@@ -16,6 +16,7 @@ beforeAll(async () => {
 describe('notifications', () => {
   it('notify skips empty ids, drops duplicates and writes one row per person', async () => {
     setNowForTests('2026-09-30T04:00:00Z');
+    // No recipients returns before the type check (CONTRACT 26), so any type is fine here.
     expect(await notifications.notify({ userIds: [], type: 'test', title: 'Nobody' })).toBe(0);
     expect(
       await notifications.notify({ userIds: [null, undefined, 0], type: 'test', title: 'Nobody' }),
@@ -44,7 +45,7 @@ describe('notifications', () => {
     await expect(
       db.transaction(async (trx) => {
         await notifications.notify(
-          { userIds: [alice.id], type: 'test', title: 'Rolled back' },
+          { userIds: [alice.id], type: 'system.test', title: 'Rolled back' },
           trx,
         );
         throw new Error('roll back');
@@ -56,11 +57,11 @@ describe('notifications', () => {
   it('cuts long text to the column sizes instead of failing', async () => {
     await notifications.notify({
       userIds: [bob.id],
-      type: 'test',
+      type: 'system.test',
       title: 'x'.repeat(250),
       body: 'y'.repeat(600),
     });
-    const row = await db('notifications').where({ userId: bob.id, type: 'test' }).first();
+    const row = await db('notifications').where({ userId: bob.id, type: 'system.test' }).first();
     expect(row.title).toHaveLength(200);
     expect(row.body).toHaveLength(500);
   });

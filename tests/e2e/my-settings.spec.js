@@ -1,7 +1,9 @@
-// CONTRACT 21: My settings. An employee opens it from the sidebar, switches the theme (it applies
-// at once and stays after a reload) and back, keeps only "Submit report" in the report's top bar
-// and turns the Slack preview off; a PM's page has no Daily report section. Every change saves at
-// once (no Save button).
+// CONTRACT 21 and 26: My settings. An employee opens it from the sidebar, finds the bell's rows in
+// Notifications (the swing, the sound, the sound choice with Play sound and the preview; picking a
+// sound and what each choice does are in live-notifications.spec.js), switches the theme (it
+// applies at once and stays after a reload) and back, keeps only "Submit report" in the report's
+// top bar and turns the Slack preview off; a PM's page has no Daily report section. Every change
+// saves at once (no Save button).
 //
 // Ankit Rana is the person: the demo leaves him checked in today with a draft report, so the
 // report offers "Submit and check out" until he turns it off, and no other spec uses him. AI is
@@ -26,6 +28,25 @@ async function saveChange(page, change) {
   expect((await saved).status()).toBe(200);
   await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
 }
+
+/** Notifications' rows in order: the control's name and its help line (CONTRACT 26). */
+const NOTIFICATION_ROWS = [
+  [
+    'Ring the bell for unread notifications',
+    'A small swing every few seconds while you have unread ones.',
+  ],
+  [
+    'Sound',
+    'A short sound for new notifications while Daybook is open. Important ones ask you to act, like a reminder to check in or a request to approve.',
+  ],
+  ['Choose a sound', 'Pick one to hear it.'],
+  [
+    'Show a preview',
+    'A small card at the top of the screen for each new notification. It hides after a few seconds.',
+  ],
+];
+const DESKTOP_NOTE =
+  "When this is on and Daybook is in the background, Daybook doesn't chime. Your computer's settings decide if the desktop notification makes a sound, whatever you chose for Sound.";
 
 /** The `data-theme` on <html>, or null when the page follows the computer. */
 function themeOf(page) {
@@ -58,6 +79,41 @@ test('an employee changes the theme, the submit buttons and the Slack preview', 
     await expect(
       ankit.getByRole('navigation', { name: 'My settings sections' }).getByRole('link'),
     ).toHaveText(['Daily report', 'Notifications', 'Appearance']);
+  });
+
+  await test.step('Notifications has the bell, its sound, the sound choice and the preview', async () => {
+    const section = ankit.getByRole('region', { name: 'Notifications' });
+    const controls = section.getByRole('switch').or(section.getByRole('group'));
+    await expect(controls).toHaveCount(NOTIFICATION_ROWS.length);
+    for (const [index, [name, help]] of NOTIFICATION_ROWS.entries()) {
+      // A switch's label wraps its help line too, so its name goes on with the help.
+      await expect(controls.nth(index)).toHaveAccessibleName(new RegExp(`^${name}( |$)`));
+      await expect(controls.nth(index)).toHaveAccessibleDescription(help);
+    }
+
+    const sound = section.getByRole('group', { name: 'Sound', exact: true });
+    await expect(sound.getByRole('button')).toHaveText(['Important only', 'All', 'Off']);
+    await expect(sound.getByRole('button', { name: 'Important only' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const tone = section.getByRole('group', { name: 'Choose a sound' });
+    await expect(tone.getByRole('button')).toHaveText(['Chime', 'Soft bell', 'Ding', 'Pop']);
+    await expect(tone.getByRole('button', { name: 'Chime' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(section.getByRole('button', { name: 'Play sound' })).toHaveAccessibleDescription(
+      'Pick one to hear it.',
+    );
+    await expect(section.getByRole('switch', { name: 'Show a preview' })).toBeChecked();
+
+    // The desktop switch shows only while desktop notifications are on for the company (the e2e
+    // server has no push keys), and the note about its sound only under it.
+    const desktop = section.getByRole('switch', { name: 'Show on this computer' });
+    const note = section.getByText(DESKTOP_NOTE);
+    if ((await desktop.count()) > 0) await expect(note).toBeVisible();
+    else await expect(note).toHaveCount(0);
   });
 
   await test.step('Dark applies at once and stays after a reload', async () => {

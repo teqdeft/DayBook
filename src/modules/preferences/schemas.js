@@ -9,6 +9,10 @@ export { THEMES };
 export const SUBMIT_BUTTONS = Object.freeze(['both', 'checkout', 'submit']);
 /** The status of a task line added by hand. */
 export const NEW_TASK_STATUSES = Object.freeze(['in_progress', 'done']);
+/** When the bell's sound plays for a new notification (CONTRACT 26). */
+export const BELL_SOUNDS = Object.freeze(['important', 'all', 'off']);
+/** Which sound plays: Chime, Soft bell, Ding or Pop (CONTRACT 26). */
+export const BELL_TONES = Object.freeze(['chime', 'bell', 'ding', 'pop']);
 
 /** Every key with its default (what a person who never changed it gets). */
 export const PREFERENCE_DEFAULTS = Object.freeze({
@@ -20,6 +24,9 @@ export const PREFERENCE_DEFAULTS = Object.freeze({
   polishLines: true,
   polishAfterTimers: true,
   bellRing: true,
+  bellSound: 'important',
+  bellTone: 'chime',
+  bellPreview: true,
   theme: 'system',
 });
 
@@ -39,6 +46,9 @@ export const PREFERENCE_FIELDS = Object.freeze({
   polishLines: onOff('Polish on each task line'),
   polishAfterTimers: onOff('Suggest wording after Fill report from timers'),
   bellRing: onOff('Ring the bell for unread notifications'),
+  bellSound: z.enum(BELL_SOUNDS, { error: 'Sound must be Important only, All or Off.' }),
+  bellTone: z.enum(BELL_TONES, { error: 'The sound must be Chime, Soft bell, Ding or Pop.' }),
+  bellPreview: onOff('Show a preview'),
   theme: z.enum(THEMES, { error: 'Theme must be Match my computer, Light or Dark.' }),
 });
 

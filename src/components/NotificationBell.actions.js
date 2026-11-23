@@ -1,13 +1,15 @@
 // The bell's item actions (CONTRACT 20): opening an item marks it read at once and then follows
 // its link; Mark as read / Mark as unread; Delete with a 5 s Undo toast whose end sends the
 // DELETE (also sent at once when another delete replaces the toast, the bell goes away or the
-// page is left). The 5 s stop while the pointer or focus is on the toast (hold).
+// page is left). The 5 s stop while the pointer or focus is on the toast (hold). With the live
+// store every write's answer goes to it (CONTRACT 26); the preview cards share followLink.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/apiClient';
 import { now } from '@/lib/time';
 import { useToast } from './ToastProvider';
 import {
+  hidePending,
   isInAppLink,
   isPlainClick,
   removeItem,
@@ -19,16 +21,52 @@ import {
 
 export const UNDO_MS = 5000;
 // A click waits at most this long for "read" to be saved, so the next page already counts it.
-const SAVE_BEFORE_NAVIGATE_MS = 400;
+export const SAVE_BEFORE_NAVIGATE_MS = 400;
 
-const itemPath = (id) => `/api/notifications/${id}`;
+export const itemPath = (id) => `/api/notifications/${id}`;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Follows an item's in-app link after a plain left click: waits up to SAVE_BEFORE_NAVIGATE_MS for
+ * `saving` (it resolves to null or the error), then `router.push`; a slow save refreshes after.
+ * Any other click (no in-app link, a modifier or middle button) is left to the browser. Shared
+ * with the preview cards' Open (CONTRACT 26). Call it synchronously in the click handler.
+ * @param {{ item: { link?: string | null }, event: { preventDefault: () => void },
+ *   saving: Promise<unknown> | null, router: { push: Function, refresh: Function },
+ *   onNavigate?: () => void }} options
+ */
+export async function followLink({ item, event, saving, router, onNavigate }) {
+  if (!isInAppLink(item.link) || !isPlainClick(event)) return;
+  event.preventDefault();
+  const saved = saving
+    ? await Promise.race([saving.then(() => true), wait(SAVE_BEFORE_NAVIGATE_MS)])
+    : true;
+  onNavigate?.();
+  router.push(item.link);
+  // Saving was slow: the new page may still count it as unread.
+  if (!saved) saving.then((error) => !error && router.refresh());
+}
+
+// A preview card's save failed: the bell (if its list is loaded) reloads quietly (CONTRACT 26).
+const reloadListeners = new Set();
+
+/** Asks every mounted bell to reload its list quietly. */
+export function requestBellReload() {
+  for (const listener of reloadListeners) listener();
+}
+
+/** @returns {() => void} unsubscribe */
+export function onBellReload(listener) {
+  reloadListeners.add(listener);
+  return () => reloadListeners.delete(listener);
+}
 
 /**
  * @param {{ items: any[] | null, setItems: Function, setUnread: Function,
  *   pendingRef: { current: { key: number, item: any, index: number } | null },
- *   onNavigate: () => void, reload: () => void }} options `pendingRef` is shared with the bell's
- *   loads, which keep a pending delete hidden.
+ *   onNavigate: () => void, reload: () => void, live?: object | null }} options `pendingRef` is
+ *   shared with the bell's loads, which keep a pending delete hidden. `live` is the live store
+ *   (CONTRACT 26), told about every write; null outside it (as in 1.10).
  */
 export function useNotificationActions({
   items,
@@ -37,6 +75,7 @@ export function useNotificationActions({
   pendingRef,
   onNavigate,
   reload,
+  live = null,
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -55,20 +94,36 @@ export function useNotificationActions({
     [setItems, setUnread],
   );
 
+  /**
+   * With the live store: a write's answer goes to the store (reads as `reportRead`), so the cards
+   * and the other tabs follow, and its count shows here (a delete waiting for Undo doesn't count).
+   */
+  const tellLive = useCallback(
+    (json, readIds) => {
+      const count = json?.data?.unreadCount;
+      if (!live || typeof count !== 'number') return;
+      if (readIds) live.reportRead(readIds, json.data.item?.readAt ?? now().toISOString(), count);
+      else live.setUnread(count);
+      setUnread(hidePending({ items: [], unread: count }, pendingRef.current).unread);
+    },
+    [live, setUnread, pendingRef],
+  );
+
   /** Shows the new state at once and saves it; puts the old state back when saving fails. */
   const saveRead = useCallback(
     async (item, read) => {
       const readAt = read ? now().toISOString() : null;
       changeRead(item, readAt);
       try {
-        await api.patch(itemPath(item.id), { read });
+        const json = await api.patch(itemPath(item.id), { read });
+        tellLive(json, read ? [item.id] : null);
         return null;
       } catch (error) {
         changeRead({ ...item, readAt }, item.readAt ?? null);
         return error;
       }
     },
-    [changeRead],
+    [changeRead, tellLive],
   );
 
   const toggleRead = useCallback(
@@ -81,32 +136,27 @@ export function useNotificationActions({
     [saveRead, toast],
   );
 
+  // No link, or a new-tab click: the browser opens it and the list stays.
   const open = useCallback(
-    async (item, event) => {
+    (item, event) => {
       const saving = item.readAt ? null : saveRead(item, true);
-      // No link, or a new-tab click (the browser opens it; the list stays).
-      if (!isInAppLink(item.link) || !isPlainClick(event)) return;
-      event.preventDefault();
-      const saved = saving
-        ? await Promise.race([saving.then(() => true), wait(SAVE_BEFORE_NAVIGATE_MS)])
-        : true;
-      onNavigate();
-      router.push(item.link);
-      // Saving was slow: the new page may still count it as unread.
-      if (!saved) saving.then((error) => !error && router.refresh());
+      return followLink({ item, event, saving, router, onNavigate });
     },
     [saveRead, onNavigate, router],
   );
 
   const commit = useCallback(
     (entry) => {
-      api.delete(itemPath(entry.item.id)).catch((error) => {
-        if (error.status === 404) return; // already gone
-        toast({ title: "Couldn't delete the notification", body: error.message, tone: 'error' });
-        reload();
-      });
+      api.delete(itemPath(entry.item.id)).then(
+        (json) => tellLive(json, null),
+        (error) => {
+          if (error.status === 404) return; // already gone
+          toast({ title: "Couldn't delete the notification", body: error.message, tone: 'error' });
+          reload();
+        },
+      );
     },
-    [toast, reload],
+    [toast, reload, tellLive],
   );
 
   /** Ends the Undo toast: Undo puts the item back, otherwise the DELETE is sent now. */
@@ -123,8 +173,9 @@ export function useNotificationActions({
       }
       setItems((list) => restoreItem(list, entry));
       if (!entry.item.readAt) setUnread((count) => count + 1);
+      live?.reportHidden(entry.item.id, false);
     },
-    [pendingRef, commit, setItems, setUnread],
+    [pendingRef, commit, setItems, setUnread, live],
   );
 
   /** (Re)starts the toast's countdown. */
@@ -152,9 +203,10 @@ export function useNotificationActions({
       const entry = { key: nextKey.current, ...removed, keyboard, returnFocus };
       pendingRef.current = entry;
       setPending(entry);
+      live?.reportHidden(item.id, true); // no card or chime for it while Undo waits (CONTRACT 26)
       countDown(entry, UNDO_MS);
     },
-    [items, pendingRef, settle, setItems, setUnread, countDown],
+    [items, pendingRef, settle, setItems, setUnread, countDown, live],
   );
 
   const undo = useCallback(() => {
@@ -207,4 +259,38 @@ export function useNotificationActions({
   }, [pendingRef]);
 
   return { pending, open, toggleRead, remove, undo, dismiss, hold };
+}
+
+/**
+ * Focus around the bell's Undo toast: Undo pressed on the toast focuses the row that came back;
+ * Tab, Shift+Tab or Escape on the toast go back to the row focus was on before it. Each falls
+ * back to the list's top, then the bell.
+ * @param {{ rootRef: { current: HTMLElement | null }, buttonRef: { current: HTMLElement | null },
+ *   actions: ReturnType<typeof useNotificationActions> }} options
+ * @returns {{ undo: () => void, leave: () => void }}
+ */
+export function useUndoFocus({ rootRef, buttonRef, actions }) {
+  const focusList = useCallback(
+    (target) => {
+      const fallback = rootRef.current?.querySelector('[data-notification-fallback]');
+      (target?.isConnected ? target : (fallback ?? buttonRef.current))?.focus();
+    },
+    [rootRef, buttonRef],
+  );
+
+  const undo = useCallback(() => {
+    // Undo had focus and goes away with the toast: focus goes to the item that came back.
+    const fromToast = document.activeElement?.closest?.('[data-notification-undo]');
+    const id = actions.pending?.item.id;
+    actions.undo();
+    if (!fromToast) return;
+    requestAnimationFrame(() => {
+      const row = rootRef.current?.querySelector(`[data-notification-id="${id}"]`);
+      focusList(row?.querySelector('a, button'));
+    });
+  }, [actions, rootRef, focusList]);
+
+  const leave = useCallback(() => focusList(actions.pending?.returnFocus), [actions, focusList]);
+
+  return { undo, leave };
 }

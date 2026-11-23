@@ -1,5 +1,6 @@
-// My settings (CONTRACT 21): which sections a person sees, in page order, and the choices of each
-// Segmented row. Pure (no server imports), so the page decides with it and the client renders it.
+// My settings (CONTRACT 21, 26): which sections a person sees, in page order, and the choices of
+// each Segmented row. Pure (no server imports), so the page decides with it and the client renders
+// it.
 import { can } from '@/lib/permissions';
 
 /** Every section in page order; the section list on the left uses the same labels. */
@@ -48,6 +49,21 @@ export const SUBMIT_BUTTON_CHOICES = Object.freeze([
 export const NEW_TASK_CHOICES = Object.freeze([
   { value: 'in_progress', label: 'In progress' },
   { value: 'done', label: 'Done' },
+]);
+
+/** "Sound" (CONTRACT 26): when Daybook chimes for new notifications while it is open. */
+export const SOUND_CHOICES = Object.freeze([
+  { value: 'important', label: 'Important only' },
+  { value: 'all', label: 'All' },
+  { value: 'off', label: 'Off' },
+]);
+
+/** "Choose a sound" (CONTRACT 26): which of the four synthesized sounds plays. */
+export const TONE_CHOICES = Object.freeze([
+  { value: 'chime', label: 'Chime' },
+  { value: 'bell', label: 'Soft bell' },
+  { value: 'ding', label: 'Ding' },
+  { value: 'pop', label: 'Pop' },
 ]);
 
 /** "Theme": 'system' follows the computer's light or dark setting. */

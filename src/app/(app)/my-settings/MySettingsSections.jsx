@@ -1,5 +1,5 @@
 'use client';
-// The My settings cards (CONTRACT 21), in page order: Daily report, AI, Notifications and
+// The My settings cards (CONTRACT 21, 26), in page order: Daily report, AI, Notifications and
 // Appearance; the page passes the ones that apply. Rows are a label, a muted help line and the
 // control: a switch on the right, or a Segmented choice below. Every change saves at once.
 import { useId } from 'react';
@@ -7,8 +7,15 @@ import Card, { CardHeader } from '@/components/Card';
 import PushSwitch, { useDesktopPush } from '@/components/PushSwitch';
 import Segmented from '@/components/Segmented';
 import Toggle from '@/components/Toggle';
+import PlaySoundButton, { usePlaySound } from './PlaySoundButton';
 import { usePreferences } from './PreferencesProvider';
-import { NEW_TASK_CHOICES, SUBMIT_BUTTON_CHOICES, THEME_CHOICES } from './sections';
+import {
+  NEW_TASK_CHOICES,
+  SOUND_CHOICES,
+  SUBMIT_BUTTON_CHOICES,
+  THEME_CHOICES,
+  TONE_CHOICES,
+} from './sections';
 import styles from './page.module.css';
 
 /** One card; a scroll target for the section list. */
@@ -41,10 +48,33 @@ function ToggleRow({ name, label, help }) {
   );
 }
 
-/** A preference with a few values: label and help, then the Segmented choice under them. */
-function ChoiceRow({ name, label, help, choices }) {
+/**
+ * A preference with a few values: label and help, then the Segmented choice under them. With
+ * `children` (Play sound) the choice and the children share a line and wrap when the card is too
+ * narrow. `onPick` runs on every press, synchronously and before a new value is saved (picking a
+ * sound plays it inside the click). `id` names the label (`${id}-label`) and the help
+ * (`${id}-help`) for a control in `children`.
+ * @param {{ name: string, label: string, help?: string,
+ *   choices: ReadonlyArray<{ value: string, label: string }>, id?: string,
+ *   onPick?: (value: string) => void, children?: import('react').ReactNode }} props
+ */
+function ChoiceRow({ name, label, help, choices, id: givenId, onPick, children }) {
   const { values, change } = usePreferences();
-  const id = useId();
+  const autoId = useId();
+  const id = givenId ?? autoId;
+  const choice = (
+    <Segmented
+      items={choices}
+      value={values[name]}
+      onChange={(next) => {
+        onPick?.(next);
+        if (next !== values[name]) change(name, next);
+      }}
+      aria-labelledby={`${id}-label`}
+      aria-describedby={help ? `${id}-help` : undefined}
+      className={styles.choice}
+    />
+  );
   return (
     <div className={`${styles.row} ${styles.choiceRow}`}>
       <p className={styles.label} id={`${id}-label`}>
@@ -55,17 +85,37 @@ function ChoiceRow({ name, label, help, choices }) {
           {help}
         </p>
       ) : null}
-      <Segmented
-        items={choices}
-        value={values[name]}
-        onChange={(next) => {
-          if (next !== values[name]) change(name, next);
-        }}
-        aria-labelledby={`${id}-label`}
-        aria-describedby={help ? `${id}-help` : undefined}
-        className={styles.choice}
-      />
+      {children ? (
+        <div className={styles.soundControls}>
+          {choice}
+          {children}
+        </div>
+      ) : (
+        choice
+      )}
     </div>
+  );
+}
+
+/**
+ * "Choose a sound" (CONTRACT 26): picking one plays it at once (before its save starts, so the
+ * click unlocks the audio), and Play sound beside the choice plays the chosen one again.
+ */
+function ToneRow() {
+  const { values } = usePreferences();
+  const play = usePlaySound();
+  const id = useId();
+  return (
+    <ChoiceRow
+      id={id}
+      name="bellTone"
+      label="Choose a sound"
+      help="Pick one to hear it."
+      choices={TONE_CHOICES}
+      onPick={play}
+    >
+      <PlaySoundButton tone={values.bellTone} describedBy={`${id}-help`} />
+    </ChoiceRow>
   );
 }
 
@@ -118,12 +168,13 @@ function AiSection() {
 }
 
 /**
+ * The bell (CONTRACT 21), its sound and preview cards (CONTRACT 26), then desktop notifications.
  * @param {{ push: { publicKey: string, userId: number } | null }} props push: while desktop
  *   notifications are on for the company (the same config the bell gets)
  */
 function NotificationsSection({ push }) {
   // The bell's "Show on this computer" (CONTRACT 14); it renders nothing in a browser without
-  // push support.
+  // push support, and the note about its sound goes with it.
   const desktop = useDesktopPush(push);
   return (
     <Section id="notifications" title="Notifications">
@@ -132,10 +183,29 @@ function NotificationsSection({ push }) {
         label="Ring the bell for unread notifications"
         help="A small swing every few seconds while you have unread ones."
       />
+      <ChoiceRow
+        name="bellSound"
+        label="Sound"
+        help="A short sound for new notifications while Daybook is open. Important ones ask you to act, like a reminder to check in or a request to approve."
+        choices={SOUND_CHOICES}
+      />
+      <ToneRow />
+      <ToggleRow
+        name="bellPreview"
+        label="Show a preview"
+        help="A small card at the top of the screen for each new notification. It hides after a few seconds."
+      />
       {push && desktop.state !== 'unsupported' ? (
-        <div className={styles.pushRow}>
-          <PushSwitch push={desktop} />
-        </div>
+        <>
+          <div className={styles.pushRow}>
+            <PushSwitch push={desktop} />
+          </div>
+          <p className={styles.note}>
+            When this is on and Daybook is in the background, Daybook doesn&apos;t chime. Your
+            computer&apos;s settings decide if the desktop notification makes a sound, whatever you
+            chose for Sound.
+          </p>
+        </>
       ) : null}
     </Section>
   );

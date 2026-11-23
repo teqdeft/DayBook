@@ -192,7 +192,11 @@ timerReminderMinutes, breakAllowanceMinutes }` (sections 11, 14, 15 and 19 to 25
 - `notify({ userIds, type, title, body?, link? }, trx?)` — in-app rows (the bell). Always created,
   whatever the Slack settings.
 - `listForUser(userId, { limit = 20 })` → `[{ id, type, title, body, link, readAt, createdAt }]`,
-  `unreadCount(userId)`, `markAllRead(userId)`, `deleteOldRead(before)`.
+  `unreadCount(userId)`, `markAllRead(userId, { ids? })` (only those ids when given, CONTRACT 26),
+  `deleteOldRead(before)`; `listAfter(userId, { after, limit = 20 })` → `{ items, more }` and
+  `latestId(userId)` for the live check (CONTRACT 26). `notify` needs a type listed in
+  `ALERT_TYPES` (`@/modules/notifications/alerts`): unlisted types throw in tests and log a warning
+  in production.
 
 ### audit (owner: system)
 
@@ -412,8 +416,8 @@ onChange? }`: 36 px fully rounded; selected = `--ink` with white text. `Segmente
 - `TopBar` (async Server Component) — `{ title, subtitle?, breadcrumb?, actions?, bell?: boolean,
 avatar?: boolean, search?: { placeholder } }`. Page title 30 px bold (−0.02em), subtitle 15 px
   `--muted`. `bell` renders `NotificationBell` (client: latest 20, "Mark all as read", each item
-  links to its screen). `search` renders `GlobalSearch` (people via `/api/users?q=`, projects via
-  `/api/projects?q=`).
+  links to its screen; it follows the live check through `useLiveNotifications()`, CONTRACT 26).
+  `search` renders `GlobalSearch` (people via `/api/users?q=`, projects via `/api/projects?q=`).
 - `Drawer` (client) — `{ open, onClose, title, footer?, children, width = 460 }`, overlay
   `var(--overlay)`, focus trap, Escape closes, focus returns to the opener.
 - `Dialog` (client) — `{ open, onClose, title, description?, footer?, children }`.
@@ -421,6 +425,10 @@ avatar?: boolean, search?: { placeholder } }`. Page title 30 px bold (−0.02em)
   the provider is mounted in the app shell. `useToastSlot()` returns the element under the app
   toasts where a component portals its own toast (the bell's Undo, CONTRACT 20), so they stack
   instead of covering each other.
+- `LiveNotifications` (client, mounted once in AppFrame around AppShell) — `{ userId, latestId, tz,
+push, children }`: the live check, the preview cards ("New notifications" region, at most 3, 2 on
+  a phone, z-index 65) and the chime (CONTRACT 26); `useLiveNotifications()` returns its store, or
+  null outside it.
 - `NotificationUndo` (client, used by `NotificationBell`) — `{ pending, onUndo, onDismiss, onHold,
 onLeave }`: "Notification deleted" with Undo for 5 s; the time stops while the pointer or focus
   is on it (`onHold`) and resumes after, at least 2 s; Tab, Shift+Tab or Escape call `onLeave`.
@@ -485,6 +493,10 @@ faded?, title? }], height }` (Today's "This week" and Overview's stacked "Attend
 | attendance                                               | `src/modules/attendance/{holidays,leave,leaveRules,calendarSchemas,calendarWriteRepo,calendarExports}.js` and `{holidayRules,holidayNotices,calendarEffects,leaveList,leavePreview}.js` (split out to stay under 300 lines); `api/holidays/route.js`, `api/holidays/[id]/route.js`, `api/leave/route.js`, `api/leave/[id]/route.js`, `api/leave/preview/route.js`, `api/leave/people/route.js`, `api/holidays/calendarRoute.js` (the shared rate limits and `:id`, not a route); `(app)/attendance/holidays/{page,loading,holidaysData}.js`, `(app)/attendance/holidays/{HolidayTable,HolidayDialog,HolidayDeleteDialog}.jsx` (+ css); `(app)/attendance/leave/{page,loading,leaveData}.js`, `(app)/attendance/leave/{LeaveTable,LeaveFilter}.jsx` (+ css); `(app)/attendance/{LeaveDialog,LeaveFields,LeaveDeleteDialog,LeaveCard,DayNotice,RowMenu}.jsx` (+ css), `{leaveForm,useLeavePreview}.js`; `(app)/today/TodayDayNotice.jsx` (new), `todayDay.js` (new: notices, week labels, "coming up" lines), `CheckInCard.jsx` (subtitle), `todayWfh.js`, `wfhOptions.js` (CONTRACT 25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | system, people-admin, reports, ui-kit, shell, dashboards | `src/modules/settings/{schemas,service}.js` (+ `crossChecks.js`, `officeNetworks.js`, `parse.js`, split out to stay under 300 lines; 11 keys, `checkHrSummary`, `checkDayMarks`, `CLOCK_KEYS`, `BOUNDED_KEYS`, `getAll` JSDoc); `src/modules/audit/{service,repo}.js` (`listForEntities`); `src/modules/users/{service,repo}.js` (`listTrackedForRange`); `src/modules/reports/{service,repo}.js` (export `listSubmittedUserIds`, new `listSubmittedDays`); `(app)/settings/{AttendanceMarksSection,HrUpdatesSection}.jsx` (new, + `HrUpdatesSection.module.css`), `(app)/settings/{SettingsForm,SettingsNav,SlackSection,TimersSection}.jsx` (two Slack switches, the timers help), `(app)/settings/{settingsValues,numberFields,page}.js` (`KEYS`, `HR_CLOCKS.hrSummaryAt` (not `CLOCKS`, whose keys `autoCheckoutSettings.test.js` pins), `SHOWN_WITH`, `NUMBERS`), `loading.js` (two more nav skeleton widths); `src/components/StatusCell.jsx` (+ css: `on_leave` "On leave" teal, `holiday` "Holiday" green, `day_off` "Day off" neutral), `Segmented.jsx` (+ css: an optional `disabled` per item; a button gets `disabled`, a link item renders as a span with `aria-disabled`, text `--muted` at 50%, no hover), `Kpi.jsx` (+ css: an empty spacer `span` with `flex: 1 0 0` before the footer, so in a grid row every bar sits at the card's bottom 8 px under the tallest content; a wrapper `div` would break the `.kpi > p:nth-child(2)` rules of `team/page.module.css` and `projects/[id]/HoursTab.module.css`; cards of equal height look as today), `MonthCalendar.jsx` (+ css: tones `leave` teal and `holiday` green, dots for both, optional `legendItems` prop, default `CALENDAR_LEGEND`); `src/modules/dashboard/{calendar,index}.js` (`buildCalendar` gains `range` and `toneOf`, `dayTone` takes `day` and answers `holiday` and `leave`, `dashboard.buildCalendar` exported) (CONTRACT 25) |
 | dashboards, reports, ai, activity                        | `src/modules/dashboard/{team,shared,overview,history,employee,service}.js` and new `{teamBoard,overviewWeek,employeeTasks}.js` (split out to stay under 300 lines), `repo.js` (`listCheckInsBetween(from, to)` replaces `countAttendanceByDay`; `listTrackedPeopleDay` adds the shift); `src/components/WeekBars.jsx` (+ css: a day's `title`, `faded` on a stacked column), `(app)/overview/page.js` (the Off legend item when `attendanceWeek.hasOff`), `src/modules/reports/logExport.js` (Day type and Leave columns); `(app)/team/**` except `[userId]/screenTime.js` (Off today group and tags, history Where and Report cells); `src/modules/reports/{monthLog,queries}.js` (My log, stuck tasks skip holidays); `(app)/log/**` except `screenTime.js` (status cells, KPI words, Day type and Leave columns); `src/modules/aiSummaries/{hrNotes,calendar}.js`, `src/modules/aiAsk/{attendance,prompt}.js`, `src/worker/jobs/aiHrNotes.js` (runs on or after the week's last working day, holidays skipped, within that ISO week); `(app)/screen-time/screenTimeView.js`, `(app)/log/screenTime.js`, `(app)/team/[userId]/screenTime.js` (no bar for a holiday without data) (CONTRACT 25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| orchestrator                                             | `docs/design/bell-preview-prototype.html` (first), `src/config/version.js` ('1.11'), `README.md` (the 1.11 "Deployment notes" and "Updating" lines), `docs/CONTRACT.md` (section 26 and its "Other section edits") (CONTRACT 26)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| system, preferences, shell                               | `src/modules/notifications/alerts.js` (new), `src/modules/notifications/{repo,service,schemas,index}.js`; `src/app/api/notifications/route.js`, `src/app/api/notifications/read-all/route.js`; `src/modules/push/{payload,service}.js`; `public/sw.js`; `src/modules/preferences/{schemas,service}.js`; `src/components/UserPrefs.jsx`; `tests/unit/{notificationAlerts,serviceWorker}.test.js` (new), `tests/unit/push.test.js`; `tests/services/notificationsLive.test.js` (new), `tests/services/{notifications,notificationsCenter,push,preferences,preferencesRoute}.test.js` (CONTRACT 26)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| shell                                                    | `src/components/live/{LiveNotifications,LiveCards,PreviewStack,PreviewCard}.jsx` and `PreviewStack.module.css` (new), `src/components/live/{liveStore,liveRules,liveCheck,liveBatch,liveLeader,liveLoop,livePresence,liveTab,liveSound,liveChannel,swAnswer,pushActive,chime,chimeGate,previewWait,useLiveEngine,useStack,usePreviewActions}.js` (new); `src/components/AppFrame.jsx`; `src/components/NotificationBell.jsx` (also exports `BellIcon`), `NotificationBell.actions.js`, `NotificationBell.list.js` (`itemTime`), `NotificationBell.live.js` (new), `NotificationItem.jsx` (uses `itemTime`); `tests/unit/{liveRules,liveBatch,liveLeader,liveChime,liveRecovery,liveStack,livePlacement,appFrameLive}.test.js` (new), `tests/helpers/liveFakes.js` (new), `tests/unit/notificationCenter.test.js` (merge of new items) (CONTRACT 26)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| preferences, orchestrator                                | `src/app/(app)/my-settings/{MySettingsSections.jsx,sections.js,page.module.css,PreferencesProvider.jsx,loading.js,loading.module.css}`, `PlaySoundButton.jsx` (new); `tests/unit/mySettings.test.js`; `tests/e2e/live-notifications.spec.js` (new), `tests/e2e/my-settings.spec.js`, `tests/e2e/support/live.js` (new), `tests/e2e/support/demoData.js` (`addNotification`) (CONTRACT 26)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 Every page starts with `const user = await requirePage('<permission>')`, renders `<TopBar ... />`
 then its blocks, has a loading skeleton (`loading.js`) and empty states. Page permissions:
@@ -623,8 +635,9 @@ doneBy, latestReport: { status, userId, userName, workDate } | null }]`.
 ## 14. Desktop notifications (added after the build guide)
 
 Every bell notification is also shown on the person's computer (Windows notification centre via the
-browser's Web Push), even when the Daybook window is minimised. Each person turns it on per browser
-from the bell; Admin can switch it off for everyone (`settings.pushEnabled`, default true).
+browser's Web Push), even when the Daybook window is minimised, except while a Daybook window is in
+front and shows its own preview card (never on Safari; CONTRACT 26). Each person turns it on per
+browser from the bell; Admin can switch it off for everyone (`settings.pushEnabled`, default true).
 
 - Env: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (generate with
   `npx web-push generate-vapid-keys`); without keys pushes are skipped. Library: `web-push`.
@@ -639,10 +652,15 @@ from the bell; Admin can switch it off for everyone (`settings.pushEnabled`, def
 userAgent })`, `unsubscribe({ user, endpoint })`, `deleteForUser(userId, trx?)` (deactivation),
   `sendPending()` (worker).
 - API: `POST /api/push/subscriptions` and `DELETE /api/push/subscriptions` (signed_in).
-- Client: `public/sw.js` handles `push` (show notification with title, body, icon, `tag` per
-  notification, `data.url`) and `notificationclick` (focus a Daybook window and open the link, or open
-  a new one); the service worker registers in development too. The bell dropdown gets "Show on this
-  computer" (permission + subscribe / unsubscribe); signing out removes this browser's subscription.
+- Client: `public/sw.js` handles `push`: it asks every Daybook window first (at most 1 s); when a
+  window in front answers that it shows the notification, no system notification is shown (not for
+  Apple endpoints, `mustShow`); otherwise it shows it (title, body, icon, `tag` per notification,
+  `data.url`), `silent` when this browser already alerted the person or a window in front has Sound
+  Off, never for Apple endpoints (CONTRACT 26). Payload `{ id, userId, title, body, url,
+mustShow? }`. It also handles `notificationclick` (focus a Daybook window and open the link, or
+  open a new one); the service worker registers in development too. The bell dropdown gets "Show on
+  this computer" (permission + subscribe / unsubscribe); signing out removes this browser's
+  subscription.
 
 ## 15. Project timers and breaks (added after the build guide)
 
@@ -1165,7 +1183,7 @@ onToolCall? })` → `{ text, data }`: checks availability (`AI_OFF`), the compan
 
 ### Version label
 
-- `APP_VERSION` in `src/config/version.js` (now '1.05'; raised with each release). Shown as small
+- `APP_VERSION` in `src/config/version.js` (now '1.11'; raised with each release). Shown as small
   muted "Daybook v1.05" at the bottom of the sidebar and under the sign-in card.
 
 ### Notification center
@@ -1180,6 +1198,9 @@ onToolCall? })` → `{ text, data }`: checks availability (`AI_OFF`), the compan
 - While there are unread notifications the bell rings gently: a short damped swing about every 6 s
   (and once at once when a new one arrives), with the red dot; no movement under
   `prefers-reduced-motion`.
+- Live (CONTRACT 26): while Daybook is open the bell learns about new notifications by itself
+  (`GET /api/notifications?after=`), a preview card shows each new one (a summary for 3 or more),
+  and a short chime plays for important ones by default (My settings → Sound).
 
 ### Decisions made while building (phase 1)
 
@@ -1246,17 +1267,20 @@ themselves only. Company rules stay in Settings (Admin).
   created on the first change.
 - Keys, values and defaults (`PREFERENCE_DEFAULTS`, frozen):
 
-  | Key                 | Values                           | Default         | Used by                   |
-  | ------------------- | -------------------------------- | --------------- | ------------------------- |
-  | `submitButtons`     | `'both'` `'checkout'` `'submit'` | `'both'`        | report top bar            |
-  | `newTaskStatus`     | `'in_progress'` `'done'`         | `'in_progress'` | report editor             |
-  | `carryOver`         | boolean                          | `true`          | suggestions (CONTRACT 24) |
-  | `slackPreview`      | boolean                          | `true`          | report page               |
-  | `polishButton`      | boolean                          | `true`          | report top bar            |
-  | `polishLines`       | boolean                          | `true`          | report task lines         |
-  | `polishAfterTimers` | boolean                          | `true`          | Fill report from timers   |
-  | `bellRing`          | boolean                          | `true`          | notification bell         |
-  | `theme`             | `'system'` `'light'` `'dark'`    | `'system'`      | whole app                 |
+  | Key                 | Values                              | Default         | Used by                            |
+  | ------------------- | ----------------------------------- | --------------- | ---------------------------------- |
+  | `submitButtons`     | `'both'` `'checkout'` `'submit'`    | `'both'`        | report top bar                     |
+  | `newTaskStatus`     | `'in_progress'` `'done'`            | `'in_progress'` | report editor                      |
+  | `carryOver`         | boolean                             | `true`          | suggestions (CONTRACT 24)          |
+  | `slackPreview`      | boolean                             | `true`          | report page                        |
+  | `polishButton`      | boolean                             | `true`          | report top bar                     |
+  | `polishLines`       | boolean                             | `true`          | report task lines                  |
+  | `polishAfterTimers` | boolean                             | `true`          | Fill report from timers            |
+  | `bellRing`          | boolean                             | `true`          | notification bell                  |
+  | `bellSound`         | `'important'` `'all'` `'off'`       | `'important'`   | when the sound plays (CONTRACT 26) |
+  | `bellTone`          | `'chime'` `'bell'` `'ding'` `'pop'` | `'chime'`       | which sound (CONTRACT 26)          |
+  | `bellPreview`       | boolean                             | `true`          | preview cards (CONTRACT 26)        |
+  | `theme`             | `'system'` `'light'` `'dark'`       | `'system'`      | whole app                          |
 
 - `preferences.getFor(userId)` → every key (stored values over the defaults; an unknown key or a
   stored value that is no longer valid is ignored). A missing table (MySQL errno 1146, a deploy
@@ -1308,13 +1332,17 @@ themselves only. Company rules stay in Settings (Admin).
      - "Suggest wording after Fill report from timers" (Toggle).
      - Under them, muted: "When you use these, your task lines are sent to Google Gemini."
   3. **Notifications** (everyone): "Ring the bell for unread notifications" (Toggle). Help: "A
-     small swing every few seconds while you have unread ones." Then the existing desktop switch
-     (`PushSwitch` "Show on this computer"), only while desktop notifications are on for the
-     company.
+     small swing every few seconds while you have unread ones." "Sound" (Segmented: Important only
+     · All · Off). "Choose a sound" (Segmented: Chime · Soft bell · Ding · Pop; picking one plays
+     it) with "Play sound" (CONTRACT 26). "Show a preview" (Toggle). Then the existing desktop
+     switch (`PushSwitch` "Show on this computer"), only while desktop notifications are on for the
+     company, with the note "When this is on and Daybook is in the background, Daybook doesn't
+     chime. Your computer's settings decide if the desktop notification makes a sound, whatever you
+     chose for Sound."
      Reminders from HR and from Daybook, and for HR the morning summary and the evening wrap-up
      (CONTRACT 25), come to the bell and, where Show on this computer is on, as desktop
-     notifications. There is no per-type mute in this release; Slack DMs follow the company's
-     switches in Settings → Slack.
+     notifications. There is no per-type mute; the Sound choice is the only difference by type
+     (CONTRACT 26). Slack DMs follow the company's switches in Settings → Slack.
   4. **Appearance** (everyone): "Theme" (Segmented: Match my computer · Light · Dark).
 - Loading skeleton (`loading.js`) like Settings'. Desktop, < 1024 px and 375 px layouts, dark theme.
 
@@ -1337,6 +1365,11 @@ themselves only. Company rules stay in Settings (Admin).
   sparkles; `polishAfterTimers` off skips the "Suggested wording" offer after Fill report from
   timers. All three still need the company's AI (`data.aiPolish`) and an editable report.
 - **Bell**: `bellRing` off stops the swing; the red dot and the count stay.
+- **Sound**: Important only chimes for the types marked important in `ALERT_TYPES`, All for every
+  new notification, Off never (CONTRACT 26).
+- **Choose a sound**: which of the four sounds plays (CONTRACT 26).
+- **Show a preview** off: no preview cards and no announcement; the bell's dot and count still
+  change.
 - **Theme**: `data-theme="light" | "dark"` on `<html>` overrides the device setting.
   `globals.css` writes each colour that changes as `light-dark(light, dark)` (one list for both
   themes), and three rules pick `color-scheme`: `:root` light, `:root[data-theme='dark']` dark,
@@ -4480,3 +4513,1384 @@ Also update the other CONTRACT sections as listed in "Other sections" below (O, 
 - Per-process caches (Needs a look 5 minutes, suggestions, the away part of the timer state) are
   cleared only in the process that wrote; on a host with more than one web process another may
   show the old value for up to 5 minutes.
+
+## 26. Bell sound and preview (company request, Daybook 1.11)
+
+The owner asked for the bell to tell people about new notifications while Daybook is open,
+approved for one release on 23 Nov 2026, shipped as version '1.11' with **no migration** and **no
+new npm dependency**:
+
+1. **Live bell.** While Daybook is open, the bell notices new notifications by itself (a light
+   live check, about every 30 s while a Daybook tab is visible and about 60 s while all are
+   hidden); the desktop-push message from `public/sw.js` still refreshes at once.
+2. **Preview card.** A card slides in under the bell for every new notification: icon, title, one
+   or two lines of body, time, "Open", "Mark as read" and a close X. It hides itself after about
+   6 s and stays while the pointer or keyboard focus is on it. Three or more arriving together show
+   one summary card ("3 new notifications"). On a phone it comes from the top.
+3. **Sound.** A short soft sound Daybook makes itself (synthesized, not copied from any app). Once
+   per batch, never several in a row, and only one open Daybook tab plays it. Default: sound for
+   important notifications only. Each person can change it in My settings, and **picks which sound**
+   they hear: Chime (the default), Soft bell, Ding or Pop (owner, 23 Nov 2026).
+4. **My settings.** A Sound choice (Important only, the default; All; Off), a "Choose a sound" choice
+   (Chime, Soft bell, Ding, Pop; picking one plays it) with a "Play sound" button, and a "Show a
+   preview" switch (default on).
+5. **No double alert.** While a Daybook window is in front, Daybook shows its own preview instead
+   of the system pop-up, where the browser's rules allow skipping it; when Daybook is closed or in
+   the background, desktop notifications work as in 1.10.
+6. **First load is quiet.** Loading a page never rings or previews what was already there; only
+   notifications newer than what this tab has seen.
+7. **Same text, same privacy.** The preview shows exactly the bell's text.
+
+Written against the code at `37578ea` (1.10), with the groundwork in `scratch/design-1.11/map.md`
+(the system as it is) and `scratch/design-1.11/browser.md` (browser rules, with sources). Names
+marked **new** don't exist yet; every other name is in the code.
+
+**Design:** `docs/design/bell-preview-prototype.html` (standalone, the real tokens, as §23 to §25),
+built by the orchestrator's prototype step before the builders start: Today with one card under the
+bell, the stack of three, the summary card, the Report page (no bell) with a card just under the top
+bar at the right, the open bell list taking a new item, My settings → Notifications with the new rows; light and
+dark, 1440, 1024 and 390 px. Its look and copy bind B's and C's screens; where it and this section
+differ, this section wins and the prototype is fixed. Build with the tokens only (never raw hex in
+CSS modules), lucide icons, and the existing `Toggle`, `Segmented`, `Button`, `useToast`.
+
+**Copy:** short and plain, sentence case, no dashes. A card's title, body and time are the bell's
+own: the row's `title` and `body` as stored, and the time as `NotificationItem` writes it ("Today
+at 9:41 AM", "Yesterday at 6:05 PM", "Monday at 9:41 AM", "13 November at 9:41 AM":
+`formatRelativeDay` gives the full weekday and `D MMMM`). Example people:
+Vishal Saini (employee), Neha Kapoor (HR).
+
+### Words
+
+- **Notification** = one `notifications` row (the bell), unchanged.
+- **Cursor** = the highest notification `id` a tab has seen. It starts at AppFrame's `latestId`
+  (the person's newest notification id when the page was rendered, 0 when they have none) and is
+  raised to each live check's `latestId` and by the bell's own load (`markSeen`, below). It never
+  goes down and survives client navigations (the provider lives in the layout); a full page load
+  starts a new one. The provider reads `latestId` once, when it mounts (`useState(() =>
+latestId)`). A newer value from a later `router.refresh()` (AutoRefresh, Mark all as read, any
+  save) is ignored, because raising the cursor from it would skip notifications that arrived since
+  the last live check.
+- **New notification** (for one tab) = a notification of the signed-in person with an `id` above
+  the tab's cursor when the tab learns about it, still unread (`readAt` null) and not hidden in
+  the bell (a delete waiting for its Undo). An item read elsewhere, deleted, restored by Undo or
+  marked unread again is never new: its id is at or below the cursor, or it is read.
+- **Live check** = one `GET /api/notifications?after=<cursor>` (below). Run by the leader tab, and
+  at times by another tab (the watchdog, an answer to the service worker, fallback mode).
+- **Leader tab** = the one Daybook tab per browser and person that runs the live checks
+  (`navigator.locks`), sharing each answer with the other tabs (`BroadcastChannel`). The others
+  are **followers**.
+- **In front** = the page's `document.visibilityState === 'visible'` and `document.hasFocus()`;
+  in the service worker, `client.focused && client.visibilityState === 'visible'`. **Visible** =
+  `visibilityState === 'visible'` (front tab of a window that isn't minimised; it may be on another
+  monitor, without focus).
+- **Batch** = the new notifications a tab learns about from the first one until 1.5 s later
+  (`BATCH_WINDOW_MS = 1500`), from one or more answers. One batch gives at most one chime and at
+  most one summary card.
+- **Important notification** = one that asks the reader to act today: check in or out, end a
+  break, add a missing time, start a timer, send a report, decide someone's request, or drop other
+  work for an urgent project. Answers to the reader's own requests, changes someone already made,
+  confirmations and summaries (except HR's morning list) are not important. Fixed per type in
+  `ALERT_TYPES` (table below).
+- **Preview card** = the small card for one new notification. **Summary card** = one card for a
+  batch of 3 or more. **Stack** = the cards on screen, at most 3 (2 on a phone), newest on top.
+- **Chime** = the short sound Daybook synthesizes with Web Audio: the one the person picked in "Choose
+  a sound" (`bellTone`: Chime, Soft bell, Ding or Pop). Never a sound file.
+- **Sound tab** = the one tab allowed to chime for a batch, named in each result (`soundTabId`):
+  the tab in front when its audio runs, else the checking tab (usually the leader) when its audio
+  runs, else the newest tab whose audio runs. When no Daybook tab of the browser is in front and
+  desktop push is active, no tab chimes (the system notification makes the sound).
+- **Desktop push active** = in this browser, `Notification.permission === 'granted'` and the service
+  worker has a push subscription (the bell's "Show on this computer" is on), while the company's
+  `pushEnabled` is on and keys are set (AppFrame's `pushKey`).
+- **Alerted** = this browser already alerted the person about a notification: a tab chimed for a
+  batch holding it (the record's `chimed` list), or showed its card while in front (`shown`). An id
+  is alerted when it is in either list. Kept in `localStorage` (below).
+
+> **Company rule (overrides CONTRACT §14, "Every bell notification is also shown on the person's
+> computer"; owner, 23 Nov 2026):** while a Daybook window is in front and answers that it shows the
+> notification itself, the service worker shows no system notification, except for Apple push
+> endpoints (Safari revokes a subscription after 3 pushes without one). A system notification for
+> something this browser already alerted, or that comes while a Daybook window is in front with
+> Sound set to Off, is shown silent (never on Apple endpoints: iPhone and iPad ignore `silent`, so
+> the page leaves the sound to the system there). When no Daybook window is in front,
+> desktop notifications are exactly as in 1.10, with the computer's own sound whatever the Sound
+> choice.
+>
+> **Company rule (overrides CONTRACT §21 "There is no per-type mute in this release"):** the Sound
+> choice is the only per-type difference: Important only chimes for the types marked important.
+> There is still no per-type mute of the bell, the cards or desktop notifications.
+
+### Data (no migration)
+
+- **No new table, no new column.** The three preferences (`bellSound`, `bellTone`, `bellPreview`)
+  are new keys in `user_preferences.prefs`
+  (JSON, migration 013): only values that differ from the defaults are stored, so every existing
+  row reads the defaults at once (`withDefaults`). Rolling back to 1.10 ignores the stored keys
+  (`withDefaults` drops unknown keys).
+- The live check reads `notifications` through the existing indexes only: the primary key and
+  `(user_id, read_at)`. There is no separate `user_id` index (migration 005 adds the
+  `(user_id, read_at)` index before the foreign key, so the foreign key uses it). `user_id = ? AND
+id > ? ORDER BY id DESC LIMIT 21` is either a primary key range over the rows newer than the
+  cursor (a handful for a fresh cursor) or a `(user_id, read_at)` lookup with a small sort.
+  `MAX(id) WHERE user_id = ?` reads the person's entries of `(user_id, read_at)`. The unread count is
+  today's `countUnread` on `(user_id, read_at)`. All are cheap at Daybook's size (read rows go after
+  180 days), and 1.11 adds no index. A runs `EXPLAIN` once on a test database with the demo data and
+  writes the plan in the PR; no test asserts it.
+- `localStorage` (per browser, never sent): `daybook.live.<userId>` = `{ chimeAt, chimed: [[id,
+at], ...], shown: [[id, at], ...] }` (each list keeps the last 50 ids; entries older than 10
+  minutes are dropped). `chimed` = ids a tab chimed for; `shown` = ids whose card a tab showed while
+  in front. Every read and write is in try/catch; without storage (private mode, blocked) each tab
+  keeps the same record in memory.
+
+### Important notifications (`src/modules/notifications/alerts.js`, new, pure, browser-safe)
+
+`ALERT_TYPES` is the one list: a frozen object `{ [type]: 'important' | 'normal' }` with **every**
+type Daybook creates (43 today: 19 important, 24 normal). Group and icon come from the type's prefix
+(`ALERT_GROUPS`). The table is the contract; the test pins it.
+
+| #   | Type                                 | Important | Group      | Why                                                                                          |
+| --- | ------------------------------------ | --------- | ---------- | -------------------------------------------------------------------------------------------- |
+| 1   | `attendance.checkin_reminder`        | yes       | attendance | You are past your late mark: check in now.                                                   |
+| 2   | `attendance.remind_check_in`         | yes       | attendance | HR asks you to check in now.                                                                 |
+| 3   | `attendance.remind_break`            | yes       | attendance | HR asks you to end a long break.                                                             |
+| 4   | `attendance.remind_check_out`        | yes       | attendance | HR asks you to check out.                                                                    |
+| 5   | `attendance.remind_missing_checkout` | yes       | attendance | HR asks you for a missing check-out time.                                                    |
+| 6   | `attendance.checkout_reminder`       | yes       | attendance | Your day has ended: check out, or carry on.                                                  |
+| 7   | `attendance.auto_checkout`           | yes       | attendance | Daybook checked you out; if you are still working, you need to act now.                      |
+| 8   | `attendance.missing_checkout`        | yes       | attendance | Add the time you left. The HR copy shares the type; both come at 00:05, so they seldom ring. |
+| 9   | `attendance.unverified_office`       | yes       | attendance | HR is asked to confirm an office check-in today.                                             |
+| 10  | `attendance_correction.requested`    | yes       | attendance | HR is asked to decide a correction; the person waits.                                        |
+| 11  | `attendance.hr_summary`              | yes       | attendance | HR's morning list of who isn't in yet, to act on now. Once a working day.                    |
+| 12  | `wfh_request.created`                | yes       | calendar   | An approver is asked to decide, often for today.                                             |
+| 13  | `project.urgent`                     | yes       | project    | A project became urgent: it changes today's work.                                            |
+| 14  | `project_request.created`            | yes       | project    | A PM or Admin is asked to decide a project request.                                          |
+| 15  | `report_edit.requested`              | yes       | report     | The approver is asked to decide; the person can't edit until then.                           |
+| 16  | `report.reminder`                    | yes       | report     | Your report isn't in yet: send it now.                                                       |
+| 17  | `timer.reminder`                     | yes       | timer      | No timer is running: start one now. At most once an hour.                                    |
+| 18  | `timer.stopped_midnight`             | yes       | timer      | Check your report before it locks. Comes at 00:05, so it seldom rings.                       |
+| 19  | `system.test`                        | yes       | system     | The doctor's test: with the default choice it checks the whole path, sound included.         |
+| 20  | `attendance_correction.approved`     | no        | attendance | The answer to your own request.                                                              |
+| 21  | `attendance_correction.rejected`     | no        | attendance | The answer to your own request.                                                              |
+| 22  | `attendance.self_checkout_past`      | no        | attendance | For HR's records; no deadline.                                                               |
+| 23  | `attendance.edited`                  | no        | attendance | HR already changed it; for your information.                                                 |
+| 24  | `attendance.break_over_allowance`    | no        | attendance | Comes from your own click when a break ends.                                                 |
+| 25  | `attendance.hr_evening_summary`      | no        | attendance | A wrap-up at the end of the day.                                                             |
+| 26  | `attendance.late_alert`              | no        | attendance | A pattern over the month, not about now.                                                     |
+| 27  | `holiday.past_changed`               | no        | calendar   | Another Admin already changed it.                                                            |
+| 28  | `leave.marked`                       | no        | calendar   | HR already marked it; for your information.                                                  |
+| 29  | `leave.changed`                      | no        | calendar   | HR already changed it.                                                                       |
+| 30  | `leave.removed`                      | no        | calendar   | HR already removed it.                                                                       |
+| 31  | `wfh_request.approved`               | no        | calendar   | The answer to your own request.                                                              |
+| 32  | `wfh_request.declined`               | no        | calendar   | The answer to your own request.                                                              |
+| 33  | `project.created`                    | no        | project    | You are the PM of a new project; nothing to do this minute.                                  |
+| 34  | `project.member_added`               | no        | project    | For your information.                                                                        |
+| 35  | `project_request.approved`           | no        | project    | The answer to your own request.                                                              |
+| 36  | `project_request.declined`           | no        | project    | The answer to your own request.                                                              |
+| 37  | `project_task.added`                 | no        | task       | New work to plan; a PM adding many tasks would chime for every member.                       |
+| 38  | `project_task.changed`               | no        | task       | As above.                                                                                    |
+| 39  | `report_edit.sent`                   | no        | report     | Confirms your own click.                                                                     |
+| 40  | `report_edit.approved`               | no        | report     | The answer to your own request (you have 24 hours).                                          |
+| 41  | `report_edit.declined`               | no        | report     | The answer to your own request.                                                              |
+| 42  | `ai.pm_summary`                      | no        | ai         | An evening read.                                                                             |
+| 43  | `ai.hr_notes`                        | no        | ai         | A weekly read.                                                                               |
+
+- `ALERT_GROUPS` (prefix → group): `attendance.`, `attendance_correction.` → `attendance`;
+  `leave.`, `holiday.`, `wfh_request.` → `calendar`; `project.`, `project_request.` → `project`;
+  `project_task.` → `task`; `report.`, `report_edit.` → `report`; `timer.` → `timer`; `ai.` → `ai`;
+  `system.` → `system`.
+- Functions: `alertLevel(type)` → `'important' | 'normal'` (`'normal'` for an unknown type),
+  `isImportant(type)`, `alertGroup(type)` → a group (`'system'` for an unknown prefix),
+  `isClassified(type)`, `assertClassified(type)` (throws `Error('Notification type "x.y" has no
+alert level. Add it to ALERT_TYPES (CONTRACT 26).')`).
+- **New types must be classified.** `notifications.notify` calls `isClassified(type)` after its
+  schema parse (so after the early return for no recipients): under Vitest (`process.env.VITEST`)
+  an unclassified type throws through `assertClassified`, so the creating module's service test
+  fails; in production it logs `logger.warn({ type }, 'notification type has no alert level')` once
+  per type per process and writes the rows as before (a notification never fails the caller's
+  change, and `notify` runs inside the caller's transaction). `notify` reads `process.env.VITEST` at
+  call time, not at import, so a test can switch it off. The unit test below also scans the source.
+- Client components may import `@/modules/notifications/alerts` (pure, no imports), an exception to
+  §2 like `@/modules/reports/todoText` (CONTRACT 24).
+
+### The live check (shell, B: `src/components/live/`)
+
+#### Where it runs
+
+- **new** `LiveNotifications` (client) is mounted once in `AppFrame`, around `AppShell`, inside
+  `ToastProvider`, so it runs on every signed-in page, with or without a bell (the bell is on 7
+  pages only and the top bar scrolls away). Props: `{ userId, latestId: number | null, tz, push:
+boolean, children }` (`tz` = `all?.timezone`, the value TopBar's `bellData` passes to the bell;
+  `push` = `Boolean(pushKey)`). It renders `children`, then the stack and the announcement region.
+  AppFrame gives it `key={user.id}`: when someone else signs in on this browser, the next render of
+  an open page (a `router.refresh()`, such as Today's auto refresh) mounts a fresh provider for
+  them, with a new store and the cursor of that render (quiet), never the last person's store.
+- AppFrame reads `latestId` with `safely(notifications.latestId(user.id), null, 'shell: could not
+read the latest notification', user.id)`, in the existing `Promise.all`. With `null`, the tab's
+  first answer sets the cursor and alerts nothing.
+- Without the provider (the dev shell demo, `src/app/dev/shell/page.js`), `useLiveNotifications()`
+  returns null and the bell works exactly as in 1.10.
+
+#### Leader and followers (`liveLeader.js`, `liveChannel.js`)
+
+- Each tab asks for the lock `daybook-live-<userId>` (`navigator.locks.request(name, { signal },
+() => held)`, `held` a promise resolved when the tab stops). The tab holding it is the leader; the
+  others wait in line. Locks are granted in the order asked, so the leader is the oldest open tab and
+  its cursor is never ahead of the others'. A tab that becomes leader runs a check at once. Chrome's
+  Energy Saver doesn't freeze a tab holding a lock another tab waits for (browser.md §2). A leader
+  whose lock is taken by the watchdog (below) sees its `request()` promise reject with an
+  `AbortError`; when it wakes it stops its loop and asks for the lock again as a follower.
+- Channel `new BroadcastChannel('daybook-live-<userId>')`. A `BroadcastChannel` never delivers a
+  message to the object that posted it, so the checking tab passes its answer to its own result
+  handler directly, then posts it, and every tab handles it the same way. The same holds for
+  `read`, `read-all` and `prefs`: the posting tab applies them itself. Each tab keeps one channel
+  object per name (a second object with the same name in the same tab would receive the first one's
+  posts). Messages (all with `userId`; a message for another id is ignored):
+  - `{ type: 'presence', tabId, visible, front, audio, at }`: every tab on mount, on
+    `visibilitychange`, window `focus` and `blur`, `resume`, on each `statechange` of its audio
+    context, every 30 s while visible, and `{ ..., gone: true }` on `pagehide` and on `freeze` (a
+    frozen page can neither check nor chime; it posts again on `resume`). `audio` =
+    `getChimePlayer().state() === 'running'`. Every tab keeps the latest per `tabId` (any tab may
+    run a check) until that tab's `gone` (**new** `livePresence.js` `createPresences({ now, selfId
+})`): `front` and `visible` count only from presences of the last 75 s (`frontTabId`, the poll
+    delay), `audio` from the latest of each tab however old, because a hidden tab posts only when
+    something changes. A tab that gets a presence from a `tabId` it doesn't know yet (a tab just
+    opened) posts its own at once, so the newcomer knows which older hidden tabs run audio.
+    `tabId` = `crypto.randomUUID()` (or a random string) per page load.
+  - `{ type: 'check-now', tabId }`: a follower that becomes visible, or got a service worker
+    message. The leader checks at once unless its last check started less than 5 s ago
+    (`CHECK_GAP_MS = 5000`; then at the 5 s mark, one check for all requests in between).
+  - `{ type: 'result', userId, items, more, unreadCount, latestId, checkedAt, frontTabId,
+soundTabId }`: each successful answer, from whoever checked (duplicates are harmless: the cursor
+    drops what was seen).
+  - `{ type: 'read', ids, unreadCount }` and `{ type: 'read-all', unreadCount: 0 }` (the count from
+    the write's answer): a tab marked something read (a card, the bell, Mark all as read). Every tab
+    sets `unread` from them, closes those cards and drops those items from its open batch and queue
+    (`read-all`: every item learned before it), and its bell marks them read.
+  - `{ type: 'prefs', userId, bellSound?, bellTone?, bellPreview? }` on channel
+    `daybook-live-prefs`: My settings saved one of the three (C calls
+    `postPreferenceChange(values)`, without a userId: `liveChannel.js` adds the one the provider
+    set with `setPreferenceUser(userId)`, and a tab ignores a `prefs` message whose `userId` is
+    another person's). The posting tab applies it through `onPreferenceChange` (its local
+    listeners), the others from the channel. Tabs use it until their next `router.refresh()` brings
+    the stored values.
+- `frontTabId` = the `tabId` of the newest presence with `front: true` (the checking tab counts
+  itself), else null. `soundTabId` = the front tab when its presence says `audio: true`; else the
+  checking tab when its own audio runs (usually the leader); else the tab of the newest presence
+  with `audio: true`; else the front tab, else the checking tab (it then finds `'no_audio'`).
+- **Fallback** (no `navigator.locks` or no `BroadcastChannel`, or either throws): every tab is its
+  own leader with its own loop, `frontTabId` is unknown (null), `soundTabId` is the tab itself, and
+  the chime claim (below) keeps it to one chime.
+- **Watchdog**: a visible follower that has had no result for 75 s (`WATCHDOG_MS`) takes the lead
+  with `navigator.locks.request(name, { steal: true }, () => held)` (no `signal`: it can't be
+  combined with `steal`) and checks at once (a frozen or sleeping leader, Edge sleeping tabs). It
+  then runs the loop as the leader, so a visible tab checks every 30 s again. The 75 s count from
+  the later of the tab's last result and the moment its own lead was stolen: while every check
+  fails (offline, a restart answering 5xx), two visible tabs take the lead from each other at most
+  once per 75 s, never back and forth, and the error backoff holds.
+- `window.__daybookLive = { checkNow, cursor, isLeader }` is set on mount and removed on unmount:
+  `checkNow()` runs one check in this tab, skipping the 5 s gap, broadcasts it, and resolves after
+  its answer has been handled (its new items are in the batcher). The e2e uses it; it only reads the
+  person's own notifications, like the loop.
+
+#### The loop (`liveRules.js` `pollDelay`, pure)
+
+- The leader runs `await check()`, then `setTimeout(loop, delay)`: the next timeout is set **after**
+  the awaited fetch, so Chrome never treats it as a timer chain and never slows it to once a minute
+  (browser.md §2). Never `setInterval`.
+- **One timer and one check at a time per tab.** Every trigger (the timeout, `check-now`, a service
+  worker message, becoming visible, `online`, `pageshow`, taking the lock, `checkNow()`) first
+  clears the pending timeout. A trigger that comes while a check is in flight is remembered and runs
+  once right after it, never in parallel. After each answer, success or error, the one next timeout
+  is set with `pollDelay`.
+- `delay` = 30,000 ms while any Daybook tab of the browser is visible (its own state or a fresh
+  presence), else 60,000 ms, each times a random factor from 0.9 to 1.1 so browsers opened at the
+  same moment drift apart.
+- **At once** (still at most one check per 5 s): when the leader takes the lock; on a service worker
+  message (below); when a tab becomes visible (a follower posts `check-now`); on window `online`
+  (failures reset); on `pageshow` with `persisted` (a page back from the back-forward cache asks for
+  the lock again and checks).
+- **Errors** (a network error, 429, 5xx and any other answer that isn't 2xx, 401 or 403): the next
+  delay is `min(base × 2^failures, 300,000 ms)` (30, 60, 120, 240, then 300 s while visible).
+  Nothing is shown to the person; the bell keeps its last count. A success resets it. (The server
+  sends no `Retry-After`, so the tab doesn't read one.)
+- **Stops** (clears timers, releases the lock, closes both channels, removes listeners and
+  `window.__daybookLive`): on a 401 or 403 answer (signed out, deactivated); when an answer's
+  `userId` isn't the tab's `userId` (someone else signed in on this browser in another tab; the
+  stale page shows nothing of theirs); on unmount (signing out navigates to `/login`, outside the
+  app layout); on `pagehide`. A stopped tab starts again only with a new page load (or `pageshow`
+  persisted while still signed in).
+
+#### One check
+
+- `GET /api/notifications?after=<cursor>` (`after=0` when the cursor is null) with `fetch(url, {
+credentials: 'same-origin', cache: 'no-store', signal })`, reading `{ data }` itself as
+  `sendHeartbeat` does in `ActivityTracker.track.js`, **never `api`** (`apiFetch` sends the whole
+  page to /login on a 401, and every waiting tab would follow as it takes the lock). This lives in
+  **new** `liveCheck.js` `checkOnce({ fetch, after, signal })` → `{ ok: true, answer }` | `{ stop:
+true }` (401 or 403: the loop stops and the page stays as it is) | `{ retry: true }` (the
+  failures above). A check that hasn't answered in 20 s (`CHECK_TIMEOUT_MS = 20000`) is aborted
+  and is `{ retry: true }` (the backoff applies), even when a fetch ignores its signal: one
+  stalled request (a dead keep-alive socket, a stuck host process, a captive portal) never holds
+  the loop and the triggers waiting behind it. Signature `checkOnce({ fetch, after, signal,
+timeoutMs, setTimer, clearTimer })`.
+- The answer is used only when `answer.userId === userId`. Otherwise the tab stops (below) before
+  anything else: no store update, no cursor change, nothing to the bell, the batcher or the channel.
+- The answer updates the store: `unread = unreadCount`; the cursor of the checking tab and of every
+  tab that handles the result: `cursor = max(cursor, latestId)`.
+- `gapMs`: when a tab handles a result, it is the result's `checkedAt` minus the newest `checkedAt`
+  this tab handled before (its own answers and broadcast ones; tabs of one browser share the
+  computer's clock), or minus its mount time when it has handled none. So a follower that becomes
+  leader isn't stale on its first check. It only decides whether a chime is stale.
+- New items (`liveRules.newItems(items, cursor, hidden)`): `id > cursor` (the cursor **before**
+  this answer), `readAt === null`, not in the store's hidden set. With a null cursor, none (it is the
+  baseline). They go to the tab's batcher. Every item (read or not) of the answer goes to the bell
+  through the store, so an open list shows it.
+
+#### Batches (`liveBatch.js`, pure with injected timers)
+
+- `createBatcher({ windowMs: 1500, onFlush })`: the first new item starts a batch; items from later
+  answers within 1.5 s of that first one join it (by id, no duplicates); at 1.5 s the batch is
+  flushed. At flush time items read meanwhile (`read` by id; `read-all` drops every item learned
+  before it; from this tab or another) or hidden in the bell are dropped, in the open batch and in
+  the queue (below) alike; an empty batch does nothing. The batch's `gapMs` is the largest of the
+  answers that brought its items.
+- The flush runs, in this order: cards (if any), the announcement, the chime decision.
+
+#### Service worker messages (`swAnswer.js`, pure)
+
+`public/sw.js` (A) posts `{ type: 'daybook:notification', ask: true, id, userId, mustShow }` with a
+`MessageChannel` port to every Daybook window on every push, and after showing a system
+notification `{ type: 'daybook:notification', os: true, id, silent }` without a port. The provider
+listens on `navigator.serviceWorker` (`message`):
+
+- **An ask**: it answers on the port at once, before any fetch, with `answerPush(...)` →
+  `{ shown, alerted, osSound }`:
+  - `sameUser` = `Number(data.userId) === userId` (a payload without `userId`, from a 1.10 worker,
+    is never the same user);
+  - `inRecord` = `data.id` is in the alerted record (`chimed` or `shown`);
+  - `alerted` = `sameUser` and (`inRecord`, or the tab is in front and its Sound choice is
+    `'off'`): the system notification is then shown silent (not on Apple endpoints, below);
+  - `running` = the tab isn't stopped, isn't in its own error backoff, and has handled a successful
+    answer (its own or a broadcast result) in the last 75 s (`WATCHDOG_MS`), so a follower behind a
+    frozen or backing-off leader never claims it shows the notification;
+  - `canSound` = the Sound choice is `'off'`, or this tab's audio runs, or another tab's latest
+    presence says `audio: true` (however old). A tab in front that nobody has clicked since it
+    loaded (just opened, reloaded, opened from a desktop notification) has no audio yet: without
+    another tab whose audio runs it must not silence the system notification, or an important
+    reminder would come with no sound at all. (The ask carries no type, so this holds for every
+    notification: one that isn't important then gets the system notification as in 1.10.)
+  - `shown` = `sameUser`, the tab is in front, `running`, `canSound`, "Show a preview" is on or the
+    bell list is open, and either `data.id > cursor`, `inRecord`, or `data.id` is in this tab's
+    open batch, its queue or its stack (`pendingIds`: the cursor rises before the flush, so an item
+    learned a moment before the push still counts). (An id the page already had when it loaded,
+    and never alerted, answers `false`: the system notification shows as before.) A modal open in
+    front still answers `true`: its cards wait (below).
+  - `osSound`: when the tab is in front, `!alerted` and (`!shown` or `data.mustShow`), the id goes
+    into the tab's `osSound` set: the system notification will make the sound, so this tab won't
+    chime for it. A tab not in front adds ids only from the `os: true` message (a hidden sound tab
+    must still chime when the tab in front answered `shown`).
+  - Then, if it answered `shown: true`, it runs the check itself at once and broadcasts the result,
+    whoever leads: the system notification was skipped because of this tab, and a leader that Edge
+    put to sleep or Chrome froze can't answer `check-now`. Otherwise it posts `check-now` (or checks
+    itself when it is the leader or in fallback).
+- **An `os: true` message**: when `silent` is false, the id goes into `osSound` in every tab (this
+  is how tabs not in front learn it, and it closes the rare race where focus moved between the
+  answer and the worker's decision; the 1.5 s batch window gives it time to arrive). No new check.
+- `NotificationBell` no longer listens for `daybook:notification` itself (the provider does and the
+  bell gets the items through the store). Open 1.10 pages keep their listener until they reload:
+  they ignore the port and reload their list, as before.
+
+### Preview cards (shell, B: `PreviewStack.jsx`, `PreviewCard.jsx`, `PreviewStack.module.css`)
+
+#### When cards show (`liveRules.planCards`, pure)
+
+At a batch's flush, in this order:
+
+1. "Show a preview" off → no cards, no announcement.
+2. The tab isn't visible → no cards (no one would see them; the bell's dot and count update).
+3. The bell list is open (the store's `bellOpen`) → no cards; the open list already shows the items
+   at the top (the bell merges them). The announcement is still made (below).
+4. **Wait** → the items go into the tab's queue when any of these holds:
+   - a modal is open (`document.querySelector('[aria-modal="true"]')`: `Dialog`, `Drawer`, the
+     away question);
+   - a list of suggestions is open (`document.querySelector('[role="combobox"][aria-expanded=
+"true"]')`: GlobalSearch's results, which open at the card's height and width, and the
+     pickers);
+   - the stack is paused (pointer or focus in it, below), so the cards never move under the pointer.
+
+   When none holds any more, every queued item is planned as one batch (3 or more → one summary card
+   and one announcement). An item is dropped 5 minutes after it was queued, by the tab's own clock
+   (never by `createdAt`; the bell has it). The chime is not delayed. The tab watches with one
+   `MutationObserver` on `document.body` (`childList`, `subtree`, `attributes` with
+   `attributeFilter: ['aria-modal', 'aria-expanded']`), connected only while the stack or the queue
+   has entries, its callback run at most once per animation frame.
+
+5. Otherwise: a batch of 1 or 2 → one card each, the newest on top; 3 or more → one summary card.
+
+- **Stack**: at most 3 entries (`MAX_CARDS`; a summary counts as one), newest on top; at 640 px and
+  narrower at most 2 (`MAX_CARDS_PHONE`), and in a window under 500 px high at most 1
+  (`MAX_CARDS_SHORT`, `SHORT_WINDOW_PX = 500`), so the stack never covers most of a phone screen
+  or runs off a short window. A new entry goes on top; the oldest beyond the limit leaves at once
+  (its leave animation, not marked read). An entry never leaves to make room while the pointer or
+  focus is in it (new items wait while the stack is paused, rule 4).
+- **A modal or list opens while cards show** (the same observer): the stack hides at once
+  (`hidden`, every entry's time paused). It shows again when no modal or open list is left, each
+  entry with at least 2,000 ms (`RESUME_MIN_MS`); entries hidden for more than 5 minutes are
+  dropped. A card is therefore never on screen over a `Dialog`, a `Drawer` or the search results.
+- Opening the bell list closes every card at once (not marked read), and none show while it stays
+  open.
+- A `read` or `read-all` from the store (a card here, the bell, another tab) closes the cards of
+  those items; a summary closes when all its items are read. A card that holds focus isn't closed by
+  a `read` from elsewhere: it goes when focus leaves it.
+- Cards shown while the tab is **in front** add their ids to the record's `shown` list
+  (`markAlerted`), so a later system notification for them is silent.
+
+#### Timing
+
+- Each entry hides itself 6,000 ms after it appears (`CARD_MS = 6000`).
+- **Pause**: while the pointer is over the stack (from its first `pointermove` or `pointerdown` on
+  the `<ol>` until `pointerleave`; not `pointerenter`, which Chrome also fires when a card appears
+  under a mouse that isn't moving, so a card that lands under a resting pointer hides on time and
+  never holds back the next ones) or
+  focus is inside it (`focusin`/`focusout` with `relatedTarget` outside), every entry's time stops.
+  When both end, each resumes with what it had left, at least 2,000 ms (`RESUME_MIN_MS = 2000`, the
+  rule of `undoResumeMs`).
+- The time runs while the tab is hidden (a card isn't kept for someone who left).
+
+#### Single card
+
+- `<li>` → `<article aria-labelledby={titleId} aria-describedby={bodyId}>` (no `aria-describedby`
+  without a body):
+  - **Icon** (`aria-hidden`): lucide, 18 px, `strokeWidth` 1.8, in a 32 × 32 tile, radius
+    `var(--radius-control)`, `--primary-soft` with `--primary-text`. By `alertGroup(type)`:
+    attendance `Clock`, calendar `CalendarDays`, project `FolderKanban`, task `ListTodo`, report
+    `FileText`, timer `Timer`, ai `Sparkles`; system and anything else the bell's own `BellIcon`
+    (not lucide's bell, which looks different from the top bar's), exported from
+    `NotificationBell.jsx` by B with a `size` prop (default 20, so the bell is unchanged) and drawn
+    at 18 px here.
+  - **Title** (`<p id>`): the row's `title`, 14/20, 600, `--ink`, at most 2 lines
+    (`-webkit-line-clamp: 2`), `overflow-wrap: anywhere`.
+  - **Body** (`<p id>`, only when the row has one): 13/18 (`--text-small`), `--muted`, at most 2
+    lines.
+  - **Time**: `<time dateTime={createdAt}>` with the bell's text ("Today at 9:41 AM"; B moves the
+    bell item's expression into `NotificationBell.list.js` `itemTime(item, tz, today)` and both
+    use it), 12/16 (`--text-tag`), `--muted`, 4 px above.
+  - **Actions** (10 px above, gap 8, wrap): **Open** only when `isInAppLink(link)`: a `next/link`
+    `<Link href={link}>` styled as a small primary button (32 px high, padding `0 12px`, radius 8,
+    `--primary` with `--on-primary`, 13 px 600, no underline, hover `--primary-hover`); then **Mark
+    as read**: a text button (32 px, padding `0 10px`, radius 8, `--primary` text, 13 px 600, hover
+    `--primary-soft`).
+  - **Close**: a 32 × 32 button at the top right (`top: 6px; right: 6px`, absolutely placed, last in
+    the DOM), lucide `X` 16 px `--muted`, hover `--surface-muted` with `--ink`, `aria-label`
+    "Dismiss" (the app toasts' name).
+  - Open, Mark as read and Dismiss each have `aria-describedby={titleId}` (the card's title), as the
+    bell row's buttons do, so repeated buttons can be told apart.
+- **Open** = the bell item's click (`useNotificationActions.open`): marks it read at once
+  (optimistic `PATCH /api/notifications/[id] { read: true }`, the store learns it and broadcasts
+  `read`), and for a plain left click waits up to `SAVE_BEFORE_NAVIGATE_MS` (400) for the save, then
+  `router.push(link)`; a slow save refreshes after. A modifier or middle click is left to the
+  browser (new tab) and still marks it read. The card closes at once. (B shares the code:
+  `usePreviewActions` uses the same helpers and constant, exported from `NotificationBell.actions.js`
+  and `NotificationBell.list.js`.)
+- **Mark as read** = the same PATCH; the card closes at once; a failure puts nothing back on screen
+  and toasts "Couldn't mark it as read" (tone error, the bell's copy), and the bell list (if loaded)
+  reloads quietly.
+- **Close X** (and Escape, below) = the card goes; the item stays unread.
+- An unread item with no in-app link shows only Mark as read.
+
+#### Summary card
+
+- Same box. Icon `BellIcon` (18 px). Title "3 new notifications" (the batch's count; with `more` from the API:
+  "More than 20 new notifications"). Body line 1: the newest item's title, 1 line, 13/18 `--ink-2`;
+  line 2: "and 2 more" (`--muted`; "and 1 more" never happens, a summary has at least 3; with
+  `more`: "and more"). Time: the newest item's.
+- Actions: **See them** (small primary button) and **Mark these as read** (text button); Close X
+  "Dismiss". Each has `aria-describedby={titleId}`, as on a single card.
+  - **See them**, on a page with a bell (the store has a registered bell): closes the stack and
+    opens the bell list (store `openBell`; focus goes to the bell button, as after pressing it).
+    On a page without a bell: the summary is replaced, in one step, by the newest `k` items not
+    read meanwhile (another tab, the bell) as single cards (fresh 6 s each, started only when the
+    stack isn't paused), `k` = the stack's limit (3, 2 on a phone); other cards past the limit leave
+    (their animation). The swap keeps the pause (the pointer that pressed it is still there), where
+    focus came from, and the queue (`useStack` `replace(key, singles, limit)`; with no unread item
+    left the summary just leaves). Focus, if it was in the summary,
+    goes to the top card's first button. Its label is then "See them" when the batch has exactly `k`
+    items and "See the newest {k}" when it has more (`seeLabel(count, maxCards, hasBell)`). In a
+    short window (limit 1) without a bell the button isn't shown: the summary already names the
+    newest.
+  - **Mark these as read**: `POST /api/notifications/read-all { ids }` with the batch's ids (at most
+    50, the newest); the card closes; `read` broadcast; failure toasts "Couldn't mark them as read"
+    (tone error, the bell's copy).
+  - With `more` (over 20), the second button is **Mark all as read** instead (`POST
+/api/notifications/read-all {}`, the bell's copy and failure toast, `read-all` broadcast),
+    because the batch's ids would miss the rows past the 20.
+
+#### Place, size, layers
+
+- The stack is a `<section aria-label="New notifications">` with an `<ol>`, rendered by the provider
+  after `children` (like the toasts' region, at the end of the shell) and only while it has
+  entries. `position: fixed; z-index: 65; width: 360px; max-width: calc(100vw - 32px)`; the section
+  has `pointer-events: none` and each card `pointer-events: auto`, so the gaps never block clicks.
+  Cards: gap 8 px.
+- **641 px and wider**, `top` = the registered bell button's `getBoundingClientRect().bottom + 8`
+  (where the bell list opens); on a page without a bell, the bottom of the page's top bar
+  (`document.querySelector('#main header')`, TopBar's `<header>`, the only `header` in `main`)
+  `+ 8`, so a card never covers the top bar's own buttons (Submit report, Save, New project). The
+  value is used when it is from 8 to 240, else 16 px (the top bar has scrolled away).
+- **641 px and wider**, `right`: with a registered bell, `clientWidth -
+bell.getBoundingClientRect().right` (`document.documentElement.clientWidth`, so the scrollbar
+  doesn't count), at least 16 and at most `clientWidth - cardWidth - 16`, so the card's right edge
+  matches the bell list's (the list opens at the bell's right edge; on Team, Overview and Ask the
+  avatar comes after the bell, and below 1024 px the actions row starts at the left). Without a
+  bell: 32 px at 1024 and wider (the main area's padding), 24 px from 641 to 1023, decided by
+  AppShell's own media query (`matchMedia('(max-width: 1023px)')`, which counts the scrollbar),
+  not by `clientWidth` (a 1030 px window with a 15 px scrollbar still has 32 px padding).
+- `top` and `right` are measured when the stack goes from empty to shown and on `resize` while
+  shown (not on scroll: once shown it stays put, like a toast).
+- **640 px and narrower** (phone): `top: max(12px, env(safe-area-inset-top))`, `left: 16px`,
+  `right: 16px`, width auto (358 px at 390), no bell anchor: it comes from the top.
+- **Card box**: `display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px;
+padding: 12px 44px 12px 12px` (room for the X), `background: var(--surface)`, `border: 1px solid
+var(--line)`, `border-radius: var(--radius-tile)` (12 px), `box-shadow: 0 16px 40px
+color-mix(in srgb, var(--navy) 14%, transparent)` (the bell list's).
+- **Touch** (`@media (hover: none)`) and 640 px and narrower: Open and Mark as read are 44 px high,
+  the X 44 × 44 (`top: 0; right: 0`), padding-right 52 px.
+- **Light and dark**: tokens only; every token used is a `light-dark()` one, so nothing else changes.
+  No new tokens (so `themeFallback.test.js` is unchanged).
+- **Layers** (z-index): page, bell list and GlobalSearch 40, sidebar scrim 44 and drawer 45,
+  `Drawer` 50, `Dialog` 60, **preview stack 65**, toasts and Undo toasts 70, `Menu` and Team
+  `TodoPopover` 80, skip link 100, LaunchSplash 1000. The stack hides while a modal or a list of
+  suggestions is open (above), so a card is never on screen over a `Dialog`, a `Drawer` or the
+  search results; 65 only keeps it above the page. Toasts sit at the bottom, cards at the top: they
+  never overlap on desktop.
+- **Motion**: enter `live-in` 180 ms `cubic-bezier(0.2, 0.8, 0.2, 1)` from `opacity: 0;
+transform: translateY(-8px)` (from the bell); phone `translateY(-16px)` (from the top). Leave 140 ms
+  ease-in to `opacity: 0; transform: translateY(-4px)`, then removed: on an `animationend` that
+  comes while the card is leaving and from the card itself (`event.target ===
+event.currentTarget`, so the end of the enter animation or of a child's never counts), with a
+  250 ms safety timeout. Reduced motion: no rule in the module; the global rule in `globals.css`
+  cuts both animations to 0.01 ms, so `animationend` still fires and a card appears and goes at
+  once. When `matchMedia('(prefers-reduced-motion: reduce)').matches`, a leaving card is also
+  removed without waiting for `animationend`.
+
+#### Keyboard and screen readers
+
+- Cards never take focus when they appear (WCAG 4.1.3). Tab order inside a card: Open, Mark as
+  read, Dismiss. The region is a landmark ("New notifications"), reachable from the landmark list;
+  every item is also in the bell, so a card that hides before someone reaches it loses nothing
+  (WCAG 2.2.1).
+- **Escape**: with focus in a card, it closes that card. Anywhere else, it closes every card (they
+  stay unread) when no modal is open and nothing else used the key: a `keydown` listener on
+  `document`, bubble phase, that checks `!event.defaultPrevented` (Menu, GlobalSearch, the bell and
+  `useModal` already call `preventDefault`).
+- **Focus never hides under a card** (WCAG 2.4.11): when focus moves to an element outside the
+  stack whose box lies completely under a card (`focusin` on `document`, comparing
+  `getBoundingClientRect()`), the stack closes at once (not marked read).
+- When a card holding focus closes (any button, Escape, its time), focus moves to the next card's
+  first control. When no card is left, it goes back to the element that had focus before focus
+  entered the stack (the `relatedTarget` of the first `focusin` into the stack, if it is still in
+  the page and not in the stack), else to the bell button, else to `main` (already
+  `tabIndex={-1}` in AppShell). Each of these is focused with `{ preventScroll: true }`: a card
+  closed with the mouse or a tap on a page scrolled down never jumps the page to the bell.
+- **Announcement**: one `<div role="status" className="visually-hidden">` rendered by the provider
+  from mount, always present (a region added with its text is often not read). It is made when a
+  batch's cards actually appear: for queued items when they leave the queue, never while a modal is
+  open (a screen reader ignores a live region outside an `aria-modal` dialog). While the bell list
+  is open (no cards), the same text is announced at the flush. Never when preview is off or the tab
+  is hidden. `announcement(batch)`: 1 item → "New notification: {title}"; 2 or more (two cards or a
+  summary) → "{n} new notifications. The newest: {title}"; with `more` → "More than 20 new
+  notifications. The newest: {title}". Bodies are never read out. The text is cleared first and set
+  on the next animation frame, and cleared again 5 s later. Never `role="alert"`.
+
+### The chime (shell, B: `chime.js`, `chimeGate.js`)
+
+#### The sounds (`scheduleChime(ctx, t0, tone)`, `TONES`, `CHIME`)
+
+Four short sounds, each picked by the person in My settings (`bellTone`, default `'chime'`). All are
+plain sine oscillators with gain envelopes. No file, nothing to download. Each note of a sound is
+played as one sine per **partial** (`hz * ratio`), each partial with its own gain and decay.
+
+| Tone (`bellTone`)  | Notes (`hz` at `at` s)                                             | Partials (`ratio`, `gain`, `decay` s)                | Attack s | Stop after s | Master |
+| ------------------ | ------------------------------------------------------------------ | ---------------------------------------------------- | -------- | ------------ | ------ |
+| `chime` "Chime"    | E5 659.25 at 0, then B5 987.77 at 0.12                             | (1, 1, 0.50), (2, 0.25, 0.25)                        | 0.010    | 0.52         | 0.16   |
+| `bell` "Soft bell" | G5 783.99 at 0                                                     | (1, 1, 1.20), (2.76, 0.30, 0.60), (5.40, 0.12, 0.30) | 0.005    | 1.22         | 0.14   |
+| `ding` "Ding"      | C6 1046.5 at 0                                                     | (1, 1, 0.60), (2, 0.20, 0.30)                        | 0.005    | 0.62         | 0.14   |
+| `pop` "Pop"        | 880 at 0, gliding to 440 over 0.08 s (`glideTo: 440, glide: 0.08`) | (1, 1, 0.12)                                         | 0.004    | 0.14         | 0.20   |
+
+For every partial of every note (`start = t0 + note.at`):
+
+| Part   | Value                                                                                                                                             |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pitch  | `frequency.setValueAtTime(hz * ratio, start)`; with `glideTo`, also `frequency.exponentialRampToValueAtTime(glideTo * ratio, start + glide)`      |
+| Attack | gain `setValueAtTime(0, start)`, `linearRampToValueAtTime(partial.gain, start + attack)` (no click)                                               |
+| Decay  | gain `exponentialRampToValueAtTime(0.001, start + decay)` (never to 0)                                                                            |
+| Stop   | each oscillator `stop(start + stopAfter)`; `onended` disconnects its nodes                                                                        |
+| Master | one gain node per play at `master` (the sum of a sound's partial gains × master stays under 0.5, so no clipping)                                  |
+| Start  | `t0 = ctx.currentTime + 0.01`; the master gain node is disconnected 300 ms after the last oscillator stops (`t0 + lastNote.at + stopAfter + 0.3`) |
+
+`TONES` exports exactly these numbers as a frozen object (`{ chime: { label: 'Chime', notes: [{ hz:
+659.25, at: 0 }, { hz: 987.77, at: 0.12 }], partials: [{ ratio: 1, gain: 1, decay: 0.5 }, { ratio:
+2, gain: 0.25, decay: 0.25 }], attack: 0.01, stopAfter: 0.52, master: 0.16 }, bell: { ... }, ding: {
+... }, pop: { ... } }`), `TONE_NAMES = ['chime', 'bell', 'ding', 'pop']`, and `CHIME = TONES.chime`.
+`scheduleChime(ctx, t0, tone = 'chime')` uses only them (an unknown name plays `chime`), so the test
+can check the calls. Chime is the E5 then B5 pair with a quiet octave (oscillators at 659.25,
+1318.5, 987.77 and 1975.54 Hz).
+
+#### The player (`getChimePlayer()`, one per page)
+
+- **No `AudioContext` at page load.** While the Sound choice isn't Off and `window.AudioContext ||
+window.webkitAudioContext` exists, the provider adds passive capture listeners on `window` for
+  `pointerdown`, `pointerup`, `keydown`, `touchend` and `click`. Every such event calls
+  `unlock(event)` until the context runs. It does nothing when `!event.isTrusted`
+  (`ServiceWorker.jsx`'s `mayLeaveFor` dispatches a synthetic click) or when
+  `navigator.userActivation && !navigator.userActivation.isActive` (a touch `pointerdown` or Escape
+  is not a gesture: creating the context there gives Chrome's "not allowed to start" warning and
+  leaves Safari locked). Otherwise it creates the context if there is none (**inside the gesture**,
+  as Safari needs), calls `resume()` without awaiting it and starts a 1-sample silent buffer. It
+  does this on every such event, not only the first: on a touch screen the `pointerup` or
+  `touchend` unlocks it. The listeners are removed in `onstatechange` when `state` becomes
+  `'running'`. Firefox and Safari still report `'suspended'` right after the gesture (the spec
+  queues the change), so `state` is never tested synchronously. An `onstatechange` to `suspended`
+  or `interrupted` (iPhone, a locked screen) adds them again.
+- `ready()` → `Promise<boolean>`: true with the test hook; no context → false (the person never
+  clicked: no sound, the card still shows); running → true; else `Promise.race([ctx.resume()
+.catch(() => {}), wait(300)])` (a `resume()` can stay pending for ever, browser.md §1), then
+  whether it is running. It never makes a sound.
+- `play({ ids, tone })` only schedules the person's sound (`scheduleChime(ctx, t0, tone)`, `tone`
+  from `useBellTone()`, or calls the test hook). It is called only after `ready()` was true and
+  `claimChime` returned `'play'`. A sound is never queued for later.
+- **Test hook**: when `typeof window.__daybookChime === 'function'`, `play()` and `playChimeNow()`
+  call `window.__daybookChime({ reason, ids, tone })` (`reason` `'batch'` or `'test'`; `ids` `[]`
+  for a test) instead of making a sound, `ready()` is true, and no context is made. Production never
+  defines it; the e2e does with `page.addInitScript`.
+- `playChimeNow(tone)` (My settings' "Play sound" and picking a sound in "Choose a sound"), called
+  synchronously in the click handler before any `await`: it creates or resumes the context, starts
+  the silent buffer and schedules that sound at once (a context that is still starting plays it as
+  soon as it runs), whatever the Sound choice, the sound tab and the rate limit. It then resolves `{ played }`, where `played` = `ctx.state ===
+'running'` after `await Promise.race([ctx.resume().catch(() => {}), wait(300)])`. When `played`
+  is false, the chime's master gain is disconnected at once, so a context that starts later never
+  plays it late. It never reads or writes the alerted record (`chimeAt`, `chimed`), so a sound
+  tried in My settings never holds back a batch's chime.
+- `chime.js` touches no browser API when it is imported (node tests import `TONE_NAMES` from it);
+  `getChimePlayer()` makes the page's player on first use. The UI's labels are `TONE_CHOICES`'
+  (My settings); `TONES[name].label` is the same text.
+
+#### When it chimes (`liveRules.shouldChime`, pure, then `claimChime`)
+
+At a batch's flush, the first rule that matches decides (the reason is returned, for tests):
+
+1. Sound choice `'off'` → `'off'`.
+2. `'important'` and no item of the batch `isImportant` → `'not_important'`.
+3. Any item of the batch is in the tab's `osSound` set, or desktop push is active with an Apple
+   subscription (Safari always shows the system notification and iPhone and iPad ignore `silent`)
+   → `'os'` (the system notification sounds).
+4. The batch's `gapMs > 150,000` (the browser was asleep, offline or frozen: the items may be
+   minutes old) → `'stale'`. Cards still show.
+5. The tab isn't the sound tab → `'not_sound_tab'`. When `frontTabId` is null and desktop push is
+   active, no tab is: the system notification makes the sound. Otherwise the tab is the sound tab
+   when its `tabId` is the result's `soundTabId` (Leader and followers, above; for a batch from
+   several answers, the newest answer's). Push state comes from `pushActive.js`
+   `desktopPushActive()` → `{ active, apple }`: permission, then `navigator.serviceWorker.ready` and
+   `pushManager.getSubscription()`, at most 500 ms, unknown = not active; `apple` = the
+   subscription endpoint's host is `push.apple.com` or ends in `.push.apple.com` (the test of
+   `isApplePush`).
+6. `await player.ready()` is false → `'no_audio'`, before claiming, so a tab that can't play never
+   blocks one that can (and `soundTabId` already prefers a tab whose audio runs).
+7. `claimChime({ ids, now })` (inside `navigator.locks.request('daybook-chime-<userId>', ...)` when
+   available): reads the record; `now - chimeAt < 10,000` (`CHIME_MIN_GAP_MS`) → `'too_soon'`; any
+   id in `chimed` → `'done_elsewhere'` (ids in `shown` don't count: a card of this same flush has
+   just written them); else writes `chimeAt = now`, adds the ids to `chimed` → `'play'`, and only
+   then the tab calls `play({ ids, tone })` (`liveSound.js` `decideChime` runs rules 1 to 7).
+
+So: one chime per batch, at most one every 10 s per browser (a batch inside the 10 s gets cards and
+no sound, never a late sound), one tab per browser, never on first load (nothing is new then, and
+no gesture has unlocked the audio), and nothing at all with Off.
+
+#### Page side, with desktop push (the rule in one place)
+
+| Daybook in this browser                   | Desktop push active | System notification (sw.js)                               | Page chime (per the Sound choice)                                                   | Cards           |
+| ----------------------------------------- | ------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------- |
+| A tab in front, preview on (or list open) | yes, not Apple      | none (the page answered `shown`)                          | the sound tab: the front tab when its audio runs, else another tab whose audio runs | in visible tabs |
+| The same, but no tab's audio runs yet     | yes, not Apple      | shown with the OS sound (not `canSound`)                  | none (`osSound`)                                                                    | in visible tabs |
+| A tab in front, preview off               | yes, not Apple      | shown with the OS sound; silent when Sound is Off         | none (`osSound`)                                                                    | none            |
+| A tab in front                            | yes, Apple          | shown (`mustShow`), with the OS sound                     | none (the system notification sounds, rule 3)                                       | in visible tabs |
+| Visible but not in front, or all hidden   | yes                 | shown with the OS sound (silent if alerted, not on Apple) | none (rule 5)                                                                       | in visible tabs |
+| A tab in front                            | no                  | n/a                                                       | the sound tab, as in the first row                                                  | in visible tabs |
+| Visible but not in front, or all hidden   | no                  | n/a                                                       | the leader if its audio runs, else the newest tab whose audio runs                  | in visible tabs |
+| Closed                                    | yes                 | shown with the OS sound, as in 1.10                       | n/a                                                                                 | n/a             |
+
+### Desktop push (system, A: `public/sw.js`, `src/modules/push/{payload,service}.js`)
+
+#### Payload
+
+- `buildPayload(notification, appUrl, { mustShow = false } = {})` → JSON `{ id, userId, title,
+body, url }` plus `mustShow: true` only when asked (`userId` = `notification.userId`, a number; no
+  `type`, no other personal data; the size stays far under 4 KB).
+- **new** `isApplePush(endpoint)` → true when the endpoint's host is `push.apple.com` or ends with
+  `.push.apple.com` (Safari's `web.push.apple.com`); a bad URL → false.
+- `planDeliveries` builds the payload per subscription: `mustShow: isApplePush(subscription.endpoint)`
+  (at most two variants per notification). Nothing else in sending changes.
+
+#### `public/sw.js` `push` (exact rule)
+
+```js
+const ASK_MS = 1000;
+
+self.addEventListener('push', (event) => {
+  event.waitUntil(handlePush(readPush(event)));
+});
+
+async function handlePush(data) {
+  const id = data.id ? String(data.id) : String(Date.now());
+  const title = typeof data.title === 'string' && data.title ? data.title : 'Daybook';
+  const mustShow = data.mustShow === true || (await appleSubscription());
+  const windows = await daybookWindows().catch(() => []); // matchAll({ type: 'window', includeUncontrolled: true }), same origin
+  const answers = await Promise.all(windows.map((client) => askWindow(client, data, mustShow)));
+  const shownInFront = windows.some(
+    (client, i) => client.focused && client.visibilityState === 'visible' && answers[i].shown,
+  );
+  if (shownInFront && !mustShow) return; // the page in front shows its own card (CONTRACT 26)
+  const silent = !mustShow && answers.some((answer) => answer.alerted); // iOS ignores silent
+  await self.registration.showNotification(title, {
+    body: typeof data.body === 'string' ? data.body : '',
+    icon: ICON,
+    badge: BADGE,
+    tag: `daybook-${id}`,
+    timestamp: Date.now(),
+    data: { url: samePath(data.url) },
+    ...(silent ? { silent: true } : {}),
+  });
+  tellShown(windows, data.id, silent); // each window: { type: 'daybook:notification', os: true, id: id ?? null, silent }, a closed one skipped
+}
+```
+
+- `askWindow(client, data, mustShow)`: a `MessageChannel`; posts `{ type: 'daybook:notification',
+ask: true, id: data.id ?? null, userId: data.userId ?? null, mustShow }` with `port2`; resolves
+  `{ shown: reply.shown === true, alerted: reply.alerted === true }` on the first reply, or
+  `{ shown: false, alerted: false }` after `ASK_MS` or on any error. All windows are asked at once,
+  so a push waits at most 1 s.
+- `appleSubscription()`: `self.registration.pushManager.getSubscription()` and `isApplePush`'s host
+  test inline (the worker can't import modules); any error → false.
+- Everything runs inside `event.waitUntil`. The skip needs **all** of: a window that reports
+  `focused` and `visible` in the worker's own snapshot, that window's page answering `shown` within
+  1 s (it checked `visibilityState` and `hasFocus()` itself), and a non-Apple subscription. Chrome
+  needs only a visible tab, Firefox only an open one (browser.md §3), so the skip is always within
+  their rules; Safari always shows. In a rare race the worst cases are one Chrome "This site has been
+  updated in the background" notice or one of Firefox's 16 quota points.
+- `silent: true` (Chrome 43, Edge 17, Firefox 132, Safari 16.6 on macOS; ignored on iPhone and
+  iPad; never with `vibrate`, which Daybook doesn't use) only when a window says this browser
+  already alerted it (or is in front with Sound Off), and never with `mustShow`: on Apple the page
+  doesn't chime (rule 3), so the system notification keeps its sound there. Otherwise no `silent`,
+  so the computer decides the sound as in 1.10. No `renotify`, `requireInteraction` or `actions`.
+- `notificationclick`, `install`, `activate`, `fetch`, `openPath`, `askPage` and the existing
+  `daybook:open` flow don't change. The old `tellPages()` goes: the ask is the new message, with
+  the same `type`, so a page still on the 1.10 bundle reloads its bell on it (and doesn't answer, so
+  the notification shows after 1 s, as in 1.10).
+
+### The bell with the live check (shell, B: `NotificationBell.jsx`, `.actions.js`, `.list.js`)
+
+- `useLiveNotifications()` (from **new** `src/components/live/LiveNotifications.jsx`) → null, or the
+  store: `{ userId, unread, subscribe(listener) → unsubscribe, setUnread(n), reportRead(ids,
+readAt, unreadCount), reportReadAll(readAt), reportHidden(id, hidden), registerBell({ button,
+open }) → unregister, setBellOpen(open), markSeen(latestId) }`, plus for the cards and the
+  engine `cursor`, `bellOpen`, `hidden`, `hasBell()`, `bellButton()` and `openBell()`. Events to
+  listeners: `{ kind: 'items', items }` (every row of an answer, newest first; sent for every
+  answer, even an empty one, because the bell re-reads `unread` on each event), `{ kind: 'read',
+ids, readAt }`, `{ kind: 'read-all', readAt }`, `{ kind: 'openBell' }`. **new** `markSeen(id)` =
+  `cursor = max(cursor, id)`.
+- With the store, the bell:
+  - drops a load of its own whose answer's `userId` isn't the store's (no list, no count change);
+  - when its own load ends while its list is open, calls `markSeen(latestId)` (the plain GET's
+    `latestId`), so rows the person just saw in the list never get a card or a chime later;
+  - takes `unread` from the store after each answer (the `hidePending` adjustment as for
+    `initialUnread`), so the red dot, the count in the button name and the swing ("a higher count
+    while the list is closed swings the bell at once") follow the live check on every bell page.
+    `initialUnread` from a fresh server render still takes over, as in 1.10;
+  - on `items`, when its list is loaded: adds the rows it doesn't have, `hidePending`, sorts as the
+    list does (`createdAt` desc, `id` desc), keeps 20. No toast, no announcement, focus untouched:
+    the row that holds keyboard focus stays even past 20 (`mergeLiveItems(..., keepId)`, the id
+    from `focusedRowId(button)`), so focus never drops to the page; it goes at the next merge
+    without focus on it, or the next load.
+    `items` that arrive while its first load is in flight are kept and merged when it ends;
+  - on `read`/`read-all`: marks those rows read locally (no request);
+  - on `openBell`: opens the list as its button does and focuses the button;
+  - registers its button (the stack's anchor) and its `open`, reports `setBellOpen` on open and
+    close (the `unregister` returned by `registerBell` also sets `bellOpen` to false, so a bell that
+    unmounts while open never keeps cards away), `reportHidden(id, true)` when a delete starts its
+    Undo and `false` on Undo, and after each of its own writes `setUnread` from the answer's
+    `unreadCount` and `reportRead` / `reportReadAll` (so other tabs and the cards follow);
+  - drops its own `daybook:notification` listener; keeps its quiet load on open and on coming back
+    after 60 s (it refreshes read states changed on other devices).
+- Without the store everything is as in 1.10.
+- `bellRing` (`useBellRing`) still only switches the swing.
+- `BellIcon` is exported (with a `size` prop, default 20) for the cards' tiles.
+
+### My settings (preferences: A owns the keys, C owns the page)
+
+#### Keys (`src/modules/preferences/schemas.js`, A)
+
+- `BELL_SOUNDS = Object.freeze(['important', 'all', 'off'])` and `BELL_TONES =
+Object.freeze(['chime', 'bell', 'ding', 'pop'])` (both exported).
+- `PREFERENCE_DEFAULTS` gains `bellSound: 'important'`, `bellTone: 'chime'` and `bellPreview: true`
+  (after `bellRing`, in that order).
+- `PREFERENCE_FIELDS` gains `bellSound: z.enum(BELL_SOUNDS, { error: 'Sound must be Important only,
+All or Off.' })`, `bellTone: z.enum(BELL_TONES, { error: 'The sound must be Chime, Soft bell, Ding
+or Pop.' })` and `bellPreview: onOff('Show a preview')` ("Show a preview must be on or off.").
+- `preferences/service.js`: the `getFor` JSDoc lists the three. Nothing else: `withDefaults`,
+  `update`, the `JSON_MERGE_PATCH` save, the 2,048-character body limit (the keys fit easily) and
+  the route's 60 a minute stay. **No migration** (map.md §6: a JSON column; only changed keys are
+  stored).
+- `src/components/UserPrefs.jsx` (A): `useBellSound()` → `'all'` or `'off'` when the stored value is
+  one of those, else `'important'`; `useBellTone()` → `'bell'`, `'ding'` or `'pop'` when the stored
+  value is one of those, else `'chime'`; `useBellPreview()` → `bellPreview !== false`. (No import of
+  the schemas file: it would bring zod into every page.)
+- The provider reads them through these hooks; after My settings saves, `router.refresh()` brings
+  the new values to this tab (CONTRACT 21), and the `prefs` channel message to the others.
+
+#### The Notifications section (C: `MySettingsSections.jsx`, `sections.js`, `page.module.css`, **new** `PlaySoundButton.jsx`)
+
+In this order:
+
+1. "Ring the bell for unread notifications" (unchanged).
+2. **"Sound"**, a `ChoiceRow` (`name="bellSound"`, `choices={SOUND_CHOICES}`): `Segmented` "Important
+   only" · "All" · "Off" (`SOUND_CHOICES` in `sections.js`: `[{ value: 'important', label:
+'Important only' }, { value: 'all', label: 'All' }, { value: 'off', label: 'Off' }]`). Help: "A
+   short sound for new notifications while Daybook is open. Important ones ask you to act, like a
+   reminder to check in or a request to approve." No button in this row.
+3. **"Choose a sound"** (owner, 23 Nov 2026), a `ChoiceRow` (`name="bellTone"`,
+   `choices={TONE_CHOICES}`): `Segmented` "Chime" · "Soft bell" · "Ding" · "Pop" (`TONE_CHOICES` in
+   `sections.js`: `[{ value: 'chime', label: 'Chime' }, { value: 'bell', label: 'Soft bell' }, {
+value: 'ding', label: 'Ding' }, { value: 'pop', label: 'Pop' }]`). Help: "Pick one to hear it."
+   **Picking a sound plays it at once**: the row's change handler calls `playChimeNow(value)`
+   synchronously, before the save starts (so the click unlocks the sound), then saves as every
+   choice does. Picking the sound already chosen plays it again and saves nothing (`ChoiceRow`'s
+   `onPick(value)` runs on every press; a value is saved only when it changed). Beside the
+   `Segmented` (same line, gap 12, centred; it wraps under it, at the left, when the card is too
+   narrow for both, as on a phone, where the page's `@container (max-width:
+360px)` rule makes the `Segmented` full width): **Play sound** (`Button variant="secondary"
+size="compact"`, lucide `Volume2` 16 px, `aria-describedby` the help line; 44 px high at 640 px
+   and below). `ChoiceRow` gains `id` (names `${id}-label` and `${id}-help`), `onPick` and
+   `children`: when given, the `Segmented` and the children sit together in `.soundControls`;
+   without them the row is as today. The button calls
+   `playChimeNow(tone)` with the chosen sound synchronously in its click handler, before any
+   `await` (so it also unlocks the sound for this page), and plays at once, whatever the Sound
+   choice (so it can be tried with Off too). `{ played: false }` (from the button or from picking)
+   → toast "Couldn't play the sound", body "Your browser didn't let Daybook play it.", tone error;
+   a pick is still saved.
+4. **"Show a preview"**, a `ToggleRow` (`name="bellPreview"`). Help: "A small card at the top of the
+   screen for each new notification. It hides after a few seconds."
+5. The existing `PushSwitch` "Show on this computer" (while push is on for the company and
+   supported), then under it, only when that row shows, a muted `.note`: "When this is on and
+   Daybook is in the background, Daybook doesn't chime. Your computer's settings decide if the
+   desktop notification makes a sound, whatever you chose for Sound."
+
+- Saving is the page's existing flow (one PATCH per change, "Saving…" / "Saved", revert and toast
+  on failure). After a successful save of `bellSound`, `bellTone` or `bellPreview`,
+  `PreferencesProvider.jsx` calls `postPreferenceChange({ [key]: value })` (B's `liveChannel.js`)
+  with the value as stored in the answer, inside try/catch (a failed broadcast never reverts a
+  save).
+- Layout (`page.module.css`): `.soundControls { display: flex; align-items: center; gap: 12px;
+flex-wrap: wrap; margin-top: 12px; } .soundControls > .choice { margin-top: 0; } .pushRow +
+.note { margin-top: 13.75px; } @media (max-width: 640px) { .soundControls .playSound { height:
+var(--control-height); } }` (two classes, so the rule beats `Button`'s compact height whatever
+  order the CSS loads in; the `.choice` margin moves to the wrapper, so the button is centred
+  on the `Segmented`, which keeps its width; the note's divider sits a row's padding under the
+  desktop switch, whose wrapper ends with only 2 px); desktop,
+  below 1024 px and 375 px; dark from the tokens. The `loading.js` skeleton gets three more rows in
+  Notifications (`SectionSkeleton` `rows`: `'toggle' | 'choice' | 'tone'`; the tone row's choice
+  and button skeleton share `.controls` in `loading.module.css`).
+
+### Modules
+
+- `@/modules/notifications` (A):
+  - **new** `listAfter(userId, { after, limit = 20 })` → `{ items: [{ id, type, title, body, link,
+readAt, createdAt }], more: boolean }`: rows with `id > after`, newest first by `id`, any read
+    state, at most `limit` (1 to 50; the repo reads `limit + 1` to set `more`).
+  - **new** `latestId(userId)` → the person's highest notification id, or 0.
+  - `markAllRead(userId, { ids } = {})` → how many: every unread one as today, or with `ids` only
+    those of the person's that are unread (`whereIn`, at most 50). Someone else's ids are ignored.
+  - `notify`: the classification check above. Everything else unchanged.
+  - repo: `listAfter(userId, afterId, limit)`, `maxId(userId)`, `markAllRead(userId, readAt, ids?)`.
+  - `alerts.js` exports as above; `index.js` re-exports `ALERT_TYPES`, `alertLevel`, `isImportant`.
+- `@/modules/push` (A): `buildPayload` (`userId`, `mustShow`), `isApplePush`, per-subscription
+  payloads.
+- `@/modules/preferences` (A): `BELL_SOUNDS`, `BELL_TONES`, three keys.
+- `src/components/live/` (B, all **new**, client or pure; no file over 300 lines):
+  - `LiveNotifications.jsx`: provider, the status region, the flush (cards, announcement, chime);
+    exports `useLiveNotifications`. Split out of it to keep files short: `useLiveEngine.js`
+    (`useLiveEngine({ userId, store, callbacks })`, `pageState()`: the page, service worker and
+    `prefs` listeners, the unlock listeners, `window.__daybookLive`), `liveTab.js`
+    (`createLiveTab(options)`: one tab's engine without React or the DOM: leadership, loop,
+    presence, results, batcher, watchdog, the worker's ask), `liveLoop.js` (`createLoop({ run,
+nextDelay, setTimer, clearTimer, now, gapMs })` → `{ trigger({ force }), setPeriodic(on), busy(),
+stop() }`), `liveSound.js` (`decideChime(...)`: rules 1 to 7 of "When it chimes"), `useStack.js`
+    (`useStack({ now, bellButton, onIdle })`: the stack's entries, timing and focus),
+    `previewWait.js` (`modalOpen()`, `blockedNow()`, `createWaitWatch(onChange)`: the one
+    `MutationObserver`) and `LiveCards.jsx` (the cards' buttons through `usePreviewActions`,
+    inside the provider so they reach the store).
+  - `liveStore.js` `createLiveStore({ userId, cursor })`; `liveRules.js` `newItems`,
+    `nextCursor`, `gapOf({ checkedAt, lastCheckedAt, mountedAt })`, `pollDelay({ anyVisible,
+failures, random })`,
+    `cardLimit({ width, height })`, `planCards({ stack, batch, preview, visible, bellOpen, wait,
+maxCards, now })` (`wait` = a modal or list is open or the stack is paused), `pickSoundTab({
+presences, selfId, selfAudio, frontTabId })`, `shouldChime({ choice, batch, osSound, gapMs,
+tabId, soundTabId, frontTabId, push })` (rules 1 to 5; `push` = `{ active, apple }`),
+    `announcement(batch)`, `summaryTitle(count, more)`, `summaryMore(count, more)`,
+    `seeLabel(count, maxCards, hasBell)`, constants `VISIBLE_MS = 30000`, `HIDDEN_MS = 60000`,
+    `MAX_BACKOFF_MS = 300000`, `CHECK_GAP_MS = 5000`, `WATCHDOG_MS = 75000`, `STALE_GAP_MS =
+150000`, `MAX_CARDS = 3`, `MAX_CARDS_PHONE = 2`, `MAX_CARDS_SHORT = 1`, `SHORT_WINDOW_PX = 500`,
+    `CARD_MS = 6000`, `RESUME_MIN_MS = 2000`, `QUEUE_MAX_AGE_MS = 300000`; also `pickFrontTab({
+presences, selfId, selfFront })`, `entriesFor(batch, now)`, `queueBatch(queue, batch, now)`,
+    `releaseQueue(queue, now)`, `PHONE_MAX_PX = 640` and `SUMMARY_FROM = 3`.
+  - `liveCheck.js` `checkOnce({ fetch, after, signal, timeoutMs = CHECK_TIMEOUT_MS, setTimer,
+clearTimer })` → `{ ok: true, answer }` | `{ stop: true }` | `{ retry: true }` (plain `fetch`,
+    never `api`; it never touches `window.location`; 20 s at most). `liveRules.js` also exports
+    `CHECK_TIMEOUT_MS = 20000`.
+  - `livePresence.js` `createPresences({ now, selfId })` → `{ apply(message), all(), fresh(),
+anyVisible(), anyAudio(), pick({ self, fallback }) }` (`apply` is true for a `tabId` it didn't
+    know; `pick` gives a result's `frontTabId` and `soundTabId`). `liveTab.js`'s engine also has
+    `frozen()` (`freeze`: posts `gone`).
+  - `liveBatch.js` `createBatcher({ windowMs, onFlush, setTimer, clearTimer, now })`,
+    `BATCH_WINDOW_MS`.
+  - `liveLeader.js` `startLeadership({ userId, locks, channelFactory, onLead, onFollow, onMessage
+})` → `{ isLeader(), isFallback(), post(message), takeLead(), stop() }` (`takeLead` = the
+    watchdog's steal; `onFollow` = the lead was stolen; fakes injected in tests).
+  - `liveChannel.js` channel names (`liveName(userId)`, `chimeLockName(userId)`, `PREFS_CHANNEL`),
+    message builders, `openChannel(name, factory)` (one object per name per tab),
+    `postPreferenceChange(values)`, `onPreferenceChange(listener)` → unsubscribe (this tab's own
+    saves) and `setPreferenceUser(userId)` (the provider names the person for `prefs` messages).
+  - `swAnswer.js` `answerPush({ data, userId, cursor, inFront, running, canSound, preview,
+bellOpen, choice, alertedIds, pendingIds })` → `{ shown, alerted, osSound }`.
+  - `pushActive.js` `desktopPushActive({ pushConfigured, timeoutMs = 500 })` → `Promise<{ active,
+apple }>`, and `isAppleEndpoint(endpoint)` (the host test of `isApplePush`; a client can't
+    import the module).
+  - `chime.js` `TONES`, `TONE_NAMES`, `CHIME`, `scheduleChime(ctx, t0, tone)` → `{ master,
+endsAt }`, `createChimePlayer(win)` (tests), `getChimePlayer()` (`unlock(event)`, `ready()`,
+    `play({ ids, tone })`, `playNow(tone)`, `state()`, `onState(listener)`, `listen(on)`: the
+    provider turns the unlock listeners on while Sound isn't Off), `playChimeNow(tone)`;
+    `chimeGate.js` `readRecord(userId, storage)`, `claimChime({ userId, ids, now, storage,
+minGapMs })` → `'play' | 'too_soon' | 'done_elsewhere'` (looks at `chimed` only, writes
+    `chimed`), `markAlerted({ userId, ids, now, storage })` (writes `shown`), `alertedIds({ userId,
+now, storage })` → `Set` (either list), `isAlerted(...)` (either list), `withChimeLock(locks,
+name, fn)` (the `daybook-chime-<userId>` lock, or at once without locks), `CHIME_MIN_GAP_MS =
+10000`.
+  - `PreviewStack.jsx` (+ `PreviewStack.module.css`; also exports `placement(bell)` and
+    `listHandlers(stack)`, the `<ol>`'s pause handlers), `PreviewCard.jsx` (single and summary),
+    `usePreviewActions.js` (`open(item, event)`, `markRead(item)`, `markMany(ids)`, `markAll()`:
+    a summary's "Mark all as read" past 20; `markMany(null)` = `markAll()`; each save resolves
+    true when it worked; also `newestIds(ids)` and `MARK_MANY_MAX = 50`).
+- The bell side (B): `NotificationBell.list.js` `itemTime(item, tz, today)` (the bell row and the
+  cards), `mergeLiveItems`, `setManyRead`, `sameUser`, `storeUnread`, `createLiveBuffer`,
+  `readResponse`, `byNewest`, `BELL_LIMIT = 20`; `NotificationBell.actions.js` `followLink({ item,
+event, saving, router, onNavigate })`, `itemPath(id)`, `SAVE_BEFORE_NAVIGATE_MS`,
+  `requestBellReload()`, `onBellReload(listener)`, `useUndoFocus`; **new**
+  `NotificationBell.live.js` `useBellLive(...)` (the bell's store wiring, split out to keep the
+  bell under 300 lines) and `focusedRowId(button, doc)`; `NotificationItem.jsx` uses `itemTime`.
+- **Import cycles** (harmless): `NotificationBell.jsx` → `LiveNotifications.jsx` → `LiveCards.jsx`
+  → `PreviewStack.jsx` → `PreviewCard.jsx` → `NotificationBell.jsx` (`BellIcon`), and
+  `LiveCards.jsx` → `usePreviewActions.js` → `LiveNotifications.jsx`. Every binding in them is used
+  at render time only; never use one at module load.
+
+### API (owner: system)
+
+| Route                                              | Permission  | Body / returns                                                                                                                                   | Errors and limits                                                                                                                                                                                                                                                                |
+| -------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| existing `GET /api/notifications`                  | `signed_in` | as today `{ items (newest 20), unreadCount }` plus `latestId` and `userId`                                                                       | unchanged (no rate limit; `?limit` still ignored)                                                                                                                                                                                                                                |
+| `GET /api/notifications?after=<id>`                | `signed_in` | `{ userId, items, more, unreadCount, latestId }`: `items` = `listAfter(..., { after, limit: 20 })`; `latestId` = `max(after, items[0]?.id ?? 0)` | `after` a whole number from 0 (`z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER)`), else 400 `VALIDATION_FAILED` `fields.after` "Use a notification id." (an empty `after=` reads as 0); 120 a minute per person → 429 `RATE_LIMITED`, counted before `after` is read |
+| existing `POST /api/notifications/read-all`        | `signed_in` | `{}` (all, as today) or `{ ids: [1 to 50 positive ids] }` → `{ marked, unreadCount }` (`0` for all; the fresh count with `ids`)                  | `ids` empty, over 50 or not ids (each must be a positive whole JSON number: `'5'`, `0`, `1.5` and `null` are refused) → 400 `fields.ids` "Pick 1 to 50 notifications."; unknown fields still ignored                                                                             |
+| existing `PATCH`, `DELETE /api/notifications/[id]` | `signed_in` | unchanged                                                                                                                                        | unchanged                                                                                                                                                                                                                                                                        |
+
+- `GET /api/notifications` (both forms) becomes `withRoute({ permission: 'signed_in', logLevel:
+'debug' }, ...)`, like `api/activity/heartbeat/route.js`: successes log at debug (dropped at the
+  production `LOG_LEVEL=info`); 4xx, 429 and 5xx still log at info.
+- The `after` branch counts ``checkRateLimit({ key: 'notifications-live', limit: 120, windowMs:
+60_000 }, ROUTE, `user:${user.id}`)`` first (per person: the office shares one IP), as
+  `api/me/preferences/route.js` does. 120 covers a browser in fallback mode with several tabs.
+- `latestId` without `after` is `notifications.latestId(user.id)` (one more indexed read); with
+  `after` it comes from the items, so the live check is two queries: `listAfter` and `unreadCount`,
+  run in parallel. `userId` is the session's.
+- Answers are dynamic (they read the session cookie); nothing is cached.
+- No new route, so CONTRACT §7 doesn't change.
+
+### Limits
+
+- Live check: 20 items per answer (`more` beyond), every 30 s visible / 60 s hidden ±10%, at most one
+  per 5 s, backoff to 5 minutes, 120 a minute per person on the server.
+- Batch window 1.5 s. Stack 3 entries (2 on a phone, 1 in a window under 500 px high). Card 6 s, at
+  least 2 s after a pause or after a modal closes. Queue (behind a modal, an open list or a paused
+  stack) 5 minutes by the tab's clock. Summary from 3 items. Mark these as read at most 50 ids.
+- Sounds 0.14 to 1.22 s (Chime about 0.65 s), master gain 0.14 to 0.20, at most one per 10 s per
+  browser, never for a batch found
+  more than 150 s after the previous check. Service worker waits at most 1 s for windows.
+- Alerted record: `chimed` and `shown`, 50 ids each, 10 minutes.
+
+### Hosting and cost
+
+- **Requests.** About 40 people, most with one browser and 1 to 2 Daybook tabs: one leader per
+  browser, so about 2 live checks a minute per person during the day and 1 a minute with Daybook in
+  the background, plus one per tab switch back to Daybook and one per desktop push. About 80 to 120
+  requests a minute for the company, 1.5 to 2 a second at peak; at night, open tabs left hidden make
+  about 40 a minute. Each is the session read plus two small indexed queries, answered in
+  milliseconds. For scale: the Today and Team pages already `router.refresh()` the whole page every
+  60 s while visible (CONTRACT 15, AutoRefresh), which costs far more per request.
+- **Logs.** The live check's successes log at debug (API, above), so the production log doesn't
+  grow by about 100,000 lines a day; errors still show.
+- **cPanel, LiteSpeed.** Short requests only: no Server-Sent Events, no WebSockets and no long
+  polling, so no connection holds a Node process (the host's process and thread limits,
+  `daybook-hosting`). No new worker job, no new cron line; the push worker is unchanged (every 10 s
+  inside the once-a-minute cron run). The rate limit is in memory per web process (as every Daybook
+  limit).
+- **No new npm dependency, no migration, no new environment variable.** Deploy = `git pull origin
+deploy`, then Restart in Setup Node.js App (no migrate line, nothing to install). Browsers fetch the
+  new `sw.js` on their next navigation (it already calls `skipWaiting` and `clients.claim`).
+- **Order during a deploy.** Pages still on the 1.10 bundle have no live check and don't answer the
+  worker, so their desktop notifications show after at most 1 s, as before; they get 1.11 on their
+  next full load.
+
+### Files and owners
+
+Three builders and the orchestrator; a file listed for one builder is edited only by that builder.
+Where a builder needs another's piece that isn't there yet, it codes against the API in this section
+and adds a stub with that signature (the §6 stub rule); the owner replaces it.
+
+| Owner                      | Builder              | Files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| orchestrator               | O                    | `docs/design/bell-preview-prototype.html` (first), `src/config/version.js` ('1.11'), `README.md` (below) and `tests/unit/hostScripts.test.js` (its "1.11 steps" check), `docs/CONTRACT.md` (this section and "Other section edits")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| system, preferences, shell | A (server and push)  | `src/modules/notifications/alerts.js` (new), `src/modules/notifications/{repo,service,schemas,index}.js`; `src/app/api/notifications/route.js`, `src/app/api/notifications/read-all/route.js`; `src/modules/push/{payload,service}.js`; `public/sw.js`; `src/modules/preferences/{schemas,service}.js`; `src/components/UserPrefs.jsx`; `tests/unit/{notificationAlerts,serviceWorker}.test.js` (new), `tests/unit/push.test.js`; `tests/services/notificationsLive.test.js` (new), `tests/services/{notifications,notificationsCenter,push,preferences,preferencesRoute}.test.js`                                                                                                                                                                                                                                                    |
+| shell                      | B (live bell)        | `src/components/live/{LiveNotifications,LiveCards,PreviewStack,PreviewCard}.jsx` and `PreviewStack.module.css` (new), `src/components/live/{liveStore,liveRules,liveCheck,liveBatch,liveLeader,liveLoop,livePresence,liveTab,liveSound,liveChannel,swAnswer,pushActive,chime,chimeGate,previewWait,useLiveEngine,useStack,usePreviewActions}.js` (new); `src/components/AppFrame.jsx`; `src/components/NotificationBell.jsx` (also exports `BellIcon`), `NotificationBell.actions.js`, `NotificationBell.list.js` (`itemTime`), `NotificationBell.live.js` (new), `NotificationItem.jsx` (uses `itemTime`); `tests/unit/{liveRules,liveBatch,liveLeader,liveChime,liveRecovery,liveStack,livePlacement,appFrameLive}.test.js` (new), `tests/helpers/liveFakes.js` (new), `tests/unit/notificationCenter.test.js` (merge of new items) |
+| preferences, orchestrator  | C (settings and e2e) | `src/app/(app)/my-settings/{MySettingsSections.jsx,sections.js,page.module.css,PreferencesProvider.jsx,loading.js,loading.module.css}`, `PlaySoundButton.jsx` (new); `tests/unit/mySettings.test.js`; `tests/e2e/live-notifications.spec.js` (new), `tests/e2e/my-settings.spec.js`, `tests/e2e/support/live.js` (new), `tests/e2e/support/demoData.js` (`addNotification`)                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+
+Contracts the others code against: A's `notifications.latestId(userId)` (B's AppFrame), the API above
+(B), `useBellSound()` / `useBellTone()` / `useBellPreview()` (B); B's `playChimeNow(tone)` →
+`Promise<{ played }>`,
+`postPreferenceChange(values)`, `window.__daybookLive.checkNow()` → `Promise<void>`, the
+`window.__daybookChime(info)` hook and the region and button names (C); C's `ChoiceRow` `children`
+slot is C's own. No file is touched outside this table: `TopBar.jsx` (the stack reads its `<header>`
+box only), `ServiceWorker.jsx`, `PushSwitch.jsx`, `NotificationBell.push.js`,
+`ToastProvider.jsx`, `Dialog.jsx` and `Drawer.jsx` don't change.
+
+**README** (O). (a) "Deployment notes": "Daybook 1.11 (bell sound and preview): no database update
+and nothing new to install. People choose the sound and the preview in My settings; the default is a
+chime for important notifications only. Each person can also pick the sound: Chime, Soft bell,
+Ding or Pop." (b) "Updating", for 1.11: "1. `git pull origin deploy`. 2. Press Restart. There is no
+migrate line this time."
+
+### Tests and version
+
+- **Unit** (node only, no DOM; fakes for every browser API):
+  - `tests/unit/notificationAlerts.test.js` (A): `ALERT_TYPES` has exactly the 43 types of the
+    table (the list is written out in the test) with their levels, 19 important; every type's prefix
+    has a group; `alertLevel`/`alertGroup` for an unknown type; `assertClassified('made.up')` throws
+    and names CONTRACT 26. **Source scan**: every `.js`/`.jsx` file under `src/`, `scripts/` and
+    `db/demo/` (not tests). On each line that contains `type:` (anywhere on the line, so both sides
+    of a ternary count) or `TYPE =`, every quoted string matching `/^[a-z_]+\.[a-z_]+$/` must be in
+    `ALERT_TYPES`, and every template literal with a dotted prefix (`` `prefix.${...}` ``) must be
+    in the test's `TEMPLATES` table with its file and its expansions, and each expansion must be
+    classified. Each `TEMPLATES` entry must also be found in its file (both ways, so the table can't
+    go stale). Today there are four: `attendance.remind_${kind}` with `REMIND_KINDS`
+    (`attendance/reminderMessages.js:105`, inside a ternary with `'attendance.checkin_reminder'`),
+    `attendance_correction.${verdict}` approved and rejected (`attendance/decisions.js`),
+    `wfh_request.${verdict}` approved and declined (`attendance/wfhDecisions.js`) and
+    `project_request.${...}` approved and declined (`projects/messages.js`). A new type (literal or
+    template) fails the test until it is classified. A type passed only through a variable is caught
+    by the `notify` guard in that module's service test, not by the scan.
+  - `tests/unit/serviceWorker.test.js` (A): loads `public/sw.js` into `node:vm` with a fake `self`,
+    `clients`, `registration` and `MessageChannel`, then fires `push`: a focused visible window
+    answering `shown` → no `showNotification`, and no message without a port; a focused window
+    answering `shown` with `mustShow` (payload, or an Apple subscription) → shown; no answer in 1 s
+    (fake timers) → shown without `silent`; a visible unfocused window answering `shown` → shown; an
+    answer `alerted` → `silent: true`, but never with `mustShow` (Apple); every window asked with `{ ask, id, userId, mustShow }` and
+    told `{ os: true, silent }` after; a payload without `userId` → shown; `tag` and `data.url` as in
+    1.10; `notificationclick` unchanged.
+  - `tests/unit/push.test.js` (A): `buildPayload` gives `userId`, `mustShow` only when true, the
+    clipping as before; `isApplePush` (web.push.apple.com yes, fcm.googleapis.com and
+    wns2-*.notify.windows.com no, a bad URL no).
+  - `tests/unit/liveRules.test.js` (B): **cursor**: the first answer with a null cursor alerts
+    nothing; ids at or below the cursor never; read items never, yet the cursor rises to `latestId`;
+    hidden (Undo pending) never; an older item marked unread again never; the cursor never goes
+    down. `gapOf`: a follower that handled a result 30 s ago and then becomes leader is not stale on
+    its first check; a tab that handled none counts from its mount. `pollDelay`: 30 s visible, 60 s
+    hidden, the 0.9 to 1.1 factor (injected `random`), doubling to 300 s. `cardLimit`: 3, 2 at 640 px
+    and narrower, 1 under 500 px high. `planCards`: 1 and 2 give cards newest on top, 3 give one
+    summary, a fourth entry pushes the oldest out (2 on a phone), preview off and hidden tab give
+    none, bell open gives none, `wait` (a modal, an open search list, a paused stack) queues, a
+    paused stack queues a new entry and it shows on resume, queued items from several batches are
+    released as one batch (3 or more → one summary), the queue drops an item 5 minutes after it was
+    queued by the tab's clock (a `createdAt` far in the past or future changes nothing).
+    `pickSoundTab`: the front tab with audio; a front tab without audio and a hidden tab with audio
+    → the hidden one; no front tab, the checking tab without audio and a hidden follower with audio
+    → the follower. `shouldChime`: every reason in order (off, not_important, os, os for an Apple
+    subscription, stale, not_sound_tab for a tab that isn't `soundTabId`, no front tab with push
+    active; play for the sound tab). `announcement(batch)` for 1, 2, 3 and `more` ("New
+    notification: …", "2 new notifications. The newest: …", "More than 20 new notifications. The
+    newest: …"), the summary copy ("3 new notifications", "and 2 more", "More than 20 new
+    notifications", "and more") and `seeLabel` ("See them" for 3 of 3, "See the newest 3" for 5,
+    "See the newest 2" on a phone, none for a limit of 1 without a bell, "See them" with a bell).
+  - `tests/unit/liveBatch.test.js` (B, fake timers): items within 1.5 s form one batch; one at
+    1.6 s starts the next; read or hidden ones are dropped at flush; a `read-all` drops every item
+    learned before it, in the batch and in the queue; an empty batch never flushes.
+  - `tests/unit/liveLeader.test.js` (B): a fake `navigator.locks` (FIFO, with `steal`) and an
+    in-memory `BroadcastChannel` bus that, like the real one, never echoes to the sender, with
+    three tabs: the first leads and is the only one that fetches; with a single tab, the leader's
+    own check reaches its store; results reach the others; `check-now` is coalesced to one check per
+    5 s; triggers during a check in flight give one more check after it, never two in parallel; the
+    leader stops → the next tab leads and checks at once; `checkOnce` with a 401 stops the loop,
+    releases the lock and never touches `window.location`; a 400, 404 or network error backs off; a
+    result for another `userId` leaves the store, cursor and batcher untouched, posts nothing and
+    stops the tab; a frozen leader (a fake that never answers) loses the lock to the visible tab's
+    watchdog after 75 s, that tab then checks every 30 s, and the old leader asks again as a
+    follower after its `AbortError`; without locks every tab polls and `claimChime` lets only one
+    chime; `answerPush` (front and new → shown; already had at load → not shown; an id in the open
+    batch or the queue → shown, not `osSound`; another user → not shown; preview off with the list
+    closed → not shown and `osSound`; in front, preview off, Sound Off → not shown, `alerted`
+    (silent); a follower with no result for 75 s → not shown; `mustShow` → `osSound` unless alerted;
+    a hidden tab → no `osSound`); a tab that answered `shown` checks at once even as a follower.
+  - `tests/unit/liveChime.test.js` (B): `scheduleChime` against a fake `AudioContext` that records
+    calls: four sine oscillators at 659.25, 1318.5, 987.77 and 1975.54 Hz (`hz * ratio`, compared
+    to 0.01 Hz), starts at `t0` and `t0 + 0.12`, each envelope `0 → 1` linear in 10 ms and exponential to 0.001 (0.50 s notes, 0.25 s
+    overtones), stops at `+0.52`, master 0.16, nothing ramps exponentially to 0; for each of
+    `bell`, `ding` and `pop`, the oscillators, gains, decays, stop times and master of the `TONES`
+    table (Pop's frequency ramps exponentially from 880 to 440 by `+0.08`); `TONE_NAMES` equals
+    `Object.keys(TONES)`; every tone's partial gains × master sum under 0.5 and its `stopAfter` is
+    at least its longest decay; an unknown tone plays Chime; `play({ tone: 'ding' })` and
+    `playChimeNow('pop')` schedule that sound and pass `tone` to the test hook; the player creates no
+    context before a gesture; a touch `pointerdown` without activation creates no context, the
+    `pointerup` after it does, and an untrusted click is ignored; `unlock` runs again on a later
+    event while the context isn't running; `ready()` with a `resume()` that never settles is false
+    after 300 ms (fake timers) and never makes a sound; `onstatechange` to `interrupted` adds the
+    unlock listeners back; `playChimeNow()` with a fake context that reports `'suspended'`
+    synchronously and turns `'running'` on the next tick resolves `{ played: true }`, and with one
+    that never runs resolves `{ played: false }` and disconnects the master gain; the
+    `window.__daybookChime` hook gets `{ reason, ids, tone }` and no context is made; `claimChime`:
+    `too_soon` within 10 s and `play` at 10 s (fake timers), `done_elsewhere` for an id in `chimed`,
+    `play` for ids that a card of the same flush marked `shown`, a storage that throws falls back to
+    memory, each list keeps 50 ids and drops ones older than 10 minutes.
+  - `tests/unit/notificationCenter.test.js` (B): merging live items into a loaded list (no
+    duplicates, pending delete stays hidden, order, 20 kept, the row holding focus kept past 20,
+    items that came during the first load merged after it); `focusedRowId`; `itemTime`.
+  - `tests/unit/liveRecovery.test.js` (B, the fakes of `tests/helpers/liveFakes.js`, which
+    `liveLeader.test.js` shares): a check that never answers gives up after 20 s, aborts the
+    request, backs off and lets the triggers behind it run; two visible tabs with failing checks
+    take the lead at most once per 75 s; a hidden follower whose audio runs is still the sound tab
+    after 2 minutes hidden; a tab opened later learns an older hidden tab's audio at once; a frozen
+    tab isn't counted until it resumes; the ask from a tab in front with no audio anywhere isn't
+    `shown` (`osSound`), with its own audio, Sound Off or a hidden tab's audio it is.
+  - `tests/unit/liveStack.test.js` (B, the real `useStack` and `LiveCards`): See them without a
+    bell keeps the pointer's pause and the queue, the limit (3, and 2 on a phone), leaves out items
+    read meanwhile and sends keyboard focus back to where it came from (also when the browser fires
+    `focusout` as the summary's button goes); focus going back uses `preventScroll`.
+  - `tests/unit/livePlacement.test.js` (B): `placement` without a bell at 1440 to 641 px with a
+    15 px scrollbar (32 px from 1024, 24 below), on a phone and with a bell; `listHandlers`: no
+    pause from `pointerenter`, a pause from `pointermove` or `pointerdown` until `pointerleave`, and
+    from focus.
+  - `tests/unit/appFrameLive.test.js` (B): AppFrame keys `LiveNotifications` by the person, with
+    their own `latestId`.
+  - `tests/unit/mySettings.test.js` (C): `SOUND_CHOICES` values equal `BELL_SOUNDS`, labels
+    "Important only", "All", "Off"; `TONE_CHOICES` values equal `BELL_TONES` and `TONE_NAMES`,
+    labels "Chime", "Soft bell", "Ding", "Pop".
+- **Services** (A; `DB_NAME=daybook_test_<n>`, `resetDatabase()`, `createUser`, `setNowForTests`):
+  - `tests/services/notificationsLive.test.js` (new): `?after` returns only the person's rows above
+    it, newest first by id, read ones included with `readAt`, at most 20 with `more` (25 rows),
+    `latestId` and `unreadCount`; `after=0`; `after` above every id → `[]` and `latestId` = `after`;
+    `after=-1`, `abc` and `1.5` → 400 with `fields.after`; someone else's rows never; `userId` is the
+    session's; signed out → 401; the 121st call in a minute → 429 and another person isn't counted;
+    plain GET gains `latestId` and `userId`; `read-all` with `ids` marks only those (and ignores
+    someone else's and read ones), answers the fresh count, `[]` and 51 ids → 400 with `fields.ids`,
+    `{}` and no body mark all as before; `notify` with an unclassified type throws under Vitest and
+    a classified one writes as before; with `VITEST` removed for two calls (try/finally), `notify`
+    with type `made.up` writes both rows, returns their count, and calls `logger.warn({ type:
+'made.up' }, 'notification type has no alert level')` exactly once; a successful `?after` call
+    logs at debug and a 400 at info (a spy on `logger`).
+  - `tests/services/notifications.test.js`, `notificationsCenter.test.js`: the `type: 'test'`
+    notifications that have recipients become `'system.test'` because of the guard (the calls with
+    no recipients return before it; `runOnce.test.js` inserts rows directly and is unaffected).
+  - `tests/services/push.test.js`: `sendPending` gives an Apple endpoint `mustShow: true` and others
+    none, every payload has `userId`.
+  - `tests/services/preferences.test.js`, `preferencesRoute.test.js`: `DEFAULTS` gain `bellSound:
+'important'`, `bellTone: 'chime'` and `bellPreview: true`; `bellSound: 'loud'` → "Sound must be
+    Important only, All or Off."; `bellTone: 'siren'` → "The sound must be Chime, Soft bell, Ding or
+    Pop."; `bellPreview: 'yes'` → "Show a preview must be on or off."; `'all'` and `'off'` are
+    stored, `'important'` removes the key; `'ding'` is stored, `'chime'` removes the key; a stored
+    stale value reads the default.
+- **E2E** (C): `tests/e2e/live-notifications.spec.js`, as Vishal Saini, against the e2e server and
+  database only (never localhost:3000 or the "daybook" database). `page.addInitScript` defines
+  `window.__daybookChimes = []` and `window.__daybookChime = (info) => window.__daybookChimes.push(info)`;
+  `tests/e2e/support/live.js` gives `addNotification(email, { type, title, body?, link? })` (through
+  `demoData.js`, a direct insert into the e2e database), `checkNow(page)` (`window.__daybookLive
+.checkNow()` then 1.6 s for the batch), `chimes(page)`, `preview(page)` (`getByRole('region', {
+name: 'New notifications' })`) and `waitChimeGap(page)` (waits until 10 s after the last recorded
+  chime, so a step that expects a chime never meets `CHIME_MIN_GAP_MS`).
+  1. **First load**: Today with Vishal's demo notifications unread: after 3 s and a `checkNow`, no
+     region and no chime.
+  2. **One important**: add `attendance.remind_check_in` "Neha Kapoor reminded you to check in" with
+     its body and `/today`; `checkNow`: one card with that title, the body, "Today at …", Open,
+     Mark as read and Dismiss; the status region says "New notification: Neha Kapoor reminded you to
+     check in"; `chimes` is 1 (`reason: 'batch'`); the bell's name says one more unread.
+  3. **Mark as read**: the card goes, the bell count goes down by 1, the API shows it read.
+  4. **Normal and Dismiss**: add `leave.marked`: a card, `chimes` still 1 (Important only); Dismiss:
+     it goes and stays unread.
+  5. **Summary**: add three at once (one important): one card "3 new notifications", "and 2 more",
+     `chimes` +1; See them opens the bell list with the three on top and no card left.
+  6. **Open**: add one with link `/log`; Open → on `/log`, the item is read. Add another: its card's
+     top is 8 px below the top bar's bottom and its right edge is 32 px from the window's right edge
+     (My log has no bell).
+  7. **Pause**: hover a card for 8 s: still there; move away: gone within 3 s.
+  8. **Bell list open**: open the list, add one: no card, the list shows it on top, and the status
+     region says "New notification: …".
+  9. **Two tabs**: a second page in the same context; add one important: cards in both, the sum of
+     both pages' `chimes` grows by exactly 1.
+  10. **My settings**: Notifications shows Sound with "Important only" pressed, Choose a sound with
+      "Chime" pressed, Play sound (click → `chimes` +1, `reason: 'test'`, `tone: 'chime'`) and Show
+      a preview on; pick "Ding": `chimes` +1 with `reason: 'test'` and `tone: 'ding'`, "Ding" stays
+      pressed after a reload, and after `waitChimeGap` an important one added and `checkNow`
+      chimes with `tone: 'ding'`; add a normal one, then switch "Ring the
+      bell" off and on (each save refreshes the page, so AppFrame renders a higher `latestId`), then
+      `checkNow`: its card shows. Choose Off, add an important one: a card, no chime; choose All and
+      switch Show a preview off: add a normal one: no card, `chimes` +1. Put the defaults back (Chime too).
+  11. **Phone** (390 × 844): a card's box is `x = 16`, width 358, near the top; Open, Mark as read and
+      Dismiss pass `expectTapSize`; with three added one after another (a `checkNow` each), at most 2
+      cards show.
+  12. No console or page errors (`problemsOf`) in any step.
+  - `tests/e2e/my-settings.spec.js`: the Notifications region lists the new rows (names and help,
+    the copy above, the note under the desktop switch where it shows).
+  - The e2e server has no VAPID keys, so desktop push is never active there; the worker side is
+    covered by the unit and service tests above. Real-browser checks (manual, before the release, on
+    the e2e copy or the live site after deploy): browser.md §9 items 1, 3, 4, 6, 7 and 8.
+- **Screens** (B and C), never against localhost:3000 or the "daybook" database. The card states
+  (Today with one card, the stack of three, the summary, the Report page with a card, the open bell
+  list with a new item) are taken on the e2e server (a copy of the project on port 3100 with
+  `daybook_e2e`, as every e2e run): a throwaway Playwright script in `scratch/design-1.11/tmp/` uses
+  `tests/e2e/support/live.js` (`addNotification`, `checkNow`), holds the stack with the pointer
+  over the card's title, and calls `page.screenshot` in light and dark (`page.emulateMedia({
+colorScheme })`) at 1440, 1024 and 390 px; then `compare.py` against the prototype's artboards.
+  My settings → Notifications uses `shot.mjs --base <that e2e URL>`.
+- `APP_VERSION` '1.11' (O).
+
+### Order of work
+
+1. **O first**: the prototype; then version '1.11'.
+2. **A**: `alerts.js` and the `notify` guard (with the `'test'` type fixes), `listAfter`,
+   `latestId`, the routes, `read-all` ids, the preference keys and hooks, the payload and `sw.js`,
+   with their tests.
+3. **B and C in parallel**, each in its own files: B against A's API (stubs until it lands), C
+   against B's `playChimeNow`, `postPreferenceChange` and the test hooks.
+4. **O last**: README, the CONTRACT edits below, review, the e2e run (C's specs) and the build.
+
+### Choices made in this section (for the owner to confirm)
+
+1. **Endpoint**: the existing `GET /api/notifications` with `?after=<id>`, not a new route: same rows,
+   same permission, the bell already calls it, and the cursor is the row id (ids only grow, so
+   nothing is repeated even when clocks differ; for the rare late commit, see Risks).
+2. **One checker per browser**: the leader tab checks and shares; 30 s while any Daybook tab is
+   visible, 60 s while all are hidden, at once after a desktop push or when a tab comes back.
+3. **Important** = asks the reader to act today; 19 of the 43 types (table). Task notifications
+   (`project_task.*`) are not important, so a PM adding many tasks doesn't chime for the whole team.
+4. **Own-action notifications** (`report_edit.sent`, `attendance.break_over_allowance`) get a card
+   like every other one (the owner's "every new notification") and chime only under All.
+5. **Sounds**: four synthesized sounds the person picks (Chime, the default: two soft notes, E5
+   then B5 with a quiet octave, about 0.65 s; Soft bell; Ding; Pop); one per batch, at most one
+   every 10 s, none for items found after the browser slept more than 150 s.
+6. **Desktop push**: no system pop-up while a Daybook window is in front and shows its own card
+   (never on Safari); a system notification for something already alerted, or that comes while a
+   Daybook window is in front with Sound Off, is silent (not on Apple); when Daybook isn't in front,
+   desktop notifications sound as the computer decides, whatever the Sound choice (the note says
+   so).
+7. **Cards** show only in visible tabs, wait (up to 5 minutes) while a dialog, a drawer or a list of
+   suggestions such as the search results is open and while the pointer or focus is on the stack,
+   hide if one of those opens over them, and a summary's "See them" opens the bell list, or on a
+   page without a bell shows the newest three (two on a phone). Escape anywhere closes them.
+8. **Show a preview off** also turns off the screen reader announcement; the bell's count still
+   changes.
+9. **Play sound** plays even when Sound is Off, so the sound can be heard before choosing; picking
+   a sound in "Choose a sound" also plays it.
+10. **Per browser**: two browsers or two devices each alert (one tab each).
+
+### Risks to watch
+
+- **Chrome on a Mac** never sets a sound on web notifications (browser.md §4): with desktop push on
+  and Daybook in the background, a Mac user hears nothing. A later release could chime from the
+  leader tab and show the system notification silent there.
+- **iPhone and Android** freeze background pages: no live check, no chime there until the page comes
+  back (then cards show, without sound, for items found after a long gap). Desktop push covers them.
+- **Edge sleeping tabs and Chrome Memory Saver** can still freeze or discard a hidden leader; the
+  watchdog (which takes the lead) and the check after a `shown` answer only help while another tab
+  is visible. A person who wants sound with every Daybook tab hidden should turn on "Show on this
+  computer". A hidden tab discarded without a `freeze` event stays known as a tab whose audio runs
+  (presences are kept until `gone`) until the others reload; a batch it would sound for then gets
+  its cards without a chime.
+- **A late commit**: `notify` runs inside the caller's transaction, so a row whose transaction
+  commits after a newer one (two check-ins at the same moment, for HR's `attendance.unverified_office`)
+  can be passed by the cursor and miss its card and chime. It is still in the bell, and the unread
+  count includes it. The window is a few milliseconds, so this is rare.
+- **Focus detection**: `hasFocus()` is false while DevTools or another app has focus, and a window
+  on a second monitor is visible without focus: then the system notification shows and the page
+  doesn't chime. Windows Focus Assist mutes system sounds but not Web Audio.
+- **Browser settings**: a site set to "Block audio" (Firefox) or a muted tab makes no sound; the card
+  still shows.
+- **Two sounds in a race**: if focus leaves Daybook between the page's answer and the worker's
+  decision, the `os` message usually stops the page's chime within the 1.5 s batch; a page that had
+  already chimed makes the system notification silent through the alerted record. Rarely, both may
+  sound.
+- **The type guard** throws in tests only; a module that creates a new type without a service test
+  would log a warning in production instead of failing. The source scan covers literal and template
+  types on any line with `type:` or `TYPE =`, ternaries included.
+- **Cost** grows with open tabs at night (one check a minute per browser). If it ever matters, a
+  later release can slow hidden checks after an hour.
+- The rate limit and the leader are per process and per browser: with more than one web process the
+  120 a minute is counted per process.
+
+### Other section edits
+
+- **§6, notifications** (replace the `listForUser` bullet):
+  "- `listForUser(userId, { limit = 20 })` → `[{ id, type, title, body, link, readAt, createdAt }]`,
+  `unreadCount(userId)`, `markAllRead(userId, { ids? })` (only those ids when given, CONTRACT 26),
+  `deleteOldRead(before)`; `listAfter(userId, { after, limit = 20 })` → `{ items, more }` and
+  `latestId(userId)` for the live check (CONTRACT 26). `notify` needs a type listed in
+  `ALERT_TYPES` (`@/modules/notifications/alerts`): unlisted types throw in tests and log a warning
+  in production."
+- **§7**: no change (no new route; `GET /api/notifications` takes `after`, `read-all` takes `ids`).
+- **§8, shell** (TopBar bullet, replace "`bell` renders `NotificationBell` (client: latest 20, "Mark
+  all as read", each item links to its screen)" with): "`bell` renders `NotificationBell` (client:
+  latest 20, "Mark all as read", each item links to its screen; it follows the live check through
+  `useLiveNotifications()`, CONTRACT 26)". **Add** after `ToastProvider`: "- `LiveNotifications`
+  (client, mounted once in AppFrame around AppShell) — `{ userId, latestId, tz, push, children }`:
+  the live check, the preview cards ("New notifications" region, at most 3, 2 on a phone, z-index 65) and the
+  chime (CONTRACT 26); `useLiveNotifications()` returns its store, or null outside it."
+- **§9**: add the owner rows of "Files and owners" above with "(CONTRACT 26)".
+- **§14** (replace the first sentence): "Every bell notification is also shown on the person's
+  computer (Windows notification centre via the browser's Web Push), even when the Daybook window is
+  minimised, except while a Daybook window is in front and shows its own preview card (never on
+  Safari; CONTRACT 26)." (Replace the "Client:" bullet's start): "- Client: `public/sw.js` handles
+  `push`: it asks every Daybook window first (at most 1 s); when a window in front answers that it
+  shows the notification, no system notification is shown (not for Apple endpoints, `mustShow`);
+  otherwise it shows it (title, body, icon, `tag` per notification, `data.url`), `silent` when this
+  browser already alerted the person or a window in front has Sound Off, never for Apple endpoints
+  (CONTRACT 26). Payload `{ id, userId, title, body, url,
+mustShow? }`. It also handles `notificationclick` (focus a Daybook window and open the link, or
+  open a new one); ..." (the rest unchanged).
+- **§20, Notification center** (add a bullet at the end): "- Live (CONTRACT 26): while Daybook is
+  open the bell learns about new notifications by itself (`GET /api/notifications?after=`), a
+  preview card shows each new one (a summary for 3 or more), and a short chime plays for important
+  ones by default (My settings → Sound)."
+- **§21, preferences table** (add after `bellRing`):
+  "| `bellSound` | `'important'` `'all'` `'off'` | `'important'` | when the sound plays (CONTRACT 26) |", "| `bellTone` | `'chime'` `'bell'` `'ding'` `'pop'` | `'chime'` | which sound (CONTRACT 26)
+  |" and "| `bellPreview` | boolean | `true` | preview cards (CONTRACT 26) |".
+- **§21, "3. Notifications"** (replace the item): "3. **Notifications** (everyone): "Ring the bell
+  for unread notifications" (Toggle). Help: "A small swing every few seconds while you have unread
+  ones." "Sound" (Segmented: Important only · All · Off). "Choose a sound" (Segmented: Chime · Soft
+  bell · Ding · Pop; picking one plays it) with "Play sound" (CONTRACT 26). "Show a preview"
+  (Toggle). Then the existing desktop switch (`PushSwitch` "Show on this computer"), only
+  while desktop notifications are on for the company, with the note "When this is on and Daybook
+  is in the background, Daybook doesn't chime. Your computer's settings decide if the desktop
+  notification makes a sound, whatever you chose for Sound." Reminders from HR and from
+  Daybook, and for HR the morning summary and the evening wrap-up (CONTRACT 25), come to the bell
+  and, where Show on this computer is on, as desktop notifications. There is no per-type mute; the
+  Sound choice is the only difference by type (CONTRACT 26). Slack DMs follow the company's
+  switches in Settings → Slack."
+- **§21, "What the preferences change"** (add after the Bell bullet): "- **Sound**: Important only
+  chimes for the types marked important in `ALERT_TYPES`, All for every new notification, Off
+  never (CONTRACT 26). - **Choose a sound**: which of the four sounds plays (CONTRACT 26). - **Show
+  a preview** off: no preview cards and no announcement; the bell's
+  dot and count still change."
+- **§20, Version label**: "`APP_VERSION` in `src/config/version.js` (now '1.11'; raised with each
+  release)."

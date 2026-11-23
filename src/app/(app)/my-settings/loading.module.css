@@ -74,9 +74,23 @@
   min-width: 0;
 }
 
+/* "Choose a sound" (CONTRACT 26): the choice with Play sound beside it, wrapping when narrow */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+  margin-top: 6px;
+}
+
 .choice {
   max-width: 100%;
   margin-top: 6px;
+}
+
+.controls > .choice {
+  margin-top: 0;
 }
 
 .switch {
