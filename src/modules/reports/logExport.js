@@ -1,4 +1,6 @@
-// The My log Excel download (GET /api/me/log?format=xlsx): one sheet of days, one of tasks.
+// The My log Excel download (GET /api/me/log?format=xlsx): one sheet of days, one of tasks. The
+// days end with "Day type" and "Leave" (CONTRACT 25): the person's own leave type and pay, never
+// HR's note.
 import { formatDayShort, toLocal } from '@/lib/time';
 
 export const LOG_STATUS_LABELS = {
@@ -9,7 +11,26 @@ export const LOG_STATUS_LABELS = {
   not_started: 'Not started',
   missing: 'Missing',
   not_checked_in: 'Not checked in',
+  holiday: 'Holiday',
+  on_leave: 'On leave',
 };
+
+const PART_WORDS = { full: 'Full day', first_half: 'First half', second_half: 'Second half' };
+const TYPE_WORDS = { casual: 'casual', sick: 'sick', other: 'other' };
+
+/** 'Working day', 'Holiday: Diwali' or 'Day off' (the Attendance Excel's words). */
+function dayType(day) {
+  if (day.holiday) return `Holiday: ${day.holiday.name}`;
+  return day.isWorkingDay ? 'Working day' : 'Day off';
+}
+
+/** 'Full day, casual, paid' / 'First half, sick, unpaid', blank without leave. */
+function leaveWords(leave) {
+  if (!leave) return '';
+  const part = PART_WORDS[leave.part] ?? PART_WORDS.full;
+  const type = TYPE_WORDS[leave.leaveType] ?? 'casual';
+  return `${part}, ${type}, ${leave.paid === false ? 'unpaid' : 'paid'}`;
+}
 
 const LOCATION_LABELS = { office: 'Office', wfh: 'WFH' };
 const TASK_STATUS_LABELS = { done: 'Done', in_progress: 'In progress', blocked: 'Blocked' };
@@ -42,6 +63,8 @@ export function monthLogWorkbook(log) {
       .map((entry) => entry.projectName)
       .join(', '),
     report: LOG_STATUS_LABELS[day.status] ?? day.status,
+    dayType: dayType(day),
+    leave: leaveWords(day.leave),
   }));
   const taskRows = days.flatMap((day) =>
     (day.report?.entries ?? []).flatMap((entry) =>
@@ -71,6 +94,8 @@ export function monthLogWorkbook(log) {
           { header: 'Logged (h)', key: 'logged', width: 11, numFmt: '0.00' },
           { header: 'Projects', key: 'projects', width: 36 },
           { header: 'Report', key: 'report', width: 15 },
+          { header: 'Day type', key: 'dayType', width: 24 },
+          { header: 'Leave', key: 'leave', width: 24 },
         ],
         rows: dayRows,
       },

@@ -1,7 +1,8 @@
 // Fills the development database with the people, projects, attendance, reports and requests shown
 // on the design canvas, so every screen looks like its artboard, plus three project plans (an off
 // track, an at risk and an on track project, projectPlans.js) for the project management screens,
-// and a to-do with unfinished tasks to suggest (todo.js) for Today's to-do.
+// a to-do with unfinished tasks to suggest (todo.js) for Today's to-do, and the 1.10 HR tools'
+// holiday, leave, breaks, missing check-outs and marks (hrTools.js, hrTimers.js).
 //
 //   npm run seed:demo                 evening state (the dashboards, 6:52 PM on the canvas)
 //   npm run seed:demo -- --midday     Vishal still checked in with a draft report (01 and 02)
@@ -30,6 +31,8 @@ import {
   buildRequests,
 } from './extras.js';
 import { checkDesignNumbers } from './checks.js';
+import { buildHrRows, planHrTools } from './hrTools.js';
+import { buildTimerDays } from './hrTimers.js';
 import { PEOPLE } from './people.js';
 import { buildProjectPlanRows } from './projectPlanRows.js';
 import { COMPLETED_PROJECTS, PROJECTS } from './projects.js';
@@ -117,6 +120,7 @@ async function readSettings() {
     workingDays: values.working_days,
     lateAfter: values.late_after,
     reportLock: values.report_lock,
+    payrollStartDay: values.payroll_month_start_day ?? 1,
   };
 }
 
@@ -142,7 +146,11 @@ async function insertDemo(trx, { settings, anchor, days, midday, slackChannel })
   const plans = planAllDays(planCtx);
   assignTasks(plans);
   addTodoLines(plans);
+  planHrTools(plans, { anchor: days[0], ...settings });
   const { rows, index } = buildRows(plans, { ...settings, days, users, projects });
+  const hrCtx = { ...settings, today: days[0], users, projects, index, when, dateOf };
+  // Before the attendance insert: it sets the entered-by columns of a self-entered check-out.
+  const hrRows = buildHrRows(hrCtx);
   // Priority tasks go in before the report lines that link to them.
   const priorityTasks = buildPriorityTasks({ when, dateOf, users, projects });
   const linkedLines = linkReportLines(rows, priorityTasks);
@@ -178,6 +186,7 @@ async function insertDemo(trx, { settings, anchor, days, midday, slackChannel })
     buildPriorityNotifications(priorityTasks, { when, users, projects }),
   );
   await insertMany(trx, 'auditLogs', buildAuditLogs(extrasCtx));
+  const timerDays = await insertHrTools(trx, hrRows, buildTimerDays(hrCtx));
   return {
     users: users.size,
     projects: projects.size,
@@ -187,7 +196,23 @@ async function insertDemo(trx, { settings, anchor, days, midday, slackChannel })
     linkedReportLines: linkedLines,
     projectPlans: planRows.plans.length,
     projectDocuments: planRows.documents.length,
+    holidays: hrRows.holidays.length,
+    leaveEntries: hrRows.leave.length,
+    timeEntries: timerDays.entries.length,
+    breaks: timerDays.breaks.length,
   };
+}
+
+/** The 1.10 rows (CONTRACT 25): the calendar, today's timers and breaks, reminders, bell, audit. */
+async function insertHrTools(trx, hrRows, timerDays) {
+  await insertMany(trx, 'holidays', hrRows.holidays);
+  await insertMany(trx, 'leaveEntries', hrRows.leave);
+  await insertMany(trx, 'timeEntries', timerDays.entries);
+  await insertMany(trx, 'attendanceBreaks', timerDays.breaks);
+  await insertMany(trx, 'attendanceReminders', hrRows.reminders);
+  await insertMany(trx, 'notifications', hrRows.notifications);
+  await insertMany(trx, 'auditLogs', hrRows.audit);
+  return timerDays;
 }
 
 /** The plans, their phases' dates, the files and notes and the summaries (CONTRACT 22). */

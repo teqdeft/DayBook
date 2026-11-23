@@ -1,0 +1,12 @@
+var R=require("../../../../chunks/[turbopack]_runtime.js")("server/app/api/leave/people/route.js")
+R.c("server/chunks/src_modules_0_29inv._.js")
+R.c("server/chunks/[root-of-the-server]__1n_09ir._.js")
+R.c("server/chunks/[root-of-the-server]__0z1nliv._.js")
+R.c("server/chunks/[root-of-the-server]__1234bn5._.js")
+R.c("server/chunks/_1rajwye._.js")
+R.c("server/chunks/_0s8fl53._.js")
+R.c("server/chunks/src_modules_settings_index_0mnhtem.js")
+R.c("server/chunks/_0lw7jqp._.js")
+R.c("server/chunks/_next-internal_server_app_api_leave_people_route_actions_1sydjl_.js")
+R.m(68903)
+module.exports=R.m(68903).exports

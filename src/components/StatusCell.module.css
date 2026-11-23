@@ -103,3 +103,14 @@ button.status:hover {
   background: var(--line);
   color: var(--ink-2);
 }
+
+/* The person's day (CONTRACT 25): leave is soft teal, a holiday soft green */
+.teal {
+  background: var(--label-teal-bg);
+  color: var(--label-teal-text);
+}
+
+.greenSoft {
+  background: var(--green-soft);
+  color: var(--green-text);
+}

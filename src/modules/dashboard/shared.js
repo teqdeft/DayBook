@@ -1,5 +1,6 @@
 // Helpers shared by the dashboard services: the request context (settings, today, now), date
-// ranges, the section 7.10 day summary, and view-model pieces used on more than one screen.
+// ranges, the section 7.10 day summary, each person's day (holidays and leave, CONTRACT 25), and
+// view-model pieces used on more than one screen.
 import {
   clockToMinutes,
   dayjs,
@@ -10,6 +11,7 @@ import {
   formatHours,
   formatTime,
   formatTimeAmPm,
+  isoWeekday,
   localToUtc,
   monthOf,
   monthRange,
@@ -18,6 +20,7 @@ import {
   workDate,
 } from '@/lib/time';
 import { plural } from '@/lib/text';
+import { attendance } from '@/modules/attendance';
 import { settings } from '@/modules/settings';
 
 /** Settings, time zone, the current moment and today's company date for one request. */
@@ -76,14 +79,73 @@ export function people(count) {
   return `${count} ${plural(count, 'person', 'people')}`;
 }
 
+// Presences of someone off without a check-in (CONTRACT 25): leave, a holiday, a day off.
+const OFF_PRESENCES = new Set(['on_leave', 'holiday', 'day_off']);
+
+/** True for a presence that means "off today" (leave, a holiday or a day off, no check-in). */
+export function isOff(presence) {
+  return OFF_PRESENCES.has(presence);
+}
+
 /**
- * The day's numbers exactly as build guide section 7.10 counts them, from the rows of
- * listTrackedPeopleDay (active people with tracks_attendance = 1 who had joined by that day):
- * checked in = rows with attendance; WFH = of those, location wfh; late = of those,
- * late_minutes > 0, averaged over late rows only; reports submitted = submitted reports among
- * the people who checked in.
+ * The calendar the dashboards read (CONTRACT 25): holidays and leave of a date range, never the
+ * leave type, pay or note (no leaveDetail) and never "WFH approved" (no WFH read), so a PM's
+ * payload can't carry them.
+ * @param {{ from: string, to: string }} range
+ */
+export function loadDashboardCalendar({ from, to }) {
+  return attendance.loadCalendar({ from, to, withWfh: false });
+}
+
+/**
+ * The company holiday on a date when it falls on a working weekday (`{ name }`), else null: a
+ * holiday on a day the company doesn't work changes nothing.
+ */
+export function holidayOn(calendar, date, workingDays) {
+  const holiday = calendar.holidayOn(date);
+  return holiday && workingDays.includes(isoWeekday(date)) ? { name: holiday.name } : null;
+}
+
+/**
+ * listTrackedPeopleDay rows with each person's day on `date` and their presence at `ctx.now`
+ * (attendance.presenceOf: first-half leave reads on_leave until the split, today only), and
+ * `lateMinutes` as the effective late (0 on a day without a late mark). `day` stays on the
+ * server: board rows copy only what they show.
+ * @param {object[]} rows
+ * @param {{ calendar: object, date: string,
+ *   ctx: { now: import('dayjs').Dayjs, tz: string } }} input
+ * @returns {object[]} rows plus { day, presence, lateMinutes }
+ */
+export function withPresence(rows, { calendar, date, ctx }) {
+  return rows.map((row) => {
+    const day = calendar.dayFor(row, date);
+    const checkIn = row.attendanceId
+      ? {
+          location: row.location,
+          officeVerified: Boolean(row.officeVerified),
+          lateMinutes: Number(row.lateMinutes ?? 0),
+        }
+      : null;
+    return {
+      ...row,
+      day,
+      presence: attendance.presenceOf({ day, row: checkIn, at: ctx.now, tz: ctx.tz }),
+      lateMinutes: attendance.effectiveLateMinutes({ row: checkIn, day }),
+    };
+  });
+}
+
+/**
+ * The day's numbers as build guide section 7.10 counts them, from the rows of
+ * listTrackedPeopleDay (active people with tracks_attendance = 1 who had joined by that day),
+ * with each person's presence (withPresence, CONTRACT 25): checked in = rows with attendance;
+ * WFH = of those, location wfh; late = of those, effective late minutes > 0, averaged over late
+ * rows only; not checked in = presence not_checked_in only (expected now); off = on leave, a
+ * holiday or a day off without a check-in; reports submitted = submitted reports among the
+ * people who checked in. Rows without a presence count as 1.09 did (no row = not checked in).
  */
 export function summarizeDay(rows) {
+  const presenceOf = (row) => row.presence ?? (row.attendanceId ? 'office' : 'not_checked_in');
   const present = rows.filter((row) => row.attendanceId);
   const wfh = present.filter((row) => row.location === 'wfh').length;
   const late = present.filter((row) => Number(row.lateMinutes) > 0);
@@ -94,7 +156,8 @@ export function summarizeDay(rows) {
     checkedIn: present.length,
     office: present.length - wfh,
     wfh,
-    notCheckedIn: rows.length - present.length,
+    notCheckedIn: rows.filter((row) => presenceOf(row) === 'not_checked_in').length,
+    off: rows.filter((row) => isOff(presenceOf(row))).length,
     late: {
       count: late.length,
       averageMinutes: late.length ? Math.round(lateTotal / late.length) : 0,
@@ -115,14 +178,19 @@ export function reportsKpi(summary, ctx) {
   };
 }
 
-/** The "Checked in" / "In today" number card: '24' 'of 26 people'. */
+/**
+ * The "Checked in" / "In today" number card: '24' 'of 26 people', or 'of 26 people, 2 off' when
+ * some are off (CONTRACT 25). The bar counts over the people expected (tracked less those off),
+ * as Attendance's Present card does.
+ */
 export function checkedInKpi(summary, label) {
+  const off = summary.off ?? 0;
   return {
     key: 'checkedIn',
     label,
     value: String(summary.checkedIn),
-    sub: `of ${people(summary.tracked)}`,
-    percent: percent(summary.checkedIn, summary.tracked),
+    sub: off > 0 ? `of ${people(summary.tracked)}, ${off} off` : `of ${people(summary.tracked)}`,
+    percent: percent(summary.checkedIn, summary.tracked - off),
     color: 'primary',
   };
 }

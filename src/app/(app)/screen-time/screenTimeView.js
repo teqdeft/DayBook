@@ -160,14 +160,17 @@ function weekBars(dates, byDate, today) {
 
 /**
  * The Screen time card for a range (Employee detail, My log): four numbers and a bar per day
- * (working days, plus any other day with data), or per week for ranges longer than a month.
+ * (working days, plus any other day with data), or per week for ranges longer than a month. A
+ * company holiday without data draws no bar (CONTRACT 25), today included.
  * @param {{
  *   range: { days: object[], totals: { activeMinutes: number, idleMinutes: number,
  *     lockedMinutes: number, daysWithData: number } },
  *   from: string, to: string, today: string, workingDays: number[],
- * }} input  `from`..`to` is the period shown (days after today are drawn empty).
+ *   holidays?: Set<string> | string[],
+ * }} input  `from`..`to` is the period shown (days after today are drawn empty); `holidays` are
+ *   the company holiday dates in it. Averages stay per day with data.
  */
-export function rangeSummary({ range, from, to, today, workingDays }) {
+export function rangeSummary({ range, from, to, today, workingDays, holidays }) {
   const days = range?.days ?? [];
   const byDate = new Map(days.map((day) => [day.workDate, day]));
   const totals = range?.totals ?? {};
@@ -176,10 +179,15 @@ export function rangeSummary({ range, from, to, today, workingDays }) {
   const locked = minutesOf(totals.lockedMinutes);
   const daysWithData = Math.max(0, Number(totals.daysWithData) || 0);
   const average = daysWithData ? Math.round(active / daysWithData) : 0;
+  const holiday = (date) =>
+    !isWorkingDay(date, workingDays, holidays) && isWorkingDay(date, workingDays);
   const dates =
     from && to && from <= to
       ? eachDay(from, to).filter(
-          (date) => isWorkingDay(date, workingDays) || byDate.has(date) || date === today,
+          (date) =>
+            isWorkingDay(date, workingDays, holidays) ||
+            byDate.has(date) ||
+            (date === today && !holiday(date)),
         )
       : [];
   const bars =

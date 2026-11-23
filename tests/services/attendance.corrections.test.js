@@ -155,6 +155,40 @@ describe('correction requests', () => {
       ),
     ).toHaveProperty('reason');
   });
+
+  it("with the caller's transaction, inserts and tells HR in it (CONTRACT 25)", async () => {
+    const ravi = await createUser({ name: 'Ravi Nair' });
+    const rowId = await addRow(ravi, '2026-09-29', { checkoutStatus: 'missing' });
+    const input = {
+      user: ravi,
+      type: 'check_out',
+      workDate: '2026-09-29',
+      checkOut: '19:10',
+      reason: 'Stayed for the release',
+    };
+    const told = () =>
+      db('notifications').where({ type: 'attendance_correction.requested', body: input.reason });
+
+    // Rolled back with the caller's transaction: no request and nobody told.
+    const rolledBack = db.transaction(async (trx) => {
+      const correction = await attendance.requestCorrection(input, trx);
+      expect(correction).toMatchObject({ attendanceId: rowId, status: 'pending' });
+      expect(await told().transacting(trx)).toHaveLength(1);
+      throw new Error('rolled back');
+    });
+    await expect(rolledBack).rejects.toThrow('rolled back');
+    expect(await db('attendanceCorrections').where({ userId: ravi.id })).toHaveLength(0);
+    expect(await told()).toHaveLength(0);
+
+    const correction = await db.transaction((trx) => attendance.requestCorrection(input, trx));
+    expect(correction.requestedTime.toISOString()).toBe(iso('19:10', '2026-09-29'));
+    expect(await told()).toHaveLength(1);
+    // The pending request is read FOR UPDATE inside the next caller's transaction.
+    expect(await code(db.transaction((trx) => attendance.requestCorrection(input, trx)))).toBe(
+      'REQUEST_ALREADY_PENDING',
+    );
+    expect(await db('attendanceCorrections').where({ userId: ravi.id })).toHaveLength(1);
+  });
 });
 
 describe('approving and rejecting', () => {

@@ -1,5 +1,6 @@
-// GET /api/attendance?date=&filter=late|wfh|not_checked_in|unverified — everyone's row for a day
-// (Admins only for an Admin viewer).
+// GET /api/attendance?date=&filter=late|wfh|not_checked_in|on_leave|unverified|on_break —
+// everyone's row and day for a date (Admins only for an Admin viewer); each item carries lateCount
+// ("4th this month", CONTRACT 25).
 // POST /api/attendance — HR adds a row for someone who forgot to check in (reason required).
 import { listResult, withRoute } from '@/lib/route';
 import { attendance } from '@/modules/attendance';

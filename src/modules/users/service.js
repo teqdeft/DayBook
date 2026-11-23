@@ -2,6 +2,8 @@
 // Roles and Slack-sync changes, which live in their own files and are re-exported here.
 import { AppError } from '@/lib/errors';
 import { can, ROLE_LABELS } from '@/lib/permissions';
+import { localToUtc } from '@/lib/time';
+import { settings } from '@/modules/settings';
 import { parseInput, toPublicUser } from './helpers';
 import * as repo from './repo';
 import { listUsersQuerySchema } from './schemas';
@@ -45,6 +47,27 @@ export async function listActive({ tracksAttendance } = {}) {
     tracksAttendance: tracksAttendance === undefined ? undefined : Boolean(tracksAttendance),
   });
   return rows.map(toPublicUser);
+}
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Everyone whose attendance counts in a date range (CONTRACT 25: the month view, the person month,
+ * the HR summaries): people who check in, joined by `to` (or with no join date), and still active
+ * or deactivated on or after `from` (compared as company dates). Sorted by name.
+ * @param {{ from: string, to: string }} range company dates 'YYYY-MM-DD', from <= to
+ * @returns {Promise<Array<ReturnType<typeof toPublicUser>>>} PublicUser with deactivatedAt (a
+ *   Date, null while active); the caller works out leftOn from it
+ * @throws VALIDATION_FAILED when the dates aren't 'YYYY-MM-DD' or from is after to (a
+ *   programming error, not user input)
+ */
+export async function listTrackedForRange({ from, to } = {}) {
+  if (!DATE.test(String(from)) || !DATE.test(String(to)) || from > to) {
+    throw new AppError('VALIDATION_FAILED', { message: 'Pick a date range like 2026-11-01.' });
+  }
+  const { timezone } = await settings.getAll();
+  const deactivatedFrom = localToUtc(from, '00:00', timezone).toDate();
+  return (await repo.listTrackedForRange({ to, deactivatedFrom })).map(toPublicUser);
 }
 
 /**

@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import { validationError } from '@/lib/errors';
-import { clockToMinutes } from '@/lib/time';
 
-/** '9:30', '09:30' or '09:30:00' -> '09:30'. Anything else fails with a readable message. */
-const clock = (label) =>
+/**
+ * '9:30', '09:30' or '09:30:00' -> '09:30'. Anything else fails with a readable message
+ * ("Enter the office end time as a time like 09:30.", or `message` when given).
+ */
+const clock = (label, message = `Enter ${label} as a time like 09:30.`) =>
   z
-    .string({ error: `Enter ${label} as a time like 09:30.` })
+    .string({ error: message })
     .trim()
-    .regex(/^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, `Enter ${label} as a time like 09:30.`)
+    .regex(/^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, message)
     .transform((value) => {
       const [h, m] = value.split(':');
       return `${h.padStart(2, '0')}:${m}`;
@@ -41,6 +43,18 @@ export const BREAK_ALLOWANCE_MINUTES = Object.freeze({ min: 0, max: 480 });
 
 /** Gemini requests per day for the whole company (CONTRACT 20). */
 export const AI_DAILY_LIMIT = Object.freeze({ min: 0, max: 2000 });
+
+/** Attendance marks and HR updates (CONTRACT 25). 0 turns a mark or the reminder off. */
+export const HALF_DAY_UNDER_MINUTES = Object.freeze({ min: 0, max: 720 });
+export const SHORT_DAY_UNDER_MINUTES = Object.freeze({ min: 0, max: 720 });
+export const LEFT_EARLY_GRACE_MINUTES = Object.freeze({ min: 0, max: 240 });
+export const PAYROLL_MONTH_START_DAY = Object.freeze({ min: 1, max: 28 });
+export const CHECKIN_REMINDER_MINUTES = Object.freeze({ min: 0, max: 240 });
+export const LATE_ALERT_DAYS = Object.freeze({ min: 1, max: 31 });
+
+/** A whole number in its range, with one message for both a wrong type and a wrong range. */
+const bounded = ({ min, max }, message) =>
+  wholeNumber({ min, max, typeMessage: message, rangeMessage: message });
 
 /** Empty strings become null, so a cleared picker saves "no channel". */
 const nullableText = (max, message) =>
@@ -178,28 +192,39 @@ export const settingsUpdateSchema = z
       typeMessage: 'The break allowance must be whole minutes.',
       rangeMessage: `The break allowance must be between ${BREAK_ALLOWANCE_MINUTES.min} and ${BREAK_ALLOWANCE_MINUTES.max} minutes (0 means no allowance).`,
     }),
+    // Attendance marks (CONTRACT 25, items 3 and 4)
+    halfDayUnderMinutes: bounded(
+      HALF_DAY_UNDER_MINUTES,
+      'Half day must be between 0 and 720 minutes (0 turns it off).',
+    ),
+    shortDayUnderMinutes: bounded(
+      SHORT_DAY_UNDER_MINUTES,
+      'Short day must be between 0 and 720 minutes (0 turns it off).',
+    ),
+    leftEarlyGraceMinutes: bounded(
+      LEFT_EARLY_GRACE_MINUTES,
+      'The left early grace must be between 0 and 240 minutes.',
+    ),
+    payrollMonthStartDay: bounded(
+      PAYROLL_MONTH_START_DAY,
+      'The payroll month must start on a day from 1 to 28.',
+    ),
+    // HR updates (CONTRACT 25, items 1, 5 and 10)
+    hrMorningSummary: z.boolean({ error: 'Choose on or off.' }),
+    hrSummaryAt: clock('the HR summary time', 'Enter a time like 10:00.'),
+    hrEveningSummary: z.boolean({ error: 'Choose on or off.' }),
+    checkinReminderMinutes: bounded(
+      CHECKIN_REMINDER_MINUTES,
+      'The reminder must be between 0 and 240 minutes (0 turns it off).',
+    ),
+    lateAlertDays: bounded(LATE_ALERT_DAYS, 'Late days must be between 1 and 31.'),
+    // Slack (CONTRACT 25): the queueDm setting keys of every remind and of both HR summaries
+    slackAttendanceRemind: z.boolean({ error: 'Choose on or off.' }),
+    slackHrSummary: z.boolean({ error: 'Choose on or off.' }),
   })
   .partial();
 
-const AUTO_CHECKOUT_KEYS = ['autoCheckoutEnabled', 'autoCheckoutAt', 'officeEnd'];
-
-/**
- * CONTRACT 19: while auto check-out is on, its time must be later than office end (the check
- * window runs from office end to it). Checked on the values after the save whenever one of the
- * three keys is sent.
- * @param {{ autoCheckoutEnabled: boolean, autoCheckoutAt: string, officeEnd: string }} current
- *   the stored settings
- * @param {object} parsed settingsUpdateSchema output (keys not sent are undefined)
- * @throws VALIDATION_FAILED on autoCheckoutAt ("Pick a time after office hours end.")
- */
-export function checkAutoCheckout(current, parsed) {
-  if (!AUTO_CHECKOUT_KEYS.some((key) => parsed[key] !== undefined)) return;
-  const pick = (key) => parsed[key] ?? current[key];
-  if (!pick('autoCheckoutEnabled')) return;
-  if (clockToMinutes(pick('autoCheckoutAt')) > clockToMinutes(pick('officeEnd'))) return;
-  const message = 'Pick a time after office hours end.';
-  throw validationError({ autoCheckoutAt: message }, message);
-}
+export { checkAutoCheckout, checkDayMarks, checkHrSummary } from './crossChecks';
 
 /** '::ffff:203.0.113.24' -> '203.0.113.24'; IPv6 in lowercase. */
 export function normalizeIp(value) {

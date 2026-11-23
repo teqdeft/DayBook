@@ -14,7 +14,7 @@ import { breakMinutesWithin, forgottenBreakEnd, isOpenRow, nowToSecond, todayFor
 /**
  * @typedef {{ id: number, userId: number, attendanceId: number, workDate: string,
  *   startedAt: Date, endedAt: Date | null, endReason: 'self' | 'checkout' | 'timer' | 'midnight'
- *   | null, pausedEntryId: number | null }} BreakRow
+ *   | 'away' | 'hr' | null, pausedEntryId: number | null }} BreakRow
  */
 
 /**
@@ -102,9 +102,11 @@ export async function startBreak({ user }) {
  * Ends the signed-in person's break ('self') and starts the timer it paused again
  * (timers.resumeAfterBreak, which does nothing when a timer runs, timers are off or the project is
  * no longer active). Nothing resumes once today's row is closed (e.g. by HR) or when the person
- * may no longer use timers (timers.canUse, e.g. no longer tracked): the break still ends. After
- * commit, tells the person once when this break took today's breaks over the daily allowance
- * (breakAllowanceMinutes; 0 = no allowance).
+ * may no longer use timers (timers.canUse, e.g. no longer tracked): the break still ends. Inside
+ * the transaction, under the attendance row lock, it works out whether this break took today's
+ * breaks over the daily allowance (breakTotalsIn); after commit the person is told once when it
+ * did (noticeOverAllowance; breakAllowanceMinutes 0 = no allowance), so a Remove and an End break
+ * that cross it together tell them once.
  * @param {{ user: { id: number, role: string, status?: string, tracksAttendance: boolean } }} input
  * @returns {Promise<{ break: BreakRow, breakMinutesToday: number, overAllowanceMinutes: number }>}
  *   minutes of break inside today's present window, and how far that is over the allowance
@@ -114,7 +116,7 @@ export async function endBreak({ user }) {
   const current = await settings.getAll();
   const today = todayFor(current);
   const at = nowToSecond();
-  const ended = await repo.transaction(async (trx) => {
+  const { ended, totals } = await repo.transaction(async (trx) => {
     const row = await lockDay({ userId: user.id, workDate: today }, trx);
     const open = await repo.findOpenBreak(user.id, trx, { forUpdate: true });
     if (!open) throw new AppError('NOT_ON_BREAK');
@@ -123,53 +125,85 @@ export async function endBreak({ user }) {
     if (resume && timers.canUse(user)) {
       await timers.resumeAfterBreak({ userId: user.id, entryId: open.pausedEntryId, at }, trx);
     }
-    return done;
+    // Today's totals: a break left open from an earlier day ends by the midnight rule and
+    // never counts towards today's allowance.
+    const counted = await breakTotalsIn(
+      { userId: user.id, workDate: today, breakId: done.id },
+      trx,
+    );
+    return { ended: done, totals: counted };
   });
-  const totals = await breakTotals({ userId: user.id, ended, today, current });
-  return { break: ended, ...totals };
+  await noticeOverAllowance({ userId: user.id, crossed: totals.crossed, total: totals.total });
+  return {
+    break: ended,
+    breakMinutesToday: totals.total,
+    overAllowanceMinutes: totals.overAllowanceMinutes,
+  };
 }
 
-/** Today's break minutes after a break ended, notifying the person when it crossed the allowance. */
-async function breakTotals({ userId, ended, today, current }) {
-  const [row, breaks] = await Promise.all([
-    repo.findByUserAndDate(userId, today),
-    repo.listBreaksByUserDate(userId, today),
+/**
+ * A day's break minutes inside the caller's transaction, after a break ended or an away break was
+ * saved (call it under the attendance row lock, so of two that end together exactly one sees the
+ * crossing): `before` without that break, `total` with it, and whether it took the day over the
+ * allowance (allowance above 0, before at or under it, total over it). Only finished breaks
+ * count: a break still open counts once it ends, so it never crosses twice.
+ * @param {{ userId: number, workDate: string, breakId: number }} input
+ * @param {import('knex').Knex.Transaction} trx
+ * @returns {Promise<{ before: number, total: number, crossed: boolean,
+ *   overAllowanceMinutes: number }>}
+ */
+export async function breakTotalsIn({ userId, workDate, breakId }, trx) {
+  const [current, row, breaks] = await Promise.all([
+    settings.getAll(),
+    repo.findByUserAndDate(userId, workDate, trx),
+    repo.listBreaksByUserDate(userId, workDate, trx),
   ]);
   const at = now();
   const tz = current.timezone;
-  const total = breakMinutesWithin(breaks, row, at, tz);
-  const before = breakMinutesWithin(
-    breaks.filter((item) => item.id !== ended.id),
-    row,
-    at,
-    tz,
-  );
-  const allowance = current.breakAllowanceMinutes;
-  if (allowance > 0 && before <= allowance && total > allowance) {
-    // "the 30 min allowance", "the 1h allowance": never a bare minute count of an hour or more.
-    const limit = allowance < 60 ? `${allowance} min` : formatDuration(allowance);
-    await notifications.notify({
-      userIds: [userId],
-      type: 'attendance.break_over_allowance',
-      title: `Your breaks today are over the ${limit} allowance`,
-      body: `You've had ${formatDuration(total)} of breaks today.`,
-      link: '/today',
-    });
-  }
+  const finished = breaks.filter((item) => item.endedAt);
+  const total = breakMinutesWithin(finished, row, at, tz);
+  const others = finished.filter((item) => Number(item.id) !== Number(breakId));
+  const before = breakMinutesWithin(others, row, at, tz);
+  const allowance = Number(current.breakAllowanceMinutes) || 0;
   return {
-    breakMinutesToday: total,
+    before,
+    total,
+    crossed: allowance > 0 && before <= allowance && total > allowance,
     overAllowanceMinutes: allowance > 0 ? Math.max(0, total - allowance) : 0,
   };
 }
 
 /**
+ * After commit: tells the person their breaks today went over the allowance
+ * (attendance.break_over_allowance), only when `crossed` (breakTotalsIn). End break and Remove
+ * call it; HR's break fixes never do.
+ * @param {{ userId: number, crossed: boolean, total: number }} input
+ */
+export async function noticeOverAllowance({ userId, crossed, total }) {
+  if (!crossed) return;
+  const allowance = Number((await settings.getAll()).breakAllowanceMinutes) || 0;
+  if (allowance <= 0) return;
+  // "the 30 min allowance", "the 1h allowance": never a bare minute count of an hour or more.
+  const limit = allowance < 60 ? `${allowance} min` : formatDuration(allowance);
+  await notifications.notify({
+    userIds: [userId],
+    type: 'attendance.break_over_allowance',
+    title: `Your breaks today are over the ${limit} allowance`,
+    body: `You've had ${formatDuration(total)} of breaks today.`,
+    link: '/today',
+  });
+}
+
+/**
  * The person's open break, if any (one from an earlier day too, until closeForgottenBreaks runs).
+ * Lock it (`forUpdate`) only inside a READ COMMITTED transaction, after attendance.lockDay.
  * @param {number} userId
  * @param {import('knex').Knex} [trx]
+ * @param {{ forUpdate?: boolean }} [options]
  * @returns {Promise<BreakRow | null>}
  */
-export async function getOpenBreak(userId, trx = db) {
-  return (await repo.findOpenBreak(userId, trx)) ?? null;
+export async function getOpenBreak(userId, trx = db, { forUpdate = false } = {}) {
+  return (await repo.findOpenBreak(userId, trx, { forUpdate })) ?? null;
 }
 
 /**

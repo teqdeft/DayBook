@@ -3,13 +3,15 @@
 // with before and after. Only an Admin changes an Admin's attendance (company rule).
 import { db } from '@/lib/db';
 import { AppError, validationError } from '@/lib/errors';
-import { dayjs, formatDayShort, now, nowDate } from '@/lib/time';
+import { dayjs, now, nowDate } from '@/lib/time';
 import { audit } from '@/modules/audit';
-import { notifications } from '@/modules/notifications';
 import { settings } from '@/modules/settings';
 import { users } from '@/modules/users';
+import { getDay } from './calendarReads';
+import { hasCheckoutEntered, markCheckoutEntered } from './checkoutEntered';
 import * as repo from './repo';
 import { clockOn, computeLateMinutes, showsAttendanceOf, todayFor, workingDayFlag } from './rules';
+import { tellPerson } from './tellPerson';
 
 /** The fields an audit row keeps for an attendance row. */
 export function auditView(row) {
@@ -109,17 +111,18 @@ async function findRowForUpdate(id, actor, trx) {
   return { row, person };
 }
 
-async function tellPerson({ userId, actor, workDate, what }, trx) {
-  if (userId === actor.id) return;
-  await notifications.notify(
-    {
-      userIds: [userId],
-      type: 'attendance.edited',
-      title: `${actor.name} ${what} your attendance for ${formatDayShort(workDate)}`,
-      link: `/log?month=${workDate.slice(0, 7)}`,
-    },
-    trx,
-  );
+/**
+ * A missing check-out the person already sent HR a time for is handled under Corrections, as in
+ * the bulk fix (CONTRACT 25, item 7): approving the request later would overwrite HR's change.
+ * Read under the row lock, so a page shown before the request still can't save over it.
+ * @throws CONFLICT "Handle it under Corrections." (on checkOut, so the dialog shows it there)
+ */
+async function assertNoPendingCheckout(row, trx) {
+  if (row.checkoutStatus !== 'missing') return;
+  const where = { userId: row.userId, workDate: row.workDate, type: 'check_out' };
+  if (!(await repo.findPendingCorrection(where, trx))) return;
+  const message = 'Handle it under Corrections.';
+  throw new AppError('CONFLICT', { message, fields: { checkOut: message } });
 }
 
 /**
@@ -164,6 +167,8 @@ export async function createForUser({
   }
   const times = resolveTimes({ workDate, checkIn, checkOut, current });
   assertOrder(times.checkInAt, times.checkOutAt);
+  // The person's day (CONTRACT 25): no late mark on a holiday or full-day leave.
+  const day = await getDay({ person, date: workDate });
   const at = nowDate();
   const row = {
     userId,
@@ -178,8 +183,9 @@ export async function createForUser({
       workDate,
       shiftStart: person.shiftStart,
       settings: current,
+      day,
     }),
-    isWorkingDay: workingDayFlag(workDate, current),
+    isWorkingDay: workingDayFlag(workDate, current, day),
     checkoutStatus: times.checkOutAt ? 'corrected' : 'open',
     source: 'hr',
     createdAt: at,
@@ -212,14 +218,27 @@ export async function createForUser({
 }
 
 /**
+ * A new check-out HR typed on a row that was missing, or whose check-out someone entered (the
+ * person's own fix, or an earlier HR fix), names HR as who entered it, with no suggestion
+ * (CONTRACT 25, item 7), so a row never says "By Priya" for a time Neha typed.
+ */
+async function markEnteredByHr({ row, actor, newCheckOut }, trx) {
+  if (!newCheckOut) return;
+  if (row.checkoutStatus !== 'missing' && !(await hasCheckoutEntered(row.id, trx))) return;
+  await markCheckoutEntered({ rowId: row.id, userId: actor.id, suggestedAt: null }, trx);
+}
+
+/**
  * HR changes a row's check-in, check-out or place (PATCH /api/attendance/:id). A new check-out
- * sets checkout_status = corrected; a new check-in recomputes late minutes; setting the place
- * counts as verified.
+ * sets checkout_status = corrected (and, on a row that was missing or whose check-out someone
+ * entered, names the actor as who entered it); a new check-in recomputes late minutes from the
+ * person's day (CONTRACT 25); setting the place counts as verified.
  * @param {{ actor: { id: number, name: string, role: string }, id: number, checkIn?: string,
  *   checkOut?: string, location?: 'office' | 'wfh', reason: string, ip?: string | null }} input
  * @returns {Promise<AttendanceRow>}
  * @throws NOT_FOUND (also an Admin's row when the actor isn't one), FORBIDDEN (their own row),
- *   VALIDATION_FAILED (future time, check-out before check-in)
+ *   CONFLICT (a missing check-out with a pending check_out correction), VALIDATION_FAILED
+ *   (future time, check-out before check-in)
  */
 export async function updateRow({ actor, id, checkIn, checkOut, location, reason, ip }) {
   const why = requireReason(reason);
@@ -230,6 +249,7 @@ export async function updateRow({ actor, id, checkIn, checkOut, location, reason
   const current = await settings.getAll();
   const rowId = await db.transaction(async (trx) => {
     const { row, person } = await findRowForUpdate(id, actor, trx);
+    await assertNoPendingCheckout(row, trx);
     const times = resolveTimes({ workDate: row.workDate, checkIn, checkOut, current });
     const checkInAt = times.checkInAt ?? row.checkInAt;
     const checkOutAt = times.checkOutAt ?? row.checkOutAt;
@@ -242,6 +262,7 @@ export async function updateRow({ actor, id, checkIn, checkOut, location, reason
         workDate: row.workDate,
         shiftStart: person?.shiftStart,
         settings: current,
+        day: person ? await getDay({ person, date: row.workDate }, trx) : undefined,
       });
     }
     if (times.checkOutAt) {
@@ -253,6 +274,7 @@ export async function updateRow({ actor, id, checkIn, checkOut, location, reason
       changes.officeVerified = true;
     }
     await repo.updateRow(row.id, changes, trx);
+    await markEnteredByHr({ row, actor, newCheckOut: Boolean(times.checkOutAt) }, trx);
     const saved = await repo.findById(row.id, trx);
     await audit.log(
       {

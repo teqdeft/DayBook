@@ -1,0 +1,104 @@
+# Migration 018 (CONTRACT 25) on MySQL 8.4, the engine production may run. Local development runs
+# MariaDB 10.4 (XAMPP), so this is where 018 meets MySQL 8.4 before the live migrate: migrate up
+# from an empty database, down for 018 only, up again, then the 018 service test. It runs on main
+# and pull requests to main only, never on the deploy branch, and publishes nothing.
+name: Migration check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migration-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mysql-8-4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          # A throwaway container: these are not secrets.
+          MYSQL_ROOT_PASSWORD: ci-root
+          MYSQL_DATABASE: daybook_test
+          MYSQL_USER: daybook
+          MYSQL_PASSWORD: ci-daybook
+        ports:
+          - 3306:3306
+        # Over TCP, so the entrypoint's temporary init server (socket only) never counts as up.
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      # Only what src/lib/env.js checks. The migrations and tests run as a user with rights on
+      # its own database only, as on the cPanel host. The database name contains "test", which
+      # resetDatabase() requires.
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_USER: daybook
+      DB_PASSWORD: ci-daybook
+      DB_NAME: daybook_test
+      SESSION_SECRET: ci-only-placeholder-never-used-at-runtime-0000
+      DEFAULT_TIMEZONE: Asia/Kolkata
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # The image creates the database with MySQL 8.4's utf8mb4_0900_ai_ci; Daybook's databases
+      # use utf8mb4_unicode_ci (tests/e2e/support/database.js), so the tables made by knex match.
+      - name: Set the database collation
+        run: |
+          node --input-type=module -e "
+            import mysql from 'mysql2/promise';
+            const options = { host: '127.0.0.1', port: 3306, user: 'root', password: 'ci-root' };
+            for (let attempt = 1; ; attempt += 1) {
+              try {
+                const connection = await mysql.createConnection(options);
+                await connection.query(
+                  'ALTER DATABASE daybook_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci',
+                );
+                const [[server]] = await connection.query('SELECT VERSION() AS version');
+                console.log('MySQL', server.version);
+                await connection.end();
+                break;
+              } catch (error) {
+                if (attempt >= 30) throw error;
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+              }
+            }
+          "
+
+      # NODE_ENV is left unset (development) so 018 prints its "018: rebuilt ... away breaks" line.
+      - name: Migrate up from an empty database
+        run: node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:latest
+
+      - name: Migrate down for 018 only
+        run: node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:down 018_hr_tools.js
+
+      - name: Migrate up again
+        run: |
+          node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:latest
+          node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:list
+
+      - name: Migration 018 service test
+        run: |
+          if [ -f tests/services/migration018.test.js ]; then
+            npx vitest run tests/services/migration018.test.js
+          else
+            echo "tests/services/migration018.test.js is not written yet; skipped."
+          fi

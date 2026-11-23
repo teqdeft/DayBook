@@ -1,5 +1,6 @@
 // Timer API (CONTRACT 15): GET /api/timers/current, POST start / stop / entries / away and
-// PATCH / DELETE /api/timers/entries/:id — permissions, Origin, status codes and error shapes.
+// PATCH / DELETE /api/timers/entries/:id — permissions, Origin, status codes and error shapes;
+// CONTRACT 25 A: Remove as a break, Left and POST /api/timers/away/:breakId/put-back.
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { createUser, resetDatabase, setSettings } from '../helpers/db.js';
@@ -26,6 +27,8 @@ const stopRoute = await import('@/app/api/timers/stop/route.js');
 const entriesRoute = await import('@/app/api/timers/entries/route.js');
 const entryRoute = await import('@/app/api/timers/entries/[id]/route.js');
 const awayRoute = await import('@/app/api/timers/away/route.js');
+const putBackRoute = await import('@/app/api/timers/away/[breakId]/put-back/route.js');
+const { resetRateLimitsForTests } = await import('@/lib/route');
 
 const EXPIRES = new Date('2026-10-26T04:00:00Z');
 let pm;
@@ -206,5 +209,71 @@ describe('POST /api/timers/away', () => {
     const kept = await away({ entryId: id, from: offered.from, to: offered.to, decision: 'keep' });
     expect(kept.status).toBe(200);
     expect(kept.json.data.away).toBeNull();
+  });
+});
+
+describe('Remove, Left and Put back through the API (CONTRACT 25 A)', () => {
+  const putBack = async (breakId) => {
+    const request = new Request(`${env.appOrigin}/api/timers/away/${breakId}/put-back`, {
+      method: 'POST',
+      headers: { origin: env.appOrigin },
+    });
+    const response = await putBackRoute.POST(request, {
+      params: Promise.resolve({ breakId: String(breakId) }),
+    });
+    return { status: response.status, json: await response.json() };
+  };
+
+  it('removes away time as a break, then puts it back', async () => {
+    resetRateLimitsForTests();
+    await insertEntry(hr, acme, { from: '10:00' });
+    await addSegment(hr, 'active', '10:00', '10:30');
+    await addSegment(hr, 'locked', '10:30', '11:00');
+    await addSegment(hr, 'active', '11:01', '11:10');
+    signInAs(hr);
+    const offered = (await current()).json.data.away;
+    const removed = await away({ ...offered, decision: 'remove' });
+    expect(removed.status).toBe(200);
+    expect(removed.json.data.answer).toMatchObject({ decision: 'remove', savedAsBreak: true });
+    const [{ breakId }] = removed.json.data.removed;
+    expect((await putBack('x1')).status).toBe(404);
+    signInAs(pm);
+    expect((await putBack(breakId)).status).toBe(403);
+    signInAs(emp);
+    expect((await putBack(breakId)).json.error.code).toBe('NOT_FOUND');
+    signInAs(hr);
+    const back = await putBack(breakId);
+    expect(back.status).toBe(200);
+    expect(back.json.data.answer).toEqual({ restored: true, minutes: 30, projectName: 'acme-app' });
+    expect(back.json.data.removed).toEqual([]);
+  });
+
+  it('checks the person out from the Left answer, with the request IP', async () => {
+    const lena = await createUser({ name: 'Lena Left' });
+    await addMembers(acme, [lena]);
+    await checkIn(lena, TODAY, { in: '09:00' });
+    await insertEntry(lena, acme, { from: '09:00' });
+    await addSegment(lena, 'active', '09:00', '18:42');
+    await addSegment(lena, 'locked', '18:42', '20:52');
+    await addSegment(lena, 'active', '20:53', '20:55');
+    setClock('20:55');
+    signInAs(lena);
+    const offered = (await current()).json.data.away;
+    expect(offered.left).toEqual({ clock: '18:42', shiftEndClock: '18:30' });
+    const left = await away({ ...offered, decision: 'left' });
+    expect(left.status).toBe(200);
+    expect(left.json.data).toMatchObject({ blocked: 'checked_out', running: null });
+    const row = await db('attendance').where({ userId: lena.id, workDate: TODAY }).first();
+    expect(row.checkOutAt).toEqual(at('18:42'));
+  });
+
+  it('limits Put back to 60 a minute per person', async () => {
+    resetRateLimitsForTests();
+    signInAs(emp);
+    for (let index = 0; index < 60; index += 1) {
+      expect((await putBack(999999)).status).toBe(404);
+    }
+    expect((await putBack(999999)).status).toBe(429);
+    resetRateLimitsForTests();
   });
 });

@@ -1,0 +1,3 @@
+{
+  "/api/attendance/me/missing-checkouts/[id]/fix/route": "app/api/attendance/me/missing-checkouts/[id]/fix/route.js"
+}

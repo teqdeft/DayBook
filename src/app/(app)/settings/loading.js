@@ -3,7 +3,9 @@ import Card from '@/components/Card';
 import Skeleton from '@/components/Skeleton';
 import styles from './loading.module.css';
 
-const NAV = [72, 150, 64, 44, 88, 124, 96, 24, 140];
+// Widths of the sub-navigation items, in SettingsNav order (with Attendance marks and HR updates,
+// CONTRACT 25).
+const NAV = [72, 150, 64, 118, 82, 44, 88, 124, 96, 24, 140];
 
 function SectionSkeleton({ fields }) {
   return (

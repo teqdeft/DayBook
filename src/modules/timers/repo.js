@@ -89,6 +89,17 @@ export function listForUserDate(userId, workDate, trx = db) {
     .orderBy(OLDEST_FIRST);
 }
 
+/** One person's entries of one work date without names (bare columns), oldest first. */
+export function listBareForUserDate(userId, workDate, trx = db) {
+  return trx('timeEntries')
+    .where({ userId, workDate })
+    .orderBy([
+      { column: 'startedAt', order: 'asc' },
+      { column: 'id', order: 'asc' },
+    ])
+    .select(BARE_COLUMNS);
+}
+
 /** Entries still running from a work date before `date` (the midnight job). */
 export function listRunningBefore(date, trx = db) {
   return entryQuery(trx).whereNull('te.endedAt').where('te.workDate', '<', date).orderBy('te.id');

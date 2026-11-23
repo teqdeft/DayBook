@@ -1,5 +1,5 @@
 // Helpers shared by the timers service files: who may use timers, today's context, the checks
-// every write makes, row mapping and input parsing. attendance and timers import each other, so
+// every write makes (lockOwnToday), row mapping and input parsing. attendance and timers import each other, so
 // other modules are only used inside functions here.
 import { AppError, validationError } from '@/lib/errors';
 import { can } from '@/lib/permissions';
@@ -8,6 +8,7 @@ import { attendance } from '@/modules/attendance';
 import { projects } from '@/modules/projects';
 import { projectTasks } from '@/modules/projectTasks';
 import { settings } from '@/modules/settings';
+import * as repo from './repo';
 import { entryMinutes } from './rules';
 
 const TASK_MESSAGE = 'Pick an open priority task of this project, or none.';
@@ -91,6 +92,27 @@ export async function checkTask({ userId, projectId, projectTaskId }) {
 
 export function entryNotFound() {
   return new AppError('NOT_FOUND', { message: "We couldn't find that timer." });
+}
+
+export const TODAY_ONLY_MESSAGE = "Only today's timers can be changed.";
+
+/**
+ * Locks the person's attendance row of today (the order of every timer and break write), then one
+ * of their entries of today, and returns that entry (bare). Shared by the hand changes
+ * (entries.js) and the away answers.
+ * @param {{ user: { id: number }, id: number | string, ctx: { date: string } }} input
+ * @param {import('knex').Knex.Transaction} trx
+ * @returns {Promise<object>}
+ * @throws NOT_FOUND, BAD_REQUEST ("Only today's timers can be changed.")
+ */
+export async function lockOwnToday({ user, id, ctx }, trx) {
+  await attendance.lockDay({ userId: user.id, workDate: ctx.date }, trx);
+  const entryId = toId(id);
+  const locked = entryId ? await repo.lockById(entryId, trx) : null;
+  if (!locked || Number(locked.userId) !== Number(user.id)) throw entryNotFound();
+  if (locked.workDate !== ctx.date)
+    throw new AppError('BAD_REQUEST', { message: TODAY_ONLY_MESSAGE });
+  return locked;
 }
 
 const iso = (value) => (value ? dayjs(value).toISOString() : null);

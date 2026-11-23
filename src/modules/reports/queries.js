@@ -5,6 +5,7 @@ import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { can } from '@/lib/permissions';
 import { addDays, nowDate, workDate, workingDaysBetween } from '@/lib/time';
+import { attendance } from '@/modules/attendance';
 import { settings } from '@/modules/settings';
 import * as carryRepo from './carryRepo';
 import * as repo from './repo';
@@ -30,9 +31,18 @@ export function getSubmittedMinutesByDay(userId, from, to) {
   return repo.submittedMinutesByDay(userId, from, to);
 }
 
+/** The company holidays from the oldest of these dates to `day`, as a Set (one query, or none). */
+async function holidaysFrom(dates, day) {
+  const oldest = dates.filter((date) => date && date <= day).sort()[0];
+  if (!oldest) return new Set();
+  const holidays = await attendance.listHolidaysBetween(oldest, day);
+  return new Set(holidays.map((holiday) => holiday.date));
+}
+
 /**
  * Stuck tasks (guide 7.5): tasks still in progress in the person's latest submitted report
- * whose first report was at least `stuckTaskDays` working days ago. A line the person closed from
+ * whose first report was at least `stuckTaskDays` working days ago; company holidays aren't
+ * working days (CONTRACT 25), leave doesn't change a task's age. A line the person closed from
  * the suggestions ("Done already", "Not needed", CONTRACT 24) isn't stuck.
  * @param {number} userId
  * @param {{ today?: string }} [options]
@@ -45,11 +55,16 @@ export async function listStuckTasks(userId, { today } = {}) {
   const latest = await repo.findLatestSubmittedBefore(userId, addDays(day, 1));
   if (!latest) return [];
   const entries = (await loadEntriesFor([latest.id])).get(latest.id) ?? [];
+  const open = entries.flatMap((entry) => entry.tasks.filter((t) => t.status === 'in_progress'));
+  const holidays = await holidaysFrom(
+    open.map((task) => task.firstReportedOn),
+    day,
+  );
   const stuck = [];
   for (const entry of entries) {
     for (const task of entry.tasks) {
       if (task.status !== 'in_progress') continue;
-      const days = workingDaysBetween(task.firstReportedOn, day, current.workingDays);
+      const days = workingDaysBetween(task.firstReportedOn, day, current.workingDays, holidays);
       if (days < current.stuckTaskDays) continue;
       stuck.push({
         taskId: task.id,

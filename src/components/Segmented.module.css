@@ -39,3 +39,10 @@
   color: var(--ink);
   font-weight: 600;
 }
+
+/* An item that can't be picked (CONTRACT 25): muted text at half strength, no hover. */
+.disabled,
+.disabled:hover {
+  color: color-mix(in srgb, var(--muted) 50%, transparent);
+  cursor: not-allowed;
+}

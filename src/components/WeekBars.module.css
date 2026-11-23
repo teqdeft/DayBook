@@ -37,6 +37,11 @@
   background: color-mix(in srgb, var(--primary) 59%, var(--surface));
 }
 
+/* A stacked column faded as a whole (Overview's holiday, CONTRACT 25). */
+.fadedTrack {
+  opacity: 0.5;
+}
+
 .label {
   margin-top: 8px;
   font-size: 13px;

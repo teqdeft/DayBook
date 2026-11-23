@@ -1,5 +1,5 @@
-// Team board cells that show live status (CONTRACT 15) and today's to-do (CONTRACT 24). No hooks:
-// rendered by TeamBoard.
+// Team board cells that show live status (CONTRACT 15), today's to-do (CONTRACT 24) and why
+// someone is off today (CONTRACT 25). No hooks: rendered by TeamBoard.
 import ProjectLabel from '@/components/ProjectLabel';
 import Tag from '@/components/Tag';
 import { formatTimeAmPm } from '@/lib/time';
@@ -8,11 +8,20 @@ import styles from './TeamBoard.module.css';
 
 /**
  * Check-in time with its "Late 38m" tag, and a marigold "On break" tag under it while the person
- * is on a break (hover shows since when).
+ * is on a break (hover shows since when). Someone off today shows their tag instead (CONTRACT
+ * 25): "On leave" or "On leave, first half" teal, "Holiday" green, "Day off" neutral.
  * @param {{ row: { checkIn: string|null, late: string|null, onBreak?: boolean,
- *   breakSince?: string|null }, tz: string }} props
+ *   breakSince?: string|null, offTag?: { label: string, tone: string } | null }, tz: string }}
+ *   props
  */
 export function CheckInCell({ row, tz }) {
+  if (!row.checkIn && row.offTag) {
+    return (
+      <Tag tone={row.offTag.tone} padX={8}>
+        {row.offTag.label}
+      </Tag>
+    );
+  }
   if (!row.checkIn) return <span className={styles.dash}>—</span>;
   const time = (
     <span className={styles.checkIn}>

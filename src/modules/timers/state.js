@@ -1,12 +1,87 @@
 // What a person's timers look like now (Today's Working on card and the sidebar chip) and a day's
-// timer summary for the daily report.
-import { dayjs, now } from '@/lib/time';
+// timer summary for the daily report. The away question covers every one of today's timer
+// entries (CONTRACT 25 A) and `removed` lists today's away breaks for Put back.
+import { dayjs, minutesBetween, now } from '@/lib/time';
 import { attendance } from '@/modules/attendance';
 import { settings } from '@/modules/settings';
 import { awayForState } from './away';
 import * as repo from './repo';
 import { summarizeDay } from './rules';
-import { canUse, loadToday, toEntryView } from './shared';
+import { canUse, clockOf, loadToday, toEntryView } from './shared';
+
+// After check-out (nothing runs, today's row closed) the away part is kept per person for 5
+// minutes in this process, so the 60 s chip poll reads screen time at most every 5 minutes. A
+// change to the day's entries or row gives a new key; every timer write of the person, and HR's
+// break fixes, forget it (forgetAway).
+const AWAY_CACHE_MS = 5 * 60 * 1000;
+const AWAY_CACHE_MAX = 1000;
+const awayCache = new Map();
+
+/**
+ * Forgets the cached away part of one person's state (after any timer or break write), or of
+ * everyone without an id (tests).
+ * @param {number} [userId]
+ */
+export function forgetAway(userId) {
+  if (userId === undefined) awayCache.clear();
+  else awayCache.delete(Number(userId));
+}
+
+/** What the cached away part depends on: the day's entries and the attendance row. */
+function awayKey(rows, row) {
+  const at = (value) => (value ? dayjs(value).valueOf() : null);
+  const entries = rows.map((item) => [
+    Number(item.id),
+    at(item.startedAt),
+    at(item.endedAt),
+    at(item.awayCheckedUntil),
+  ]);
+  return JSON.stringify([entries, at(row?.checkOutAt), row?.checkoutStatus ?? null]);
+}
+
+function remember(userId, key, away, at) {
+  if (awayCache.size >= AWAY_CACHE_MAX) {
+    for (const [id, item] of awayCache) {
+      if (item.until <= at.valueOf() || awayCache.size >= AWAY_CACHE_MAX) awayCache.delete(id);
+    }
+  }
+  awayCache.set(Number(userId), { key, away, until: at.valueOf() + AWAY_CACHE_MS });
+}
+
+/**
+ * The away question for the state, or null. Asked when nothing blocks or after check-out (it
+ * survives Stop, Switch, Start break and Check out), about today's timer entries oldest first;
+ * before migration 018 (no away breaks yet) only about the running one, as 1.09.
+ */
+async function awayPart({ user, ctx, rows, runningRow, blocked, available, at }) {
+  if (blocked !== null && blocked !== 'checked_out') return null;
+  if (!ctx.settings.activityTrackingEnabled) return null;
+  const running = runningRow?.workDate === ctx.date && blocked === null ? [runningRow] : [];
+  const candidates = available ? rows.filter((row) => row.source === 'timer') : running;
+  if (candidates.length === 0) return null;
+  const key = !runningRow && !ctx.open ? awayKey(rows, ctx.row) : null;
+  const hit = key ? awayCache.get(Number(user.id)) : null;
+  if (hit && hit.key === key && hit.until > at.valueOf()) return hit.away;
+  const away = await awayForState({ user, ctx, entries: rows, candidates, at });
+  if (key) remember(user.id, key, away, at);
+  return away;
+}
+
+/** Today's away breaks nobody else changed, oldest first, for Put back on Today. */
+function removedOf(awayBreaks, rows, tz) {
+  const names = new Map(rows.map((row) => [Number(row.id), row.projectName ?? null]));
+  return (awayBreaks ?? [])
+    .filter((item) => item.endedAt && !item.changedById)
+    .map((item) => ({
+      breakId: Number(item.id),
+      from: dayjs(item.startedAt).toISOString(),
+      to: dayjs(item.endedAt).toISOString(),
+      fromClock: clockOf(item.startedAt, tz),
+      toClock: clockOf(item.endedAt, tz),
+      minutes: minutesBetween(item.startedAt, item.endedAt),
+      projectName: names.get(Number(item.awayEntryId)) ?? null,
+    }));
+}
 
 /** Why the person can't start a timer now (timers are on), or null. */
 function blockedFor(ctx, allowed) {
@@ -29,6 +104,7 @@ function emptyState({ mode, allowed, blocked, at }) {
     totalMinutes: 0,
     byProject: [],
     away: null,
+    removed: [],
     serverNow: at.toISOString(),
   };
 }
@@ -54,10 +130,15 @@ async function offState({ user, allowed, tz, at }) {
  *   running: object | null, onBreak: boolean, breakStartedAt: string | null,
  *   entries: object[], totalMinutes: number,
  *   byProject: Array<{ projectId, projectName, projectColor, minutes }>,
- *   away: { entryId, from, to, minutes, fromClock, toClock, projectName } | null,
+ *   away: { entryId, from, to, minutes, fromClock, toClock, projectName,
+ *   kind: 'away' | 'no_data', running: boolean,
+ *   left: { clock: string, shiftEndClock: string } | null } | null,
+ *   removed: Array<{ breakId, from, to, fromClock, toClock, minutes, projectName }>,
  *   serverNow: string }>} running and entries are EntryViews (entries oldest first); canUse:
- *   the person may use timers at all (active, tracked, checks in and writes reports); away only
- *   while a timer runs and nothing blocks
+ *   the person may use timers at all (active, tracked, checks in and writes reports); away while
+ *   nothing blocks or after check-out, about today's timer entries (only the running one before
+ *   migration 018); removed: today's away breaks nobody else changed ([] with no entries, timers
+ *   off or before 018)
  */
 export async function getState({ user }) {
   const at = now();
@@ -75,6 +156,8 @@ export async function getState({ user }) {
   ]);
   const entries = rows.map((row) => toEntryView(row, ctx.tz, at));
   const summary = summarizeDay(entries);
+  // Null before migration 018 (no away breaks yet): only the running entry is asked about.
+  const awayBreaks = rows.length > 0 ? await attendance.listAwayBreaks(user.id, ctx.date) : [];
   // A break left open from an earlier day (until the midnight job closes it) is not today's.
   const onBreak = openBreak?.workDate === ctx.date ? openBreak : null;
   return {
@@ -91,10 +174,16 @@ export async function getState({ user }) {
       minutes,
     })),
     // A timer left running from an earlier day (until it is closed) is never asked about.
-    away:
-      blocked === null && runningRow?.workDate === ctx.date
-        ? await awayForState(runningRow, ctx, at)
-        : null,
+    away: await awayPart({
+      user,
+      ctx,
+      rows,
+      runningRow,
+      blocked,
+      available: awayBreaks !== null,
+      at,
+    }),
+    removed: removedOf(awayBreaks, rows, ctx.tz),
   };
 }
 

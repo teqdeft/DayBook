@@ -1,6 +1,6 @@
 // Pure helpers for Today's Working on card (CONTRACT 15). No server imports: the server loader
 // (todayTimers.js), the client components and the unit tests all use them.
-import { dayjs, formatClockShort, formatDuration, minutesBetween } from '@/lib/time';
+import { dayjs, formatClock, formatClockShort, formatDuration, minutesBetween } from '@/lib/time';
 
 const PRIORITY_LABELS = { p1: 'P1', p2: 'P2', p3: 'P3' };
 
@@ -95,6 +95,47 @@ export function todoOffers(groups, projectId) {
 export function entryRange(entry) {
   const start = formatClockShort(entry.startClock);
   return entry.endClock ? `${start}–${formatClockShort(entry.endClock)}` : `${start}–now`;
+}
+
+/**
+ * Today's entries and removed time (CONTRACT 25 A) in one list, in time order: `{ kind: 'entry',
+ * entry }` and `{ kind: 'removed', item }`.
+ * @param {Array<{ id: number, startedAt: string }>} entries
+ * @param {Array<{ breakId: number, from: string }>} [removed]
+ */
+export function timeline(entries, removed = []) {
+  const rows = [
+    ...(entries ?? []).map((entry) => ({ kind: 'entry', at: entry.startedAt, entry })),
+    ...(removed ?? []).map((item) => ({ kind: 'removed', at: item.from, item })),
+  ];
+  return rows.sort((a, b) => dayjs(a.at).valueOf() - dayjs(b.at).valueOf());
+}
+
+/** A removed-time row: its range ('1:00–1:45'), what it says and Put back's accessible name. */
+export function removedView(item) {
+  const timer = item.projectName ? `your ${item.projectName} timer` : 'your timer';
+  const from = formatClock(item.fromClock);
+  const to = formatClock(item.toClock);
+  const fromWords = from.slice(-2) === to.slice(-2) ? formatClockShort(item.fromClock) : from;
+  return {
+    range: `${formatClockShort(item.fromClock)}–${formatClockShort(item.toClock)}`,
+    text: `Away, removed from ${timer}`,
+    // "to" rather than the dash, which screen readers read badly.
+    label: `Put back ${fromWords} to ${to} on your timer`,
+  };
+}
+
+/** The toast after Put back: the time went back on the timer, or only the break went. */
+export function putBackToast(answer) {
+  if (!answer?.restored) {
+    return {
+      title: 'Break removed',
+      body: "We couldn't put the time back on your timer. Add it with Add time.",
+    };
+  }
+  const length = answer.minutes < 60 ? `${answer.minutes} min` : formatDuration(answer.minutes);
+  const timer = answer.projectName ? `your ${answer.projectName} timer` : 'your timer';
+  return { title: 'Time put back', body: `${length} went back on ${timer}.` };
 }
 
 /** Minutes for a list or a toast: '45m', '1h 5m', and '0m' (not '0h') under a minute. */

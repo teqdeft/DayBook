@@ -148,7 +148,11 @@ describe('the month', () => {
       logged: 8.5,
       projects: 'internal-tool, acme-store',
       report: 'Locked',
+      // CONTRACT 25: the last two columns, Day type and Leave.
+      dayType: 'Working day',
+      leave: '',
     });
+    expect(days.columns.slice(-2).map((column) => column.header)).toEqual(['Day type', 'Leave']);
     expect(tasks.rows.map((row) => [row.project, row.hours, row.task, row.status])).toEqual([
       ['internal-tool', 6, 'Backend', 'In progress'],
       ['internal-tool', '', 'Review', 'Done'],

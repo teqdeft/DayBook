@@ -86,6 +86,17 @@
   flex: none;
 }
 
+/* "First half on leave" or the holiday's name under the date (CONTRACT 25). */
+.dayNote {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--muted);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .num {
   font-variant-numeric: tabular-nums;
 }

@@ -1,6 +1,8 @@
 // Team dashboard (artboard 05): today's numbers, hours by project, the attendance donut, urgent
 // projects and the team board. PM and Admin; Admins' attendance shows to another Admin only.
-// Refreshes every minute so check-ins, breaks and running timers stay live.
+// Refreshes every minute so check-ins, breaks and running timers stay live. People off today
+// (CONTRACT 25) have their own board group and donut segment; the legend lists "Off today" only
+// when someone is.
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import Card, { CardHeader } from '@/components/Card';
@@ -91,12 +93,14 @@ export default async function TeamPage({ searchParams }) {
           </div>
           <Legend
             className={styles.legend}
-            items={attendance.segments.map((segment) => ({
-              key: segment.key,
-              label: segment.label,
-              color: segment.color,
-              value: segment.value,
-            }))}
+            items={attendance.segments
+              .filter((segment) => segment.key !== 'off' || segment.value > 0)
+              .map((segment) => ({
+                key: segment.key,
+                label: segment.label,
+                color: segment.color,
+                value: segment.value,
+              }))}
           />
         </Card>
 

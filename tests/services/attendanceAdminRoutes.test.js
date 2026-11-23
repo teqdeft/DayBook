@@ -1,6 +1,8 @@
 // The Attendance API passes the signed-in viewer: HR and PMs never get an Admin's attendance from
 // GET /api/attendance, /summary, /export or /api/attendance-corrections, and their PATCH of an
 // Admin's row answers 404 like a row that doesn't exist; an Admin gets everyone.
+import { readdir } from 'node:fs/promises';
+import path from 'node:path';
 import ExcelJS from 'exceljs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
@@ -147,5 +149,48 @@ describe('Attendance API and Admins', () => {
     expect((await db('attendance').where({ id: ceoRowId }).first()).checkInAt.toISOString()).toBe(
       '2026-09-30T04:00:00.000Z',
     );
+  });
+});
+
+describe('Attendance API routes in 1.10 (CONTRACT 25)', () => {
+  it('PATCH /api/attendance/12 still reaches [id] beside the new static segments', async () => {
+    const folder = path.resolve(import.meta.dirname, '../../src/app/api/attendance');
+    const entries = (await readdir(folder, { withFileTypes: true })).filter((entry) =>
+      entry.isDirectory(),
+    );
+    const names = entries.map((entry) => entry.name);
+    expect(names).toContain('[id]');
+    // Next.js matches a static segment first: none of them may look like a row id.
+    for (const name of names.filter((item) => !item.startsWith('['))) {
+      expect(name).not.toMatch(/^\d+$/);
+    }
+    signInAs(hr);
+    const response = await call(patchRow, '/api/attendance/12', {
+      method: 'PATCH',
+      body: { checkIn: '09:10', reason: 'Badge log' },
+      params: { id: '12' },
+    });
+    expect(response.status).toBe(404);
+    expect((await response.json()).error.message).toBe('That attendance row no longer exists.');
+  });
+
+  it("items carry the person's day, the marks and lateCount; a PM never sees WFH approved", async () => {
+    signInAs(hr);
+    const [item] = (await dataOf(await call(getDay, `/api/attendance?date=${DAY}`))).filter(
+      (entry) => entry.user.id === vishal.id,
+    );
+    expect(item).toMatchObject({
+      where: 'wfh',
+      lateMinutes: 0,
+      lateCount: null,
+      onBreakSince: null,
+      breakCount: 0,
+      checkoutEnteredBy: null,
+      day: { date: DAY, isWorkingDay: true, expected: 1, lateMark: '09:30' },
+      marks: { halfDay: false, shortDay: false, leftEarly: false },
+    });
+    signInAs(pm);
+    const forPm = await dataOf(await call(getDay, `/api/attendance?date=${DAY}`));
+    expect(forPm.every((entry) => entry.day.wfhApproved === false)).toBe(true);
   });
 });

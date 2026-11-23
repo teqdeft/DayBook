@@ -25,6 +25,10 @@ export const STATUS_LABELS = {
   deactivated: 'Deactivated',
   completed: 'Completed',
   draft: 'Draft',
+  // The person's day (CONTRACT 25): off without a check-in
+  on_leave: 'On leave',
+  holiday: 'Holiday',
+  day_off: 'Day off',
 };
 
 const STATUS_FILL = {
@@ -44,6 +48,10 @@ const STATUS_FILL = {
   unverified: 'marigold',
   wfh: 'violet',
   edited: 'violet',
+  // CONTRACT 25: one mapping everywhere (StatusCell, MonthCalendar, Tag, the Team board); day_off
+  // stays neutral
+  on_leave: 'teal',
+  holiday: 'greenSoft',
 };
 
 const SIZE_CLASS = {

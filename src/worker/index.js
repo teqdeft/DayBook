@@ -1,7 +1,9 @@
 // The worker process (npm run worker): schedules the six jobs of build guide section 12, plus the
 // desktop-push job (CONTRACT 14), the two timer jobs (CONTRACT 15), the two auto check-out jobs
-// (CONTRACT 19) and the two AI summary jobs (CONTRACT 20), with node-cron. Ticks run in UTC; each
-// job decides in company time. Stop it with
+// (CONTRACT 19), the two AI summary jobs (CONTRACT 20) and the four HR jobs (CONTRACT 25: the
+// check-in reminders, the morning summary, the evening wrap-up, the late alerts), with node-cron.
+// Ticks run in UTC; each job decides in company time. Jobs on the same minute start in the order
+// of JOBS (close-open-timers before mark-missing-checkouts) but run side by side. Stop it with
 // Ctrl-C / SIGTERM (or the 'shutdown' message process managers send on Windows): it stops
 // scheduling, waits for running jobs, then closes the database pool. A job whose previous tick is
 // still running skips the new tick (the overlap guard in tick()).
@@ -14,10 +16,14 @@ import { slack } from '@/modules/slack';
 import { aiHrNotesJob } from './jobs/aiHrNotes';
 import { aiPmSummaryJob } from './jobs/aiPmSummary';
 import { autoCheckoutJob } from './jobs/autoCheckout';
+import { checkinRemindersJob } from './jobs/checkinReminders';
 import { checkoutReminderJob } from './jobs/checkoutReminder';
 import { cleanupJob } from './jobs/cleanup';
 import { closeOpenTimersJob } from './jobs/closeOpenTimers';
 import { healthLogJob } from './jobs/healthLog';
+import { hrEveningSummaryJob } from './jobs/hrEveningSummary';
+import { hrSummaryJob } from './jobs/hrSummary';
+import { lateAlertsJob } from './jobs/lateAlerts';
 import { markMissingCheckoutsJob } from './jobs/markMissingCheckouts';
 import { pushNotificationsJob } from './jobs/pushNotifications';
 import { reportReminderJob } from './jobs/reportReminder';
@@ -31,9 +37,13 @@ const JOBS = [
   reportReminderJob,
   checkoutReminderJob,
   autoCheckoutJob,
-  markMissingCheckoutsJob,
   closeOpenTimersJob,
+  markMissingCheckoutsJob,
   timerRemindersJob,
+  checkinRemindersJob,
+  hrSummaryJob,
+  hrEveningSummaryJob,
+  lateAlertsJob,
   aiPmSummaryJob,
   aiHrNotesJob,
   slackUserSyncJob,

@@ -32,7 +32,7 @@ export default function TimersSection() {
         <NumberField
           name="timerAwayMinutes"
           label="Ask about away time after (minutes)"
-          help="Idle or locked this long while a timer runs: people keep or remove that time."
+          help="Idle, locked or no screen time this long while a timer runs: people keep it as work or count it as a break."
           maxLength={3}
         />
         <NumberField

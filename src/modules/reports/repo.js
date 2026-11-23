@@ -95,6 +95,19 @@ export async function listSubmittedUserIds(userIds, workDate, trx = db) {
   return rows.map((row) => row.userId);
 }
 
+/** [{ userId, workDate }] of the submitted reports of these people from `from` to `to`. */
+export function listSubmittedDays(userIds, from, to, trx = db) {
+  return trx('dailyReports')
+    .whereIn('userId', userIds)
+    .where({ status: 'submitted' })
+    .whereBetween('workDate', [from, to])
+    .select('userId', 'workDate')
+    .orderBy([
+      { column: 'userId', order: 'asc' },
+      { column: 'workDate', order: 'asc' },
+    ]);
+}
+
 /** { 'YYYY-MM-DD': minutes } of submitted reports. */
 export async function submittedMinutesByDay(userId, from, to, trx = db) {
   const rows = await trx('dailyReports')

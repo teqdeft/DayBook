@@ -1,0 +1,12 @@
+var R=require("../../../chunks/[turbopack]_runtime.js")("server/app/api/holidays/route.js")
+R.c("server/chunks/src_modules_0zwaz-w._.js")
+R.c("server/chunks/[root-of-the-server]__1n_09ir._.js")
+R.c("server/chunks/[root-of-the-server]__0wrgxxy._.js")
+R.c("server/chunks/[root-of-the-server]__1234bn5._.js")
+R.c("server/chunks/_1rajwye._.js")
+R.c("server/chunks/_0s8fl53._.js")
+R.c("server/chunks/src_modules_settings_index_0mnhtem.js")
+R.c("server/chunks/_0lw7jqp._.js")
+R.c("server/chunks/_next-internal_server_app_api_holidays_route_actions_18uwoc4.js")
+R.m(85099)
+module.exports=R.m(85099).exports

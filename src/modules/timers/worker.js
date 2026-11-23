@@ -1,9 +1,10 @@
 // The timer side of the worker (CONTRACT 15): closing timers forgotten overnight, reminding
 // people who have no timer running (whenever timers aren't off, CONTRACT 19) and telling auto
-// check-out when someone's timer last ran.
+// check-out and the suggested check-out time (CONTRACT 25) when someone's timer last ran. HR's
+// break fixes read a day's entries here too (listEntriesFor).
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import { dayjs, formatTime, isWorkingDay, now } from '@/lib/time';
+import { dayjs, formatTime, now } from '@/lib/time';
 import { attendance } from '@/modules/attendance';
 import { notifications } from '@/modules/notifications';
 import { settings } from '@/modules/settings';
@@ -114,7 +115,8 @@ function reminderText({ first, checkInAt, tz }) {
  * running for timerReminderMinutes (since their last entry ended, their last break ended or they
  * checked in), at most once an hour. The first reminder after check-in, while they haven't timed
  * anything today, is "You haven't started a timer yet" ("You checked in at 9:32. ..."); later ones
- * are "No timer is running". Re-checks the mode; the job checks the clock.
+ * are "No timer is running". Re-checks the mode and the working day (holidays skipped, through
+ * attendance.companyDay); the job checks the clock.
  * @param {string} today 'YYYY-MM-DD' (company date)
  * @returns {Promise<{ reminded: number }>}
  */
@@ -122,7 +124,9 @@ export async function sendReminders(today) {
   const current = await settings.getAll();
   const minutes = Number(current.timerReminderMinutes) || 0;
   if (current.timersMode === 'off' || minutes <= 0) return { reminded: 0 };
-  if (!isWorkingDay(today, current.workingDays)) return { reminded: 0 };
+  // A company holiday is not a working day (CONTRACT 25); people who checked in on leave are
+  // working and reminded as usual.
+  if (!(await attendance.companyDay(today)).isWorkingDay) return { reminded: 0 };
   const since = now().subtract(REMINDER_EVERY_MINUTES, 'minute').toDate();
   let reminded = 0;
   for (const { row, timedToday } of await dueForReminder(today, minutes)) {
@@ -155,4 +159,34 @@ export async function sendReminders(today) {
 export async function lastRanAt({ userId, workDate, at }, trx) {
   const { running, lastEndedAt } = await repo.lastRunOn({ userId, workDate }, trx);
   return running ? at : lastEndedAt;
+}
+
+/**
+ * One person's timer entries of a work date (bare: no project names), oldest first. HR's break
+ * fix reads it so a break never runs into tracked work (CONTRACT 25, item 2); no lock needed.
+ * @param {number} userId
+ * @param {string} workDate 'YYYY-MM-DD'
+ * @returns {Promise<Array<{ id, userId, workDate, projectId, startedAt: Date,
+ *   endedAt: Date | null, source, stopReason }>>}
+ */
+export function listEntriesFor(userId, workDate) {
+  return repo.listBareForUserDate(userId, workDate);
+}
+
+/**
+ * When each person's last finished entry of a work date ended (the suggested check-out time of a
+ * past date, CONTRACT 25). Unlike lastRanAt, an entry still running gives no sign: one left
+ * running from a past date would answer "now". One query.
+ * @param {{ workDate: string, userIds: number[] }} input
+ * @param {import('knex').Knex} [trx] the caller's transaction
+ * @returns {Promise<Map<number, Date | null>>} every asked id (as a number); null without a
+ *   finished entry that date
+ */
+export async function lastRanByUser({ workDate, userIds }, trx) {
+  const ids = [...new Set((userIds ?? []).map(Number))];
+  const found = new Map(ids.map((id) => [id, null]));
+  for (const row of await repo.lastEndedByUser(workDate, ids, trx)) {
+    found.set(Number(row.userId), row.lastEndedAt ?? null);
+  }
+  return found;
 }

@@ -15,11 +15,11 @@ import {
   clockOf,
   entryNotFound,
   loadToday,
+  lockOwnToday,
   parseInput,
   toEntryView,
-  toId,
 } from './shared';
-import { getState } from './state';
+import { forgetAway, getState } from './state';
 
 const fail = (field, message) => validationError({ [field]: message }, message);
 
@@ -54,7 +54,9 @@ function described(item, tz) {
 }
 
 /**
- * Compared to the minute (firstOverlap), as the clocks show the stretches.
+ * Compared to the minute (firstOverlap), as the clocks show the stretches. Time removed from a
+ * timer (an away break, CONTRACT 25) says so: "That overlaps time you removed from your timer from
+ * 1:00 to 1:45. Put it back first."
  * @throws VALIDATION_FAILED on startClock (the start is inside another stretch) or endClock when
  *   [start, end) overlaps another of the person's entries that day or a break
  */
@@ -72,6 +74,15 @@ async function checkOverlap({ userId, ctx, span, others, at }) {
   }
   const breaks = await attendance.listBreaks(userId, ctx.date);
   const found = firstOverlap(span, breaks, at);
+  // Only then the 1.10 columns (with the 1054 fallback): is it time removed from a timer?
+  const details = found ? await attendance.listBreakDetails(userId, ctx.date) : [];
+  if (details.find((item) => Number(item.id) === Number(found.id))?.source === 'away') {
+    const times = `from ${formatTime(found.startedAt, ctx.tz)} to ${formatTime(found.endedAt, ctx.tz)}`;
+    throw fail(
+      field(found),
+      `That overlaps time you removed from your timer ${times}. Put it back first.`,
+    );
+  }
   if (found) {
     const what = found.endedAt ? 'your break' : 'your break, on';
     throw fail(field(found), `That overlaps ${what} ${described(found, ctx.tz)}.`);
@@ -159,22 +170,8 @@ export async function addEntry({ user, input, ip = null }) {
     const entry = toEntryView(await repo.findById(id, trx), ctx.tz, at);
     await log({ user, action: 'time_entry.create', entry, after: entry, ip }, trx);
   });
+  forgetAway(user.id);
   return getState({ user });
-}
-
-/**
- * Locks the person's attendance row of today (the order of every timer and break write), then one
- * of their entries of today. @throws NOT_FOUND, BAD_REQUEST
- */
-async function lockOwnToday({ user, id, ctx }, trx) {
-  await attendance.lockDay({ userId: user.id, workDate: ctx.date }, trx);
-  const entryId = toId(id);
-  const locked = entryId ? await repo.lockById(entryId, trx) : null;
-  if (!locked || Number(locked.userId) !== Number(user.id)) throw entryNotFound();
-  if (locked.workDate !== ctx.date) {
-    throw new AppError('BAD_REQUEST', { message: "Only today's timers can be changed." });
-  }
-  return locked;
 }
 
 /** The project and task columns an edit changes. */
@@ -261,6 +258,7 @@ export async function updateEntry({ user, id, input, ip = null }) {
     const after = toEntryView(await repo.findById(locked.id, trx), ctx.tz, at);
     await log({ user, action: 'time_entry.update', entry: after, before, after, ip }, trx);
   });
+  forgetAway(user.id);
   return getState({ user });
 }
 
@@ -280,5 +278,6 @@ export async function removeEntry({ user, id, ip = null }) {
     await repo.removeEntry(locked.id, trx);
     await log({ user, action: 'time_entry.delete', entry: before, before, ip }, trx);
   });
+  forgetAway(user.id);
   return getState({ user });
 }

@@ -1,0 +1,19 @@
+/* Fix selected (CONTRACT 25, item 7): the rows and their times above the reason. */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+  list-style: none;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  color: var(--muted);
+}

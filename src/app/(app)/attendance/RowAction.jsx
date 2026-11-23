@@ -1,7 +1,10 @@
 'use client';
 // HR's row actions on Attendance: Edit (and Fix for a missing check-out), Confirm an unverified
 // office check-in, and Add a row for someone who forgot. Every change asks for a reason, which is
-// saved in the audit log. Errors show under the field that caused them.
+// saved in the audit log. Errors show under the field that caused them. CONTRACT 25, item 7: Fix
+// opens with the check-out prefilled (the suggested time, or the time typed in the Missing
+// check-outs list) and, with a suggestion, the help line under it; the list shows the button as
+// a text button.
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/Button';
@@ -66,13 +69,26 @@ function requestFor(kind, row, form) {
   return ['patch', `/api/attendance/${row.attendanceId}`, body];
 }
 
+/** The button's look: Fix is a small secondary button (artboard 09) unless the caller says. */
+function buttonLook(kind, variant, size) {
+  const fix = kind === 'fix';
+  return {
+    variant: variant ?? (fix ? 'secondary' : 'text'),
+    size: size ?? (fix ? 'small' : 'default'),
+    className: fix && !variant ? styles.fix : styles.action,
+  };
+}
+
 /**
  * @param {{ kind: 'edit' | 'fix' | 'confirm' | 'add', row: { attendanceId?: number,
  *   userId: number, name: string, workDate: string, dayLabel: string, checkIn?: string | null,
  *   checkOut?: string | null, location?: 'office' | 'wfh', note?: string | null,
- *   checkInText?: string | null, isToday: boolean } }} props clocks are 'HH:mm' company time
+ *   checkInText?: string | null, suggestedText?: string | null, isToday: boolean },
+ *   variant?: 'secondary' | 'text', size?: 'small' | 'compact' | 'default',
+ *   className?: string }} props clocks are 'HH:mm' company time; suggestedText ("6:41 PM") adds
+ *   the help line under Check-out; variant and size override the button's look
  */
-export default function RowAction({ kind, row }) {
+export default function RowAction({ kind, row, variant, size, className }) {
   const router = useRouter();
   const toast = useToast();
   const id = useId();
@@ -129,6 +145,11 @@ export default function RowAction({ kind, row }) {
   }
 
   const times = kind !== 'confirm';
+  const look = buttonLook(kind, variant, size);
+  const suggestion =
+    kind === 'fix' && row.suggestedText
+      ? `Suggested: ${row.suggestedText}, the last time Daybook saw them working.`
+      : null;
   const description =
     kind === 'confirm'
       ? `${row.name} checked in at the office at ${row.checkInText} without the office network.`
@@ -136,10 +157,10 @@ export default function RowAction({ kind, row }) {
   return (
     <>
       <Button
-        variant={kind === 'fix' ? 'secondary' : 'text'}
-        size={kind === 'fix' ? 'small' : 'default'}
+        variant={look.variant}
+        size={look.size}
         onClick={show}
-        className={kind === 'fix' ? styles.fix : styles.action}
+        className={[look.className, className].filter(Boolean).join(' ')}
         aria-label={`${copy.button}: ${row.name}, ${row.dayLabel}`}
       >
         {copy.button}
@@ -183,6 +204,7 @@ export default function RowAction({ kind, row }) {
                 label={kind === 'add' && row.isToday ? 'Check-out (optional)' : 'Check-out'}
                 htmlFor={`${id}-out`}
                 error={errors.checkOut}
+                help={errors.checkOut ? null : suggestion}
               >
                 <Input
                   id={`${id}-out`}

@@ -12,6 +12,7 @@ import { users } from '@/modules/users';
 import * as repo from './repo';
 import { heartbeatSchema, MAX_RANGE_DAYS } from './schemas';
 import {
+  CONTINUE_MS,
   currentStateOf,
   latestSegment,
   minutesFromSeconds,
@@ -213,6 +214,30 @@ export async function getTeamDay(date, { viewer } = {}) {
       ...summary,
       segments,
     };
+  });
+}
+
+/**
+ * Whether anyone other than `exceptUserId` had screen time recorded more than CONTINUE_MS (150 s)
+ * inside [from, to] on a work date (CONTRACT 25 A: a no-data gap counts as away only then; while
+ * Daybook is down nobody reports, so such a gap is never asked about). Two people's heartbeats
+ * are up to that far apart, so a colleague's last beat before an outage, or first after it, may
+ * fall just inside the person's gap: those edges never count, and a stretch of 300 s or less
+ * never does. One query on the work_date index, LIMIT 1 (none for such a short stretch).
+ * @param {{ workDate: string, from: Date, to: Date, exceptUserId: number }} input
+ * @returns {Promise<boolean>}
+ */
+export async function anyoneSeenBetween({ workDate: date, from, to, exceptUserId }) {
+  const inner = {
+    from: dayjs(from).add(CONTINUE_MS, 'millisecond'),
+    to: dayjs(to).subtract(CONTINUE_MS, 'millisecond'),
+  };
+  if (!inner.from.isBefore(inner.to)) return false;
+  return repo.existsOtherBetween({
+    workDate: date,
+    from: inner.from.toDate(),
+    to: inner.to.toDate(),
+    exceptUserId,
   });
 }
 

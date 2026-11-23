@@ -65,6 +65,11 @@ test('an employee asks HR to fix a forgotten check-out and HR approves it', asyn
 
   await test.step('the employee asks from Today', async () => {
     await open(deepak, '/today');
+    // With no request waiting, Today's pop-up asks for the missing check-out by itself (CONTRACT
+    // 25 B). This spec asks HR through "Request a correction", so it puts the pop-up off.
+    const popUp = deepak.getByRole('dialog', { name: `You didn't check out on ${dayShort(day)}` });
+    await popUp.getByRole('button', { name: 'Not now' }).click();
+    await expect(popUp).toBeHidden();
     await deepak.getByRole('button', { name: 'Request a correction' }).click();
     const dialog = deepak.getByRole('dialog', { name: 'Request a correction' });
     await dialog

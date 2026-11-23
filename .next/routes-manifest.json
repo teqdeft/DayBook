@@ -66,12 +66,45 @@
       "namedRegex": "^/api/ai/projects/(?<nxtPid>[^/]+?)/summary/tasks(?:/)?$"
     },
     {
+      "page": "/api/attendance/me/missing-checkouts/[id]/fix",
+      "regex": "^/api/attendance/me/missing\\-checkouts/([^/]+?)/fix(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/attendance/me/missing\\-checkouts/(?<nxtPid>[^/]+?)/fix(?:/)?$"
+    },
+    {
+      "page": "/api/attendance/people/[userId]/month",
+      "regex": "^/api/attendance/people/([^/]+?)/month(?:/)?$",
+      "routeKeys": {
+        "nxtPuserId": "nxtPuserId"
+      },
+      "namedRegex": "^/api/attendance/people/(?<nxtPuserId>[^/]+?)/month(?:/)?$"
+    },
+    {
       "page": "/api/attendance/[id]",
       "regex": "^/api/attendance/([^/]+?)(?:/)?$",
       "routeKeys": {
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/api/attendance/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/attendance/[id]/breaks",
+      "regex": "^/api/attendance/([^/]+?)/breaks(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/attendance/(?<nxtPid>[^/]+?)/breaks(?:/)?$"
+    },
+    {
+      "page": "/api/attendance/[id]/breaks/[breakId]",
+      "regex": "^/api/attendance/([^/]+?)/breaks/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid",
+        "nxtPbreakId": "nxtPbreakId"
+      },
+      "namedRegex": "^/api/attendance/(?<nxtPid>[^/]+?)/breaks/(?<nxtPbreakId>[^/]+?)(?:/)?$"
     },
     {
       "page": "/api/attendance/[id]/confirm-office",
@@ -96,6 +129,22 @@
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/api/attendance\\-corrections/(?<nxtPid>[^/]+?)/reject(?:/)?$"
+    },
+    {
+      "page": "/api/holidays/[id]",
+      "regex": "^/api/holidays/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/holidays/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/leave/[id]",
+      "regex": "^/api/leave/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/leave/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
       "page": "/api/me/carry-suggestions/[taskId]/close",
@@ -323,6 +372,14 @@
       "namedRegex": "^/api/team/(?<nxtPuserId>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/api/timers/away/[breakId]/put-back",
+      "regex": "^/api/timers/away/([^/]+?)/put\\-back(?:/)?$",
+      "routeKeys": {
+        "nxtPbreakId": "nxtPbreakId"
+      },
+      "namedRegex": "^/api/timers/away/(?<nxtPbreakId>[^/]+?)/put\\-back(?:/)?$"
+    },
+    {
       "page": "/api/timers/entries/[id]",
       "regex": "^/api/timers/entries/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -385,6 +442,14 @@
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/api/wfh\\-requests/(?<nxtPid>[^/]+?)/decline(?:/)?$"
+    },
+    {
+      "page": "/attendance/people/[userId]",
+      "regex": "^/attendance/people/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPuserId": "nxtPuserId"
+      },
+      "namedRegex": "^/attendance/people/(?<nxtPuserId>[^/]+?)(?:/)?$"
     },
     {
       "page": "/projects/[id]",
@@ -503,10 +568,46 @@
       "namedRegex": "^/api/attendance/export(?:/)?$"
     },
     {
+      "page": "/api/attendance/me/missing-checkouts/hide",
+      "regex": "^/api/attendance/me/missing\\-checkouts/hide(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/attendance/me/missing\\-checkouts/hide(?:/)?$"
+    },
+    {
       "page": "/api/attendance/me/today",
       "regex": "^/api/attendance/me/today(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/attendance/me/today(?:/)?$"
+    },
+    {
+      "page": "/api/attendance/missing-checkouts/fix",
+      "regex": "^/api/attendance/missing\\-checkouts/fix(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/attendance/missing\\-checkouts/fix(?:/)?$"
+    },
+    {
+      "page": "/api/attendance/month",
+      "regex": "^/api/attendance/month(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/attendance/month(?:/)?$"
+    },
+    {
+      "page": "/api/attendance/month/export",
+      "regex": "^/api/attendance/month/export(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/attendance/month/export(?:/)?$"
+    },
+    {
+      "page": "/api/attendance/needs-look",
+      "regex": "^/api/attendance/needs\\-look(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/attendance/needs\\-look(?:/)?$"
+    },
+    {
+      "page": "/api/attendance/reminders",
+      "regex": "^/api/attendance/reminders(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/attendance/reminders(?:/)?$"
     },
     {
       "page": "/api/attendance/summary",
@@ -567,6 +668,30 @@
       "regex": "^/api/health(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/health(?:/)?$"
+    },
+    {
+      "page": "/api/holidays",
+      "regex": "^/api/holidays(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/holidays(?:/)?$"
+    },
+    {
+      "page": "/api/leave",
+      "regex": "^/api/leave(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/leave(?:/)?$"
+    },
+    {
+      "page": "/api/leave/people",
+      "regex": "^/api/leave/people(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/leave/people(?:/)?$"
+    },
+    {
+      "page": "/api/leave/preview",
+      "regex": "^/api/leave/preview(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/leave/preview(?:/)?$"
     },
     {
       "page": "/api/me",
@@ -753,6 +878,30 @@
       "regex": "^/attendance(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/attendance(?:/)?$"
+    },
+    {
+      "page": "/attendance/holidays",
+      "regex": "^/attendance/holidays(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/attendance/holidays(?:/)?$"
+    },
+    {
+      "page": "/attendance/leave",
+      "regex": "^/attendance/leave(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/attendance/leave(?:/)?$"
+    },
+    {
+      "page": "/attendance/missing",
+      "regex": "^/attendance/missing(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/attendance/missing(?:/)?$"
+    },
+    {
+      "page": "/attendance/month",
+      "regex": "^/attendance/month(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/attendance/month(?:/)?$"
     },
     {
       "page": "/dev/shell",

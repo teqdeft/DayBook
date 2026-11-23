@@ -86,27 +86,35 @@ async function tellHr({ user, correction, summary }, trx) {
   }
 }
 
+/** Inserts the request and tells HR, inside `trx`; returns the new id. */
+async function insertAndTellHr({ user, record, row, current }, trx) {
+  const newId = await repo.insertCorrection(record, trx);
+  const correction = { ...record, id: newId };
+  const summary = describeCorrection(correction, row, current.timezone);
+  await tellHr({ user, correction, summary }, trx);
+  return newId;
+}
+
 /**
  * A person asks HR to fix their attendance (POST /api/attendance-corrections).
  * check_in and check_out need that day's row; missing_day needs no row and stores the check-in
  * time, the check-out time (requested_end_time) and the place. Times are clocks in company time
  * and can't be in the future. Notifies HR in the app and by Slack DM (slack_requests_notify); an
  * Admin's request notifies the other active Admins instead (nobody when there is none).
+ * With `trx` (CONTRACT 25: Today's pop-up over the self-fix limit, inside the transaction that
+ * holds the attendance row lock) it reads the pending request FOR UPDATE, inserts and tells HR in
+ * that transaction, so a double tap waits on the row lock and then finds the first request.
  * @param {{ user: { id: number, name: string, role: string }, type: 'check_in' | 'check_out' | 'missing_day',
  *   workDate: string, checkIn?: string, checkOut?: string, location?: 'office' | 'wfh',
  *   reason: string }} input
+ * @param {import('knex').Knex.Transaction} [trx] the caller's transaction
  * @returns {Promise<object>} the new correction
  * @throws VALIDATION_FAILED, REQUEST_ALREADY_PENDING
  */
-export async function requestCorrection({
-  user,
-  type,
-  workDate,
-  checkIn,
-  checkOut,
-  location,
-  reason,
-}) {
+export async function requestCorrection(
+  { user, type, workDate, checkIn, checkOut, location, reason },
+  trx,
+) {
   const why = requireReason(reason);
   checkRequestFields({ type, checkIn, checkOut, location });
   const current = await settings.getAll();
@@ -117,11 +125,12 @@ export async function requestCorrection({
     checkOut: type === 'check_in' ? null : checkOut,
     current,
   });
-  const row = await repo.findByUserAndDate(user.id, workDate);
+  const row = await repo.findByUserAndDate(user.id, workDate, trx);
   const attendanceId = checkAgainstRow({ type, row, times });
-  if (await repo.findPendingCorrection({ userId: user.id, workDate, type })) {
-    throw new AppError('REQUEST_ALREADY_PENDING');
-  }
+  const pending = trx
+    ? await repo.findPendingCorrection({ userId: user.id, workDate, type }, trx).forUpdate()
+    : await repo.findPendingCorrection({ userId: user.id, workDate, type });
+  if (pending) throw new AppError('REQUEST_ALREADY_PENDING');
   const at = nowDate();
   const record = {
     userId: user.id,
@@ -136,13 +145,13 @@ export async function requestCorrection({
     createdAt: at,
     updatedAt: at,
   };
-  const id = await db.transaction(async (trx) => {
-    const newId = await repo.insertCorrection(record, trx);
-    const correction = { ...record, id: newId };
-    const summary = describeCorrection(correction, row, current.timezone);
-    await tellHr({ user, correction, summary }, trx);
-    return newId;
-  });
+  if (trx) {
+    const newId = await insertAndTellHr({ user, record, row, current }, trx);
+    return repo.findCorrection(newId, trx);
+  }
+  const id = await db.transaction((inner) =>
+    insertAndTellHr({ user, record, row, current }, inner),
+  );
   return repo.findCorrection(id);
 }
 

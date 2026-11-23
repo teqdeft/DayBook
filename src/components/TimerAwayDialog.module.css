@@ -1,0 +1,23 @@
+/* The away question's muted line and its two buttons (CONTRACT 25 A). */
+.help {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Bottom sheet: the buttons stack full width. */
+@media (max-width: 520px) {
+  .buttons {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+}

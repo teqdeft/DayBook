@@ -6,6 +6,36 @@ import { createUser, resetDatabase, setSettings } from '../helpers/db.js';
 
 let admin;
 
+// CONTRACT 25: Attendance marks, HR updates and the two Slack switches (snake_case row keys).
+const KEYS_1_10 = {
+  half_day_under_minutes: 'halfDayUnderMinutes',
+  short_day_under_minutes: 'shortDayUnderMinutes',
+  left_early_grace_minutes: 'leftEarlyGraceMinutes',
+  payroll_month_start_day: 'payrollMonthStartDay',
+  hr_morning_summary: 'hrMorningSummary',
+  hr_summary_at: 'hrSummaryAt',
+  hr_evening_summary: 'hrEveningSummary',
+  checkin_reminder_minutes: 'checkinReminderMinutes',
+  late_alert_days: 'lateAlertDays',
+  slack_attendance_remind: 'slackAttendanceRemind',
+  slack_hr_summary: 'slackHrSummary',
+};
+const DEFAULTS_1_10 = {
+  halfDayUnderMinutes: 270,
+  shortDayUnderMinutes: 480,
+  leftEarlyGraceMinutes: 15,
+  payrollMonthStartDay: 1,
+  hrMorningSummary: true,
+  hrSummaryAt: '10:00',
+  hrEveningSummary: false,
+  checkinReminderMinutes: 30,
+  lateAlertDays: 4,
+  slackAttendanceRemind: true,
+  slackHrSummary: true,
+};
+const pick110 = (values) =>
+  Object.fromEntries(Object.values(KEYS_1_10).map((key) => [key, values[key]]));
+
 beforeAll(async () => {
   await resetDatabase();
   setNowForTests('2026-09-30T04:00:00Z');
@@ -72,6 +102,7 @@ describe('settings.getAll', () => {
       aiHrNotesAt: '19:00',
       aiAskEnabled: true,
       aiProjectSummaryEnabled: false,
+      ...DEFAULTS_1_10,
     });
   });
 
@@ -277,6 +308,190 @@ describe('settings.update', () => {
       .pluck('key');
     expect(keys.sort()).toEqual(['slack_todo_channel_id', 'slack_todo_channel_name']);
     await setSettings({ slack_todo_channel_id: null, slack_todo_channel_name: null });
+  });
+});
+
+describe('attendance marks and HR updates (CONTRACT 25)', () => {
+  beforeEach(() => settings.setCacheTtlForTests(null));
+
+  it('reads the defaults when the rows are missing (the live server never seeds)', async () => {
+    const rows = await db('settings').whereIn('key', Object.keys(KEYS_1_10)).select('key', 'value');
+    expect(rows).toHaveLength(11);
+    await db('settings').whereIn('key', Object.keys(KEYS_1_10)).delete();
+    expect(pick110(await settings.getAll())).toEqual(DEFAULTS_1_10);
+
+    // The first save adds the row; the others keep reading their defaults.
+    const saved = await settings.update({ user: admin, values: { lateAlertDays: 6 } });
+    expect(pick110(saved)).toEqual({ ...DEFAULTS_1_10, lateAlertDays: 6 });
+    expect(await db('settings').where({ key: 'late_alert_days' }).first()).toMatchObject({
+      value: '6',
+      updatedBy: admin.id,
+    });
+    await db('settings').where({ key: 'late_alert_days' }).delete();
+    await db('settings').insert(rows);
+    expect(pick110(await settings.getAll())).toEqual(DEFAULTS_1_10);
+  });
+
+  it('keeps a hand-edited number inside its range and a broken clock at the default', async () => {
+    await setSettings({
+      half_day_under_minutes: 9000,
+      payroll_month_start_day: 0,
+      late_alert_days: 'many',
+      checkin_reminder_minutes: -5,
+      hr_summary_at: '',
+    });
+    expect(await settings.getAll()).toMatchObject({
+      halfDayUnderMinutes: 720,
+      payrollMonthStartDay: 1,
+      lateAlertDays: 4,
+      checkinReminderMinutes: 0,
+      hrSummaryAt: '10:00',
+    });
+    await setSettings({
+      half_day_under_minutes: 270,
+      payroll_month_start_day: 1,
+      late_alert_days: 4,
+      checkin_reminder_minutes: 30,
+      hr_summary_at: '10:00',
+    });
+  });
+
+  it('saves every key with an audit row, and reads the clock as HH:mm', async () => {
+    const values = {
+      halfDayUnderMinutes: '240',
+      shortDayUnderMinutes: 450,
+      leftEarlyGraceMinutes: 0,
+      payrollMonthStartDay: 26,
+      hrMorningSummary: false,
+      hrSummaryAt: '9:45',
+      hrEveningSummary: true,
+      checkinReminderMinutes: 0,
+      lateAlertDays: 31,
+      slackAttendanceRemind: false,
+      slackHrSummary: false,
+    };
+    const saved = await settings.update({ user: admin, values });
+    expect(pick110(saved)).toEqual({ ...values, halfDayUnderMinutes: 240, hrSummaryAt: '09:45' });
+    const log = await db('audit_logs')
+      .where({ action: 'settings.update' })
+      .orderBy('id', 'desc')
+      .first();
+    expect(parseJson(log.before)).toEqual(DEFAULTS_1_10);
+    expect(parseJson(log.after)).toEqual(pick110(saved));
+    const restored = await settings.update({ user: admin, values: DEFAULTS_1_10 });
+    expect(pick110(restored)).toEqual(DEFAULTS_1_10);
+  });
+
+  it('refuses values out of range with the Settings messages', async () => {
+    const reminder = 'The reminder must be between 0 and 240 minutes (0 turns it off).';
+    const cases = [
+      ['halfDayUnderMinutes', 721, 'Half day must be between 0 and 720 minutes (0 turns it off).'],
+      ['shortDayUnderMinutes', -1, 'Short day must be between 0 and 720 minutes (0 turns it off).'],
+      ['leftEarlyGraceMinutes', 241, 'The left early grace must be between 0 and 240 minutes.'],
+      ['payrollMonthStartDay', 29, 'The payroll month must start on a day from 1 to 28.'],
+      ['payrollMonthStartDay', 0, 'The payroll month must start on a day from 1 to 28.'],
+      ['checkinReminderMinutes', 2.5, reminder],
+      ['checkinReminderMinutes', 241, reminder],
+      ['lateAlertDays', 0, 'Late days must be between 1 and 31.'],
+      ['lateAlertDays', 32, 'Late days must be between 1 and 31.'],
+      ['hrSummaryAt', '10 am', 'Enter a time like 10:00.'],
+      ['hrMorningSummary', 'yes', 'Choose on or off.'],
+      ['hrEveningSummary', null, 'Choose on or off.'],
+      ['slackAttendanceRemind', 'on', 'Choose on or off.'],
+      ['slackHrSummary', 1, 'Choose on or off.'],
+    ];
+    for (const [key, value, message] of cases) {
+      const error = await expectAppError(
+        settings.update({ user: admin, values: { [key]: value } }),
+        'VALIDATION_FAILED',
+      );
+      expect(error.fields, `${key} = ${value}`).toEqual({ [key]: message });
+    }
+    // The edges are allowed.
+    const edges = await settings.update({
+      user: admin,
+      values: { halfDayUnderMinutes: 0, shortDayUnderMinutes: 720, payrollMonthStartDay: 28 },
+    });
+    expect(edges).toMatchObject({
+      halfDayUnderMinutes: 0,
+      shortDayUnderMinutes: 720,
+      payrollMonthStartDay: 28,
+    });
+    await settings.update({ user: admin, values: DEFAULTS_1_10 });
+    expect(pick110(await settings.getAll())).toEqual(DEFAULTS_1_10);
+  });
+
+  it('checkDayMarks: a half day below a short day while both are on', async () => {
+    const message = 'Half day must be less than the short day time.';
+    for (const values of [
+      { halfDayUnderMinutes: 480 },
+      { shortDayUnderMinutes: 200 },
+      { halfDayUnderMinutes: 500, shortDayUnderMinutes: 400 },
+    ]) {
+      const error = await expectAppError(
+        settings.update({ user: admin, values }),
+        'VALIDATION_FAILED',
+      );
+      expect(error.fields).toEqual({ halfDayUnderMinutes: message });
+      expect(error.message).toBe(message);
+    }
+    // 0 turns a mark off, so the other can be anything.
+    let saved = await settings.update({
+      user: admin,
+      values: { halfDayUnderMinutes: 600, shortDayUnderMinutes: 0 },
+    });
+    expect(saved).toMatchObject({ halfDayUnderMinutes: 600, shortDayUnderMinutes: 0 });
+    saved = await settings.update({
+      user: admin,
+      values: { halfDayUnderMinutes: 0, shortDayUnderMinutes: 100 },
+    });
+    expect(saved).toMatchObject({ halfDayUnderMinutes: 0, shortDayUnderMinutes: 100 });
+    // Neither sent: a stored clash (a hand-edited row) never blocks other saves.
+    await setSettings({ half_day_under_minutes: 500, short_day_under_minutes: 400 });
+    expect(
+      (await settings.update({ user: admin, values: { lateAlertDays: 5 } })).lateAlertDays,
+    ).toBe(5);
+    await settings.update({ user: admin, values: DEFAULTS_1_10 });
+    expect(pick110(await settings.getAll())).toEqual(DEFAULTS_1_10);
+  });
+
+  it('checkHrSummary: at or after the late mark and before office end, while the summary is on', async () => {
+    const tooEarly = (clock) => ({
+      hrSummaryAt: `Pick a time at or after the late mark (${clock}).`,
+    });
+    const tooLate = { hrSummaryAt: 'Pick a time before office hours end.' };
+    const refused = async (values) =>
+      (await expectAppError(settings.update({ user: admin, values }), 'VALIDATION_FAILED')).fields;
+
+    expect(await refused({ hrSummaryAt: '09:15' })).toEqual(tooEarly('9:30'));
+    expect(await refused({ hrSummaryAt: '18:30' })).toEqual(tooLate);
+    // Moving the late mark or office end past the summary is refused on the summary time.
+    expect(await refused({ lateAfter: '13:05' })).toEqual(tooEarly('1:05'));
+    expect(await refused({ officeEnd: '10:00' })).toEqual(tooLate);
+
+    // The late mark itself is fine, and so is moving both together.
+    const atMark = await settings.update({ user: admin, values: { hrSummaryAt: '09:30' } });
+    expect(atMark.hrSummaryAt).toBe('09:30');
+    const moved = await settings.update({
+      user: admin,
+      values: { lateAfter: '10:15', hrSummaryAt: '10:15' },
+    });
+    expect(moved).toMatchObject({ lateAfter: '10:15', hrSummaryAt: '10:15' });
+
+    // Off: the time isn't checked (the form hides it), and turning it back on checks it.
+    const off = await settings.update({
+      user: admin,
+      values: { hrMorningSummary: false, hrSummaryAt: '07:00' },
+    });
+    expect(off).toMatchObject({ hrMorningSummary: false, hrSummaryAt: '07:00' });
+    expect(await refused({ hrMorningSummary: true })).toEqual(tooEarly('10:15'));
+    expect((await settings.getAll()).hrMorningSummary).toBe(false);
+
+    await settings.update({
+      user: admin,
+      values: { lateAfter: '09:30', hrSummaryAt: '10:00', hrMorningSummary: true },
+    });
+    expect(pick110(await settings.getAll())).toEqual(DEFAULTS_1_10);
   });
 });
 

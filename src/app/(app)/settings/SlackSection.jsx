@@ -36,6 +36,17 @@ const SWITCHES = [
     label: 'Send requests to the PM on Slack',
     help: 'Report edits and new project requests.',
   },
+  // CONTRACT 25: the queueDm setting keys of every remind and of both HR summaries
+  {
+    key: 'slackAttendanceRemind',
+    label: 'Send attendance reminders',
+    help: 'Check-in reminders and the ones HR sends from Attendance.',
+  },
+  {
+    key: 'slackHrSummary',
+    label: 'Send HR the daily summaries',
+    help: 'The morning summary and the evening wrap-up, as a direct message.',
+  },
 ];
 
 /** Channels the bot is in, loaded once when Slack is set up. */

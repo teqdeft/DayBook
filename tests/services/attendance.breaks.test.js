@@ -1,5 +1,6 @@
-// Breaks (CONTRACT 15): Start break / End break, worked time, the allowance notice, check-out
-// ending a break, the midnight close and the day view columns. The timers module is mocked: its
+// Breaks (CONTRACT 15): Start break / End break, worked time, the allowance notice (decided inside
+// the transaction since CONTRACT 25), check-out ending a break, the midnight close and the day
+// view columns. The timers module is mocked: its
 // calls are asserted here, and the real pair is tested once both sides are built.
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
@@ -584,5 +585,85 @@ describe("today's state and the day view", () => {
     expect(Object.keys(mine[0]).sort()).toEqual(BREAK_KEYS);
     const all = await attendance.listBreaksForDate(date);
     expect(all.map((item) => item.userId)).toEqual([p1.id, p2.id]);
+  });
+});
+
+describe('the allowance notice is decided in the transaction (CONTRACT 25)', () => {
+  /** An away break straight into the table, as a Remove saves it. */
+  async function awayBreak(user, from, to) {
+    const row = await attendance.getForUserOnDate(user.id, TODAY);
+    await db('attendanceBreaks').insert({
+      userId: user.id,
+      attendanceId: row.id,
+      workDate: TODAY,
+      startedAt: when(from),
+      endedAt: when(to),
+      endReason: 'away',
+      source: 'away',
+    });
+  }
+
+  it('breakTotalsIn counts finished breaks only, under the row lock', async () => {
+    await setSettings({ break_allowance_minutes: 30 });
+    const { user } = await checkedIn('09:00');
+    await awayBreak(user, '10:00', '10:20');
+    setNowForTests(at('13:00'));
+    await attendance.startBreak({ user });
+    setNowForTests(at('13:20'));
+    const [saved] = await db('attendanceBreaks').where({ userId: user.id, source: 'away' });
+    const totals = await db.transaction(async (trx) => {
+      await attendance.lockDay({ userId: user.id, workDate: TODAY }, trx);
+      return attendance.breakTotalsIn({ userId: user.id, workDate: TODAY, breakId: saved.id }, trx);
+    });
+    // The open break (20 min so far) counts once it ends, so it never crosses twice.
+    expect(totals).toEqual({ before: 0, total: 20, crossed: false, overAllowanceMinutes: 0 });
+    const ended = await attendance.endBreak({ user });
+    expect(ended).toMatchObject({ breakMinutesToday: 40, overAllowanceMinutes: 10 });
+    expect(await notices(user)).toHaveLength(1);
+  });
+
+  it('an away break that already crossed: ending a later break sends nothing more', async () => {
+    await setSettings({ break_allowance_minutes: 30 });
+    const { user } = await checkedIn('09:00');
+    await awayBreak(user, '10:00', '10:45');
+    setNowForTests(at('13:00'));
+    await attendance.startBreak({ user });
+    setNowForTests(at('13:10'));
+    expect(await attendance.endBreak({ user })).toMatchObject({ overAllowanceMinutes: 25 });
+    expect(await notices(user)).toEqual([]);
+  });
+
+  it('noticeOverAllowance sends only when crossed, and never with no allowance', async () => {
+    await setSettings({ break_allowance_minutes: 30 });
+    const { user } = await checkedIn('09:00');
+    await attendance.noticeOverAllowance({ userId: user.id, crossed: false, total: 45 });
+    expect(await notices(user)).toEqual([]);
+    await attendance.noticeOverAllowance({ userId: user.id, crossed: true, total: 45 });
+    expect(await notices(user)).toEqual([
+      {
+        title: 'Your breaks today are over the 30 min allowance',
+        body: "You've had 45m of breaks today.",
+        link: '/today',
+      },
+    ]);
+    await setSettings({ break_allowance_minutes: 0 });
+    await attendance.noticeOverAllowance({ userId: user.id, crossed: true, total: 45 });
+    expect(await notices(user)).toHaveLength(1);
+  });
+
+  it('an End break retried after a deadlock tells the person once', async () => {
+    await setSettings({ break_allowance_minutes: 30 });
+    const { user } = await checkedIn('09:00');
+    const entryId = await stoppedEntry(user, '09:15', '12:00');
+    timers.stopRunning.mockResolvedValueOnce({ id: entryId });
+    setNowForTests(at('12:00'));
+    await attendance.startBreak({ user });
+    setNowForTests(at('12:40'));
+    timers.resumeAfterBreak.mockRejectedValueOnce(
+      Object.assign(new Error('Deadlock found'), { errno: 1213 }),
+    );
+    expect(await attendance.endBreak({ user })).toMatchObject({ overAllowanceMinutes: 10 });
+    expect(timers.resumeAfterBreak).toHaveBeenCalledTimes(2);
+    expect(await notices(user)).toHaveLength(1);
   });
 });

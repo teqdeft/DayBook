@@ -159,6 +159,39 @@ describe('report time on the Team board', () => {
   });
 });
 
+describe('a weekend is a day off, not "Not checked in" (CONTRACT 25)', () => {
+  it('puts everyone in Off today with a neutral "Day off" tag on a Saturday', async () => {
+    setNowForTests('2026-10-03T06:30:00Z'); // Saturday, 12:00 PM in Kolkata
+    const team = await dashboard.getTeamToday({ viewer: people.pm });
+    expect(team.summary).toMatchObject({ tracked: 4, checkedIn: 0, notCheckedIn: 0, off: 4 });
+    expect(team.groups.map((group) => [group.key, group.count])).toEqual([
+      ['office', 0],
+      ['wfh', 0],
+      ['not_checked_in', 0],
+      ['off', 4],
+    ]);
+    expect(rowsOf(team).map((row) => [row.name, row.offTag, row.report])).toEqual([
+      ['Ava', { label: 'Day off', tone: 'neutral' }, 'off'],
+      ['Ben', { label: 'Day off', tone: 'neutral' }, 'off'],
+      ['Cara', { label: 'Day off', tone: 'neutral' }, 'off'],
+      ['Dev', { label: 'Day off', tone: 'neutral' }, 'off'],
+    ]);
+    expect(team.kpis[0]).toMatchObject({ sub: 'of 4 people, 4 off', percent: 0 });
+    expect(team.attendance.segments.map((segment) => segment.value)).toEqual([0, 0, 0, 4]);
+    expect(team.subtitle).not.toContain('Holiday');
+  });
+
+  it("leaves the weekend out of the Overview's Not checked in and the history", async () => {
+    setNowForTests('2026-10-03T06:30:00Z');
+    const overview = await dashboard.getOverview({ viewer: people.ceo });
+    expect(overview.summary).toMatchObject({ notCheckedIn: 0, off: 5 });
+    expect(overview.kpis[0].sub).toBe('of 5 people, 5 off');
+    const detail = await dashboard.getEmployeeDetail({ userId: people.dev.id, viewer: people.pm });
+    expect(detail.history.map((row) => row.date)).not.toContain('2026-10-03');
+    expect(detail.history[0]).toMatchObject({ date: '2026-10-02', report: 'not_checked_in' });
+  });
+});
+
 describe("Admins' attendance is for Admins only", () => {
   it('leaves Admins out of the Team board, its numbers and the donut for PMs and HR', async () => {
     for (const viewer of [people.pm, people.hr]) {
@@ -166,7 +199,7 @@ describe("Admins' attendance is for Admins only", () => {
       expect(rowsOf(team).map((row) => row.name)).toEqual(['Ava', 'Ben', 'Cara', 'Dev']);
       expect(team.summary).toMatchObject({ tracked: 4, checkedIn: 3, wfh: 1, notCheckedIn: 1 });
       expect(team.summary.late.count).toBe(2);
-      expect(team.attendance.segments.map((segment) => segment.value)).toEqual([2, 1, 1]);
+      expect(team.attendance.segments.map((segment) => segment.value)).toEqual([2, 1, 1, 0]);
       expect(team.counts).toEqual({ everyone: 4, missing: 2, late: 2, noTodo: 2 });
       expect(team.kpis.map((kpi) => kpi.sub)).toEqual([
         'of 4 people',

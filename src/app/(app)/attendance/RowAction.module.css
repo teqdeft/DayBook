@@ -44,3 +44,10 @@
   line-height: 18px;
   color: var(--red-text);
 }
+
+/* Fix on a missing check-out: 44 px to tap on a phone (CONTRACT 25). */
+@media (max-width: 640px) {
+  .fix {
+    min-height: 44px;
+  }
+}

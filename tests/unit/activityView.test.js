@@ -110,6 +110,34 @@ describe('rangeSummary', () => {
     expect(summary.bars.map((bar) => bar.key)).toEqual(['2026-09-27', '2026-09-28', '2026-09-29']);
   });
 
+  it('draws no bar for a company holiday without data, today included (CONTRACT 25)', () => {
+    const holidays = new Set(['2026-09-29', '2026-09-30', '2026-10-01']);
+    const summary = rangeSummary({
+      range: {
+        days: [{ workDate: '2026-10-01', activeMinutes: 60, idleMinutes: 0, lockedMinutes: 0 }],
+        totals: { activeMinutes: 60, idleMinutes: 0, lockedMinutes: 0, daysWithData: 1 },
+      },
+      from: '2026-09-28',
+      to: '2026-10-04',
+      today: '2026-09-30',
+      workingDays: [1, 2, 3, 4, 5],
+      holidays,
+    });
+    // Tuesday and today (Wednesday) are holidays without data; Thursday's holiday has some.
+    expect(summary.bars.map((bar) => bar.key)).toEqual(['2026-09-28', '2026-10-01', '2026-10-02']);
+    // The average stays per day with data.
+    expect(summary.stats[1].value).toBe('1h');
+    const withoutHolidays = rangeSummary({
+      range: week,
+      from: '2026-09-28',
+      to: '2026-10-04',
+      today: '2026-09-30',
+      workingDays: [1, 2, 3, 4, 5],
+      holidays: [],
+    });
+    expect(withoutHolidays.bars).toHaveLength(5);
+  });
+
   it('switches to one bar per week for long ranges, and copes with no data', () => {
     const summary = rangeSummary({
       range: null,

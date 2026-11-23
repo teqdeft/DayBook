@@ -193,14 +193,16 @@ export function cancelledToast(line, request) {
 }
 
 /**
- * The first working day after `today` (the "another day" request starts there).
+ * The first working day after `today` (the "another day" request starts there): company holidays
+ * are skipped like days the company doesn't work (CONTRACT 25).
  * @param {string} today 'YYYY-MM-DD'
  * @param {number[]} workingDays ISO weekdays, settings.workingDays
+ * @param {Set<string> | string[]} [holidays] holiday dates of the days ahead
  */
-export function nextWorkingDay(today, workingDays) {
-  for (let step = 1; step <= 7; step += 1) {
+export function nextWorkingDay(today, workingDays, holidays) {
+  for (let step = 1; step <= 14; step += 1) {
     const date = addDays(today, step);
-    if (isWorkingDay(date, workingDays ?? [])) return date;
+    if (isWorkingDay(date, workingDays ?? [], holidays)) return date;
   }
   return addDays(today, 1);
 }

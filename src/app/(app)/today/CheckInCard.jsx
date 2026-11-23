@@ -5,7 +5,9 @@
 // approved, with Ask HR on the WFH option. The server decides for real; this only offers what the
 // server will accept (checkInOptions in wfhOptions.js). Once a request is sent, the refresh turns
 // Ask HR into "Waiting for HR", which would drop a keyboard user's focus: it moves to the WFH
-// option, which now says so.
+// option, which now says so. CONTRACT 25: the subtitle follows the person's day: "Late after 2:00."
+// on first-half leave (the page passes that late mark), "No late mark today." on a holiday or
+// full-day leave (`day.lateMark` null).
 import { useEffect, useId, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, House } from 'lucide-react';
@@ -62,10 +64,20 @@ function Choice({ name, value, checked, disabled, onChange, icon, title, hint, a
 }
 
 /**
+ * "Office hours 9:30 to 6:30. Late after 9:30.", or "... No late mark today." when the person's
+ * day has no late mark (a holiday, full-day leave, a day the company doesn't work).
+ */
+export function checkInSubtitle({ officeHours, lateAfter, day }) {
+  const mark = day && day.lateMark === null ? 'No late mark today.' : `Late after ${lateAfter}.`;
+  return `Office hours ${officeHours}. ${mark}`;
+}
+
+/**
  * @param {{ onOfficeNetwork: boolean, allowUnverifiedOffice: boolean, officeAnywhere: boolean,
  *   wfh: { needsApproval: boolean, approved: boolean, approvedBy: string | null,
- *   pending: boolean }, today: string, lateAfter: string, officeHours: string, tz: string }} props
- *   lateAfter and officeHours are ready to show ("9:30", "9:30 to 6:30"); wfh from wfhToday()
+ *   pending: boolean }, today: string, lateAfter: string, officeHours: string, tz: string,
+ *   day?: { lateMark: string | null } | null }} props lateAfter and officeHours are ready to show
+ *   ("9:30", "9:30 to 6:30"); wfh from wfhToday(); day = today's PersonDay (CONTRACT 25)
  */
 export default function CheckInCard({
   onOfficeNetwork,
@@ -76,6 +88,7 @@ export default function CheckInCard({
   lateAfter,
   officeHours,
   tz,
+  day = null,
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -142,7 +155,7 @@ export default function CheckInCard({
       <form onSubmit={checkIn} noValidate className={styles.form}>
         <CardHeader
           title="Check in"
-          subtitle={`Office hours ${officeHours}. Late after ${lateAfter}.`}
+          subtitle={checkInSubtitle({ officeHours, lateAfter, day })}
           actions={
             options.network === 'on' ? (
               <Tag tone="green" size="lg" dot>

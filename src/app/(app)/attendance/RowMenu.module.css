@@ -1,0 +1,18 @@
+/* The Attendance row's "..." menu (CONTRACT 25): on a phone it is the only way to Remind, Mark
+   leave or Edit leave, so its trigger and its items get a 44 px hit area (the prototype's
+   .act-line .menu-trigger). At every width it sits 8 px further right, into the cell's padding,
+   as in the prototype. */
+.menu {
+  margin-right: -8px;
+}
+
+@media (max-width: 640px) {
+  .menu > button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .menu [role='menuitem'] {
+    min-height: 44px;
+  }
+}

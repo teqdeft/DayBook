@@ -1,8 +1,10 @@
 // The Screen time card on My log (docs/CONTRACT.md section 11): the person's own active, idle and
-// locked time for the month shown. Server only (called from page.js).
+// locked time for the month shown; a company holiday without data draws no bar (CONTRACT 25).
+// Server only (called from page.js).
 import { can } from '@/lib/permissions';
 import { dayjs, monthOf, monthRange } from '@/lib/time';
 import { activity } from '@/modules/activity';
+import { attendance } from '@/modules/attendance';
 import { settings } from '@/modules/settings';
 import { measuredText, rangeSummary } from '../screen-time/screenTimeView';
 
@@ -14,11 +16,19 @@ export async function loadMyScreenTime({ user, month, today }) {
   if (!can(user, 'activity.self') || !user.tracksAttendance) return null;
   const { from, to } = monthRange(month);
   const end = to < today ? to : today;
-  const [current, range] = await Promise.all([
+  const [current, range, holidays] = await Promise.all([
     settings.getAll(),
     end >= from ? activity.getRange(user.id, from, end) : null,
+    attendance.listHolidaysBetween(from, to),
   ]);
-  const summary = rangeSummary({ range, from, to, today, workingDays: current.workingDays });
+  const summary = rangeSummary({
+    range,
+    from,
+    to,
+    today,
+    workingDays: current.workingDays,
+    holidays: new Set(holidays.map((holiday) => holiday.date)),
+  });
   const monthName = dayjs(`${month}-01`).format('MMMM');
   const isThisMonth = month === monthOf(today);
   return {

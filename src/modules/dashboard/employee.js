@@ -1,5 +1,7 @@
 // Employee detailed view (artboard 06): profile and five numbers for a range, the month
 // attendance calendar, hours by project, tasks to watch (stuck tasks) and the report history.
+// The person's day (CONTRACT 25) adds holidays and leave to the calendar and the history, and
+// a holiday never makes a task older. PMs see this page, so leave never carries its type or pay.
 import { AppError } from '@/lib/errors';
 import {
   addDays,
@@ -9,25 +11,29 @@ import {
   formatDateLong,
   formatDayMonthShort,
   formatHours,
-  isWorkingDay,
   monthOf,
   monthRange,
   toLocal,
   weekRange,
   workDate,
-  workingDaysBetween,
 } from '@/lib/time';
-import { initials, plural } from '@/lib/text';
+import { initials } from '@/lib/text';
+import { attendance as attendanceModule } from '@/modules/attendance';
 import { buildCalendar, calendarTitle } from './calendar';
+import { holidaysSince, tasksToWatch } from './employeeTasks';
 import { buildHistory } from './history';
 import * as repo from './repo';
-import { hoursBars, loadContext, reportDue, showsAdmins, totalMinutes } from './shared';
+import {
+  hoursBars,
+  loadContext,
+  loadDashboardCalendar,
+  reportDue,
+  showsAdmins,
+  totalMinutes,
+} from './shared';
 import { todoToday } from './todo';
 
 export const DETAIL_RANGES = ['week', 'month', 'custom'];
-// Tasks in progress this many working days (after the first) are listed even before they are
-// stuck, as on the canvas ("In progress 3 days" in grey).
-const WATCH_AFTER_DAYS = 2;
 // Only tasks whose latest version was reported in the last 30 days are considered.
 const TASK_LOOKBACK_DAYS = 30;
 
@@ -54,55 +60,6 @@ export function detailPeriod({ range = 'month', from, to } = {}, today) {
   return { ...period, end: min(period.to, today) };
 }
 
-/**
- * Working days a task has been in progress, counting the day it was first reported (the canvas
- * shows "In progress 6 days" for a task first reported on Wed 23 and viewed on Wed 30).
- */
-export function daysInProgress(firstReportedOn, today, workingDays) {
-  if (!firstReportedOn || firstReportedOn > today) return 0;
-  const first = isWorkingDay(firstReportedOn, workingDays) ? 1 : 0;
-  return workingDaysBetween(firstReportedOn, today, workingDays) + first;
-}
-
-/**
- * Build guide 7.5: a task is stuck when it is still in progress and at least `stuckTaskDays`
- * working days have passed since first_reported_on (the first day itself not counted).
- */
-export function isStuckTask(firstReportedOn, today, workingDays, stuckTaskDays) {
-  if (!firstReportedOn || firstReportedOn > today) return false;
-  return workingDaysBetween(firstReportedOn, today, workingDays) >= stuckTaskDays;
-}
-
-function tasksToWatch(rows, ctx) {
-  const { workingDays, stuckTaskDays } = ctx.settings;
-  const listFrom = Math.min(WATCH_AFTER_DAYS, stuckTaskDays);
-  const items = rows
-    .map((row) => {
-      const passed = workingDaysBetween(row.firstReportedOn, ctx.today, workingDays);
-      const days = daysInProgress(row.firstReportedOn, ctx.today, workingDays);
-      return {
-        id: row.id,
-        title: row.title,
-        project: { name: row.projectName, color: row.color },
-        firstReportedOn: row.firstReportedOn,
-        lastReportedOn: row.workDate,
-        passed,
-        days,
-        stuck: isStuckTask(row.firstReportedOn, ctx.today, workingDays, stuckTaskDays),
-        label: `In progress ${days} ${plural(days, 'day')}`,
-      };
-    })
-    .filter((item) => item.passed >= listFrom)
-    .sort((a, b) => b.days - a.days || a.id - b.id);
-  return {
-    stuckTaskDays,
-    subtitle: `In progress for ${stuckTaskDays} ${plural(stuckTaskDays, 'day')} or more are flagged`,
-    stuckCount: items.filter((item) => item.stuck).length,
-    emptyText: `No task has been in progress for ${listFrom + 1} working days or more.`,
-    items: items.map(({ passed: _passed, ...item }) => item),
-  };
-}
-
 function localMinutes(at, tz) {
   const local = toLocal(at, tz);
   return local.hour() * 60 + local.minute();
@@ -114,8 +71,11 @@ function clockOf(minutes) {
   return `${h}:${m}`;
 }
 
-/** The five numbers of the profile card for the period (build guide 7.10). */
-function periodStats({ attendance, reports, hoursRows, period, ctx }) {
+/**
+ * The five numbers of the profile card for the period (build guide 7.10). Late days count the
+ * effective late (CONTRACT 25: never on a holiday or a full day of leave).
+ */
+function periodStats({ attendance, reports, hoursRows, period, ctx, dayOf }) {
   const inRange = attendance.filter((a) => a.workDate >= period.from && a.workDate <= period.end);
   const working = inRange.filter((a) => a.isWorkingDay);
   const average = working.length
@@ -139,7 +99,9 @@ function periodStats({ attendance, reports, hoursRows, period, ctx }) {
     loggedLabel,
     averageCheckInMinutes: average,
     averageCheckIn: average === null ? '—' : formatClockShort(clockOf(average)),
-    lateDays: inRange.filter((a) => Number(a.lateMinutes) > 0).length,
+    lateDays: inRange.filter(
+      (a) => attendanceModule.effectiveLateMinutes({ row: a, day: dayOf(a.workDate) }) > 0,
+    ).length,
     wfhDays: inRange.filter((a) => a.location === 'wfh').length,
     reportsSubmitted: inRange.filter((a) => submittedDays.has(a.workDate)).length,
     reportsExpected: inRange.length,
@@ -194,6 +156,43 @@ function profileOf(person, ctx) {
 }
 
 /**
+ * The page's reads for one person, in parallel (each one query; the calendar three), then the
+ * holidays since the oldest open task's first report. `dayOf` is the person's day (holidays and
+ * leave as { id, part } only: never the type or pay, PMs see this page).
+ */
+async function loadDetail({ person, period, monthDays, ctx }) {
+  const userId = person.id;
+  const spanFrom = min(period.from, monthDays.from);
+  const spanTo = max(period.to, monthDays.to);
+  const historyTo = period.end >= period.from ? period.end : addDays(period.from, -1);
+  const [attendance, reports, entries, revisions, requests, hoursRows, openTasks, todo, calendar] =
+    await Promise.all([
+      repo.listAttendance(userId, spanFrom, spanTo),
+      repo.listReports(userId, spanFrom, spanTo),
+      repo.listReportEntries(userId, period.from, historyTo),
+      repo.listRevisions(userId, period.from, historyTo),
+      repo.listOpenEditRequests(userId, period.from, historyTo),
+      repo.hoursByProject({ from: period.from, to: period.end, userId }),
+      repo.listOpenTasks(userId, addDays(ctx.today, -TASK_LOOKBACK_DAYS)),
+      todoToday(person, ctx),
+      loadDashboardCalendar({ from: spanFrom, to: spanTo }),
+    ]);
+  return {
+    attendance,
+    reports,
+    entries,
+    revisions,
+    requests,
+    hoursRows,
+    openTasks,
+    todo,
+    holidays: await holidaysSince(openTasks, ctx.today),
+    days: historyTo >= period.from ? eachDay(period.from, historyTo) : [],
+    dayOf: (date) => calendar.dayFor(person, date),
+  };
+}
+
+/**
  * The Employee detailed view for one person.
  * @param {{ userId: number, viewer?: { role: string }, range?: 'week'|'month'|'custom',
  *   from?: string, to?: string }} options  custom needs from <= to (checked by the schema);
@@ -203,7 +202,10 @@ function profileOf(person, ctx) {
  *   only for someone who doesn't check in (a PM, or tracking turned off): the page shows it
  *   instead of the attendance numbers, and `calendar.empty` instead of a month without check-ins.
  *   `todoToday` is today's to-do (see todoToday(), null for someone who doesn't write reports);
- *   history tasks carry `closedNote` ("Marked done on Thu, 12 Nov" | null).
+ *   history tasks carry `closedNote` ("Marked done on Thu, 12 Nov" | null). CONTRACT 25: the
+ *   calendar has the tones holiday and leave (also for days to come), history rows show holiday
+ *   and leave days (where 'holiday' | 'on_leave' with `whereNote`, report 'off' on a day the
+ *   person wasn't expected), and holidays don't age tasks; nothing carries the leave type or pay.
  * @throws NOT_FOUND when the person doesn't exist, or is an Admin and the viewer isn't (an
  *   Admin's attendance is shown to Admins only)
  */
@@ -217,26 +219,12 @@ export async function getEmployeeDetail({ userId, viewer, range = 'month', from,
   const period = detailPeriod({ range, from, to }, ctx.today);
   const month = monthOf(period.end < period.from ? period.from : period.end);
   const monthDays = monthRange(month);
-  const spanFrom = min(period.from, monthDays.from);
-  const spanTo = max(period.to, monthDays.to);
-  const historyTo = period.end >= period.from ? period.end : addDays(period.from, -1);
-
-  const [attendance, reports, entries, revisions, requests, hoursRows, openTasks, todo] =
-    await Promise.all([
-      repo.listAttendance(userId, spanFrom, spanTo),
-      repo.listReports(userId, spanFrom, spanTo),
-      repo.listReportEntries(userId, period.from, historyTo),
-      repo.listRevisions(userId, period.from, historyTo),
-      repo.listOpenEditRequests(userId, period.from, historyTo),
-      repo.hoursByProject({ from: period.from, to: period.end, userId }),
-      repo.listOpenTasks(userId, addDays(ctx.today, -TASK_LOOKBACK_DAYS)),
-      todoToday(person, ctx),
-    ]);
+  const data = await loadDetail({ person, period, monthDays, ctx });
+  const { attendance, reports, hoursRows, dayOf } = data;
   const profile = profileOf(person, ctx);
   const attendanceNote = attendanceNoteOf(profile);
   const total = totalMinutes(hoursRows);
   const hoursLabel = period.key === 'week' ? 'This week' : period.label;
-  const days = historyTo >= period.from ? eachDay(period.from, historyTo) : [];
   // Someone who doesn't check in gets a note instead of an empty calendar; check-ins from before
   // tracking was turned off still show.
   const monthHasAttendance = attendance.some(
@@ -250,9 +238,9 @@ export async function getEmployeeDetail({ userId, viewer, range = 'month', from,
     person: profile,
     attendanceNote,
     period,
-    stats: periodStats({ attendance, reports, hoursRows, period, ctx }),
+    stats: periodStats({ attendance, reports, hoursRows, period, ctx, dayOf }),
     calendar: {
-      ...buildCalendar({ month, attendance, profile, ctx }),
+      ...buildCalendar({ month, attendance, profile, ctx, dayOf }),
       empty:
         attendanceNote && !monthHasAttendance
           ? { title: 'No attendance to show', body: attendanceNote.body }
@@ -264,17 +252,18 @@ export async function getEmployeeDetail({ userId, viewer, range = 'month', from,
       bars: hoursBars(hoursRows),
       rows: hoursRows,
     },
-    tasks: tasksToWatch(openTasks, ctx),
-    todoToday: todo,
+    tasks: tasksToWatch(data.openTasks, ctx, data.holidays),
+    todoToday: data.todo,
     history: buildHistory({
-      days,
+      days: data.days,
       attendance,
       reports,
-      entries,
-      revisions,
-      requests,
+      entries: data.entries,
+      revisions: data.revisions,
+      requests: data.requests,
       profile,
       ctx,
+      dayOf,
     }),
     historyEmptyText: attendanceNote
       ? 'No check-ins or reports in this range.'

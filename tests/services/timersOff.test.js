@@ -197,6 +197,7 @@ describe('getState while timers are off', () => {
       totalMinutes: 0,
       byProject: [],
       away: null,
+      removed: [],
       serverNow: at('10:45').toISOString(),
     });
     expect(openBreak).not.toHaveBeenCalled();
@@ -228,6 +229,7 @@ describe('getState while timers are off', () => {
       totalMinutes: 0,
       byProject: [],
       away: null,
+      removed: [],
       serverNow: at('10:45').toISOString(),
     };
     expect(await timers.getState({ user: emp })).toEqual(empty);

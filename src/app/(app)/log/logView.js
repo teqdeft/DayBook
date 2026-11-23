@@ -19,7 +19,12 @@ export const LOG_STATUS = {
   not_started: { status: 'draft', label: 'Not started' },
   missing: { status: 'missing', label: 'Missing' },
   not_checked_in: { status: 'not_checked_in', label: 'Not checked in' },
+  // CONTRACT 25: a day off with no check-in and no report
+  holiday: { status: 'holiday', label: 'Holiday' },
+  on_leave: { status: 'on_leave', label: 'On leave' },
 };
+
+const HALF_NOTES = { first_half: 'First half on leave', second_half: 'Second half on leave' };
 
 /** '12:00 tomorrow', '18:30 today', '12:00 on Thu, 1 Oct' (24-hour, like the lock rule text). */
 export function momentText(at, tz, today) {
@@ -50,6 +55,22 @@ function timesText(day, tz) {
 
 function reportHref(date, today) {
   return date === today ? '/report' : `/report?date=${date}`;
+}
+
+/** The muted line under the date (CONTRACT 25): the half of a leave day, or the holiday's name. */
+function dayNoteOf(day) {
+  if (day.leave && HALF_NOTES[day.leave.part]) return HALF_NOTES[day.leave.part];
+  return day.holiday?.name ?? null;
+}
+
+/** The opened row's line on a holiday or a day of leave (no check-in, no report). */
+function offNote(day) {
+  if (day.status === 'holiday') {
+    return day.isToday
+      ? `Today is a holiday: ${day.holiday.name}.`
+      : `Holiday: ${day.holiday.name}. Nobody was expected in.`;
+  }
+  return day.isToday ? "You're on leave today." : 'You were on leave this day.';
 }
 
 /** The line under an opened day's tasks and what the person can do about it. */
@@ -88,6 +109,12 @@ function panelFooter(day, { tz, today }) {
           ? "This report wasn't submitted before it locked."
           : 'No report was written for this day.',
         action: request,
+      };
+    case 'holiday':
+    case 'on_leave':
+      return {
+        note: offNote(day),
+        action: day.isToday ? { kind: 'link', href, label: 'Write report' } : request,
       };
     default:
       return {
@@ -131,6 +158,7 @@ export function dayRows(log) {
     return {
       date: day.date,
       dateLabel: formatDayShort(day.date),
+      dayNote: dayNoteOf(day),
       isToday: day.isToday,
       wfh: day.attendance?.location === 'wfh',
       times: timesText(day, log.timezone),
@@ -157,7 +185,12 @@ function lateText(minutes) {
   return value < 60 ? `${value} ${plural(value, 'minute')}` : formatDuration(value);
 }
 
-/** The four numbers at the top. */
+/** '19.5' for a count of days that may hold a half (half-day leave, CONTRACT 25). */
+function daysValue(count) {
+  return String(Math.round((Number(count) || 0) * 10) / 10);
+}
+
+/** The four numbers at the top; "Days present" is over the working days so far, leave included. */
 export function kpiCards(log) {
   const k = log.kpis;
   const isThisMonth = log.month === log.today.slice(0, 7);
@@ -174,7 +207,7 @@ export function kpiCards(log) {
     {
       key: 'present',
       label: 'Days present',
-      value: String(k.daysPresent),
+      value: daysValue(k.daysPresent),
       sub: `of ${k.workingDays} working ${plural(k.workingDays, 'day')}`,
       percent: k.presentPercent,
       color: 'green',
@@ -222,9 +255,10 @@ export function editRequestItems(log) {
   });
 }
 
-/** Attendance counts with their legend colours. */
+/** Attendance counts with their legend colours; "On leave" only when there was some. */
 export function attendanceItems(log) {
-  const days = (count) => `${count} ${plural(count, 'day')}`;
+  const days = (count) => `${daysValue(count)} ${plural(count, 'day')}`;
+  const leave = log.attendance.leave ?? 0;
   return [
     { key: 'office', label: 'In office', color: 'primary', value: days(log.attendance.office) },
     { key: 'wfh', label: 'Working from home', color: 'violet', value: days(log.attendance.wfh) },
@@ -235,5 +269,6 @@ export function attendanceItems(log) {
       color: 'red',
       value: days(log.attendance.notCheckedIn),
     },
+    ...(leave > 0 ? [{ key: 'leave', label: 'On leave', color: 'teal', value: days(leave) }] : []),
   ];
 }

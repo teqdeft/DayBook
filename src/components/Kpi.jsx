@@ -7,6 +7,10 @@ import styles from './Kpi.module.css';
  * `trailing` is an element at the top right, level with the label (the Overview's chevron on a
  * card that is a link); `as` and `href` pass through, so <Kpi as={Link} href="/requests" ...>
  * makes the whole card the link.
+ * In a grid row the cards share the tallest card's height: the bar (with the footer above it)
+ * sits at the bottom of each card, 8 px under the tallest content (CONTRACT 25), and cards of
+ * equal height look as they always did. The space goes to an empty spacer, so the card's
+ * children stay label, value row, footer, bar (pages style them by position).
  */
 export default function Kpi({
   label,
@@ -30,6 +34,7 @@ export default function Kpi({
         <span className={styles.value}>{value}</span>
         {sub ? <span className={styles.sub}>{sub}</span> : null}
       </p>
+      {hasBar ? <span className={styles.spacer} aria-hidden="true" /> : null}
       {footer ? <p className={styles.footer}>{footer}</p> : null}
       {hasBar ? (
         <ProgressBar className={styles.bar} percent={percent} color={color} height={8} />

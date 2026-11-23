@@ -63,6 +63,22 @@ describe('time', () => {
     expect(workingDaysBetween('2026-09-23', '2026-09-30', [1, 2, 3, 4, 5])).toBe(5);
   });
 
+  it('skips holidays when they are given (CONTRACT 25)', () => {
+    const days = [1, 2, 3, 4, 5];
+    expect(isWorkingDay('2026-11-24', days, new Set(['2026-11-24']))).toBe(false);
+    expect(isWorkingDay('2026-11-24', days, ['2026-11-24'])).toBe(false);
+    expect(isWorkingDay('2026-11-25', days, ['2026-11-24'])).toBe(true);
+    expect(isWorkingDay('2026-11-24', days, [])).toBe(true);
+    expect(isWorkingDay('2026-11-24', days, new Map([['2026-11-24', { name: 'Diwali' }]]))).toBe(
+      false,
+    );
+    expect(isWorkingDay('2026-11-28', days, ['2026-11-24'])).toBe(false); // a Saturday
+    // Mon 23 to Fri 27 Nov, from the day after Sun 22: 5 working days, 4 with Tue 24 off.
+    expect(workingDaysBetween('2026-11-22', '2026-11-27', days)).toBe(5);
+    expect(workingDaysBetween('2026-11-22', '2026-11-27', days, new Set(['2026-11-24']))).toBe(4);
+    expect(workingDaysBetween('2026-11-22', '2026-11-27', days, ['2026-11-28'])).toBe(5);
+  });
+
   it('formats hours and durations like the design', () => {
     expect(formatHours(480)).toBe('8h');
     expect(formatHours(510)).toBe('8h 30m');

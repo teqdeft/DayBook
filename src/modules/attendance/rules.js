@@ -1,48 +1,33 @@
 // Pure attendance rules shared by the service files: late minutes, present and worked time, and
-// the "where" status a row shows. No database access here.
+// the "where" status a row shows. No database access here. lateMarkFor() and whereOf() live in
+// calendar.js (client-safe, the person's day) and are re-exported here.
 import { env } from '@/lib/env';
 import {
   addDays,
-  clockToMinutes,
   dayjs,
   isWorkingDay,
   lateMinutesFor,
   localToUtc,
   minutesBetween,
-  normalizeClock,
   now,
   workDate as localDate,
 } from '@/lib/time';
+import { lateMarkFor, lateMinutesForDay, whereOf } from './calendar';
 
-/**
- * When a check-in starts counting as late, 'HH:mm' in company time: late_after, or for someone
- * with their own shift start, that start plus the company's grace (late_after minus office_start
- * when it is later: Late after 9:35 with the office at 9:30 gives everyone 5 minutes, so a 10:00
- * shift is late from 10:05). Never past 23:59.
- * @param {{ shiftStart?: string | null,
- *   settings: { lateAfter: string, officeStart?: string } }} input
- * @returns {string}
- */
-export function lateMarkFor({ shiftStart, settings }) {
-  if (!shiftStart) return normalizeClock(settings.lateAfter);
-  const grace = settings.officeStart
-    ? Math.max(0, clockToMinutes(settings.lateAfter) - clockToMinutes(settings.officeStart))
-    : 0;
-  const mark = Math.min(clockToMinutes(shiftStart) + grace, 23 * 60 + 59);
-  const pad = (value) => String(value).padStart(2, '0');
-  return `${pad(Math.floor(mark / 60))}:${pad(mark % 60)}`;
-}
+export { lateMarkFor, whereOf };
 
 /**
  * Late minutes for a check-in (guide 7.2.4): whole minutes after the late mark (lateMarkFor():
  * late_after, or the person's own shift start plus the company's grace); 0 on a day that is not a
- * working day.
+ * working day. With `day` (the person's day, CONTRACT 25) the mark is `day.lateMark`: none on a
+ * holiday or full-day leave, the split plus the grace on first-half leave.
  * @param {{ checkInAt: Date, workDate: string, shiftStart?: string | null,
  *   settings: { lateAfter: string, officeStart?: string, timezone: string,
- *   workingDays: number[] } }} input
+ *   workingDays: number[] }, day?: PersonDay }} input
  * @returns {number}
  */
-export function computeLateMinutes({ checkInAt, workDate, shiftStart, settings }) {
+export function computeLateMinutes({ checkInAt, workDate, shiftStart, settings, day }) {
+  if (day) return lateMinutesForDay({ checkInAt, day, settings });
   return lateMinutesFor({
     checkInAt,
     date: workDate,
@@ -52,8 +37,15 @@ export function computeLateMinutes({ checkInAt, workDate, shiftStart, settings }
   });
 }
 
-/** True when the date is one of the company's working days. */
-export function workingDayFlag(date, settings) {
+/**
+ * True when the date is one of the company's working days: `day.isWorkingDay` with the person's
+ * day (holidays count as not working, CONTRACT 25), else the weekday rule.
+ * @param {string} date
+ * @param {{ workingDays: number[] }} settings
+ * @param {PersonDay} [day]
+ */
+export function workingDayFlag(date, settings, day) {
+  if (day) return day.isWorkingDay;
   return isWorkingDay(date, settings.workingDays);
 }
 
@@ -160,17 +152,6 @@ export function forgottenBreakEnd(item, row) {
  */
 export function isOpenRow(row) {
   return Boolean(row) && !row.checkOutAt && row.checkoutStatus === 'open';
-}
-
-/**
- * The "Where" status a row shows: office, wfh, unverified (office without the office network)
- * or not_checked_in.
- * @param {{ location: string, officeVerified: boolean } | null} row
- */
-export function whereOf(row) {
-  if (!row) return 'not_checked_in';
-  if (row.location === 'office') return row.officeVerified ? 'office' : 'unverified';
-  return 'wfh';
 }
 
 /**

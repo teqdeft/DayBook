@@ -9,6 +9,8 @@ export const SECTIONS = [
   { id: 'company', label: 'Company' },
   { id: 'hours', label: 'Office hours and reports' },
   { id: 'check-in', label: 'Check-in' },
+  { id: 'attendance-marks', label: 'Attendance marks' }, // CONTRACT 25
+  { id: 'hr-updates', label: 'HR updates' },
   { id: 'slack', label: 'Slack' },
   { id: 'screen-time', label: 'Screen time' },
   { id: 'timers', label: 'Timers and breaks' },

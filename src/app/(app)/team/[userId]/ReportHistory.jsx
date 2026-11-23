@@ -3,7 +3,9 @@
 // shows its tasks and its edit history (every submit, who made it, when and why). The latest few
 // days show first; "Show N more days" reveals the rest of the range. A day the auto check-out
 // closed says "Auto" next to its Out time (CONTRACT 19). A line the person closed from the
-// suggestions says so under its title, "Marked done on Thu, 12 Nov" (CONTRACT 24).
+// suggestions says so under its title, "Marked done on Thu, 12 Nov" (CONTRACT 24). Holidays and
+// leave days show "Holiday" / "On leave" with a muted line (the half of the day, the holiday's
+// name), and a dash for the report on a day the person wasn't expected (CONTRACT 25).
 import { Fragment, useState } from 'react';
 import ProjectLabel from '@/components/ProjectLabel';
 import StatusCell from '@/components/StatusCell';
@@ -27,7 +29,8 @@ const COLUMNS = [
 /**
  * @param {{ rows: object[], emptyText?: string }} props rows from dashboard.getEmployeeDetail().history
  *   (`checkoutStatus` is the day's attendance checkout status, 'auto' after an auto check-out;
- *   each entry's tasks carry `closedNote`, "Marked not needed on Thu, 12 Nov" or null)
+ *   each entry's tasks carry `closedNote`, "Marked not needed on Thu, 12 Nov" or null; `where`
+ *   may be 'on_leave' or 'holiday' with `whereNote`, and `report` 'off')
  */
 export default function ReportHistory({ rows, emptyText = 'No working days in this range yet.' }) {
   const [open, setOpen] = useState(() => new Set());
@@ -91,11 +94,20 @@ export default function ReportHistory({ rows, emptyText = 'No working days in th
                     </button>
                   </td>
                   <td data-label="Where">
-                    {row.where ? (
-                      <StatusCell status={row.where} size="cellCompact" className={styles.where} />
-                    ) : (
-                      <span className={styles.none}>—</span>
-                    )}
+                    <span className={styles.whereStack}>
+                      {row.where ? (
+                        <StatusCell
+                          status={row.where}
+                          size="cellCompact"
+                          className={styles.where}
+                        />
+                      ) : (
+                        <span className={styles.none}>—</span>
+                      )}
+                      {row.whereNote ? (
+                        <span className={styles.whereNote}>{row.whereNote}</span>
+                      ) : null}
+                    </span>
                   </td>
                   <td data-label="In" className={styles.num}>
                     {row.in}
@@ -128,7 +140,11 @@ export default function ReportHistory({ rows, emptyText = 'No working days in th
                     ) : null}
                   </td>
                   <td data-label="Report" className={styles.reportCell}>
-                    <StatusCell status={row.report} label={row.reportLabel ?? undefined} />
+                    {row.report === 'off' ? (
+                      <span className={styles.none}>—</span>
+                    ) : (
+                      <StatusCell status={row.report} label={row.reportLabel ?? undefined} />
+                    )}
                   </td>
                 </tr>
                 {isOpen ? (

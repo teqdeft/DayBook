@@ -1,0 +1,36 @@
+/* Today's missing check-out pop-up (CONTRACT 25, item B). */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.checkedIn {
+  margin-bottom: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* After the self-fix limit, HR checks the time first. */
+.limitBox {
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--marigold-soft);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--marigold-text);
+}
+
+/* "2 of 3" at the footer's start */
+.count {
+  margin-right: auto;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}

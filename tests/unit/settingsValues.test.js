@@ -1,16 +1,34 @@
 // The Settings form's values (settingsValues.js): auto check-out (CONTRACT 19) shows "Check at" as
 // "8:00 PM", must come after the office ends while it is on, and keeps the saved time while it is
-// off and hidden; only changed keys are sent.
+// off and hidden; only changed keys are sent. Attendance marks and HR updates (CONTRACT 25) use
+// the API's limits, messages and cross checks.
 import { describe, expect, it } from 'vitest';
 import {
   AUTO_CHECKOUT_TOO_EARLY,
   changedKeys,
   CLOCKS,
+  HALF_DAY_TOO_LONG,
+  HR_CLOCKS,
+  isShown,
   KEYS,
+  SUMMARY_TOO_LATE,
+  summaryTooEarly,
   toForm,
   toValues,
+  wrapUpAt,
 } from '@/app/(app)/settings/settingsValues';
 import { NUMBERS } from '@/app/(app)/settings/numberFields';
+import {
+  CHECKIN_REMINDER_MINUTES,
+  checkDayMarks,
+  checkHrSummary,
+  HALF_DAY_UNDER_MINUTES,
+  LATE_ALERT_DAYS,
+  LEFT_EARLY_GRACE_MINUTES,
+  PAYROLL_MONTH_START_DAY,
+  settingsUpdateSchema,
+  SHORT_DAY_UNDER_MINUTES,
+} from '@/modules/settings/schemas';
 
 const SAVED = {
   companyName: 'Teqdeft',
@@ -41,6 +59,18 @@ const SAVED = {
   timerReminderMinutes: 25,
   breakAllowanceMinutes: 60,
   pushEnabled: true,
+  // CONTRACT 25
+  halfDayUnderMinutes: 270,
+  shortDayUnderMinutes: 480,
+  leftEarlyGraceMinutes: 15,
+  payrollMonthStartDay: 1,
+  hrMorningSummary: true,
+  hrSummaryAt: '10:00',
+  hrEveningSummary: false,
+  checkinReminderMinutes: 30,
+  lateAlertDays: 4,
+  slackAttendanceRemind: true,
+  slackHrSummary: true,
 };
 
 const edit = (changes) => ({ ...toForm(SAVED), ...changes });
@@ -155,5 +185,166 @@ describe('Settings form values', () => {
       autoCheckoutEnabled: true,
       autoCheckoutAt: '20:15',
     });
+  });
+});
+
+// CONTRACT 25: Attendance marks, HR updates and the two Slack switches.
+describe('Settings form values: attendance marks and HR updates', () => {
+  /** The API's message for one value of one key (settingsUpdateSchema), or null when allowed. */
+  const apiMessage = (key, value) => {
+    const result = settingsUpdateSchema.safeParse({ [key]: value });
+    return result.success ? null : result.error.issues[0].message;
+  };
+  /** What checkDayMarks / checkHrSummary throw on these values, or null. */
+  const crossMessage = (check, current, parsed) => {
+    try {
+      check(current, parsed);
+      return null;
+    } catch (error) {
+      return error.fields;
+    }
+  };
+
+  it('edits the new keys in page order: Check-in, Attendance marks, HR updates, then Slack', () => {
+    const marks = [
+      'halfDayUnderMinutes',
+      'shortDayUnderMinutes',
+      'leftEarlyGraceMinutes',
+      'payrollMonthStartDay',
+      'hrMorningSummary',
+      'hrSummaryAt',
+      'hrEveningSummary',
+      'checkinReminderMinutes',
+      'lateAlertDays',
+    ];
+    const start = KEYS.indexOf('autoMarkMissingCheckout') + 1;
+    expect(KEYS.slice(start, start + marks.length)).toEqual(marks);
+    expect(KEYS[start + marks.length]).toBe('slackReportChannelId');
+    const slack = KEYS.indexOf('slackRequestsNotify');
+    expect(KEYS.slice(slack + 1, slack + 3)).toEqual(['slackAttendanceRemind', 'slackHrSummary']);
+    expect(Object.keys(CLOCKS)).not.toContain('hrSummaryAt');
+    expect(HR_CLOCKS).toEqual({ hrSummaryAt: 'the HR summary time' });
+  });
+
+  it('uses the API limits and messages for the six numbers', () => {
+    const bounds = {
+      halfDayUnderMinutes: HALF_DAY_UNDER_MINUTES,
+      shortDayUnderMinutes: SHORT_DAY_UNDER_MINUTES,
+      leftEarlyGraceMinutes: LEFT_EARLY_GRACE_MINUTES,
+      payrollMonthStartDay: PAYROLL_MONTH_START_DAY,
+      checkinReminderMinutes: CHECKIN_REMINDER_MINUTES,
+      lateAlertDays: LATE_ALERT_DAYS,
+    };
+    for (const [key, { min, max }] of Object.entries(bounds)) {
+      expect({ min: NUMBERS[key].min, max: NUMBERS[key].max }, key).toEqual({ min, max });
+      expect(apiMessage(key, max + 1), key).toBe(NUMBERS[key].message);
+      expect(apiMessage(key, min - 1), key).toBe(NUMBERS[key].message);
+      expect(apiMessage(key, min), key).toBeNull();
+      // The form refuses the same values with the same words.
+      const { errors } = toValues(edit({ [key]: String(max + 1) }), SAVED);
+      expect(errors[key], key).toBe(NUMBERS[key].message);
+    }
+    expect(NUMBERS.halfDayUnderMinutes.message).toBe(
+      'Half day must be between 0 and 720 minutes (0 turns it off).',
+    );
+    expect(NUMBERS.payrollMonthStartDay.message).toBe(
+      'The payroll month must start on a day from 1 to 28.',
+    );
+  });
+
+  it('shows the numbers as text and the summary time as 10:00 AM; sends only what changed', () => {
+    const form = toForm(SAVED);
+    expect(form).toMatchObject({
+      halfDayUnderMinutes: '270',
+      payrollMonthStartDay: '1',
+      lateAlertDays: '4',
+      hrSummaryAt: '10:00 AM',
+      hrMorningSummary: true,
+      slackHrSummary: true,
+    });
+    expect(toValues(form, SAVED).errors).toEqual({});
+    const { values, errors } = toValues(
+      edit({
+        payrollMonthStartDay: '26',
+        hrSummaryAt: '11:15 am',
+        hrEveningSummary: true,
+        slackAttendanceRemind: false,
+      }),
+      SAVED,
+    );
+    expect(errors).toEqual({});
+    expect(changedKeys(values, SAVED)).toEqual({
+      payrollMonthStartDay: 26,
+      hrSummaryAt: '11:15',
+      hrEveningSummary: true,
+      slackAttendanceRemind: false,
+    });
+  });
+
+  it('puts the evening wrap-up half an hour after office hours end', () => {
+    expect(wrapUpAt('18:30')).toBe('19:00');
+    expect(wrapUpAt('17:45')).toBe('18:15');
+    expect(wrapUpAt('23:50')).toBe('00:20');
+  });
+
+  it('asks for a time like 9:30 AM while the summary is on, and hides it while off', () => {
+    expect(toValues(edit({ hrSummaryAt: 'soon' }), SAVED).errors).toEqual({
+      hrSummaryAt: 'Enter the HR summary time like 9:30 AM.',
+    });
+    expect(apiMessage('hrSummaryAt', 'soon')).toBe('Enter a time like 10:00.');
+    expect(isShown(edit({ hrMorningSummary: false }), 'hrSummaryAt')).toBe(false);
+    expect(isShown(edit({}), 'hrSummaryAt')).toBe(true);
+    const off = toValues(edit({ hrMorningSummary: false, hrSummaryAt: 'soon' }), SAVED);
+    expect(off.errors).toEqual({});
+    expect(changedKeys(off.values, SAVED)).toEqual({ hrMorningSummary: false });
+    // Off, the summary time is never checked against the late mark or office end.
+    const early = toValues(edit({ hrMorningSummary: false, hrSummaryAt: '7:00 AM' }), SAVED);
+    expect(early.errors).toEqual({});
+  });
+
+  it('refuses a half day not below the short day while both are on, as the API does', () => {
+    for (const [half, short] of [
+      ['480', '480'],
+      ['500', '400'],
+    ]) {
+      const form = edit({ halfDayUnderMinutes: half, shortDayUnderMinutes: short });
+      expect(toValues(form, SAVED).errors).toEqual({ halfDayUnderMinutes: HALF_DAY_TOO_LONG });
+      expect(
+        crossMessage(checkDayMarks, SAVED, {
+          halfDayUnderMinutes: Number(half),
+          shortDayUnderMinutes: Number(short),
+        }),
+      ).toEqual({ halfDayUnderMinutes: HALF_DAY_TOO_LONG });
+    }
+    for (const [half, short] of [
+      ['0', '200'],
+      ['600', '0'],
+      ['269', '270'],
+    ]) {
+      const form = edit({ halfDayUnderMinutes: half, shortDayUnderMinutes: short });
+      expect(toValues(form, SAVED).errors, `${half} ${short}`).toEqual({});
+    }
+    // A number that can't be read is the only error shown.
+    expect(toValues(edit({ shortDayUnderMinutes: 'x' }), SAVED).errors).toEqual({
+      shortDayUnderMinutes: NUMBERS.shortDayUnderMinutes.message,
+    });
+  });
+
+  it('wants the summary at or after the late mark and before office end, as the API does', () => {
+    // SAVED: late after 9:35, office ends 6:30 PM.
+    const early = toValues(edit({ hrSummaryAt: '9:30 AM' }), SAVED).errors;
+    expect(early).toEqual({ hrSummaryAt: summaryTooEarly('09:35') });
+    expect(early.hrSummaryAt).toBe('Pick a time at or after the late mark (9:35).');
+    expect(crossMessage(checkHrSummary, SAVED, { hrSummaryAt: '09:30' })).toEqual(early);
+    expect(toValues(edit({ hrSummaryAt: '9:35 AM' }), SAVED).errors).toEqual({});
+
+    const late = toValues(edit({ hrSummaryAt: '6:30 PM' }), SAVED).errors;
+    expect(late).toEqual({ hrSummaryAt: SUMMARY_TOO_LATE });
+    expect(crossMessage(checkHrSummary, SAVED, { hrSummaryAt: '18:30' })).toEqual(late);
+
+    // Moving the late mark past the summary flags the summary time, with the new late mark.
+    const moved = toValues(edit({ lateAfter: '1:05 PM' }), SAVED).errors;
+    expect(moved).toEqual({ hrSummaryAt: 'Pick a time at or after the late mark (1:05).' });
+    expect(crossMessage(checkHrSummary, SAVED, { lateAfter: '13:05' })).toEqual(moved);
   });
 });

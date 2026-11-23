@@ -281,6 +281,21 @@ describe('request dialog dates', () => {
     expect(nextWorkingDay('2026-10-16', [])).toBe('2026-10-17');
   });
 
+  it('skips company holidays (CONTRACT 25), given as a Set or an array', () => {
+    const monToFri = [1, 2, 3, 4, 5];
+    // Friday -> Monday is Diwali -> Tuesday
+    expect(nextWorkingDay('2026-11-06', monToFri, new Set(['2026-11-09']))).toBe('2026-11-10');
+    expect(nextWorkingDay('2026-11-06', monToFri, ['2026-11-09', '2026-11-10'])).toBe('2026-11-11');
+    // A holiday on a Saturday changes nothing.
+    expect(nextWorkingDay('2026-11-06', monToFri, ['2026-11-07'])).toBe('2026-11-09');
+    // A whole fortnight of holidays: tomorrow, as before.
+    const fortnight = Array.from(
+      { length: 14 },
+      (_, index) => `2026-11-${String(7 + index).padStart(2, '0')}`,
+    );
+    expect(nextWorkingDay('2026-11-06', monToFri, fortnight)).toBe('2026-11-07');
+  });
+
   it('moves To with From until the person picks To, and never leaves it before From', () => {
     expect(followFrom({ toDate: '2026-10-14', toTouched: false }, '2026-10-16')).toBe('2026-10-16');
     expect(followFrom({ toDate: '2026-10-20', toTouched: true }, '2026-10-16')).toBe('2026-10-20');

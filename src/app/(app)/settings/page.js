@@ -1,6 +1,6 @@
 // Settings (artboard 12): company, office hours and reports, check-in networks and switches,
-// Slack, screen time, timers and breaks, desktop notifications and AI. One "Save changes" saves
-// every section. Admin only.
+// attendance marks and HR updates (CONTRACT 25), Slack, screen time, timers and breaks, desktop
+// notifications and AI. One "Save changes" saves every section. Admin only.
 import { headers } from 'next/headers';
 import TopBar from '@/components/TopBar';
 import { env } from '@/lib/env';
