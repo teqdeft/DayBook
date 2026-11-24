@@ -1,5 +1,7 @@
-// acme-store's files and notes and its AI summary (CONTRACT 22), for the demo. Only the text of a
-// file is ever stored, so the "PDF" here is its pages of text. The summary is written by hand in the
+// acme-store's files and notes and its AI summary (CONTRACT 22), for the demo. The "PDF" here is a
+// text-only document from before 1.12 (its pages of text; the file wasn't kept), and every document
+// reads as "Only PM and Admins" unless it says `visibility` (CONTRACT 27). The real files are in
+// projectFiles.js. The summary is written by hand in the
 // shape of the AI's answer (no AI was asked): projectPlanRows.js runs it through the same checks a
 // real answer goes through, so every quote must be found in the document it names.
 //
@@ -40,6 +42,13 @@ const SOW_PAGES = [
   ],
 ].map((lines) => lines.join('\n'));
 
+// CONTRACT 27: a Whole project note everyone on the project reads in the Files tab.
+const CONTACTS_NOTE = [
+  'Store manager: Kavita Rao, for content and product photos.',
+  'IT lead: Imran Shaikh, for the payment gateway and the warehouse system.',
+  'Call before 5 PM. Write to both for anything about the launch date.',
+].join('\n');
+
 export const STORE_DOCUMENTS = [
   {
     ref: 'D1',
@@ -56,6 +65,15 @@ export const STORE_DOCUMENTS = [
     phase: 'requirement_gathering',
     added: ['-8 Tue', '15:10'],
     pages: SOW_PAGES,
+  },
+  {
+    ref: 'D3',
+    kind: 'note',
+    title: 'Who to call at Acme Retail',
+    phase: null, // Whole project
+    visibility: 'everyone',
+    added: ['-9 Tue', '10:20'],
+    pages: [CONTACTS_NOTE],
   },
 ];
 

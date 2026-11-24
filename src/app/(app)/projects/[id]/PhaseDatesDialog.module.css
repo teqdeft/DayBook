@@ -1,0 +1,30 @@
+/* The Edit dates dialog (CONTRACT 22 and 27): the two dates side by side, and the error under them
+   (moved here from the Phases tab's PhaseSection.module.css). */
+.datesRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.dateField {
+  display: flex;
+  flex: 1 1 180px;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dateLabel {
+  margin-bottom: 4px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
+.dateError {
+  margin: 5px 0 0;
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}

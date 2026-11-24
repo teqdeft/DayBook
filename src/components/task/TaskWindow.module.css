@@ -1,0 +1,257 @@
+/* The task window (CONTRACT 27), as the prototype: the Dialog's frame at 640 px and at most 90%
+   high, the project and phase line over a 20 px title, the facts in two columns, sections parted
+   by a line, and a full-screen sheet on a phone with the main button first. */
+.panel {
+  max-height: min(90vh, calc(100vh - 48px));
+}
+
+/* The project and phase line sits at the top; a title alone (loading) is lowered to the X's middle,
+   as the prototype's `.win-h > .win-title`. */
+.headText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.headText > .title:first-child {
+  padding-top: 5px;
+}
+
+.context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.title {
+  font-family: var(--font-heading-stack);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.title:focus {
+  outline: none;
+}
+
+.title:focus-visible {
+  box-shadow: none;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0 8px;
+}
+
+/* "This task isn't available. …": centred in a narrow block, as the prototype's empty state. */
+.problem {
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 8px 0 4px;
+  font-size: var(--text-body);
+  line-height: 20px;
+  color: var(--ink);
+  text-align: center;
+}
+
+/* Owner, Due, Priority, Added by */
+.facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 24px;
+  margin: 0;
+}
+
+.facts div {
+  min-width: 0;
+}
+
+.facts dt {
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.facts dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  margin: 4px 0 0;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+/* "Anyone on the project": the dashed circle of the board's cards (the prototype's `.av-any`). */
+.anyone {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1.5px dashed var(--line-dashed);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+
+.away {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Note, Files, Latest report. The page's line height (1.45), as the prototype, so a thumbnail's
+   12 px size line stays 17 px high. */
+.section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.heading {
+  margin-bottom: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.sectionHead .heading {
+  margin-bottom: 0;
+}
+
+.note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.gap {
+  height: 12px;
+}
+
+.chips {
+  margin-top: 12px;
+}
+
+.red {
+  color: var(--red-text);
+}
+
+.green {
+  color: var(--green-text);
+}
+
+.primary {
+  color: var(--primary-text);
+}
+
+/* Footer */
+.delete,
+.left {
+  margin-right: auto;
+}
+
+.doneTag {
+  gap: 4px;
+}
+
+.inTodo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.inTodo svg {
+  flex: none;
+  color: var(--green);
+}
+
+/* A phone: the sheet fills the screen (also between 521 and 640 px, where the Dialog's frame keeps
+   its margins), the body grows so the footer sits at the bottom edge, and the X and "Add files"
+   are 44 px tap targets, as the prototype's `.win-h .ib` and `.btn-sm`. */
+@media (max-width: 640px) {
+  [role='dialog'].panel {
+    position: fixed;
+    inset: 0;
+    width: auto;
+    height: auto;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  [role='dialog'].panel > [data-modal-body] {
+    flex: 1 1 auto;
+  }
+
+  .panel .close {
+    width: 44px;
+    height: 44px;
+    margin: -4px -6px 0 auto;
+  }
+
+  .sectionHead .addFiles {
+    height: 44px;
+  }
+
+  .facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .facts > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .facts dd {
+    justify-content: flex-end;
+    margin: 0;
+    text-align: right;
+  }
+
+  .main {
+    order: -1;
+    flex-basis: 100%;
+  }
+
+  .edit {
+    flex: 1 1 0;
+  }
+
+  .delete {
+    order: 2;
+    flex: 1 1 0;
+    margin-right: 0;
+  }
+}

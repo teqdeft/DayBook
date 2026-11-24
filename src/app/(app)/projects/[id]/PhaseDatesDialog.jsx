@@ -1,6 +1,6 @@
 'use client';
-// "Edit dates" on the Phases tab (CONTRACT 22): a phase's planned start and end, side by side as in
-// the prototype. Either may be left empty. An end before the start is caught here and by the server
+// "Edit dates" from a column's menu on the Board (CONTRACT 22 and 27): a phase's planned start and
+// end, side by side as in the prototype. Either may be left empty. An end before the start is caught here and by the server
 // with the same words; success toasts "Dates saved." and refreshes the page.
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -10,7 +10,8 @@ import Input from '@/components/Input';
 import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/apiClient';
 import { END_BEFORE_START } from '@/modules/projectPlan/schemas';
-import styles from './PhaseSection.module.css';
+import styles from './PhaseDatesDialog.module.css';
+import windowStyles from './projectWindows.module.css';
 
 /** The two dates, the error and saving them. */
 function useDates({ projectId, phase, onClose }) {
@@ -72,6 +73,7 @@ function DatesForm({ projectId, phase, onClose }) {
   return (
     <Dialog
       open
+      className={windowStyles.window}
       onClose={onClose}
       title={phase.label}
       onSubmit={save}

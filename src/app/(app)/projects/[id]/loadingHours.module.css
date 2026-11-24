@@ -1,0 +1,103 @@
+/* The Hours tab's skeleton: the range and Excel button, five numbers, the two hours cards and the
+   three tables. Its cards take `.block` and the tables' last cell `.cell` from loading.module.css. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  max-width: 100%;
+}
+
+.actions > * {
+  max-width: 100%;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.columns {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.tableHead {
+  display: flex;
+  align-items: center;
+  height: 54px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tableRow {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 54px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--track);
+}
+
+.tableRow:last-child {
+  border-bottom: 0;
+}
+
+@media (max-width: 1279px) {
+  .kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1023px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .charts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .tableRow {
+    gap: 12px;
+    padding: 0 16px;
+  }
+
+  /* A row keeps its first three blocks and its last cell (the button) on a phone. */
+  .tableRow > :nth-child(n + 4):not(:last-child) {
+    display: none;
+  }
+
+  /* Placeholders don't shrink by themselves; on a phone the row's blocks share the width. */
+  .tableRow > span {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+}

@@ -1,7 +1,8 @@
 'use client';
 // The Settings sections (artboard 12) inside one form: Company, Office hours and reports,
 // Check-in, Attendance marks and HR updates (CONTRACT 25), Slack, and Screen time, Timers and
-// breaks, Notifications and AI (added after the canvas). "Save changes" in the top bar submits it.
+// breaks, Notifications, AI and Files (CONTRACT 27; added after the canvas). "Save changes" in the
+// top bar submits it.
 import DayToggleGroup from '@/components/DayToggleGroup';
 import Input from '@/components/Input';
 import Select from '@/components/Select';
@@ -9,6 +10,7 @@ import AiSection from './AiSection';
 import AttendanceMarksSection from './AttendanceMarksSection';
 import CheckInSection from './CheckInSection';
 import ClockField from './ClockField';
+import FilesSection from './FilesSection';
 import FormField from './FormField';
 import HrUpdatesSection from './HrUpdatesSection';
 import NotificationsSection from './NotificationsSection';
@@ -100,8 +102,9 @@ function HoursSection({ reportLocks }) {
  *   networks: Array<{ id: number, name: string, ipAddress: string }>, currentIp: string | null,
  *   connection: { configured: boolean, connected: boolean, teamName: string | null },
  *   pushConfigured: boolean, ai: { configured: boolean, usage: { used: number, limit: number }
- *   | null } }} props pushConfigured: the server has VAPID keys (CONTRACT 14); ai: the server has
- *   GEMINI_API_KEY, and today's AI requests (CONTRACT 20)
+ *   | null }, files: object | null }} props pushConfigured: the server has VAPID keys (CONTRACT
+ *   14); ai: the server has GEMINI_API_KEY, and today's AI requests (CONTRACT 20); files: the
+ *   space used and the storage check (CONTRACT 27, FilesSection), null when it couldn't be read
  */
 export default function SettingsForm({
   timezones,
@@ -111,6 +114,7 @@ export default function SettingsForm({
   connection,
   pushConfigured,
   ai,
+  files = null,
 }) {
   const { save } = useSettingsForm();
   return (
@@ -136,6 +140,7 @@ export default function SettingsForm({
       <TimersSection />
       <NotificationsSection configured={pushConfigured} />
       <AiSection configured={Boolean(ai?.configured)} usage={ai?.usage ?? null} />
+      <FilesSection space={files} />
     </form>
   );
 }

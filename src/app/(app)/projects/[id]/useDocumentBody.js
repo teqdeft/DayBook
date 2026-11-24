@@ -1,8 +1,8 @@
 'use client';
-// The text of one file or note (CONTRACT 22). The list on the Phases tab comes without any text, so
-// it is fetched when first needed: opening the name's box, or editing a note. The last few stay in
-// memory for this tab, so opening a box again shows it at once; an edit makes a new version, which
-// is fetched again.
+// The text of one note or text (CONTRACT 22 and 27). The Files tab's list comes without any text, so
+// it is fetched when first needed: opening the note window, or editing a note. The last few stay in
+// memory for this tab, so opening a window again shows it at once; an edit makes a new version,
+// which is fetched again.
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/apiClient';
 

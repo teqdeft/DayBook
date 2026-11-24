@@ -1,0 +1,38 @@
+/* Settings → Files (CONTRACT 27), as the prototype's settings-files screen: the two numbers, then
+   the space used under a divider, its lines 6 px apart. */
+.space {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.used {
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.line {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+/* one muted line with an Info icon: a storage problem, a disk-full day, the database update */
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.note svg {
+  flex: none;
+  margin-top: 1px;
+}

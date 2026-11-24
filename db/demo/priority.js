@@ -257,7 +257,8 @@ export function buildPriorityNotifications(priorityTasks, ctx) {
         type: 'project_task.added',
         title: `New ${PRIORITY_LABELS[task.priority]} task on ${project.name}: ${task.title}`,
         body: (task.details ? `${lead} ${task.details}` : lead).slice(0, 500),
-        link: '/today',
+        // CONTRACT 27: task notifications open the task on its project page.
+        link: `/projects/${row.projectId}?task=${row.id}`,
         readAt: task.created[0] === 0 ? null : ctx.when(task.created[0], '19:30'),
         pushedAt: row.createdAt,
         createdAt: row.createdAt,

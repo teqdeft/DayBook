@@ -34,11 +34,35 @@ function fallbackTokens() {
   );
 }
 
+/** A top-level :root token's value (two-space indent, outside the @supports block). */
+const rootToken = (name) => css.match(new RegExp(`^ {2}${name}: ([^;]+);$`, 'm'))?.[1];
+
 describe('globals.css without light-dark()', () => {
-  it('gives every themed colour its light value', () => {
+  it('gives every themed colour its light value, and the menu shadow, and nothing else', () => {
     const themed = themedTokens();
     expect(themed.size).toBeGreaterThan(40);
-    expect(Object.fromEntries(fallbackTokens())).toEqual(Object.fromEntries(themed));
+    const fallback = fallbackTokens();
+    fallback.delete('--shadow-menu'); // the one token without light-dark() (below)
+    expect(Object.fromEntries(fallback)).toEqual(Object.fromEntries(themed));
+  });
+
+  it('has the menu shadow in both themes and without color-mix() (CONTRACT 27)', () => {
+    // The value Menu.module.css and ToastProvider.module.css use; navy follows the theme.
+    expect(rootToken('--shadow-menu')).toBe(
+      '0 12px 32px color-mix(in srgb, var(--navy) 14%, transparent)',
+    );
+    // Browsers without light-dark() may lack color-mix() too: the light navy at 14%.
+    const navy = themedTokens().get('--navy');
+    const rgb = [1, 3, 5].map((at) => parseInt(navy.slice(at, at + 2), 16)).join(', ');
+    expect(fallbackTokens().get('--shadow-menu')).toBe(`0 12px 32px rgba(${rgb}, 0.14)`);
+  });
+
+  it('keeps the picture veil and its text the same in both themes (CONTRACT 27)', () => {
+    expect(rootToken('--photo-veil')).toBe('rgba(5, 6, 16, 0.86)');
+    expect(rootToken('--photo-veil-text')).toBe('#ffffff');
+    const fallback = fallbackTokens();
+    expect(fallback.has('--photo-veil')).toBe(false);
+    expect(fallback.has('--photo-veil-text')).toBe(false);
   });
 
   it('covers the yellow project colour (CONTRACT 23)', () => {

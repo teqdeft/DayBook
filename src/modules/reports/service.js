@@ -52,6 +52,7 @@ export { getTimersForReport, timersForReport } from './timerCheck';
 export { listCarrySuggestions, closeSuggestion } from './suggestions';
 export {
   getTodo,
+  todoTakesLines,
   addTodoLine,
   addTodoLines,
   updateTodoLine,

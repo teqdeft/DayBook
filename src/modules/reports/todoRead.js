@@ -115,3 +115,18 @@ export async function getTodo({ user, date, timerState } = {}) {
     suggestions,
   };
 }
+
+/**
+ * Whether today's to-do still takes new lines (CONTRACT 24): no report yet and the day hasn't
+ * locked, or a draft that is still editable. One read, never creates the draft. The task window
+ * on the member's project page shows "Add to to-do" only then (CONTRACT 27).
+ * @param {{ user: { id: number } }} input
+ * @returns {Promise<boolean>}
+ */
+export async function todoTakesLines({ user }) {
+  const current = await settings.getAll();
+  const today = workDate(current.timezone);
+  const report = (await repo.findByUserAndDate(user.id, today)) ?? null;
+  if (!report) return openUntilLock(today, current);
+  return report.status !== 'submitted' && isEditable(report);
+}

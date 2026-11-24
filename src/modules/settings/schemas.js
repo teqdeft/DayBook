@@ -52,6 +52,10 @@ export const PAYROLL_MONTH_START_DAY = Object.freeze({ min: 1, max: 28 });
 export const CHECKIN_REMINDER_MINUTES = Object.freeze({ min: 0, max: 240 });
 export const LATE_ALERT_DAYS = Object.freeze({ min: 1, max: 31 });
 
+/** Files (CONTRACT 27): the largest single file in MB and the company's storage limit in GB. */
+export const FILE_MAX_MB = Object.freeze({ min: 1, max: 2048 });
+export const FILE_STORAGE_LIMIT_GB = Object.freeze({ min: 1, max: 1000 });
+
 /** A whole number in its range, with one message for both a wrong type and a wrong range. */
 const bounded = ({ min, max }, message) =>
   wholeNumber({ min, max, typeMessage: message, rangeMessage: message });
@@ -221,10 +225,13 @@ export const settingsUpdateSchema = z
     // Slack (CONTRACT 25): the queueDm setting keys of every remind and of both HR summaries
     slackAttendanceRemind: z.boolean({ error: 'Choose on or off.' }),
     slackHrSummary: z.boolean({ error: 'Choose on or off.' }),
+    // Files (CONTRACT 27)
+    fileMaxMb: bounded(FILE_MAX_MB, 'Pick a size from 1 to 2,048 MB.'),
+    fileStorageLimitGb: bounded(FILE_STORAGE_LIMIT_GB, 'Pick a limit from 1 to 1,000 GB.'),
   })
   .partial();
 
-export { checkAutoCheckout, checkDayMarks, checkHrSummary } from './crossChecks';
+export { checkAutoCheckout, checkDayMarks, checkFileLimits, checkHrSummary } from './crossChecks';
 
 /** '::ffff:203.0.113.24' -> '203.0.113.24'; IPv6 in lowercase. */
 export function normalizeIp(value) {

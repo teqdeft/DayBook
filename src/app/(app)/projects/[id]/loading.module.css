@@ -1,3 +1,5 @@
+/* The project page's skeletons (CONTRACT 27): the frame, then each tab at its real sizes (the Files
+   and Hours tabs' in loadingFiles and loadingHours.module.css). */
 .page {
   display: flex;
   flex-direction: column;
@@ -35,48 +37,93 @@
   min-width: 0;
 }
 
-/* Overview */
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  min-width: 0;
+.cell {
+  margin-left: auto;
 }
 
-.smallCard,
-.phaseCard,
-.wideCard {
+/* Board: the band, the pills and the columns, as the Board tab */
+.band {
+  --card-pad: 22px 24px 20px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  box-sizing: border-box;
+  gap: 20px;
   min-width: 0;
 }
 
-.smallCard {
-  flex: 1 1 220px;
-}
-
-.phaseCard {
-  flex: 2 1 440px;
-}
-
-.wideCard {
-  flex: 1 1 400px;
-}
-
-.centered {
-  align-self: center;
-}
-
-.steps {
+.bandStats {
   display: flex;
-  justify-content: space-around;
+  align-items: flex-end;
+  gap: 16px 32px;
+}
+
+.parts {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pills {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  min-height: 44px;
+}
+
+.boardColumns {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
   overflow: hidden;
 }
 
-/* Timeline */
+.boardColumn {
+  display: flex;
+  flex: 1 1 236px;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-muted);
+}
+
+.taskCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+/* Summary */
+.summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+
+.summaryColumn,
+.cardStack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* Timeline (`.block` is the Hours cards' too) */
 .timelineRow {
   display: flex;
   align-items: center;
@@ -89,37 +136,6 @@
   min-width: 0;
 }
 
-/* Hours */
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 12px;
-  max-width: 100%;
-}
-
-.actions > * {
-  max-width: 100%;
-}
-
-.kpis {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.kpi {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.charts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-
 .block {
   display: flex;
   flex-direction: column;
@@ -127,76 +143,29 @@
   min-width: 0;
 }
 
-.columns {
-  display: flex;
-  justify-content: space-around;
-  gap: 8px;
-  overflow: hidden;
-}
-
-.tableHead {
-  display: flex;
-  align-items: center;
-  height: 54px;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--line);
-}
-
-.tableRow {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  height: 54px;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--track);
-}
-
-.tableRow:last-child {
-  border-bottom: 0;
-}
-
-.cell {
-  margin-left: auto;
-}
-
-@media (max-width: 1279px) {
-  .kpis {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .charts {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 1023px) {
-  .kpis {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-  }
-
-  .charts {
+  .summary {
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
   }
-
-  .actions {
-    justify-content: flex-start;
-  }
 }
 
-@media (max-width: 639px) {
-  .tableRow {
-    gap: 12px;
-    padding: 0 16px;
+@media (max-width: 640px) {
+  .bandStats {
+    flex-wrap: wrap;
   }
 
-  .tableRow > :nth-child(n + 4):not(.cell) {
+  .partName {
     display: none;
   }
 
-  /* Placeholders don't shrink by themselves; on a phone the row's blocks share the width. */
-  .tableRow > span {
+  /* One column at a time on a phone. */
+  .boardColumn:not(:first-child) {
+    display: none;
+  }
+
+  /* Placeholders don't shrink by themselves; on a phone the stats share the width. */
+  .bandStats > span {
     flex-shrink: 1;
     min-width: 0;
   }

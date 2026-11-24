@@ -1,3 +1,5 @@
+import os from 'node:os';
+import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
 // End-to-end tests (guide 15.3). Two ways to run them:
@@ -15,6 +17,11 @@ import { defineConfig, devices } from '@playwright/test';
 // Either way the global setup migrates the database and loads the demo data
 // (`npm run seed:demo`), and the global teardown loads it again, so the database is left in the
 // normal demo state. The tests share one database, so they run one at a time.
+//
+// Files (CONTRACT 27): in CI mode the server, the setup's `seed:demo`, the teardown and
+// tests/e2e/support/files.js share one files folder under the system temp folder (FILES_DIR, unless
+// it is set already) and upload in 64 KB pieces, so a 2 MB file goes up in many pieces. Locally,
+// start the server with the same FILES_DIR and FILES_PIECE_BYTES the run gets.
 const reuseServer = Boolean(process.env.E2E_BASE_URL);
 const CI_PORT = 3100;
 const CI_URL = `http://localhost:${CI_PORT}`;
@@ -22,6 +29,8 @@ const CI_URL = `http://localhost:${CI_PORT}`;
 if (!reuseServer) {
   // The global setup, the tests and the teardown read the same database the server uses.
   process.env.DB_NAME = process.env.E2E_DB_NAME || 'daybook_e2e';
+  process.env.FILES_DIR ??= path.join(os.tmpdir(), 'daybook-e2e-files');
+  process.env.FILES_PIECE_BYTES = '65536';
 }
 
 const baseURL = reuseServer ? process.env.E2E_BASE_URL.replace(/\/$/, '') : CI_URL;
@@ -75,6 +84,8 @@ export default defineConfig({
           APP_URL: CI_URL,
           PORT: String(CI_PORT),
           WORKER_CRON_ENABLED: 'false',
+          FILES_DIR: process.env.FILES_DIR,
+          FILES_PIECE_BYTES: process.env.FILES_PIECE_BYTES,
         },
       },
 });

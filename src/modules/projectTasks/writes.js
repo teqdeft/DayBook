@@ -1,14 +1,13 @@
 // Priority task changes: create, edit, mark done / reopen and delete. Only the project's PM or
 // Admin (the same rule as editing the project), each in one transaction with its audit line and
-// notifications.
+// notifications. Files on tasks (CONTRACT 27) go through taskFiles.js in the same transaction.
 import { db } from '@/lib/db';
 import { AppError, validationError } from '@/lib/errors';
 import { can } from '@/lib/permissions';
 import { nowDate } from '@/lib/time';
-import { audit } from '@/modules/audit';
 import { guardPlanWrite } from '@/modules/projectPlan/migrationGuard';
-import { projects } from '@/modules/projects';
-import { sendAdded, sendChanged } from './messages';
+import { projectFiles } from '@/modules/projectFiles';
+import { sendAdded, sendChanged, sendFilesAdded, toldOf } from './messages';
 import * as repo from './repo';
 import {
   projectTaskCreateSchema,
@@ -17,45 +16,17 @@ import {
 } from './schemas';
 import {
   forbidden,
+  lockForManage,
+  logTask as log,
+  manageableProject,
   parseInput,
-  projectNotFound,
-  snapshot,
-  taskNotFound,
+  teamOf,
   toId,
   toTask,
 } from './shared';
+import { attachToNewTask, changeFiles } from './taskFiles';
 
 const ASSIGNEE_MESSAGE = 'Pick someone who is on this project, or anyone on the project.';
-
-/** The project, when the user may manage it. @throws NOT_FOUND, FORBIDDEN */
-async function manageableProject(user, projectId) {
-  if (!can(user, 'project.manage')) throw forbidden();
-  const project = await projects.findById(projectId);
-  if (!project) throw projectNotFound();
-  if (!projects.canManage(user, project)) throw forbidden();
-  return project;
-}
-
-/** Locks the task and checks the user may manage its project. */
-async function lockForManage(user, id, trx) {
-  if (!can(user, 'project.manage')) throw forbidden();
-  const taskId = toId(id);
-  const locked = taskId ? await repo.lockById(taskId, trx) : null;
-  if (!locked) throw taskNotFound();
-  const project = await manageableProject(user, locked.projectId);
-  return { project, before: toTask(await repo.findWithPlan(taskId, trx)) };
-}
-
-/**
- * The project's members, and its PM when they aren't one of them: a task can be for the PM, but
- * tasks for anyone only reach members.
- */
-async function teamOf(project, trx) {
-  const members = await repo.listProjectMembers(project.id, trx);
-  const isMember = members.some((member) => member.id === project.pmId);
-  const manager = isMember ? null : await repo.findPerson(project.pmId, trx);
-  return { members, manager: manager ?? null };
-}
 
 /** @throws VALIDATION_FAILED unless the person is an active member or the project's PM. */
 function assertAssignee(assigneeId, { members, manager }) {
@@ -67,33 +38,21 @@ function assertAssignee(assigneeId, { members, manager }) {
   }
 }
 
-async function log({ user, action, task, before, after, ip }, trx) {
-  await audit.log(
-    {
-      actorId: user.id,
-      action,
-      entityType: 'project_task',
-      entityId: task.id,
-      before: before ? snapshot(before) : null,
-      after: after ? { projectId: task.projectId, ...snapshot(after) } : null,
-      ip,
-    },
-    trx,
-  );
-}
-
 /**
- * Adds a priority task to a project. The assignee (or, for anyone, every active member) is
- * notified, except the person adding it.
+ * Adds a priority task to a project, with its held uploads as its files (CONTRACT 27). The assignee
+ * (or, for anyone, every active member) is notified, except the person adding it; the body names
+ * the files.
  * @param {{ user: object, projectId: number, input: { title: string, details?: string | null,
  *   priority?: 'p1'|'p2'|'p3', assigneeId?: number | null, phase?: string | null,
- *   dueDate?: string | null }, ip?: string | null }} args priority defaults to p2; assigneeId null
- *   means anyone on the project; phase is one of the list; dueDate is 'YYYY-MM-DD'
- * @returns {Promise<object>} the task (listForProject shape without latestReport)
+ *   dueDate?: string | null, uploadKeys?: string[] }, ip?: string | null }} args priority
+ *   defaults to p2; assigneeId null means anyone on the project; phase is one of the list; dueDate
+ *   is 'YYYY-MM-DD'; uploadKeys: 0 to 20 of the user's held uploads for a new task
+ * @returns {Promise<object>} the task (listForProject shape without latestReport) plus `told`
+ *   ('person' | 'members' | null) and `toldName` (the person's name, or null)
  * @throws FORBIDDEN (not the project's PM or Admin), NOT_FOUND, VALIDATION_FAILED (title 2-200,
- *   details up to 1000, assignee not an active member or the PM, phase or due date not valid),
- *   PROJECT_NOT_ACTIVE (completed project), PLAN_UNAVAILABLE (503, a phase or due date before
- *   migration 015)
+ *   details up to 1000, assignee not an active member or the PM, phase or due date not valid,
+ *   `fields.uploadKeys`), PROJECT_NOT_ACTIVE (completed project), PLAN_UNAVAILABLE (503, a phase
+ *   or due date before migration 015), UPDATE_NEEDED (503, upload keys before migration 019)
  */
 export async function create({ user, projectId, input, ip = null }) {
   const project = await manageableProject(user, toId(projectId));
@@ -130,10 +89,15 @@ export async function create({ user, projectId, input, ip = null }) {
         },
         trx,
       );
+      const { uploadKeys } = values;
+      const files = await attachToNewTask(
+        { user, projectId: project.id, taskId: id, uploadKeys, ip },
+        trx,
+      );
       const task = toTask(await repo.findWithPlan(id, trx));
       await log({ user, action: 'project_task.create', task, after: task, ip }, trx);
-      await sendAdded({ task, project, ...team, actor: user }, trx);
-      return task;
+      const reached = await sendAdded({ task, project, ...team, actor: user, files }, trx);
+      return { ...task, ...toldOf(reached, task) };
     }),
   );
 }
@@ -152,31 +116,58 @@ function editChanges(before, values, team) {
 }
 
 /**
- * Edits a task's title, details, priority, assignee, phase or due date (only the fields sent). A
- * new priority or assignee on an open task notifies the (new) assignee, or every active member when
- * it is for anyone. Keeping a removed member as the assignee is allowed; picking one is not.
+ * Who a saved edit tells: a new priority or person on an open task sends `changed` (with the files
+ * line when files were added too); files added alone send `files_added`. Nothing for a done task.
+ */
+function tellAboutEdit({ before, task, changes, added, project, team, actor }, trx) {
+  if (task.status !== 'open') return [];
+  if ('priority' in changes || 'assigneeId' in changes) {
+    return sendChanged({ before, task, project, ...team, actor, files: added }, trx);
+  }
+  return sendFilesAdded({ task, project, ...team, actor, files: added }, trx);
+}
+
+/**
+ * Edits a task's title, details, priority, assignee, phase or due date (only the fields sent), and
+ * its files: `removeFileIds` are removed first (soft delete), then `addUploadKeys` are attached
+ * (CONTRACT 27). A new priority or assignee on an open task notifies the (new) assignee, or every
+ * active member when it is for anyone; files added without such a change send `files_added`.
+ * Keeping a removed member as the assignee is allowed; picking one is not.
  * @param {{ user: object, id: number, input: object, ip?: string | null }} args input as
  *   projectTaskUpdateSchema
- * @returns {Promise<object>} the task
- * @throws FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, PLAN_UNAVAILABLE (503, a phase or due date
- *   before migration 015)
+ * @returns {Promise<object>} the task plus `told` and `toldName` (as create)
+ * @throws FORBIDDEN, NOT_FOUND, VALIDATION_FAILED (also `fields.uploadKeys` and
+ *   `fields.removeFileIds`), TOO_MANY_FILES (409, past 20 files), PLAN_UNAVAILABLE (503, a phase
+ *   or due date before migration 015), UPDATE_NEEDED (503, file changes before migration 019)
  */
 export async function update({ user, id, input, ip = null }) {
   if (!can(user, 'project.manage')) throw forbidden();
-  const values = parseInput(projectTaskUpdateSchema, input);
+  const { addUploadKeys, removeFileIds, ...values } = parseInput(projectTaskUpdateSchema, input);
   return guardPlanWrite(() =>
     db.transaction(async (trx) => {
       const { project, before } = await lockForManage(user, id, trx);
+      const files = await changeFiles(
+        { user, task: before, addUploadKeys, removeFileIds, ip },
+        trx,
+      );
       const team = await teamOf(project, trx);
       const changes = editChanges(before, values, team);
-      if (Object.keys(changes).length === 0) return before;
-      await repo.update(before.id, { ...changes, updatedBy: user.id, updatedAt: nowDate() }, trx);
-      const task = toTask(await repo.findWithPlan(before.id, trx));
-      await log({ user, action: 'project_task.update', task, before, after: task, ip }, trx);
-      if (task.status === 'open' && ('priority' in changes || 'assigneeId' in changes)) {
-        await sendChanged({ before, task, project, ...team, actor: user }, trx);
+      const fieldsChanged = Object.keys(changes).length > 0;
+      if (!fieldsChanged && files.added.length === 0 && files.removed.length === 0) {
+        return { ...before, ...toldOf([], before) };
       }
-      return task;
+      let task = before;
+      if (fieldsChanged) {
+        await repo.update(before.id, { ...changes, updatedBy: user.id, updatedAt: nowDate() }, trx);
+        task = toTask(await repo.findWithPlan(before.id, trx));
+        await log({ user, action: 'project_task.update', task, before, after: task, ip }, trx);
+      }
+      const { added } = files;
+      const reached = await tellAboutEdit(
+        { before, task, changes, added, project, team, actor: user },
+        trx,
+      );
+      return { ...task, ...toldOf(reached, task) };
     }),
   );
 }
@@ -214,8 +205,8 @@ export async function setStatus({ user, id, status, ip = null }) {
 }
 
 /**
- * Deletes a task. Report lines linked to it keep their text and lose the link (ON DELETE SET
- * NULL).
+ * Deletes a task and its files (marked deleted in the same transaction, CONTRACT 27). Report lines
+ * linked to it keep their text and lose the link (ON DELETE SET NULL).
  * @param {{ user: object, id: number, ip?: string | null }} args
  * @returns {Promise<{ id: number, deleted: true }>}
  * @throws FORBIDDEN, NOT_FOUND
@@ -223,6 +214,8 @@ export async function setStatus({ user, id, status, ip = null }) {
 export async function remove({ user, id, ip = null }) {
   return db.transaction(async (trx) => {
     const { before } = await lockForManage(user, id, trx);
+    // Its files are marked deleted first (purged at night); 0 and no write before migration 019.
+    await projectFiles.deleteFilesOfTask({ user, taskId: before.id }, trx);
     await repo.remove(before.id, trx);
     await log({ user, action: 'project_task.delete', task: before, before, ip }, trx);
     return { id: before.id, deleted: true };

@@ -1,8 +1,9 @@
 'use client';
-// The AI summary on the Overview (CONTRACT 22): only the project's PM or Admin ever gets this card, on
-// the server. Writing and updating run the summary through the API; errors toast the API's message and
-// change nothing (useSummaryRequests.js). It never moves a phase, and "Add to tasks" is the PM's own
-// click. Its buttons keep keyboard focus while they work (BusyButton).
+// The AI summary on the Summary tab (CONTRACT 22 and 27): only the project's PM or Admin ever gets
+// this card, on the server. Writing and updating run the summary through the API; errors toast the
+// API's message and change nothing (useSummaryRequests.js). The AI phase line under the action items
+// never moves a phase, and "Add to tasks" is the PM's own click. Its buttons keep keyboard focus
+// while they work (BusyButton).
 import { useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import Badge from '@/components/Badge';
@@ -22,6 +23,8 @@ import { addedId, useAddAction, useWriteSummary } from './useSummaryRequests';
 import styles from './SummaryCard.module.css';
 
 const READING = 'Reading the files…';
+const EMPTY_TEXT =
+  'Upload a PDF, Word or text file, or write a note, in Files, and AI writes a summary here.';
 const OFF_TEXT = 'AI summary is off. An Admin can turn it on in Settings → AI.';
 const TRUNCATED = 'Only the first 50,000 characters were read.';
 
@@ -65,6 +68,24 @@ function ActionItems({ actions, projectId, currentPhase, canAdd }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+/** "AI suggests moving on: “…” · Weekly call notes". It moves nothing. */
+function AiLine({ suggestion }) {
+  return (
+    <p className={styles.aiLine}>
+      <Sparkles className={styles.aiLineIcon} size={16} strokeWidth={1.8} aria-hidden="true" />
+      <span className={styles.aiLineText}>
+        AI suggests moving on: &#8220;{suggestion.quote}&#8221;
+        {suggestion.source ? (
+          <>
+            {' · '}
+            <span className={styles.aiLineSource}>{suggestion.source}</span>
+          </>
+        ) : null}
+      </span>
+    </p>
   );
 }
 
@@ -149,8 +170,11 @@ function Prompt({ text, children }) {
   );
 }
 
-/** The written summary: action items, the overview, the full text on request, the footer. */
-function SummaryText({ projectId, canAdd, currentPhase, state, summary, writer }) {
+/**
+ * The written summary: action items, the AI phase line, the overview, the full text on request, the
+ * footer.
+ */
+function SummaryText({ projectId, canAdd, currentPhase, state, summary, suggestion, writer }) {
   const { body } = summary;
   const risk = firstRisk(body);
   return (
@@ -161,6 +185,7 @@ function SummaryText({ projectId, canAdd, currentPhase, state, summary, writer }
         currentPhase={currentPhase}
         canAdd={canAdd}
       />
+      {suggestion ? <AiLine suggestion={suggestion} /> : null}
       {body?.overview ? <p className={styles.text}>{body.overview}</p> : null}
       {risk ? <p className={styles.risk}>{risk}</p> : null}
       <FullSummary groups={summaryGroups(body)} />
@@ -174,8 +199,10 @@ function SummaryText({ projectId, canAdd, currentPhase, state, summary, writer }
  *   counts: { files: number, notes: number },
  *   summary: { body: object, stale: boolean, truncated: boolean,
  *     sources: { files: number, notes: number } } | null,
- *   currentPhase: string | null }} props status: the project's; available:
- *   ai.isAvailable('project_summary'); counts: the project's files and notes now
+ *   currentPhase: string | null, suggestion?: { quote: string, source: string } | null }} props
+ *   status: the project's; available: ai.isAvailable('project_summary'); counts: the project's files
+ *   and notes now; suggestion: the AI phase line (summaryView.aiSuggestion), null when it doesn't
+ *   name the next phase or the project is completed
  */
 export default function SummaryCard({
   projectId,
@@ -184,6 +211,7 @@ export default function SummaryCard({
   counts,
   summary,
   currentPhase,
+  suggestion = null,
 }) {
   const heading = useRef(null);
   const writer = useWriteSummary(projectId, Boolean(summary), heading);
@@ -192,10 +220,10 @@ export default function SummaryCard({
   const shown = ['fresh', 'stale', 'offSummary'].includes(state);
 
   return (
-    <Card as="section" padding="compact" aria-labelledby="overview-ai" className={styles.card}>
+    <Card as="section" padding="compact" aria-labelledby="summary-ai" className={styles.card}>
       <div className={styles.head}>
         <Sparkles className={styles.spark} size={18} strokeWidth={1.8} aria-hidden="true" />
-        <h2 id="overview-ai" ref={heading} tabIndex={-1} className={styles.title}>
+        <h2 id="summary-ai" ref={heading} tabIndex={-1} className={styles.title}>
           AI summary
         </h2>
         <Tag tone="violet" padX={8}>
@@ -206,9 +234,9 @@ export default function SummaryCard({
       {state === 'off' ? <p className={styles.note}>{OFF_TEXT}</p> : null}
 
       {state === 'empty' ? (
-        <Prompt text="Add a project PDF or meeting notes in a phase and AI writes a summary here.">
-          <Button variant="secondary" size="compact" href={tabHref(projectId, 'phases')}>
-            Go to phases
+        <Prompt text={EMPTY_TEXT}>
+          <Button variant="secondary" size="compact" href={tabHref(projectId, 'files')}>
+            Go to files
           </Button>
         </Prompt>
       ) : null}
@@ -233,6 +261,7 @@ export default function SummaryCard({
           currentPhase={currentPhase}
           state={state}
           summary={summary}
+          suggestion={suggestion}
           writer={writer}
         />
       ) : null}

@@ -163,119 +163,6 @@
   min-width: 0;
 }
 
-/* Priority tasks: the artboard's table header is 1 px taller than the shared divider header */
-.priority .tasksHead {
-  min-height: 55px;
-  padding-bottom: 16px;
-}
-
-.taskTitle {
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
-.muted {
-  color: var(--muted);
-}
-
-/* Priority tasks (not on the canvas): the My tasks card's table, full width */
-.priority {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.priorityCell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.phoneTitle {
-  display: none;
-}
-
-.forYou {
-  font-weight: 600;
-  color: var(--ink);
-}
-
-/* The To-do column (CONTRACT 24): a 32 px Plus, or a muted check and "In to-do". */
-.todoAdd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin-right: -6px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ink-2);
-  cursor: pointer;
-}
-
-.todoAdd:hover {
-  background: var(--track);
-  color: var(--ink);
-}
-
-.inTodo {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--text-small);
-  line-height: 18px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.inTodoIcon {
-  flex: none;
-  color: var(--green);
-}
-
-/* "Show 2 more priority tasks": a quiet text button under the table, like a table footer. */
-.priorityMore {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-height: 44px;
-  padding: 12px 20px 14px;
-  border: 0;
-  border-top: 1px solid var(--track);
-  border-radius: 0 0 var(--radius-card) var(--radius-card);
-  background: none;
-  font: inherit;
-  font-size: var(--text-small);
-  font-weight: 600;
-  line-height: 18px;
-  color: var(--primary);
-  text-align: left;
-  cursor: pointer;
-}
-
-.priorityMore:hover {
-  text-decoration: underline;
-}
-
-.priorityMore:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 2px var(--primary);
-}
-
-.moreChevron {
-  flex: none;
-  transition: transform 0.15s ease;
-}
-
-.moreChevronOpen {
-  transform: rotate(180deg);
-}
-
 /* Report strip */
 .strip {
   --card-pad: 18px 25px 19px 26px;
@@ -348,8 +235,8 @@
 
 /* Below 1024 px the rows let go of their cards (display: contents), so the cards line up in the
    order CONTRACT 24 gives: Your day, Working on, Urgent, the to-do, This week, Priority tasks, the
-   strip and the links under it. The table's rows become cards with 16 px sides; the header lines
-   up with them. */
+   strip and the links under it (Priority tasks' order and its table's phone rows are in
+   PriorityCard.module.css). */
 @media (max-width: 1023px) {
   .rowDay,
   .rowTasks {
@@ -376,10 +263,6 @@
     order: 5;
   }
 
-  .priority {
-    order: 6;
-  }
-
   .strip {
     order: 7;
   }
@@ -387,32 +270,11 @@
   .help {
     order: 8;
   }
-
-  .priority .tasksHead {
-    padding-right: 16px;
-    padding-left: 16px;
-  }
-
-  .priorityMore {
-    padding-right: 16px;
-    padding-left: 16px;
-  }
-
-  .phoneTitle {
-    display: inline;
-  }
 }
 
 @media (max-width: 640px) {
   .wideOnly {
     display: none;
-  }
-
-  /* The To-do column's Plus: 44 px on phones */
-  .todoAdd {
-    width: 44px;
-    height: 44px;
-    margin-right: 0;
   }
 
   .phoneOnly {

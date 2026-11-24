@@ -1,6 +1,8 @@
-// Reads a picked file into text, in the browser (CONTRACT 22). The server never opens a file, because
-// of the host's memory limits: only the text goes to it, and the file is never kept. pdf.js and its
-// worker load on the first PDF, not with the page. It only ever extracts text: nothing in a PDF is run
+// Reads a file into text, in the PM's browser (CONTRACT 22 and 27): the Files tab reads a PDF, Word
+// .docx, .txt or .md project file once it is uploaded (or from "Read text for AI"), and posts the text
+// for the AI summary. The server never opens a file, because of the host's memory limits: the file
+// itself is kept as it came (CONTRACT 27, Storage), its text only from here. pdf.js and its worker
+// load on the first PDF, not with the page. It only ever extracts text: nothing in a PDF is run
 // or drawn, and the viewer and annotation parts of pdf.js are never used. A Word .docx is read with
 // the browser's own zip inflate (readDocx.js), and a .txt or .md as it is.
 import {

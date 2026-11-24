@@ -1,4 +1,4 @@
-/* The project page's frame: header, tabs and the chosen tab. */
+/* The project page's frame (CONTRACT 27): header, tabs and the chosen tab, 14 px apart. */
 .page {
   display: flex;
   flex-direction: column;
@@ -29,4 +29,11 @@
 
 .urgent {
   color: var(--marigold-text);
+}
+
+/* "+ New task" takes the full width under the title on a phone, as the prototype. */
+@media (max-width: 640px) {
+  .newTask {
+    flex: 1 1 100%;
+  }
 }

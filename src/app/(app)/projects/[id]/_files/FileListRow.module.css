@@ -1,0 +1,206 @@
+/* One row of the Files tab (CONTRACT 27, Files tab, Rows), as the prototype: at least 64 px, the
+   thumbnail or type tile, the name, the muted line and the third line, then Download and "⋯". At
+   640 px and below a two-line card with 44 px buttons. */
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 0;
+  border-top: 1px solid var(--track);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.thumb {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--track);
+}
+
+.thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tile {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 4px 4px 0;
+  border-radius: var(--radius-cell);
+  background: var(--track);
+  color: var(--ink-2);
+}
+
+.tileBox {
+  display: inline-flex;
+  flex: none;
+  margin: 4px 4px 0;
+}
+
+.rowText {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.name {
+  display: flex;
+  max-width: 100%;
+  text-decoration: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  line-height: 22px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.meta {
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted);
+}
+
+.notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
+.notes span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.rowActions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+
+.iconLink,
+.menuButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-cell);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.iconLink:hover,
+.menuButton:hover {
+  background: var(--track);
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .iconLink,
+  .menuButton {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* a two-line card: name and buttons on top, the meta line across the full width under them */
+  .row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 2px 12px;
+    align-items: center;
+  }
+
+  .rowText {
+    display: contents;
+  }
+
+  .row > .tile,
+  .row > .tileBox,
+  .row > .thumb {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: start;
+  }
+
+  .name {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 11px 0;
+    margin: -11px 0;
+  }
+
+  .rowActions {
+    grid-column: 3;
+    grid-row: 1;
+    margin: -11px -10px -11px 0;
+  }
+
+  .meta {
+    grid-column: 2 / 4;
+    grid-row: 2;
+  }
+
+  .notes {
+    grid-column: 2 / 4;
+    grid-row: 3;
+  }
+
+  .meta .link {
+    display: inline-block;
+    padding: 13px 0;
+    margin: -13px 0;
+  }
+}

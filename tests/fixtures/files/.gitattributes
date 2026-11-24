@@ -1,0 +1,7 @@
+# The tests compare downloads with these bytes: never convert line endings here.
+*.png binary
+*.jpg binary
+*.svg binary
+*.html binary
+*.exe binary
+*.txt binary

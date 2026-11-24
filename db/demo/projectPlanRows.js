@@ -167,6 +167,7 @@ function documentRows(ctx, plan, { project, pmId }, firstId) {
         id: firstId + i,
         projectId: project.id,
         phase: document.phase,
+        visibility: document.visibility ?? 'managers',
         kind: document.kind,
         title: document.title,
         body,

@@ -1,8 +1,15 @@
 .card {
   --card-pad: 20px 22px 23px;
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+
+.top {
+  min-width: 0;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--track);
 }
 
 .head {
@@ -10,8 +17,61 @@
   align-items: flex-start;
   gap: 12px;
   min-width: 0;
-  padding-bottom: 15px;
-  border-bottom: 1px solid var(--track);
+}
+
+/* CONTRACT 27: the name links to the project page, and the link covers the whole card. */
+.link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.card:hover .link {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The six phases: done green, the current filled to its share, later ones the track. 12 px under
+   the head and 3 px apart, as the prototype's `.pcard-top` and `.mband`. */
+.band {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 3px;
+  margin-top: 12px;
+}
+
+.part {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track);
+}
+
+.done {
+  background: var(--green);
+}
+
+.current {
+  background: linear-gradient(
+    to right,
+    var(--primary) var(--fill, 0%),
+    var(--track) var(--fill, 0%)
+  );
+}
+
+.phaseLine {
+  margin-top: 8px;
+  overflow: hidden;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .titles {

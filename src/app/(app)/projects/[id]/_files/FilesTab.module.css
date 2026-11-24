@@ -1,0 +1,342 @@
+/* The Files tab (CONTRACT 27, Files tab), as the prototype's pm-files, pm-files-phase,
+   pm-files-tasks and emp-files screens: a 240 px side list of places beside one flat list; below
+   1024 px the side list turns into the "Show" select, and at 640 px and below the buttons go full
+   width and the rows become two-line cards with 44 px buttons. */
+
+.files {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: var(--block-gap);
+  align-items: start;
+}
+
+/* ---------- side list (looks like Settings' section list) ---------- */
+
+.places {
+  --card-pad: 8px;
+}
+
+.placeList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.place {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 1px 12px 0;
+  border-radius: var(--radius-control);
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 20px;
+  text-decoration: none;
+}
+
+.place:hover {
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.place[aria-current='page'] {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.placeName {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.placeCount {
+  font-family: var(--font-heading-stack);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.zero {
+  color: var(--muted);
+}
+
+.placeHeading {
+  padding: 12px 12px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.placeLine {
+  height: 1px;
+  margin: 6px 8px;
+  background: var(--line);
+}
+
+/* ---------- the main column ---------- */
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  min-height: 44px;
+}
+
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.titleNote {
+  font-family: var(--font-body-stack);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.show {
+  display: none;
+  align-items: center;
+  gap: 10px;
+}
+
+.showLabel,
+.sortLabel {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.show .select {
+  width: 260px;
+}
+
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+
+.search {
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+
+.sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.sort .select {
+  width: 180px;
+}
+
+.storage {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.storage svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* ---------- the list ---------- */
+
+.list {
+  --card-pad: 0 20px;
+  position: relative;
+  min-height: 120px;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.subhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0;
+  padding: 14px 0 2px;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.list > .subhead:first-child {
+  border-top: 0;
+}
+
+.subheadNote {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.subheadCount {
+  font-family: var(--font-heading-stack);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.empty {
+  padding: 40px 0;
+}
+
+/* while files are dragged over the list (managers, desktop) */
+.drop {
+  position: absolute;
+  inset: -1px;
+  z-index: 2;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 2px dashed var(--primary);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--primary-soft) 94%, transparent);
+  color: var(--primary-text);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.dragIn .drop {
+  display: flex;
+}
+
+/* ---------- lock and update cards ---------- */
+
+.lock {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--ink-2);
+}
+
+.lock svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+@media (max-width: 1023px) {
+  .files {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .places {
+    display: none;
+  }
+
+  .show {
+    display: flex;
+  }
+
+  .title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 640px) {
+  .show,
+  .actions,
+  .search,
+  .sort {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .actions > * {
+    flex: 1 1 100%;
+  }
+
+  .primaryAction {
+    order: -1;
+  }
+
+  .show .select,
+  .sort .select {
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  .list {
+    --card-pad: 0 16px;
+  }
+
+  .drop {
+    display: none !important;
+  }
+
+  .subhead .link {
+    display: inline-block;
+    padding: 13px 0;
+    margin: -13px 0;
+  }
+}

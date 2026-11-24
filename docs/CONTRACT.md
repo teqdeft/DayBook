@@ -66,6 +66,8 @@ copy match. Data-driven numbers may differ from the artboard; layout and styling
 - Client Components must not import server modules (`@/lib/db`, `@/lib/session`, `@/modules/*`
   except `@/modules/slack/format`). Shared pure helpers: `@/lib/time`, `@/lib/text`,
   `@/lib/permissions`, `@/lib/apiClient`.
+- Client components may also import the pure files of `@/modules/projectFiles` (`access`, `names`,
+  `kinds`, `fileMessages`) (CONTRACT 27).
 
 ## 3. Code conventions
 
@@ -181,7 +183,8 @@ activityIdleMinutes, activityRetentionDays, pushEnabled, timersMode, timerAwayMi
 timerReminderMinutes, breakAllowanceMinutes }` (sections 11, 14, 15 and 19 to 25 describe the later
   keys; §25 adds halfDayUnderMinutes, shortDayUnderMinutes, leftEarlyGraceMinutes,
   payrollMonthStartDay, hrMorningSummary, hrSummaryAt, hrEveningSummary, checkinReminderMinutes,
-  lateAlertDays, slackAttendanceRemind, slackHrSummary; clock values
+  lateAlertDays, slackAttendanceRemind, slackHrSummary; CONTRACT 27 adds fileMaxMb,
+  fileStorageLimitGb; clock values
   `'HH:mm'`; cached in-process ~30 s, cleared on save). Defaults come from `db/seeds/03_settings.js`.
 - `update({ user, values, ip })` → saves changed keys, audit `settings.update`, returns `getAll()`.
 - `listOfficeNetworks()`, `addOfficeNetwork({ user, name, ipAddress, ip })`,
@@ -281,6 +284,7 @@ memberCount }]`; `getPickerFor(userId)` → `{ urgent, mine, others, requests }`
   `countPendingRequestsFor(user)`; `listPendingRequestsFor(user)` →
   `[{ id, name, note, createdAt, requester }]`; `listHandledRequestsFor(user, { limit })`;
   `countActive()` → `{ active, urgent }`.
+- `isMember({ projectId, userId })` → boolean (an active member row) (CONTRACT 27).
 
 ### dashboard (owner: dashboards)
 
@@ -301,6 +305,32 @@ memberCount }]`; `getPickerFor(userId)` → `{ urgent, mine, others, requests }`
 
 - Section 11 has the module. CONTRACT 25 adds `anyoneSeenBetween({ workDate, from, to,
 exceptUserId })` → boolean.
+
+### projectFiles (owner: projects)
+
+- CONTRACT 27 has the module (Modules; its pure, browser-safe files in §2). `ProjectFile` =
+  `{ id, projectId, scope: 'project' | 'task', taskId, phase, visibility, name, ext, kind,
+typeLabel, sizeBytes, isPicture, thumbUrl, width, height, createdBy: { id, name }, createdAt,
+task: { id, title, phase, assigneeId } | null, hasText, downloadUrl, viewUrl, canManage }`.
+- Reads: `viewerContext({ viewer, project })` → `ctx`; `listForProject({ viewer, projectId })` →
+  `{ files: ProjectFile[], canSee, canManage }`; `listForTask({ viewer, task })` → `ProjectFile[]`;
+  `countsForTasks({ viewer, tasks })` → `{ [taskId]: n }`; `countTaskFilesForMember({ userId,
+projectIds })` → `{ [projectId]: n }`; `fileForDocument({ projectId, fileId }, trx)` →
+  `{ id, scope, phase, visibility, name } | null`; `getForDownload({ viewer, id })` →
+  `{ file, path }` or NOT_FOUND; `limits()` → `{ maxFileBytes, maxTaskFiles, pickMax }`;
+  `spaceUsage()` → `{ usedBytes, heldBytes, deletedBytes, limitBytes, fileCount, projectCount,
+diskFullAt, storage: { ready, problem } }`; `storageStatus()` → `{ ready, problem }`.
+- Uploads: `startUpload({ user, input })`, `uploadStatus({ user, key })`, `receivePiece({ user,
+key, offset, request })`, `finishUpload({ user, key, thumb })`, `cancelUpload({ user, key })`.
+- Task attachments, inside the caller's transaction: `attachUploads({ user, projectId, taskId,
+uploadKeys }, trx)` → `ProjectFile[]`; `removeTaskFiles({ user, taskId, fileIds }, trx)` →
+  `ProjectFile[]`; `deleteFilesOfTask({ user, taskId }, trx)` → count;
+  `countActiveForTask(taskId, trx)` (a locking read).
+- Management: `updateFile({ user, id, input, ip })` → `ProjectFile`; `removeFile({ user, id, ip })`
+  → `{ id }` (soft delete).
+- Worker and scripts: `cleanUp({ limit, budgetMs })` → count; `wipeStorageForReset()` →
+  `{ removed }`; server-only `storeFile({ user, projectId, target, taskId, phase, visibility, name,
+bytes })` → a `ProjectFile` or a held `{ key }` (`db/demo` and tests, never a route).
 
 Until a module's owner finishes, `src/modules/<name>/` holds a stub with these signatures that
 returns empty data, so every page renders. Owners replace the stub completely.
@@ -325,14 +355,17 @@ projects → `projects/[id]/phase`, `deadline`, `phases/[phase]/dates`, `documen
 `me/carry-suggestions/**` (24), timers → `timers/away/[breakId]/put-back` and attendance →
 `attendance/[id]/breaks/**`, `attendance/me/missing-checkouts/**`,
 `attendance/missing-checkouts/fix`, `attendance/reminders`, `attendance/month/**`,
-`attendance/people/**`, `attendance/needs-look`, `holidays/**`, `leave/**` (25).
+`attendance/people/**`, `attendance/needs-look`, `holidays/**`, `leave/**` (25), projects →
+`uploads/**`, `project-files/**`, `project-tasks/[id]/files` and `GET project-tasks/[id]` (27).
 
 Downloads ("Download Excel" buttons) — each screen uses an endpoint its viewers are allowed to call:
 Team dashboard and Employee detail → `GET /api/exports/hours?from=&to=&userId=` (`export.hours`,
 dashboards); My log → `GET /api/me/log?month=YYYY-MM&format=xlsx` (`report.self`, own data only,
 reports); Attendance → `GET /api/attendance/export?date=YYYY-MM-DD` (`attendance.view_all`,
 attendance); Attendance month → `GET /api/attendance/month/export?month=YYYY-MM&userId=`
-(`attendance.correct`, attendance). All use `xlsxResponse` from `@/lib/excel`.
+(`attendance.correct`, attendance). All use `xlsxResponse` from `@/lib/excel`. Project and task
+files → `GET /api/project-files/[id]` (`signed_in`, the file rule of CONTRACT 27; streamed, never
+`xlsxResponse`).
 
 Paths, permissions and bodies are in build guide section 9. Lists take `limit` (max 100) and
 `offset`. Dates in query strings are `YYYY-MM-DD`.
@@ -433,6 +466,8 @@ push, children }`: the live check, the preview cards ("New notifications" region
 onLeave }`: "Notification deleted" with Undo for 5 s; the time stops while the pointer or focus
   is on it (`onHold`) and resumes after, at least 2 s; Tab, Shift+Tab or Escape call `onLeave`.
 - `Menu` (client) — `{ label (aria), items: [{ label, onSelect, tone?, disabled? }] }` (row "⋯").
+  `onSelect(event)` gets the item's click, so a Delete can tell Enter or Space (`detail` 0: the
+  Undo toast takes focus) from a tap (CONTRACT 27).
 - `DataTable` (server-safe, no hooks) — `{ columns: [{ key, header, width?, align?, render?(row) }],
 rows, rowKey = 'id', groups?: [{ key, title, tone, count, rows, collapsed?, onToggle?, footer? }],
 empty?: node, dense?, stackBelow?: 1024 | 1280 }`: 40 px header on `--surface-muted`, rows ≥ 54 px
@@ -451,6 +486,13 @@ faded?, title? }], height }` (Today's "This week" and Overview's stacked "Attend
 'future' | 'empty' | 'weekend' | 'leave' | 'holiday', isToday }]], legendItems? }` (Mon–Fri
   columns) with its legend; the `leave` (teal) and `holiday` (green) tones and the optional
   `legendItems` (default `CALENDAR_LEGEND`) are CONTRACT 25.
+
+**files** (client, `src/components/files/`, CONTRACT 27): `UploadField`, `UploadChip`, `FileTile`,
+`FileThumbs`, `FileRows`, `PictureViewer`, `TaskAttachProvider` / `useTaskAttach`, the hooks
+`useUploads`, `useFileRemoval` (props in CONTRACT 27, Modules).
+
+**task** (client, `src/components/task/`, CONTRACT 27): `TaskWindow`, `TaskWindowProvider` /
+`useTaskWindow`, `useTaskDetails` (props in CONTRACT 27, Modules).
 
 ## 9. Pages and ownership
 
@@ -497,12 +539,21 @@ faded?, title? }], height }` (Today's "This week" and Overview's stacked "Attend
 | system, preferences, shell                               | `src/modules/notifications/alerts.js` (new), `src/modules/notifications/{repo,service,schemas,index}.js`; `src/app/api/notifications/route.js`, `src/app/api/notifications/read-all/route.js`; `src/modules/push/{payload,service}.js`; `public/sw.js`; `src/modules/preferences/{schemas,service}.js`; `src/components/UserPrefs.jsx`; `tests/unit/{notificationAlerts,serviceWorker}.test.js` (new), `tests/unit/push.test.js`; `tests/services/notificationsLive.test.js` (new), `tests/services/{notifications,notificationsCenter,push,preferences,preferencesRoute}.test.js` (CONTRACT 26)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | shell                                                    | `src/components/live/{LiveNotifications,LiveCards,PreviewStack,PreviewCard}.jsx` and `PreviewStack.module.css` (new), `src/components/live/{liveStore,liveRules,liveCheck,liveBatch,liveLeader,liveLoop,livePresence,liveTab,liveSound,liveChannel,swAnswer,pushActive,chime,chimeGate,previewWait,useLiveEngine,useStack,usePreviewActions}.js` (new); `src/components/AppFrame.jsx`; `src/components/NotificationBell.jsx` (also exports `BellIcon`), `NotificationBell.actions.js`, `NotificationBell.list.js` (`itemTime`), `NotificationBell.live.js` (new), `NotificationItem.jsx` (uses `itemTime`); `tests/unit/{liveRules,liveBatch,liveLeader,liveChime,liveRecovery,liveStack,livePlacement,appFrameLive}.test.js` (new), `tests/helpers/liveFakes.js` (new), `tests/unit/notificationCenter.test.js` (merge of new items) (CONTRACT 26)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | preferences, orchestrator                                | `src/app/(app)/my-settings/{MySettingsSections.jsx,sections.js,page.module.css,PreferencesProvider.jsx,loading.js,loading.module.css}`, `PlaySoundButton.jsx` (new); `tests/unit/mySettings.test.js`; `tests/e2e/live-notifications.spec.js` (new), `tests/e2e/my-settings.spec.js`, `tests/e2e/support/live.js` (new), `tests/e2e/support/demoData.js` (`addNotification`) (CONTRACT 26)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| orchestrator                                             | `docs/design/project-board-prototype.html`; `db/migrations/019_project_files.js`; `tests/services/migration019.test.js`; `.github/workflows/migration-check.yml` (019 down and up on MySQL 8.4, then `migration019.test.js`); `db/seeds/03_settings.js` (`file_max_mb`, `file_storage_limit_gb`); `src/config/version.js` ('1.12'); `src/lib/env.js` (`FILES_DIR`, `FILES_PIECE_BYTES`, `filesDir`, `filesDirIsDefault`, `filesPieceBytes`; `FILES_DIR` ignored when `NODE_ENV=test`) and `tests/unit/env.test.js`; `.env.example` (a "Files" block); `.gitignore` (`/.daybook-files/`); `src/proxy.js` (the matcher) and `tests/unit/clientIp.test.js`; `src/app/globals.css` (`--photo-veil`, `--photo-veil-text`, and `--shadow-menu: 0 12px 32px color-mix(in srgb, var(--navy) 14%, transparent)`, the value `Menu.module.css` and `ToastProvider.module.css` already use; both themes and the `@supports not` fallback) and `tests/unit/themeFallback.test.js`; **stubs** with the exact signatures of Modules, so every builder starts green and the owner replaces them (the 1.10 pattern): `src/modules/projectFiles/{index,service}.js` (every function; reads return `[]`, `{}` or 0, writes throw `UPDATE_NEEDED`), `src/modules/projectSummaries/fileDocuments.js` (`syncFileDocument` resolves), `[id]/BoardTab.jsx`, `[id]/_board/TaskEditorProvider.jsx`, `src/components/task/{TaskWindowProvider,TaskWindow}.jsx`, `src/components/task/useTaskDetails.js`, `src/components/files/{UploadField,UploadChip,FileThumbs,FileRows,PictureViewer,TaskAttachProvider}.jsx` and `{useUploads,useFileRemoval}.js` (CONTRACT 27)                                                                                                                                                                                                                                                                            |
+| orchestrator                                             | `README.md` (the 1.12 lines) and `tests/unit/hostScripts.test.js` (the 1.12 steps); `scripts/doctor.js` (a "Files" line: "✓ File storage is ready (1.2 GB of 10 GB used)" or "✗ File storage isn't set up:" plus the problem's sentence (Settings), then "See README Updating, 1.12."); `scripts/reset.js` and `db/demo/seedDemo.js` (`projectFiles.wipeStorageForReset()` after the truncate); `db/demo/*` (on acme-store, through `projectFiles.storeFile`: a PNG and a PDF on one task, a Word file on an Anyone task, two Whole project files, one "Only PM and Admins", a note; the bytes from `db/demo/files/`); `tests/unit/demoProjectPlans.test.js` if the demo builders change; `docs/CONTRACT.md` (section 27 and its "Other section edits") (CONTRACT 27)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| projects, system                                         | `src/modules/projectFiles/**` (all new: `index, service, repo, uploadRepo, spaceRepo, schemas, errors, access, names, kinds, fileMessages, pieces, ranges, pictures, storage, uploads, finish, attach, manage, reads, download, space, cleanup, migration019`); `src/app/api/uploads/route.js`, `api/uploads/[key]/route.js`, `api/uploads/[key]/pieces/route.js`, `api/uploads/[key]/finish/route.js`, `api/project-files/[id]/route.js`, `api/project-files/[id]/view/route.js`, `api/project-files/[id]/thumb/route.js`; `src/worker/jobs/cleanup.js` (the `projectFiles` step); `src/modules/settings/{schemas,service,crossChecks}.js`; `(app)/settings/FilesSection.jsx` (+ css, new), `SettingsForm.jsx`, `SettingsNav.jsx`, `settingsValues.js`, `numberFields.js`, `page.js`, `loading.js`; tests: `tests/unit/{fileNames,filePieces,fileRanges,fileKinds,fileAccess,fileSpace,fileMessages,settingsValues}.test.js`, `tests/services/{projectFilesUploads,projectFilesStorage,projectFilesDownload,projectFilesManage,projectFilesCleanup,projectFilesMigration,settings,runOnce}.test.js` (`runOnce`: the cleanup result gains `projectFiles: 0`) and the shared kit `tests/services/projectFilesKit.js` (new) (CONTRACT 27)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| projects, system                                         | `src/modules/projectTasks/{writes,schemas,messages,service,repo,shared}.js` and new `{taskFiles,taskDetails}.js`; `src/modules/projects/{service,repo,messages}.js` (`isMember`, the `member_added` link); `src/app/api/projects/[id]/tasks/route.js`, `api/project-tasks/[id]/route.js` (+ GET), `api/project-tasks/[id]/files/route.js` (new); `src/modules/notifications/alerts.js`; tests: `tests/unit/{notificationAlerts,taskFileMessages,noSlackNoAi}.test.js`, `tests/services/{projectTaskFiles,projectTasks.reads,projectTasks,projectTasksPlan,projects}.test.js` (`projectTasksPlan`: the task link becomes `?task=<id>`) (CONTRACT 27)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| projects                                                 | `(app)/projects/[id]/BoardTab.jsx` (new), `(app)/projects/[id]/_board/**` (new, CONTRACT 27 Modules), `phasesView.js`; `MovePhaseButton.jsx` (controlled `open`, `onOpenChange`), `DeadlineButton.jsx` (`label`), `PhaseDatesDialog.jsx` and its new `PhaseDatesDialog.module.css`; deletes `PhasesTab`, `PhasesBoard`, `PhaseSection`, `PhaseTasks`, `PhaseTaskRow`, `PhaseTaskForm` (+ css); `tests/unit/{boardView,projectBoard}.test.js` (new), `tests/unit/phasesBoard.test.js` and `tests/unit/projectPhasesTab.test.js` (rewritten or folded into the new ones; the `undoQueue` cases stay), `tests/services/projectPhasesTab.test.js` → `tests/services/projectBoardTab.test.js` (CONTRACT 27)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| projects, attendance, shell                              | `(app)/projects/[id]/{page,projectHead,loading}.js`, `ProjectView.jsx`, `MemberProjectView.jsx` (new), `ProjectTabs.jsx` (+ css), `SummaryTab.jsx` (new, from `OverviewTab`), `HealthBox.jsx`, `CriticalTasksCard.jsx`, `SummaryCard.jsx` (+ css; the AI phase line), `Overview.module.css` (keeps `.deadlineAction`, used by `DeadlineButton`), `TimelineTab.jsx`, `TabSkeletons.jsx`, `ProjectLoading.jsx`, `page.module.css`; deletes `OverviewTab`, `ProgressCard`, `DeadlineCard`, `PhaseCard`; `src/components/task/**` (new); `(app)/today/{PriorityCard.jsx,todayData.js}` (+ css); `(app)/projects/{ProjectCard.jsx,MyProjectsView.jsx}` (+ css); `tests/unit/{projectTabs,projectSummaryTab,memberProjectView,taskWindow}.test.js`, `tests/unit/projectOverview.test.js` (replaced), `tests/unit/todoCardActions.test.js` and `todoCardRender.test.js` (the Priority card rows), `tests/services/projectMemberPage.test.js` (new) and `tests/services/todayTaskFiles.test.js` (new) (CONTRACT 27)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| projects                                                 | `(app)/projects/[id]/FilesTab.jsx` (new), `(app)/projects/[id]/_files/**` (new); `src/components/files/**` (new, `TaskAttachProvider` included); `(app)/projects/[id]/{documentsView,useDocumentBody,readDocumentFile,readDocx,docxText}.js`; deletes `PhaseDocuments`, `AddFileButton`, `DocumentRow`, `NoteForm`, `DocumentText` (+ css; moved into `_files/`); `src/modules/projectSummaries/{documents,schemas,repo,shared,service}.js` and new `fileDocuments.js`; `src/app/api/projects/[id]/documents/route.js`, `api/project-documents/[id]/route.js`; tests: `tests/unit/{filesTabView,uploadClient,uploadQueue,filesTab}.test.js` (new; `filesTab` replaces `phaseDocuments.test.js`), `tests/services/{projectSummariesDocuments,projectSummariesRoutes,projectSummariesMigration,projectPlanMigration}.test.js` (the two migration tests roll back 019 first with `db.migrate.down({ name: '019_project_files.js' })`, then 015, and `latest` restores both; the routes test keeps its member-404 note, now made without `visibility`, and adds a member-200 case for an Everyone note) (CONTRACT 27)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| orchestrator                                             | `tests/e2e/{project-board,task-files,project-files}.spec.js` (new), `tests/e2e/project-plan.spec.js` (the new tabs), `tests/e2e/{smoke,todo}.spec.js` (as needed), `tests/e2e/support/files.js` (new), `tests/e2e/support/projectPlan.js`, `tests/fixtures/files/*` (new, all plain and harmless, since the deploy branch copies `tests/` to the host, where a malware scanner could quarantine anything that looks like an attack: `logo.png`, `photo.jpg`, `wrong-bytes.png` (a text file named .png), `drawing.svg` (a plain `<rect>`), `page.html` (`<!doctype html><title>Test</title><p>Test page</p>`; neither has script, event attributes or links), `setup.exe` (16 bytes of plain text), `notes.txt`, `empty.txt`, plus the existing PDF and DOCX fixtures; the tests check headers only), `playwright.config.js` (at the top, next to `DB_NAME` in CI mode: `process.env.FILES_DIR ??= path.join(os.tmpdir(), 'daybook-e2e-files'); process.env.FILES_PIECE_BYTES = '65536';`, both passed in `webServer.env`, so the setup's `seed:demo`, the teardown, `support/files.js` and the server share one folder) (CONTRACT 27)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 Every page starts with `const user = await requirePage('<permission>')`, renders `<TopBar ... />`
 then its blocks, has a loading skeleton (`loading.js`) and empty states. Page permissions:
 /today `attendance.self`, /report and /log `report.self`, /projects `project.request`
-(`project.manage` holders see the PM view), /team `team.view`, /requests
-`project_request.handle`, /attendance `attendance.view_all`, /attendance/missing and
+(`project.manage` holders see the PM view), /projects/[id] `project.request` (`team.view` holders
+see the PM view, active members the member view, anyone else 404; CONTRACT 27), /team `team.view`,
+/requests `project_request.handle`, /attendance `attendance.view_all`, /attendance/missing and
 /attendance/holidays `attendance.view_all`, /attendance/month, /attendance/people/[userId] and
 /attendance/leave `attendance.correct` (CONTRACT 25), /people `people.manage`, /overview
 `overview.view`, /settings `settings.manage`, /settings/roles `roles.manage`, /my-settings any
@@ -519,6 +570,9 @@ signed-in person (`requireUser()`).
 - Migration checks that need MySQL 8.4 run in `.github/workflows/migration-check.yml` (a mysql:8.4
   service container; CONTRACT 25).
 - Every business rule in guide section 7 that your module owns gets at least one service test.
+- File tests always use the test folder under the system temp folder, per `DB_NAME` (`FILES_DIR` is
+  ignored under `NODE_ENV=test`); never the dev folder. Service tests make files through
+  `tests/services/projectFilesKit.js` (CONTRACT 27).
 
 ## 11. Screen time (added after the build guide, at the company's request)
 
@@ -592,6 +646,7 @@ lastReportedOn, daysReported, minutesOnDays }], entries: [{ workDate, user, minu
 The project's PM (or Admin) lists a project's important tasks and marks each **P1** (highest),
 **P2** or **P3**, optionally for one person (`assignee_id`; null = anyone on the project). Members
 see their open priority tasks on Today (P1 first) and can link a daily-report task line to one.
+Tasks can carry files (CONTRACT 27).
 
 - Table `project_tasks` (migration 008): `project_id`, `title` (2–200), `details` (≤1000, optional),
   `priority` p1 | p2 | p3, `assignee_id` (active member of the project, or null), `status` open |
@@ -599,13 +654,15 @@ see their open priority tasks on Today (P1 first) and can link a daily-report ta
   ON DELETE SET NULL) links a report line to the priority task it worked on; carry-over keeps it.
 - Who: create, edit (title, details, priority, assignee), mark done / reopen and delete need
   `project.manage` for that project (the project's PM, or Admin) — same rule as editing the project.
-  Members of the project (and PM/Admin) can read them. Order everywhere: P1, P2, P3, then oldest first.
+  PM, Admin and `team.view` holders read every task; other members read only the tasks for them and
+  for anyone on the project (CONTRACT 27). Order everywhere: P1, P2, P3, then oldest first.
 - Notifications (type, in the bell and on the desktop): `project_task.added` to the assignee, or to
   every active member when unassigned ("New P1 task on internal-tool: Fix login timeout");
   `project_task.changed` when priority or assignee changes (to the new assignee / members);
   `project.member_added` to people newly added to a project ("You were added to acme-store").
-  Audit: `project_task.create`, `project_task.update`, `project_task.done`, `project_task.reopen`,
-  `project_task.delete`.
+  Links open the task on the project page (`/projects/[id]?task=<id>`); `project_task.files_added`
+  when files are added later (CONTRACT 27). Audit: `project_task.create`, `project_task.update`,
+  `project_task.done`, `project_task.reopen`, `project_task.delete`.
 - `projectTasks` module (`@/modules/projectTasks`):
   - `listForProject({ viewer, projectId, status? })` → `[{ id, projectId, title, details, priority,
 status, assignee: { id, name, initials, role, status } | null, createdBy, createdAt, doneAt,
@@ -628,7 +685,7 @@ doneBy, latestReport: { status, userId, userName, workDate } | null }]`.
   `POST /api/project-tasks/[id]/status { status: 'open' | 'done' }`. Reports' PUT/submit bodies accept
   `projectTaskId` on a task (must be an open task of that entry's project, or the one already linked).
 - UI: shared `PriorityTag` component (`@/components/PriorityTag`, `{ priority: 'p1'|'p2'|'p3', size }`:
-  P1 red, P2 marigold, P3 neutral, text "P1"). A "Priority tasks" card on `/projects/[id]` (manage),
+  P1 red, P2 marigold, P3 neutral, text "P1"). A "Priority tasks" card on `/projects/[id]` (manage; replaced by the Board, CONTRACT 27),
   a P-count on My projects cards, a "Priority tasks" card on Today, priority suggestions in the daily
   report's task field, and a Priority column for linked tasks in the project report.
 
@@ -1183,7 +1240,7 @@ onToolCall? })` → `{ text, data }`: checks availability (`AI_OFF`), the compan
 
 ### Version label
 
-- `APP_VERSION` in `src/config/version.js` (now '1.11'; raised with each release). Shown as small
+- `APP_VERSION` in `src/config/version.js` (now '1.12'; raised with each release). Shown as small
   muted "Daybook v1.05" at the bottom of the sidebar and under the sign-in card.
 
 ### Notification center
@@ -1477,7 +1534,7 @@ added the original note again as a new line. Fill twice with a polish in between
 
 ## 22. Project management: phases, plan, tasks and AI summary (company request, Daybook 1.07)
 
-**Design:** `docs/design/project-management-prototype.dc.html`, the clickable prototype the owner approved. Its look, layout and copy bind every screen below (its numbers are sample data, and its "speed is 4" is a demo shortcut). Open it in a text editor: the markup and the `renderVals()` logic are readable. Where real data needs a state the prototype doesn't draw, this section says what to show. Build with Daybook's real components and tokens (`Card`, `TopBar`, `Button`, `Dialog`, `Segmented`, `FilterPills`, `DataTable`, `PriorityTag`, `Toast`), never raw hex in CSS modules. **The UI says "AI", never "Gemini"** (Settings → AI excepted). No consent checkbox, no phase history screen, no note on a phase move.
+**Design:** `docs/design/project-management-prototype.dc.html`, the clickable prototype the owner approved. Its look, layout and copy bind every screen below (its numbers are sample data, and its "speed is 4" is a demo shortcut). Open it in a text editor: the markup and the `renderVals()` logic are readable. Where real data needs a state the prototype doesn't draw, this section says what to show. Build with Daybook's real components and tokens (`Card`, `TopBar`, `Button`, `Dialog`, `Segmented`, `FilterPills`, `DataTable`, `PriorityTag`, `Toast`), never raw hex in CSS modules. **The UI says "AI", never "Gemini"** (Settings → AI excepted). No consent checkbox, no phase history screen, no note on a phase move. The project page is redrawn by CONTRACT 27 (Board, Summary, Files, Timeline, Hours); its prototype replaces this one for the project page.
 
 ### Words
 
@@ -1490,7 +1547,7 @@ added the original note again as a new line. Fill twice with a polish in between
 - `project_plans`: `project_id` PK FK CASCADE, `current_phase` VARCHAR(24) NULL, `deadline` DATE NULL, `updated_by` FK users NULL, timestamps. No row = Not set and no deadline.
 - `project_phase_plans`: PK (`project_id`, `phase`), FK CASCADE, `phase` VARCHAR(24), `planned_start`, `planned_end`, `actual_start`, `actual_end` DATE NULL, `updated_by`, timestamps. No row = no dates.
 - `project_tasks` gets `phase` VARCHAR(24) NULL and `due_date` DATE NULL, and INDEX(`project_id`, `status`, `done_at`). Existing tasks stay `NULL`.
-- `project_documents`: `id`, `project_id` FK CASCADE, `phase` VARCHAR(24) NOT NULL, `kind` ENUM('file','note'), `title` VARCHAR(200), `body` MEDIUMTEXT (a file's pages are separated by `\f`), `pages` INT NULL, `pages_total` INT NULL, `char_count` INT, `created_by`, `updated_by`, timestamps, INDEX(`project_id`, `phase`). **The text is stored; the file never is.**
+- `project_documents`: `id`, `project_id` FK CASCADE, `phase` VARCHAR(24) NOT NULL, `kind` ENUM('file','note'), `title` VARCHAR(200), `body` MEDIUMTEXT (a file's pages are separated by `\f`), `pages` INT NULL, `pages_total` INT NULL, `char_count` INT, `created_by`, `updated_by`, timestamps, INDEX(`project_id`, `phase`). **The text is stored; the file never is** (until 1.12: CONTRACT 27 keeps the real files too). `phase` may be null (Whole project), and the table gains `visibility` and `file_id` (CONTRACT 27).
 - `project_summaries`: `project_id` PK FK CASCADE, `body` JSON (no column default), `source_key` CHAR(64), `truncated` BOOLEAN, `dropped_count` INT, `model` VARCHAR(60) NULL, `created_by`, `updated_by`, timestamps.
 - Settings key `aiProjectSummaryEnabled` (boolean, default false) in `db/seeds/03_settings.js`, the settings schema and `settingsValues.js`.
 
@@ -1506,24 +1563,24 @@ added the original note again as a new line. Fill twice with a polish in between
   - `movePhase({ user, projectId, phase, from?, ip })`, `setDeadline({ user, projectId, deadline, ip })`, `setPhaseDates({ user, projectId, phase, plannedStart, plannedEnd, ip })`: `assertCanManage`, a transaction that locks the plan row, `audit.log` in it (`project.phase`, `project.deadline`, `project.phase_dates`: ids and values only). End before start: "The end date can't be before the start date." `from` is the phase the page showed (null for Not set): when the locked row's phase differs and isn't already `phase`, the move is refused with CONFLICT (409) "The phase changed. Reload the page.", so a page left open can't turn a move forward into a move back. Without `from` nothing is checked.
   - **Actual dates** (company time zone), as in the prototype's `confirmMove`. Forward: the old phase's `actual_end` = today, the new phase's `actual_start` = today and `actual_end` = null; phases jumped over stay empty (shown as "Skipped"). Back: later phases lose both actual dates, the target's `actual_end` = null, and its `actual_start` = today only when empty. Moving to the current phase is a no-op.
 - `@/modules/projectTasks` (extended): create and update take `phase` (one of the list, or null) and `dueDate` (`YYYY-MM-DD` or null); `listForProject` returns them. The project's PM may now be an assignee, next to active members. `progressByProject(projectIds, { weeks })` → `{ [projectId]: { total, done, doneByWeek: [n, n, n] } }` in one query (`weeks` = `{ from, to }` UTC bounds of the last 3 full Monday to Sunday weeks in the company time zone, newest first). `doneByWeek` counts by `done_at`, so reopening a task takes it out. Existing notification and audit behaviour stays.
-- `@/modules/projectSummaries` (`repo`, `service`, `schemas`, `prompt.js`, `checks.js`, `index`, tables `project_documents`, `project_summaries`). **Everything here is only for people who can manage the project**: reads return NOT_FOUND to anyone else, on the server, so nothing reaches another PM's browser.
-  - `listDocuments({ user, projectId })` (no `body`), `getDocument({ user, id })` (with `body`), `addDocument`, `updateDocument` (notes only: title and text), `removeDocument`. Limits: title 1 to 200, text 1 to 200,000 characters, 40 documents per project ("This project has too many files and notes. Delete some first.").
+- `@/modules/projectSummaries` (`repo`, `service`, `schemas`, `prompt.js`, `checks.js`, `index`, tables `project_documents`, `project_summaries`). **Everything here is only for people who can manage the project**: reads return NOT_FOUND to anyone else, except members reading Everyone notes and text-only documents (CONTRACT 27), on the server, so nothing reaches another PM's browser.
+  - `listDocuments({ user, projectId })` (no `body`), `getDocument({ user, id })` (with `body`), `addDocument`, `updateDocument` (notes only: title and text), `removeDocument`. Limits: title 1 to 200, text 1 to 200,000 characters, 100 documents per project (CONTRACT 27; "This project has 100 files and notes with text. Delete some first.").
   - `getSummary({ user, projectId })` → `{ body, stale, truncated, updatedAt, updatedByName, sources: { files, notes } }` or null. `stale` = `source_key` differs from the sha256 of the current documents' ids and `updated_at`.
   - `writeSummary({ user, projectId })`, `addActionAsTask({ user, projectId, actionKey })`.
 - `@/modules/ai`: feature `project_summary` (`aiProjectSummaryEnabled`), `PERSON_DAILY_CAPS.project_summary` 15, and `generate()` takes an optional `timeoutMs` (55,000 for this feature; everyone else keeps 30 s). The company's existing daily limit applies. Nothing new in Settings except the one row: "Project summaries", help "PMs can write a short summary from a project's files and notes with Gemini.", shown like the other feature rows in `AiSection.jsx`.
 
 ### API
 
-| Route                                                                             | Permission                    | Notes                                                                |
-| --------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------- |
-| `PUT /api/projects/[id]/phase` `{ phase, from? }`                                 | `project.manage`, own project | returns the plan; 409 when `from` is out of date                     |
-| `PUT /api/projects/[id]/deadline` `{ deadline }`                                  | same                          | `null` clears it                                                     |
-| `PUT /api/projects/[id]/phases/[phase]/dates` `{ plannedStart, plannedEnd }`      | same                          | both nullable                                                        |
-| `POST /api/projects/[id]/documents`, `PATCH`/`DELETE /api/project-documents/[id]` | same                          | body `{ phase, kind, title, text, pages?, pagesTotal? }`             |
-| `GET /api/project-documents/[id]`                                                 | `signed_in`                   | the service answers NOT_FOUND to anyone who can't manage the project |
-| `POST /api/ai/projects/[id]/summary`                                              | `project.manage`, own project | 4 a minute per person; writes or updates the summary                 |
-| `POST /api/ai/projects/[id]/summary/tasks` `{ actionKey }`                        | `project.manage`, own project | adds a P2 task to the current phase, once                            |
-| existing `projects/[id]/tasks`, `project-tasks/*`                                 | unchanged                     | now take `phase`, `dueDate`                                          |
+| Route                                                                             | Permission                    | Notes                                                                                                                                        |
+| --------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUT /api/projects/[id]/phase` `{ phase, from? }`                                 | `project.manage`, own project | returns the plan; 409 when `from` is out of date                                                                                             |
+| `PUT /api/projects/[id]/deadline` `{ deadline }`                                  | same                          | `null` clears it                                                                                                                             |
+| `PUT /api/projects/[id]/phases/[phase]/dates` `{ plannedStart, plannedEnd }`      | same                          | both nullable                                                                                                                                |
+| `POST /api/projects/[id]/documents`, `PATCH`/`DELETE /api/project-documents/[id]` | same                          | body `{ phase, kind, title, text, pages?, pagesTotal? }`                                                                                     |
+| `GET /api/project-documents/[id]`                                                 | `signed_in`                   | the service answers NOT_FOUND to anyone who can't manage the project (CONTRACT 27: members also read Everyone notes and text-only documents) |
+| `POST /api/ai/projects/[id]/summary`                                              | `project.manage`, own project | 4 a minute per person; writes or updates the summary                                                                                         |
+| `POST /api/ai/projects/[id]/summary/tasks` `{ actionKey }`                        | `project.manage`, own project | adds a P2 task to the current phase, once                                                                                                    |
+| existing `projects/[id]/tasks`, `project-tasks/*`                                 | unchanged                     | now take `phase`, `dueDate`                                                                                                                  |
 
 Non-managers get FORBIDDEN on writes. Document and AI routes refuse a raw body over 1 MB with 413 before parsing, like `src/app/api/me/preferences/route.js`.
 
@@ -1553,20 +1610,21 @@ Input: `{ status, total, done, doneByWeek, deadline, today, createdOn }`. Output
 
 As the prototype: subtitle "5 active projects: 1 off track, 1 at risk" (the counts only on the Active tab, without a search), search, New project, status pills, the hours range, then the columns Project (square, name, client under it), Health, Phase, Progress (thin bar + %, or "No tasks yet"), Deadline ("15 Dec 2026", or muted "No deadline"), Manager, Hours (as today, following the range), and the existing row menu at the end. Team and Status columns go. An urgent project gets a small marigold "Urgent" tag beside its name, with the note as its `title`. The range keeps working (CONTRACT 16). The row menu's "Priority tasks" becomes "Phases and tasks", linking to `?tab=phases`. No N+1: one `listPlans`, one `progressByProject`. A failure of either still renders the table, as "No plan yet".
 
-### Project page (`/projects/[id]`, `team.view`)
+### Project page (`/projects/[id]`, see CONTRACT 27)
 
-Breadcrumb, square, name and health pill, subtitle "Acme Clinics · PM: Riya Kapoor · Active" (with the urgent note as today). Tabs are links with `?tab=overview|phases|timeline|hours`, `aria-current`, default `overview`; a URL with `range`, `from` or `to` and no tab opens Hours, so old links keep working. Only the chosen tab loads its data.
+Breadcrumb, square, name and health pill, subtitle "Acme Clinics · PM: Riya Kapoor · Active" (with the urgent note as today). Tabs are links with `?tab=overview|phases|timeline|hours`, `aria-current`, default `overview` (CONTRACT 27: Board, Summary, Files, Timeline, Hours, default `board`; `overview` and `phases` open the Board); a URL with `range`, `from` or `to` and no tab opens Hours, so old links keep working. Only the chosen tab loads its data.
 
-- **Overview**: health box, then Progress (donut), Deadline (with "Change deadline" or "Add deadline" and its one-field dialog) and Phase (stepper, AI line, button named after the next phase: "Move to Design"; from Not set "Start Requirement gathering"; no button after Support), then Critical tasks (open P1s by due date, tasks without a date last, max 5, checkbox, "See all tasks") and AI summary.
-- **Phases**: as the prototype, one accordion section per phase, the current one open (with Not set, the first). A section "No phase yet" comes last, only when tasks without a phase exist; it has no dates, files, Move or Edit dates. Task rows keep what the card shows today: `details` as a muted line, the away label, and the latest reported status ("Neha, yesterday: In progress"), which helps the PM decide to tick a task. Only the PM and Admin tick; reports never close a task. The add and edit row sets title, owner, due date and priority; `details` is left alone on edit.
-- **Timeline**: as the prototype, from a pure `timelineLayout.js`. The chart runs from the Monday before the earliest date (planned, actual or today) to the Sunday after the latest (planned, actual, deadline, expected finish or today), at least 8 weeks. Empty state when no phase has planned dates: "No planned dates yet. Add dates to each phase in the Phases tab." with a button going there. Summary line copy as in the prototype, built from real late phases, left out when nothing is late. The actual bar turns red only after a planned end (a planned start alone makes nothing late), a month name near the right edge stays inside the chart, and a range on one day reads "11 Nov" here as on Phases (`planFormat.dateRange`).
+- Overview and Phases are replaced by the Board and Summary tabs (CONTRACT 27).
+- **Timeline**: as the prototype, from a pure `timelineLayout.js`. The chart runs from the Monday before the earliest date (planned, actual or today) to the Sunday after the latest (planned, actual, deadline, expected finish or today), at least 8 weeks. Empty state when no phase has planned dates: "No planned dates yet. Add dates to each phase in the Phases tab." with a button going there (CONTRACT 27: "Add dates to each phase from its menu on the Board." and "Go to the board", for managers only). Summary line copy as in the prototype, built from real late phases, left out when nothing is late. The actual bar turns red only after a planned end (a planned start alone makes nothing late), a month name near the right edge stays inside the chart, and a range on one day reads "11 Nov" here as on Phases (`planFormat.dateRange`).
 - **Hours**: today's report exactly (range, Download Excel, KPIs, charts, people, tasks, daily log), with the Priority tasks card gone and `tab=hours` kept on its range links and form (`keep`).
-- **Another PM** (`team.view`, can't manage): sees health, progress, deadline, stepper, critical tasks, phases with tasks and dates, the timeline and hours, with no ticks, Add, Edit, Move, Change deadline or AI line. In place of the AI summary: nothing, and Critical tasks takes the width. In Phases: the muted "Only Riya Kapoor and Admins can edit phases." on top, and "Files and notes are only for Riya Kapoor and Admins." in each open section.
+- **Another PM** (`team.view`, can't manage): sees health, progress, deadline, stepper, critical tasks, phases with tasks and dates, the timeline and hours, with no ticks, Add, Edit, Move, Change deadline or AI line. In place of the AI summary: nothing, and Critical tasks takes the width. In Phases: the muted "Only Riya Kapoor and Admins can edit phases." on top, and "Files and notes are only for Riya Kapoor and Admins." in each open section (CONTRACT 27: the Board's "Only Riya Kapoor and Admins can change tasks and phases." and the Files tab's "Files are only for Riya Kapoor, Admins and people on the project."). They get no files unless they are a member of the project, then a member's files (CONTRACT 27).
 - **Undo**: Delete hides the row at once with a toast and Undo for 6 s (`useToastSlot`, as the bell's Undo). The `DELETE` is sent when the toast ends, on unmount, or on `pagehide` with `keepalive`. Undo cancels it. A failed delete brings the row back with an error toast. Every sent delete refreshes the page once it is done, also after the board unmounted (the tab shown next was loaded before the delete went out). Ticking a task: the prototype's "Marked done." with Undo, which reopens it.
-- Notification links to `#priority` become `?tab=phases`; `HoursCard` links gain `tab=hours`.
+- Notification links to `#priority` become `?tab=phases` (CONTRACT 27: task links are `/projects/[id]?task=<id>`); `HoursCard` links gain `tab=hours`.
 - **Shared client parts** (in `src/app/(app)/projects/[id]/`): `MovePhaseButton` `{ projectId, currentPhase, targetPhase, plan, today, children | label, variant, size, className }` (sends `{ phase: targetPhase, from: currentPhase }`); `BusyButton` `{ busy, onClick, …Button props }`, a button that keeps keyboard focus while it works (`aria-disabled`, never `disabled`), for the AI card's buttons; `TaskCheck` `{ taskId, title, done, className }`, whose Undo toast lives in `TaskUndoProvider` (mounted by `ProjectView` around every tab, so the toast outlives a row that leaves the list); `DueTag` `{ dueDate, today, done, className }`; `UndoToast` `{ pending, onUndo, onEnd, onLeave?, duration? }` with `UNDO_MS` 6000; `planFormat.js` for dates and phase copy.
 
 ### Files and notes
+
+Files and notes now live in the Files tab, with real files (CONTRACT 27); the reading rules below still apply to the text the AI reads.
 
 - **+ Add file**: a real file picker, PDF, Word `.docx`, `.txt` or `.md` (`accept` lists the extensions and their MIME types). Every file is read **in the browser**; the server never opens a file, because of the host's memory limits, and only the text is sent. Limits for every type: 20 MB, 200,000 characters. Wrong type: "Pick a PDF, Word (.docx), .txt or .md file."
 - **PDF**: `pdfjs-dist` (dynamic import, loaded only on click, legacy build, `isEvalSupported: false`, `getDocument` and `getTextContent` only, never the viewer, annotation layer or scripting). Pages join with `\f`. Also the first 100 pages; when cut, the toast says "Read the first 100 of 140 pages." Errors in a toast: no text "No readable text. Is it a scan? Paste the key parts as a note."; password "Remove the password or paste the text as a note."; broken "This file isn't a PDF Daybook can read." While reading: "Reading page 12 of 14…" on the button. `pdfjs-dist` is a **devDependency** pinned to **5.5.207** (it is bundled by the build in GitHub Actions; the server installs nothing new): 5.6.83 up to 6.2.107 carry advisory GHSA-hq66-cqwq-w95j, and the fixed versions need Node 22.13, which CI and the host don't run.
@@ -1575,12 +1633,12 @@ Breadcrumb, square, name and health pill, subtitle "Acme Clinics · PM: Riya Kap
 
 ### AI summary
 
-Card states: **no documents** (empty text + "Go to phases"); **documents, no summary** ("1 file and 1 note are ready." + **Write summary**); **summary** (prototype; footer "From 1 file and 1 note. Written by AI, check anything important."); **stale** (footer "Files or notes changed since this summary." + **Update summary**); **off** (no key or switch off: "AI summary is off. An Admin can turn it on in Settings → AI.", an existing summary stays readable and can't be updated). Working: the button reads "Reading the files…"; then a toast "Summary written." or "Summary updated."; errors toast the API's message and change nothing. `truncated` adds "Only the first 50,000 characters were read." to the footer.
+Card states: **no documents** (empty text + "Go to phases"; CONTRACT 27: "Go to files"); **documents, no summary** ("1 file and 1 note are ready." + **Write summary**); **summary** (prototype; footer "From 1 file and 1 note. Written by AI, check anything important."); **stale** (footer "Files or notes changed since this summary." + **Update summary**); **off** (no key or switch off: "AI summary is off. An Admin can turn it on in Settings → AI.", an existing summary stays readable and can't be updated). Working: the button reads "Reading the files…"; then a toast "Summary written." or "Summary updated."; errors toast the API's message and change nothing. `truncated` adds "Only the first 50,000 characters were read." to the footer.
 
 - **Prompt** (`prompt.js`, model `fast`, JSON output): project name, client, current phase, today, the phase list, then the documents, newest first, up to **50,000 characters in total**, as `D1…Dn` inside random letters-only markers, clearly marked as data whose instructions are never to be followed. English; quotes stay in the document's language; no budgets, rates or personal details.
 - **Answer**: `overview` (≤ 400 characters), `scope[≤5] { text, notInScope, doc, quote }`, `deadlines[≤5] { text, dateAsWritten, doc, quote }`, `risks[≤5] { text, kind: 'risk'|'question', doc, quote }`, `actions[≤5] { owner: 'client'|'us'|'unclear', text, dueAsWritten, doc, quote }`, `nextPhase { phase, doc, quote }` (phase may be null), all strings length-capped.
 - **Checks** (`checks.js`): every point's `quote` must be found in that document's text as sent (normalise both: NFKC, strip U+200B to U+200D and U+00AD, join words hyphenated across lines, collapse spaces, unify quote marks, case-fold), or the point is dropped and counted, silently on screen. The page comes from Daybook's own search for the quote between `\f`s, never from the AI: "SOW-Acme-v3.pdf, page 3"; a quote over page breaks, blank pages included, is on the page it starts on; a note is just its title. Stored text keeps contact details masked. `nextPhase` needs a found quote too.
-- **AI line** shows only when `nextPhase.phase` is the current phase's next phase and the project isn't Completed. It never moves anything: only the PM's click does.
+- **AI line** shows only when `nextPhase.phase` is the current phase's next phase and the project isn't Completed. It never moves anything: only the PM's click does. It is now drawn in the AI summary card on the Summary tab (CONTRACT 27).
 - **Actions**: each stored item has a stable `key` (a hash of its normalised owner and text) and `taskId`. `addActionAsTask` locks the row, finds the item by key (gone: 409 "The summary changed. Reload the page."), creates one P2 task titled with its text in the current phase with no due date, and stores `taskId`; the button becomes "Added". A rewrite keeps `taskId` for an item with the same key.
 - **Privacy**: logs and audit rows never hold document or summary text. Ask Daybook never reads these tables. Text is sent through the module's existing scrubbing, a file page by page so that no mask (a footer phone number, a name split over pages) swallows a `\f`; the PM's and team's names go as tokens and come back through `restoreNames`.
 
@@ -1686,7 +1744,7 @@ Two asks from the owner, approved with the answers at the end of this section (1
 - **Play** shows only when the person is checked in, not on a break and not checked out, timers aren't off, the group is an active project (not a project request), the line isn't Done and no timer runs on it. It calls `POST /api/me/todo/lines/[id]/timer`: `timers.start` with the project, the line's `projectTaskId` (left out when that priority task is closed) and `note` = the first 200 characters of the title; then, in the same request, the line's `timer_note` = that note, so Fill report from timers merges into this line (`reportTimers.lineFor` matches by `timerNote`) even if the title is reworded later. A set note is part of the report's version, so a report tab opened before Play gets "This report changed somewhere else" on its next save instead of saving the line without its note, and re-reads when it becomes visible. Refusals from `timers.start` are toasted as they come. Once it runs, Play goes (the line is "Now"); if Play had focus, focus moves to the line's title.
 - **"Now"** = the person's running entry has the group's `project_id` and its normalised note equals the line's `timer_note` or its title.
 - **TimerStartForm** (the Today timer form): after a project is picked, the note field offers that project's not-done to-do lines (same listbox as `matchSuggestions`, heading "Your to-do on Studio Ubique"). Picking one starts the timer through the same `.../lines/[id]/timer` route.
-- **Priority tasks card**: each row gets a 32 px Plus icon button "Add to to-do: {title}" (44 px at 640 px and below). It adds a line to the to-do with the task's title and `projectTaskId` (creating the group). When a to-do line already links that task, the button is replaced by a muted check and "In to-do".
+- **Priority tasks card**: each row gets a 32 px Plus icon button "Add to to-do: {title}" (44 px at 640 px and below). It adds a line to the to-do with the task's title and `projectTaskId` (creating the group). When a to-do line already links that task, the button is replaced by a muted check and "In to-do". Rows show a paperclip and count and open the task window (CONTRACT 27).
 - **Add project**: a dashed full-width "Add project" button under the groups opens the report's `ProjectPicker` (no "Ask for a missing project" here; projects already in the list are greyed "In your to-do"; "2 still open" beside projects with suggestions, prop `showOpenCounts`, off in the timer form). Picking one adds the group with the input focused and its suggestion box.
 - **Reminder line** (only while suggestions exist for projects not in the list): muted "Still open from past reports:" then each project as a text button with its count, "Acme booking app (2)". Clicking opens the **Still open dialog** (Request 4); it never adds a project by itself.
 - **Slack button.** "Post to Slack" (primary, compact; only while Slack is on with a bot token, a to-do channel is set in Settings, and the list has a line: `slack.canPostTodo`). After the click: disabled "Posting…". Sent: muted check "Posted at 9:41 AM". Failed: red "Couldn't post to Slack." and "Try again" (secondary). After the list changes (not after a tick): "Update post" (secondary) beside "Posted at …", then "Updating…". Hidden when the list is empty. While a post is sending, the card asks `GET /api/me/todo` every 5 seconds for up to a minute.
@@ -4645,7 +4703,7 @@ at], ...], shown: [[id, at], ...] }` (each list keeps the last 50 ids; entries o
 ### Important notifications (`src/modules/notifications/alerts.js`, new, pure, browser-safe)
 
 `ALERT_TYPES` is the one list: a frozen object `{ [type]: 'important' | 'normal' }` with **every**
-type Daybook creates (43 today: 19 important, 24 normal). Group and icon come from the type's prefix
+type Daybook creates (44: 19 important, 25 normal). Group and icon come from the type's prefix
 (`ALERT_GROUPS`). The table is the contract; the test pins it.
 
 | #   | Type                                 | Important | Group      | Why                                                                                          |
@@ -4693,6 +4751,7 @@ type Daybook creates (43 today: 19 important, 24 normal). Group and icon come fr
 | 41  | `report_edit.declined`               | no        | report     | The answer to your own request.                                                              |
 | 42  | `ai.pm_summary`                      | no        | ai         | An evening read.                                                                             |
 | 43  | `ai.hr_notes`                        | no        | ai         | A weekly read.                                                                               |
+| 44  | `project_task.files_added`           | no        | task       | New files on your task; like the other task types.                                           |
 
 - `ALERT_GROUPS` (prefix → group): `attendance.`, `attendance_correction.` → `attendance`;
   `leave.`, `holiday.`, `wfh_request.` → `calendar`; `project.`, `project_request.` → `project`;
@@ -5578,7 +5637,7 @@ migrate line this time."
 ### Tests and version
 
 - **Unit** (node only, no DOM; fakes for every browser API):
-  - `tests/unit/notificationAlerts.test.js` (A): `ALERT_TYPES` has exactly the 43 types of the
+  - `tests/unit/notificationAlerts.test.js` (A): `ALERT_TYPES` has exactly the 44 types of the
     table (the list is written out in the test) with their levels, 19 important; every type's prefix
     has a group; `alertLevel`/`alertGroup` for an unknown type; `assertClassified('made.up')` throws
     and names CONTRACT 26. **Source scan**: every `.js`/`.jsx` file under `src/`, `scripts/` and
@@ -5894,3 +5953,2326 @@ mustShow? }`. It also handles `notificationclick` (focus a Daybook window and op
   dot and count still change."
 - **§20, Version label**: "`APP_VERSION` in `src/config/version.js` (now '1.11'; raised with each
   release)."
+
+## 27. Project board, task files and the Files tab (company request, Daybook 1.12)
+
+The owner asked for a simpler, more modern project page and for files on tasks, approved for one
+release on 23 Nov 2026 and shipped as version '1.12' with **one** new migration,
+`db/migrations/019_project_files.js` (001 to 018 are never edited), and **no new npm dependency**:
+
+1. **Phase board.** On the project page every phase is a column of task cards. Finished phases fold
+   into one slim "Done phases" column once their tasks are done. A six-part band on top shows
+   progress, the deadline (Change) and the next phase's button ("Move to Testing"); the forecast
+   sentence sits under it. Filter pills All open, Critical, With files. "+ Add task" under each
+   column (quick add, "More options"). Ticking a card finishes the task (Undo). A card can be
+   **dragged** to another phase and moved from its menu (keyboard). Files can be **dropped** on a
+   card. A card opens the task window. The AI summary and the critical tasks move to a quiet
+   **Summary** tab; **Timeline** and **Hours** stay. On a phone: one phase at a time, with back and
+   next buttons.
+2. **Files on tasks.** When the PM creates or edits a task (for one person or "Anyone on the
+   project"), they attach several files at once (Choose files, or drag and drop). The person sees a
+   paperclip and a count on Today's Priority tasks card and on the card, opens the task window, sees
+   picture thumbnails and downloads other files. Files can be added and removed later.
+3. **Files tab.** Every project gets one place for all its documents: "Whole project" plus the six
+   phases, plus the files on its tasks, with counts; several files at once; real files people open
+   and download; each upload says who can see it ("Everyone on the project" or "Only PM and
+   Admins"). Notes live there too. Today's per-phase "Files and notes" (§22) moves here; old
+   text-only documents keep working, labelled "Text only".
+4. **Any type, big files.** Any file type. Big files go up in 4 MB pieces with a progress bar,
+   Cancel and automatic retry. Admins set the largest file (500 MB to start) and a company storage
+   limit (10 GB to start) and see the space used. Only PNG, JPG, GIF and WebP ever show inside
+   Daybook; everything else, SVG, HTML and programs included, is only downloaded.
+5. **Read-only project page for people on the project**: progress, phase steps and deadline (no
+   health), their own tasks and "Anyone" tasks, the task window with files, the Files tab.
+
+Owner decisions of 23 Nov 2026 (fixed): only the project's PM and Admins upload, rename and delete
+files; employees can't upload. A task's files are for the person it is for (while on the project),
+everyone on the project for an Anyone task, the project's PM and Admins; HR only as a member; never
+other PMs. Files never go to Slack or AI. Earlier privacy rules stay (§25 Choices 10, §11, §20).
+
+Written against the code at `81178e0` (1.11), with the groundwork in `scratch/design-1.12/map.md`
+(the code as it is) and `scratch/design-1.12/research.md` (uploads, disk, downloads, the Files tab,
+with sources). Names marked **new** don't exist yet; every other name is in the code.
+
+**Design:** `docs/design/project-board-prototype.html` (standalone, the real tokens, as §23 to §26),
+made by the orchestrator first from the reviewed `scratch/design-pm/option-b.html` (and its brief
+`scratch/design-pm/design-brief.md`, section 1.2 and sections 2 to 7) with these changes: the Files
+tab (PM and employee: All files, a phase place with "On tasks in Design", the upload window, the
+Uploads card with uploading, waiting, reading, paused and failed rows and "Cancel all", the note
+window, the Edit details window, empty states, the phone select); the task window's not available
+state; a "No phase yet" column with one
+old task in the sample; a past phase that still has an open task shown as a column, not a tile; a
+skipped phase in the band; the "Move Fix the login page" dialog in place of the menu's phase
+sub-list; the copy of this section (any type, 500 MB, no "can't be attached" or old Office messages,
+no Undo on "files added" toasts); the column menu's "Files for Development" (no count) in place of
+"Files and notes"; the Summary tab without its "Files and notes" card and with the AI phase line in
+the AI summary card; the employee page with the tabs Board and Files (the band inside the Board tab)
+and without the "Files on your tasks" card; Settings → Files. The prototype's PM "Projects list"
+cards are **not** part of 1.12 (the list keeps today's table, Choices 1); the prototype keeps that
+screen only as a way in, marked "Not changed in 1.12". Its look, layout and copy bind every
+builder's screens; where it and this section differ, this section wins and the prototype is fixed.
+Build with Daybook's components and tokens only (`TopBar`, `Breadcrumb`, `Card`, `Button`,
+`IconButton`, `Dialog`, `Menu`, `FilterPills`, `Segmented`, `Field`, `Input`, `Select`, `Textarea`,
+`Tag`, `PriorityTag`, `Avatar`, `AvatarStack`, `ProjectLabel`, `ProjectSquare`, `ProgressBar`,
+`EmptyState`, `Skeleton`, `useToast`, `useToastSlot`), lucide icons at `strokeWidth={1.8}`, never
+raw colours in CSS modules (the picture viewer's veil and the drag's `--shadow-menu` are new tokens,
+Files and owners, O).
+
+**What it replaces in §22:** the Overview tab (its progress, deadline and phase cards become the
+band; its health box, critical tasks and AI summary become the Summary tab), the Phases tab (the
+accordion becomes the Board), "Files and notes" (becomes the Files tab), and "Project page
+(`team.view`)" (members now open it). **What stays:** the Projects list table, the forecast rules,
+the AI summary rules and card states (the AI phase line moves into the AI summary card, Summary
+tab), `MovePhaseButton`'s confirm, the deadline and phase dates dialogs (each gains one small prop,
+C), the Timeline and Hours tabs, the Undo rules and `UndoToast`, `TaskCheck`, `TaskUndoProvider`,
+`DueTag`, browser text reading (`readDocumentFile`).
+
+**Copy:** short and plain, sentence case, no dashes. In file rows, chips, note meta lines and tiles
+a date is `formatDayMonthShort` ("21 Nov"); in sentences, task facts ("Added by: Riya Kapoor on Mon,
+23 Nov"), card report lines ("Blocked · Fri, 20 Nov") and report lines it is `formatDayShort`; a
+deadline "16 Dec 2026". Sizes always through `formatSize`: "0 KB" for 0, "340 KB" (no decimals
+under 1 MB, at least "1 KB" above 0), "1.2 MB", "24.6 MB" (one decimal, ".0" dropped: "500 MB"),
+"1.2 GB" from 1 GB; 1 KB = 1,024 bytes, 1 MB = 1,048,576 bytes. Example people: Riya Kapoor (PM),
+Vishal Saini and Simran Kaur (employees), Neha Kapoor (HR), the CEO (Admin). The UI says "AI",
+never "Gemini". The upload, file and space routes' error messages never hold a file name (a 5xx is
+written to the error log); the browser adds the name from its own copy (`fileMessages.js`). The
+one exception is the 400 field message `fields.uploadKeys` "brief.pdf couldn't be added. Add it
+again." of the task save and of `POST /api/project-tasks/[id]/files` (both through `attachUploads`;
+the uploader's own upload, so the name is theirs; a 4xx is never logged).
+
+> **Company rule (overrides §22 "The text is stored; the file never is"):** from 1.12 Daybook keeps
+> real files, on disk in a private folder outside the app (Storage). The AI summary still reads only
+> text, extracted in the PM's browser, and never a task file.
+>
+> **Company rule (overrides §13 "Members of the project (and PM/Admin) can read them"):** a member
+> who doesn't have `team.view` reads only the tasks for them and the tasks for anyone on the
+> project, in every read (pages and `GET /api/projects/[id]/tasks`). Progress numbers still count
+> every task.
+>
+> **Company rule (overrides §9's `/projects/[id]` `team.view`):** the project page is
+> `project.request` plus a check: `team.view` holders get the PM view, active members get the
+> read-only member view, anyone else gets a 404.
+
+### Words
+
+- **Project file** = a real file on a project, in one **place**: "Whole project" (`phase` null) or
+  one of the six phases. It has a **visibility**. Row in `project_files` with `scope 'project'`.
+- **Task file** = a real file attached to one task (`scope 'task'`, `task_id`). It follows its task
+  (phase, person); who sees it is the task rule (decision 7), never a visibility choice.
+- **Project document** = one `project_documents` row (§22): text the AI summary reads. Three kinds
+  after 1.12: a **note** (`kind 'note'`, typed in Daybook); the **text of a project file**
+  (`kind 'file'`, `file_id` set, made in the PM's browser after the upload); a **text-only
+  document** (`kind 'file'`, `file_id` null: added before 1.12, "Text only", the original file
+  wasn't kept). Task files never get a document.
+- **Note** = a titled text written in Daybook, in a place, with a visibility. Shown in the Files tab.
+- **Upload** = one file on its way in: a `file_uploads` row plus `FILES_DIR/tmp/<key>.part` while it
+  is **receiving**. A task file's upload is **held** when finished (`ready`): it waits for the task
+  save or the attach call that names it. A project file's upload is attached when it finishes.
+- **Piece** = one part of an upload sent in one request: 4 MiB (4,194,304 bytes), the last one
+  shorter. **Offset** = how many bytes the server has.
+- **Visibility** = who sees a project file, a note or a text-only document: **"Everyone on the
+  project"** (`everyone`: the PM, Admins and members) or **"Only PM and Admins"** (`managers`).
+- **Member** = an active person with a `project_members` row for the project, whatever their role
+  (HR and PMs too). The project's PM isn't a member row; deactivated people keep their row and get
+  nothing (they can't sign in); people taken off the project lose the row and lose access at once.
+  **People on the project** (UI) = the PM and the members.
+- **Manager of a project** = its PM (with `project.manage`) or an Admin (`canManageProject`,
+  `projects/shared.js:76`). The CEO is an Admin.
+- **Picture** = a PNG, JPG, GIF or WebP file whose first bytes match its extension and whose size is
+  at most 40 megapixels. Only pictures are ever shown inside Daybook (inline). A **thumbnail** is a
+  small JPEG (400 px wide, about 40 KB) that the uploader's browser makes from the picture and sends
+  with Finish (research.md 3.7); a picture without one (the browser couldn't make it, demo data) uses
+  the picture itself when it is up to 2 MB, else the picture tile.
+- **Storage limit** = the company's room for files (Settings, 10 GB to start). **Space used** =
+  every active file plus every running or held upload that hasn't expired, by bytes from the
+  database (no disk scan). A deleted file stops counting at once; its disk file leaves in the
+  nightly cleanup (the free-disk check at Start and the write errors still protect the disk).
+- **Largest file** = the biggest single file allowed (Settings, 500 MB to start).
+
+### Who sees and does what
+
+One pure rule, **new** `src/modules/projectFiles/access.js`, used by every read, count, download and
+page (A). `ctx` = `{ projectId, userId, active, manages, member }` for **one viewer and one
+project**: `manages` = `canManageProject(viewer, project)`; `member` = an active `project_members`
+row and an active user, read by A's own repo (`repo.isActiveMember`, the same rule as B's
+`projects.isMember`, so A doesn't wait for B). `viewerContext({ viewer, project })` builds it;
+`countsForTasks` and `countTaskFilesForMember` build one `ctx` per project, never one for several.
+
+```js
+export function canSeeFile(ctx, file) {
+  if (!ctx.active) return false;
+  if (Number(file.projectId) !== Number(ctx.projectId)) return false; // a ctx is for one project
+  if (file.status !== 'active') return false;
+  if (file.scope === 'task' && !file.task) return false; // its task is gone
+  if (ctx.manages) return true;
+  if (!ctx.member) return false; // other PMs, HR not on the project, people taken off
+  if (file.scope === 'project') return file.visibility === 'everyone';
+  return file.task.assigneeId === null || file.task.assigneeId === ctx.userId;
+}
+export const canManageFiles = (ctx) => ctx.active && ctx.manages;
+export const filesAccess = (ctx) =>
+  canManageFiles(ctx) ? 'manage' : ctx.active && ctx.member ? 'member' : 'none';
+export function canReadDocument(ctx, doc) {
+  if (!ctx.active || Number(doc.projectId) !== Number(ctx.projectId)) return false;
+  // notes and text-only documents; the text of a project file is for managers only
+  if (ctx.manages) return true;
+  return (
+    ctx.member && doc.visibility === 'everyone' && (doc.kind === 'note' || doc.fileId === null)
+  );
+}
+```
+
+| Viewer                                 | Project file, Everyone | Project file, Only PM and Admins | Task file, task for one person | Task file, Anyone task | Note or text-only, Everyone | Note or text-only, Only PM and Admins | Text of a project file | Upload, rename, move, change who sees, delete |
+| -------------------------------------- | ---------------------- | -------------------------------- | ------------------------------ | ---------------------- | --------------------------- | ------------------------------------- | ---------------------- | --------------------------------------------- |
+| The project's PM                       | yes                    | yes                              | yes                            | yes                    | yes                         | yes                                   | yes                    | yes                                           |
+| Admin (the CEO)                        | yes                    | yes                              | yes                            | yes                    | yes                         | yes                                   | yes                    | yes                                           |
+| Member, the task's person              | yes                    | no                               | yes (their task)               | yes                    | yes                         | no                                    | no                     | no                                            |
+| Member, not the task's person          | yes                    | no                               | no                             | yes                    | yes                         | no                                    | no                     | no                                            |
+| HR on the project (a member)           | as a member            | no                               | as a member                    | as a member            | as a member                 | no                                    | no                     | no                                            |
+| HR not on the project                  | no (404)               | no                               | no                             | no                     | no                          | no                                    | no                     | no                                            |
+| Another PM, not a member               | no (404)               | no                               | no                             | no                     | no                          | no                                    | no                     | no                                            |
+| Another PM who is a member             | as a member            | no                               | as a member                    | as a member            | as a member                 | no                                    | no                     | no                                            |
+| Taken off the project                  | no (404)               | no                               | no                             | no                     | no                          | no                                    | no                     | no                                            |
+| The task's earlier person (reassigned) | as a member            | no                               | no                             | as a member            | as a member                 | no                                    | no                     | no                                            |
+| Deactivated                            | no (signed out)        | no                               | no                             | no                     | no                          | no                                    | no                     | no                                            |
+
+- "No" on a read is always **404 NOT_FOUND** "We couldn't find that file." (never 403), so an id
+  says nothing. On a write it is 403 FORBIDDEN "You can't change files on this project." for a
+  viewer who can see the file, else 404.
+- The rule runs on every request; nothing is cached per person. A move of a task to another person
+  takes effect on the next read.
+- **Files follow `ctx`, never the page's `access`.** Task rights come from `access` (`'manage'`,
+  `'team'`, `'member'`, page section); file rights come from `filesAccess(ctx)` (`head.filesAccess`).
+  A PM who is a member of another PM's project gets the PM view for tasks (`'team'`) and the
+  member's file rights (`'member'`): paperclips and "With files" counted from the files they may see
+  (their own and Anyone tasks), Files in the task window on those tasks, and the Files tab as a
+  member sees it (no Upload, no menus).
+- A viewer with `filesAccess 'none'` (another PM who isn't on the project) gets no paperclip, no
+  "With files" pill, no Files tab content and no Files section in the task window; nothing about
+  the files is loaded for them.
+- **Never to AI**: `projectSummaries` reads only `project_documents`; `aiAsk` and `aiSummaries`
+  read `project_tasks` and must never read `project_files` or `file_uploads` (a test scans every
+  file of both modules for either spelling, see Tests). **Never to Slack**: no file name, file or
+  link goes to the Slack outbox.
+
+### Data (migration `019_project_files.js`, portable to MySQL 8.4 and MariaDB 10.4; every length is also checked in zod)
+
+One file, owner orchestrator, in the style of `018_hr_tools.js` (lines 1 to 60): `export const config
+= { transaction: false }`; **each table change is ONE raw SQL statement** with inline `PRIMARY KEY`,
+`UNIQUE KEY`, `KEY` and `CONSTRAINT ... FOREIGN KEY` clauses and `ENGINE=InnoDB DEFAULT
+CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`; every identifier backtick-quoted; names as knex names
+them (`<table>_<column>_foreign`, `<table>_<columns>_unique`, `<table>_<columns>_index`); guarded by
+`hasTable` / `hasColumn` on the statement's first new object; 1050 and 1060 count as "already there"
+when the check then says so; the statements run on one pinned connection after `SET SESSION
+lock_wait_timeout = 30`. **No generated columns** (so MySQL error 3192 can't arise) and no CASCADE on
+a column any generated column reads. DATETIME columns are UTC, written by the app (`nowDate()`).
+
+1. **`project_files`** (every real file, project or task):
+   - `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, PRIMARY KEY.
+   - `project_id` BIGINT UNSIGNED NOT NULL, FK `projects` **ON DELETE CASCADE** (projects are never
+     deleted in the app; `seed:demo` and `reset` empty the folder themselves, Storage).
+   - `scope` ENUM('project','task') NOT NULL.
+   - `task_id` BIGINT UNSIGNED NULL, FK `project_tasks` **ON DELETE SET NULL** (the task delete
+     marks its files deleted first, Task files; SET NULL is the safety net: a `scope 'task'` row
+     without a task is never served and the cleanup purges it).
+   - `phase` VARCHAR(24) NULL: project files: null = Whole project, else one of `PHASE_KEYS`; task
+     files: always null (the place is the task's phase).
+   - `visibility` ENUM('everyone','managers') NOT NULL DEFAULT 'managers' (fails closed: the service
+     always writes it; task files: stored 'managers', never read).
+   - `status` ENUM('active','deleted') NOT NULL DEFAULT 'active'.
+   - `name` VARCHAR(255) NOT NULL (the cleaned display name, utf8mb4; never on disk).
+   - `ext` VARCHAR(10) NOT NULL DEFAULT '' (lower case letters and digits, from the name).
+   - `size_bytes` BIGINT UNSIGNED NOT NULL.
+   - `storage_key` VARCHAR(48) NOT NULL: `'yyyy/mm/<32 lower hex>'` (the month the upload
+     finished, UTC), UNIQUE `project_files_storage_key_unique`.
+   - `is_picture` TINYINT(1) NOT NULL DEFAULT 0; `width`, `height` INT UNSIGNED NULL (pictures);
+     `has_thumb` TINYINT(1) NOT NULL DEFAULT 0 (a thumbnail sits at `files/<storage_key>.t`).
+     `ext`, `is_picture`, `width`, `height` and `has_thumb` never change after Finish.
+   - `created_by` BIGINT UNSIGNED NOT NULL FK `users`; `updated_by`, `deleted_by` BIGINT UNSIGNED
+     NULL FK `users` (users are never deleted: RESTRICT).
+   - `deleted_at` DATETIME NULL; `created_at`, `updated_at` DATETIME NOT NULL DEFAULT
+     CURRENT_TIMESTAMP (the service writes both).
+   - KEY `project_files_project_id_status_index` (`project_id`, `status`) (the Files tab, the FK);
+     KEY `project_files_task_id_status_index` (`task_id`, `status`) (task windows, counts, the FK);
+     KEY `project_files_status_deleted_at_index` (`status`, `deleted_at`) (the purge).
+2. **`file_uploads`** (uploads on their way in and held ones):
+   - `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY; `upload_key` CHAR(32) NOT NULL (random hex,
+     the only id the browser sees), UNIQUE `file_uploads_upload_key_unique`.
+   - `project_id` BIGINT UNSIGNED NOT NULL FK `projects` ON DELETE CASCADE; KEY.
+   - `target` ENUM('project','task') NOT NULL.
+   - `task_id` BIGINT UNSIGNED NULL FK `project_tasks` ON DELETE SET NULL; KEY (`task_id`). Target
+     task: the existing task, or null for a task not saved yet.
+   - `phase` VARCHAR(24) NULL and `visibility` ENUM('everyone','managers') NOT NULL DEFAULT
+     'managers' (target project only; Start always writes the person's choice).
+   - `name` VARCHAR(255) NOT NULL; `ext` VARCHAR(10) NOT NULL DEFAULT ''; `size_bytes` BIGINT
+     UNSIGNED NOT NULL; `received_bytes` BIGINT UNSIGNED NOT NULL DEFAULT 0; `piece_bytes` INT
+     UNSIGNED NOT NULL (the piece size given at Start).
+   - `status` ENUM('receiving','ready','attached','cancelled','expired') NOT NULL DEFAULT
+     'receiving'.
+   - `storage_key` VARCHAR(48) NULL: chosen at Finish, **before** the `.part` is renamed, so the row
+     always names any disk file it made.
+   - `is_picture` TINYINT(1) NOT NULL DEFAULT 0, `width`, `height` INT UNSIGNED NULL, `has_thumb`
+     TINYINT(1) NOT NULL DEFAULT 0 (set at Finish, copied at attach).
+   - `file_id` BIGINT UNSIGNED NULL FK `project_files` ON DELETE SET NULL; KEY (`file_id`).
+   - `busy_until` DATETIME NULL (the lease of the request writing a piece or finishing).
+   - `expires_at` DATETIME NOT NULL (receiving: 2 h after Start or the last piece, since a reload
+     can't resume an upload anyway; ready: 24 h after Finish).
+   - `created_by` BIGINT UNSIGNED NOT NULL FK `users`; timestamps.
+   - KEY `file_uploads_status_expires_at_index` (`status`, `expires_at`) (space, cleanup); KEY
+     `file_uploads_created_by_status_index` (`created_by`, `status`) (running uploads per person).
+3. **`file_space`** (one row, the lock that keeps two Starts from both passing the storage limit):
+   `id` TINYINT UNSIGNED NOT NULL PRIMARY KEY, `disk_full_at` DATETIME NULL (the last time the
+   server refused a write for lack of disk), `updated_at` DATETIME NOT NULL DEFAULT
+   CURRENT_TIMESTAMP. The migration inserts `(1)` with `INSERT IGNORE` (both servers); Start puts
+   it back only when its lock finds no row (Storage, Storage limit check).
+4. **`project_documents`**, one ALTER: `MODIFY phase VARCHAR(24) NULL` (null = Whole project), `ADD
+visibility ENUM('everyone','managers') NOT NULL DEFAULT 'managers'` (every existing row keeps
+   today's privacy: Only PM and Admins), `ADD file_id BIGINT UNSIGNED NULL`, `ADD UNIQUE KEY
+project_documents_file_id_unique (file_id)` (one text per file), `ADD CONSTRAINT
+project_documents_file_id_foreign FOREIGN KEY (file_id) REFERENCES project_files (id) ON DELETE
+CASCADE` (a file's text never outlives its file row, so it can never turn into a text-only
+   document). Guarded by `hasColumn('project_documents', 'visibility')`. The table is copied once
+   (adding a foreign key): it is small (at most 40 rows a project before 1.12).
+5. No change to `project_tasks`, `projects`, `project_members` or `notifications`. No new permission
+   key.
+
+**How the three relate.** A project file may have one project document (its text, `file_id`); a
+note and a text-only document have none. A task file never has one. A file's document is always
+stored with `visibility 'managers'` (members never read a file's text, whatever the file's
+visibility). Deleting a project file deletes its document in the same transaction, so the AI summary
+stops reading it at once (the CASCADE is only the safety net). Renaming or moving a project file
+renames or moves its document in the same transaction. A file row never exists
+without its disk file except for the tiny window of a crash (Uploads, Finish), and a disk file never
+exists without a row naming it (the upload row first, then the file row).
+
+**Soft delete for Undo.** The browser waits behind its 6 s Undo toast before it sends a `DELETE`
+(the §22 pattern, `useUndoDelete`). The `DELETE` sets `status 'deleted'`, `deleted_at`,
+`deleted_by`: from that moment the file is never listed, counted or served. The disk file and the
+row are removed by the nightly cleanup (Storage). There is no restore route: Undo never reaches the
+server.
+
+`down` (each object checked first, so a stopped `down` runs again): `UPDATE project_documents SET
+phase = 'requirement_gathering', updated_at = updated_at WHERE phase IS NULL` (1.11 has no Whole
+project; `updated_at = updated_at` keeps the column's ON UPDATE from restamping the rows), drops
+`project_documents_file_id_foreign` (checked in `information_schema.TABLE_CONSTRAINTS`), then one
+ALTER drops `file_id`, its unique key and `visibility` and makes `phase` NOT NULL again (the text of
+uploaded files stays as text-only documents); then drops `file_uploads`, `file_space` and
+`project_files`. Files on disk are left alone (README).
+
+**Settings** (two keys, `db/seeds/03_settings.js` by the orchestrator; a missing row reads as the
+default, the live server never seeds): `file_max_mb: 500` and `file_storage_limit_gb: 10` (Settings,
+below).
+
+**Audit actions** (new, `entityType 'project_file'`, `entityId` the file): `project_file.add`
+(after: `{ projectId, scope, taskId, phase, visibility, sizeBytes, ext }`), `project_file.update`
+(before and after: `{ phase, visibility, nameChanged: true }`), `project_file.delete` (before: the
+same fields). **Never the file name or any text** (as §22's documents). Uploads, cancels, downloads
+and cleanup are not audited. Logs carry ids and sizes only, never names.
+
+**Notification type** (new): `project_task.files_added` (Notifications).
+
+### Deploy before migrate (errno 1146 and 1054)
+
+The code ships before the migrate line runs (README). Every existing screen and job keeps working,
+and every new feature either reads as empty or answers one sentence.
+
+- **One guard**, **new** `src/modules/projectFiles/migration019.js` (the
+  `attendance/migration018.js` pattern): `isMissing019(error)` (errno 1146 or 1054),
+  `guard019Read(area, read, fallback)`, `guard019Write(area, write)` throws `new
+AppError('UPDATE_NEEDED', { status: 503, message: 'This needs the latest database update. Ask an
+Admin.' })` (the 1.10 code and sentence, no new code). One warning per area per process: "The
+  1.12 database update is missing (run the migrate line); <area> is off". Areas: `files`,
+  `documents`. Nothing caches "missing", so everything works once migrated, without a restart.
+
+| Feature                                 | Before 019                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Board, member board, Today, My projects | work; file counts read as 0 (no paperclips; "With files (0)")                                                                                                                                                                                                                                                                                                                                   |
+| Task window                             | works; Files reads as none ("No files on this task."); Add files and drops answer the sentence in a toast                                                                                                                                                                                                                                                                                       |
+| New task, Edit task, Delete task        | work as 1.11 without files: `deleteFilesOfTask` and `countActiveForTask` read through `guard019Read` (1146 → 0, no write; a failed statement doesn't end the transaction on either server); `attachUploads` and `removeTaskFiles` with empty lists return `[]` without a query; a picked file's chip shows the sentence; only a save that names upload keys or file ids answers `UPDATE_NEEDED` |
+| Every new route                         | `/api/uploads/**`, `/api/project-files/**`, `POST /api/project-tasks/[id]/files` answer `UPDATE_NEEDED` 503                                                                                                                                                                                                                                                                                     |
+| Files tab                               | one muted card with an Info icon: "Files need the latest database update. Ask an Admin." Nothing else (the old documents are kept and show after the migration)                                                                                                                                                                                                                                 |
+| AI summary                              | works: `projectSummaries` reads documents through `withFileColumns(read)`, which on 1054 reads again without `visibility` and `file_id` (every row `managers`, no file)                                                                                                                                                                                                                         |
+| Notes and documents routes              | `POST` and `PATCH` that set `visibility: 'everyone'`, `phase: null` or `fileId` answer `UPDATE_NEEDED`; a body with no `visibility` (or `'managers'`), a phase and no `fileId` is written without the new columns and works as in 1.11                                                                                                                                                          |
+| Settings → Files                        | the two fields save (the `settings` table exists); the space line reads "Files need the latest database update. Run the migrate line in README, Updating." in place of the numbers                                                                                                                                                                                                              |
+| Cleanup                                 | the files step counts 0, one warning                                                                                                                                                                                                                                                                                                                                                            |
+| Checking                                | `npm run doctor` shows "✗ 1 database update not run: 019_project_files.js. Run the migrate line in README Updating."                                                                                                                                                                                                                                                                            |
+
+A still-running 1.11 process after the migration inserts documents with `visibility 'managers'`
+(the column default), and a PM tab still running 1.11 code after the Restart posts notes and texts
+without `visibility`, which the 1.12 server also stores as `'managers'` (Notes). Nothing an older
+process or page writes becomes visible to members.
+
+### Storage (A: `src/modules/projectFiles/storage.js`, new)
+
+- **`FILES_DIR`** (`src/lib/env.js`, orchestrator): an absolute path, trimmed. **Production: no
+  default.** When it is missing or unusable Daybook still starts; every file feature answers
+  `FILES_UNAVAILABLE` (503) "File storage isn't set up yet. Ask an Admin.", Settings → Files says
+  so, and `npm run doctor` shows ✗. Development default: `<app root>/.daybook-files` (git-ignored,
+  `.gitignore` line `/.daybook-files/`; never in `scratch/`). Tests (`NODE_ENV=test`): always `<os
+temp dir>/daybook-test-files/<DB_NAME>`, and `FILES_DIR` is ignored, so a value in a `.env` file
+  is never used, or emptied, by tests. `env.filesDir` is the resolved folder and
+  `env.filesDirIsDefault` says whether it came from the default.
+- **`FILES_PIECE_BYTES`** (env, optional): the piece size Start hands out. Default 4,194,304.
+  Production: 1,048,576 to 8,388,608 (for a stricter host). Elsewhere: 65,536 to 4,194,304 (e2e uses
+  65,536). A value out of range fails the env check ("Daybook can't start", as other bad values).
+- **The check** (`checkStorage({ dir, isProduction } = env)`, pure inputs so tests can pass their
+  own; cached 60 s per process, `resetStorageForTests()` clears the cache; `ensureReady()` throws
+  `FILES_UNAVAILABLE`), in this order:
+  1. The value is absolute (`~` is never expanded: dotenv doesn't) → else `not_absolute`.
+  2. The folder exists or can be made (`mkdir(dir, { recursive: true, mode: 0o700 })`), then
+     `fs.realpath(dir)` is used from here on (a symlink or `/home` vs `/home2` can't hide where it is).
+     **Never `process.cwd()`**: the web process's working folder is whatever the host's launcher sets.
+  3. In production, walking up from the real folder to `/`: a folder that holds both Daybook's
+     `server.cjs` and `package.json` → `inside_app`; a path part named `public_html` → `public`.
+  4. **The marker** `FILES_DIR/.daybook-files` ("Daybook keeps project files here. Don't add or
+     remove files by hand.") is there, or the folder is **empty** and the marker is written now
+     (a marker that another process's check wrote between the two looks counts as there).
+     A folder that isn't empty and has no marker → `not_empty` (so the home folder, a web folder or
+     any other folder in use is never taken over, and reset never empties one). Every mode.
+  5. With the marker in place: `tmp/` and `files/` exist or are made; `FILES_DIR/.htaccess`
+     (`Require all denied` and `Options -Indexes`) is written when missing, so a folder put under a
+     document root by mistake is never listed or served; mode 0700 on `FILES_DIR`, `tmp/` and
+     `files/` (POSIX only); a probe file can be written and removed → else `not_writable`.
+     Problems: `not_set`, `not_absolute`, `inside_app`, `public`, `not_empty`, `not_writable` (logged
+     once at error level with the problem, never the path in a response). Each has its own sentence in
+     Settings and doctor (Settings).
+- **Layout** (same file system, so the final `rename` never copies):
+
+  ```
+  FILES_DIR/                       e.g. /home/cpuser/daybook-files   (mode 0700)
+    .daybook-files                 the marker
+    .htaccess                      Require all denied, Options -Indexes
+    tmp/<upload_key>.part          one per receiving upload (mode 0600)
+    files/<yyyy>/<mm>/<32 hex>     finished files: no extension, never the person's name
+    files/<yyyy>/<mm>/<32 hex>.t   its thumbnail (pictures only, when the browser sent one)
+  ```
+
+- **Names on disk are random**: `crypto.randomBytes(16).toString('hex')`; the storage key is
+  `` `${yyyy}/${mm}/${hex}` `` (UTC month of Finish). Paths are built only from `FILES_DIR`, fixed
+  parts and a key checked against `/^\d{4}\/\d{2}\/[0-9a-f]{32}$/` (an upload key against
+  `/^[0-9a-f]{32}$/`), with `path.join`, then checked with `path.resolve` to start with `FILES_DIR +
+path.sep`. Nothing from the browser is ever part of a path. Windows dev works the same
+  (`node:path` only). New `.part` files are opened with mode 0o600.
+- **Windows only** (development and tests): `rename`, `unlink` and `truncate` retry `EPERM`,
+  `EACCES` and `EBUSY` up to 10 times, 100 ms apart, before the error map (an antivirus or the
+  search indexer briefly holds new files). On Linux there is no retry.
+- **Writing a piece**: `stat` the `.part` first. If it is shorter than `received_bytes` (the machine
+  lost data), `received_bytes` is set to its size rounded down to a piece boundary and the answer is
+  409 `UPLOAD_OFFSET` without writing (the browser asks Status and resends). Otherwise
+  `truncate(part, offset)` (it only ever shortens: it drops a half-written tail of an earlier try),
+  then `stream/promises` `pipeline(Readable.fromWeb(piece.stream()), hasher?,
+createWriteStream(part, { flags: 'r+', start: offset }))` (positional, never append mode).
+- **Atomic finish**: `open(part, 'r+')`, `filehandle.sync()`, close, `mkdir(files/yyyy/mm)`,
+  `rename(part, final)`. Every handle is closed in `finally`.
+- **Disk-full handling** (`isDiskFull(error)`): `ENOSPC`, `EFBIG`, and `EDQUOT`, which Node 20 reports
+  as code `UNKNOWN` with `errno === -os.constants.errno.EDQUOT` (-122 on Linux). On any of them: stop
+  the upload (status `cancelled`), delete its `.part`, set `file_space.disk_full_at = now`, log one
+  error (ids only) and answer `FILES_DISK_FULL` (507) "The server is out of space for files. Ask an
+  Admin." `EACCES`/`EPERM` (after the Windows retries) → `FILES_UNAVAILABLE`; `EMFILE` →
+  `UPLOAD_BUSY` (429, `Retry-After: 2`); `ENOENT` on the `.part` of a `receiving` upload (a host
+  scanner moved it) → `UPLOAD_LOST` (410) "This file was removed from the server while it uploaded.
+  Add it again. If it happens again, ask an Admin."
+- **Free disk**: Start also reads `fsPromises.statfs(FILES_DIR)` (`bavail * bsize`) and refuses
+  with `FILES_DISK_FULL` when free space is under the file's size plus 256 MiB. (A cPanel quota can
+  run out while the disk shows room, so write errors are handled too.)
+- **Storage limit check** (A, `space.js`): Start runs one transaction whose **first** statement is
+  `SELECT id FROM file_space WHERE id = 1 FOR UPDATE`. Nothing is read in that transaction before
+  it, so the plain reads after it see every upload another Start committed while this one waited.
+  Only when no row comes back (after `reset` or `seed:demo` emptied the table) does it run `INSERT
+IGNORE INTO file_space (id, updated_at) VALUES (1, ?)` and the same `SELECT ... FOR UPDATE` again.
+  Never run `INSERT IGNORE` before the lock on every Start: its shared lock deadlocks two Starts sent
+  together. Then `used = SUM(project_files.size_bytes WHERE status = 'active') +
+SUM(file_uploads.size_bytes WHERE status IN ('receiving','ready') AND expires_at > now)`, and it
+  refuses when `used + size > file_storage_limit_gb × 1024³` with `FILES_SPACE_FULL` (507). The
+  message never names the file: Admin (`settings.manage`) "Daybook's file space is full (9.8 GB of
+  10 GB). Delete old files or raise the limit in Settings."; anyone else "There isn't enough space
+  for this file. Ask an Admin to make room." (the browser shows
+  `fileMessages.spaceFull({ admin, name, usedBytes, limitBytes })` with its own copy of the name).
+  The upload row is inserted in the same transaction, so the lock stops two big Starts from both
+  passing. The transaction is retried up to 3 times on errno 1213 and 1205 (the
+  `attendance/repo.js` deadlock pattern).
+- **Nightly cleanup** (A, `cleanup.js`; one more step in `src/worker/jobs/cleanup.js`:
+  `projectFiles: () => projectFiles.cleanUp({ limit: 500, budgetMs: 20_000 })`, returning a count).
+  In order, each at most `limit` rows, stopping when the time budget is used (the rest waits a
+  night):
+  1. **Abandoned uploads**: `receiving` past `expires_at`: delete the `.part` and, if `storage_key`
+     is set (a crash during Finish), that file and its `.t`; status `expired`.
+  2. **Held uploads never attached**: `ready` past `expires_at`: delete the file at `storage_key`
+     and its `.t`; status `expired`.
+  3. **Files of deleted tasks**: `scope 'task'`, `task_id` null, `status 'active'` (only after a
+     task delete outside the service): status `deleted`, `deleted_at` now (purged by step 4 next
+     night).
+  4. **Deleted files after the Undo window**: `status 'deleted'` with `deleted_at` at least 10
+     minutes ago: delete the disk file and its `.t`, then the row.
+  5. **Stray pieces**: every `tmp/` entry matching `^[0-9a-f]{32}\.part$` older than 24 h (by
+     `mtime`) whose key has no `receiving` row. Nothing else in `tmp/` is touched.
+  6. **Old upload rows**: `attached`, `cancelled` and `expired` rows older than 7 days.
+     In every part `ENOENT` counts as already removed. Any other error on one row (`EBUSY`, `EPERM`,
+     `EACCES` on one file) skips that row with one warning and the part goes on; each part orders by
+     id, so a skipped row never blocks the rows after it. The step ends early, returning its count so
+     far, only when the storage check fails (then 0 and one warning) or the time budget is used. It
+     never throws, so the rest of the cleanup run isn't marked failed. Before 019 it returns 0.
+- **`seed:demo` and `npm run reset`** (orchestrator): after emptying the tables they call
+  `projectFiles.wipeStorageForReset()`, which works **only when the marker file is there** and
+  removes only names Daybook makes (`tmp/<32 hex>.part`, `files/<4 digits>/<2 digits>/<32
+hex>` and its `.t`, then the month and year folders left empty), never anything else; it returns
+  `{ removed }`.
+- **No virus scanner** on the host (ClamAV needs 3 GiB+ of memory; the account has 0.5 to 1 GB).
+  The protection is: only managers upload, files are never opened or unpacked by Daybook (no
+  archive reading, no server thumbnails, no AI), safe download headers, and the scanners on
+  people's own computers. CSV files can hold spreadsheet formulas; acceptable for files the
+  company's own PMs add.
+
+### Uploads (A: `src/modules/projectFiles/{uploads,pieces,finish,uploadRepo,schemas}.js`, new)
+
+Our own small protocol, no library (research.md 1.13: tus's `PATCH` with
+`application/offset+octet-stream` falls outside the default OWASP CRS methods and content types and
+may count against ModSecurity's 1 MB no-files limit). It copies tus's rules: the offset sent must be
+the server's offset, else 409; a piece that fails its checksum is dropped and the offset stays;
+expired and cancelled uploads are gone for good.
+
+**Routes** (all `withRoute({ permission: 'signed_in' })`, the service decides; every handler first
+counts a per-person rate limit, `checkRateLimit(LIMIT, ROUTE, 'user:' + user.id)`, as
+`api/me/preferences/route.js` does; `withRoute` checks Origin on POST and DELETE as always; `export
+const runtime = 'nodejs'`):
+
+| Route                                     | Body                                                            | Answer                                                                                                                                                          | Per person |
+| ----------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `POST /api/uploads` (Start)               | JSON `uploadStartSchema`                                        | 201 `{ data: { key, pieceSize, offset: 0, name, size, expiresAt } }` (`name` = the cleaned name)                                                                | 60 a min   |
+| `GET /api/uploads/[key]` (Status)         | none                                                            | 200 `{ data: { key, offset, size, status, busy, expiresAt } }` (`busy` = `busy_until` is in the future), `Cache-Control: no-store`                              | 120 a min  |
+| `POST /api/uploads/[key]/pieces?offset=N` | `multipart/form-data`, one part `piece`                         | 200 `{ data: { offset } }` (the new offset)                                                                                                                     | 300 a min  |
+| `POST /api/uploads/[key]/finish` (Finish) | none, or `multipart/form-data` with one part `thumb` (pictures) | target project: 201 `{ data: { file: ProjectFile } }`; target task: 200 `{ data: { upload: { key, status: 'ready', name, size, ext, isPicture, expiresAt } } }` | 60 a min   |
+| `DELETE /api/uploads/[key]` (Cancel)      | none                                                            | 200 `{ data: { cancelled: true } }` (a `receiving` or `ready` upload: its `.part` or held file is deleted at once)                                              | 120 a min  |
+
+`projectFiles/errors.js` also exports `retryResponse(error, requestId, seconds)` →
+`Response.json({ error: { code, message, requestId } }, { status: error.status, headers: {
+'Retry-After': String(seconds), 'Cache-Control': 'no-store' } })`, because a thrown `AppError`
+carries no headers (`route.js` `errorResponse`). The pieces and Finish routes wrap the service call
+in try/catch and **return** `retryResponse` for `UPLOAD_BUSY` (a handler may return a `Response`);
+every other error is rethrown to `withRoute`.
+
+**The proxy doesn't run for the piece, Finish, Status and Cancel routes** (`/api/uploads/<key>`
+and below; Start, `POST /api/uploads`, still goes through it, which is harmless: a small JSON
+body). `src/proxy.js`'s matcher becomes
+`['/((?!_next/|icons/|favicon.ico|robots.txt|api/uploads/).*)']` (orchestrator; a constant, as
+`proxy.md` requires). Reason (map.md 9, `proxyClientMaxBodySize.md`, `dist/server/body-streams.js`):
+when the proxy runs, Next clones every non-GET body and keeps a copy in memory up to 10 MB, cutting
+it **silently** past that; leaving the upload routes out avoids two extra in-memory copies of every
+piece and any silent cut. Consequence: with `TRUST_PROXY=false` a client-sent `X-Forwarded-For`
+isn't stripped on these routes, so they **never use the client IP**: rate limits are per person and
+their audit rows (Finish of a project file) carry `ip: null`. The proxy never decided access anyway
+(its own comment): `withRoute` checks the session on every route. `tests/unit/clientIp.test.js`
+adds: the matcher doesn't match `/api/uploads` children such as `/api/uploads/abc/pieces`, and still
+matches `/api/attendance/check-in`, `/api/project-files/5` and `/api/uploadsx`.
+
+**Schemas** (zod 4, `schemas.js`; `idValue` is a factory here too, as the private one in
+`projectTasks/schemas.js:18-23`, which isn't exported):
+
+```js
+const ID = /^[1-9]\d{0,15}$/;
+const idValue = (message) =>
+  z
+    .union([z.number(), z.string().trim()], { error: message })
+    .refine((v) => ID.test(String(v)), message)
+    .transform(Number);
+const name = z
+  .string({ error: 'Pick a file.' })
+  .min(1, { error: 'Pick a file.' })
+  .max(1000, { error: 'That file name is too long.' });
+const size = z
+  .number({ error: 'Pick a file.' })
+  .int()
+  .min(1, { error: 'This file is empty.' })
+  .max(Number.MAX_SAFE_INTEGER);
+const common = {
+  projectId: idValue("We couldn't find that project."),
+  name,
+  size,
+  lastModified: z.number().int().min(0).optional(),
+};
+export const uploadStartSchema = z.discriminatedUnion(
+  'target',
+  [
+    z.object({
+      ...common,
+      target: z.literal('project'),
+      phase: z.enum(PHASE_KEYS, { error: 'Pick a place from the list.' }).nullable().default(null),
+      // required, no default: the Upload dialog always sends the choice, so nothing is shared by accident
+      visibility: z.enum(['everyone', 'managers'], { error: 'Pick who can see it.' }),
+    }),
+    z.object({
+      ...common,
+      target: z.literal('task'),
+      taskId: idValue("We couldn't find that task.").nullable().default(null),
+    }),
+  ],
+  { error: 'Pick where the file goes.' },
+);
+export const uploadKeySchema = z
+  .string()
+  .regex(/^[0-9a-f]{32}$/, { error: "We couldn't find that upload." });
+export const pieceQuerySchema = z.object({
+  offset: z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+});
+export const fileUpdateSchema = z
+  .object({
+    // the base name only; the server keeps the stored extension (Names)
+    name: z
+      .string()
+      .trim()
+      .min(1, { error: 'Write a name.' })
+      .max(200, { error: 'Keep the name to 200 characters.' })
+      .optional(),
+    phase: z.enum(PHASE_KEYS, { error: 'Pick a place from the list.' }).nullable().optional(),
+    visibility: z.enum(['everyone', 'managers'], { error: 'Pick who can see it.' }).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { error: 'Nothing to change.' });
+```
+
+A route `[key]` that fails `uploadKeySchema` answers 404 (as `routeId` does for ids).
+
+**Start** (`startUpload({ user, input })`): `ensureReady()`; the project exists (else 404) and the
+viewer manages it (else 403 "You can't add files to this project."); target task with a `taskId`:
+the task is on the project (else 404 "We couldn't find that task."); the name is cleaned
+(`names.cleanFileName`, below) and its `ext` taken; `size` at most `file_max_mb × 1,048,576` (else
+`FILE_TOO_BIG` 413 "This file is 1.2 GB. Each file can be up to 500 MB."); at most 10 `receiving`
+uploads for this person with `expires_at > now` (else `TOO_MANY_UPLOADS` 429 "You have 10 files
+uploading. Wait for some to finish."); free disk (Storage); then the space transaction (lock
+`file_space` first, sum, insert the row with a new `upload_key`, `piece_bytes` =
+`env.filesPieceBytes`, `expires_at` = now + 2 h); then `open(tmp/<key>.part, 'wx', 0o600)` and
+close. If the `.part` can't be made the row is set `cancelled` and the storage error answers.
+
+**Piece** (`receivePiece({ user, key, offset, request })`), cheapest checks first:
+
+1. Rate limit (per person), session.
+2. A process-wide counter allows **2 pieces** being read or written at once; a third gets
+   `UPLOAD_BUSY` 429 "Daybook is busy with other files. Trying again." with `Retry-After: 2`
+   (memory stays near 25 MB; the web app's disk thread pool has Node's default 4 threads, and the
+   other 2 keep pages, database connections and downloads moving; Hosting and cost). It is a 429,
+   not a 503: it is normal back-pressure, and `withRoute` logs every 5xx at error level.
+3. The upload exists and is this person's (else 404 "We couldn't find that upload."); `cancelled`
+   or `expired`, or `receiving` past `expires_at` → `UPLOAD_GONE` 410 "This upload stopped because
+   it was left too long. Add the file again." (`expired` is written then); `ready` or `attached` →
+   409 `UPLOAD_OFFSET`.
+4. `Content-Length` present (else `LENGTH_REQUIRED` 411 "That part of the file came without its
+   size.") and at most `piece_bytes + 65,536` (else `PAYLOAD_TOO_LARGE` 413 "That part of the file
+   is too large."), **before** the body is read.
+5. **Claim the lease** in one statement: `UPDATE file_uploads SET busy_until = ? WHERE id = ? AND
+created_by = ? AND status = 'receiving' AND received_bytes = ? AND (busy_until IS NULL OR
+busy_until < ?)` (app clock `nowDate()`, + 2 minutes). 0 rows: read the row; offset differs →
+   `UPLOAD_OFFSET` 409 "Daybook has a different part of this file." (the browser asks Status); else
+   `UPLOAD_BUSY` 429 with `Retry-After` = the seconds until `busy_until` (1 to 120; a web process
+   stopped mid-piece leaves its lease for up to 2 minutes).
+6. `request.formData()`; exactly one field, `piece`, a file (else `PIECE_BAD` 400 "That part of the
+   file didn't arrive whole."); its size **exactly** `min(piece_bytes, size_bytes - offset)` (else
+   `PIECE_BAD`, nothing written).
+7. Write at the offset (Storage). With an `X-Piece-Sha256` header (64 lower hex) the SHA-256
+   computed while writing must match, else the part is cut back to `offset` and `PIECE_CHECKSUM` 422
+   "That part of the file changed on the way. Daybook will send it again."
+8. `UPDATE ... SET received_bytes = ?, busy_until = NULL, expires_at = <now + 2 h> WHERE id = ? AND
+status = 'receiving'`. 0 rows (cancelled meanwhile) → `UPLOAD_GONE`. Answer `{ offset }`.
+
+The lease is released in `finally` on every error after step 5. Pure helpers (`pieces.js`):
+`pieceCount(size, pieceBytes)`, `expectedPieceBytes(size, pieceBytes, offset)` (null when the
+offset isn't a piece boundary below `size`), `isPieceOffset(offset, size, pieceBytes)`.
+
+**Finish** (`finishUpload({ user, key, thumb })`) is **safe to repeat at every stage** (its answer
+can be lost to a host timeout):
+
+1. Claim the lease for **5 minutes** (the `sync` of a big file under the host's disk limit can take
+   a minute) with `status = 'receiving' AND received_bytes = size_bytes` and, when `storage_key` is
+   null, set a new one in the same statement. 0 rows: read the row. Already `ready` → 200 with the
+   same `{ upload }`; already `attached` → 201 with the file of its `file_id` (`UPLOAD_GONE` when
+   that file was deleted, or when `canSeeFile` now says no to the person, as after a PM change, so
+   a repeat Finish never shows a file a download would answer 404 for); `cancelled` or `expired` →
+   `UPLOAD_GONE`; `receiving` with bytes missing
+   → `UPLOAD_INCOMPLETE` 409 "Some of this file is still missing."; lease held → `UPLOAD_BUSY` 429
+   with `Retry-After`.
+2. If `tmp/<key>.part` exists: `sync`, `mkdir`, `rename` to `files/<storage_key>`. If it doesn't and
+   `files/<storage_key>` exists, an earlier Finish got this far: go on. Neither → `UPLOAD_GONE`.
+3. Read the picture header of the final file (`ENOENT` → `UPLOAD_GONE`):
+   `pictures.readPicture(read, ext)` → `{ isPicture, width, height }` (PNG `89 50 4E 47 0D 0A 1A
+0A` and IHDR, GIF `GIF87a`/`GIF89a`, WebP `RIFF....WEBP` with VP8, VP8L or VP8X: the first 64 KB;
+   JPEG `FF D8 FF`, then the segments are walked with positional reads (each 4-byte marker and
+   length, then the segment is skipped) until the SOF marker, at most 1 MB into the file, since
+   EXIF, XMP, ICC and Photoshop segments often come first; pure JS, no decoding; over 40,000,000
+   pixels, or bytes that don't match the extension (`jpg`/`jpeg` → JPEG, `png`, `gif`, `webp`), is
+   not a picture).
+4. **Thumbnail**: when the body has a `thumb` part, the upload is a picture, the part is at most
+   512 KB and starts `FF D8 FF`, it is written to `files/<storage_key>.t` (mode 0o600) and
+   `has_thumb` is 1. Anything else about `thumb` is ignored (no thumbnail, no error).
+5. One transaction **locks the upload row** (`FOR UPDATE`) and goes on only while it is still
+   `receiving`; otherwise (a Cancel won the race) it deletes `files/<storage_key>` and its `.t`
+   (`ENOENT` is fine) and answers `UPLOAD_GONE`. Target project: it reads the project again and
+   checks `canManageProject(user, project)`; when that fails the upload is set `cancelled`, its disk
+   files are deleted and the answer is 403 FORBIDDEN "You can't add files to this project.";
+   otherwise it inserts the `project_files` row (`scope 'project'`, the upload's phase and
+   visibility, the picture and thumbnail fields), sets the upload `attached`, `file_id`,
+   `busy_until` null, writes `project_file.add` (`ip: null`) and answers the file. A 1062 on
+   `project_files_storage_key_unique` (a second Finish after an expired lease) reads the row again
+   and answers as step 1 does for `attached`. Target task: the upload becomes `ready` with the
+   picture fields, `expires_at` = now + 24 h, `busy_until` null; answers the upload.
+
+A crash anywhere leaves only rows that name what is on disk: a `receiving` row with its `.part`, or
+with its `storage_key` file after step 2; the cleanup removes both when they expire. A file row is
+committed only after its disk file is in place.
+
+**Cancel** (`cancelUpload({ user, key })`) is one statement: `UPDATE file_uploads SET status =
+'cancelled', busy_until = NULL WHERE upload_key = ? AND created_by = ? AND status IN
+('receiving','ready')`. Only when it changed the row are the `.part`, the `storage_key` file and its
+`.t` deleted (`ENOENT` is fine). With 0 rows it reads the row: not this person's or unknown → 404;
+`attached` → 409 CONFLICT "This file is already added." (the browser keeps the file: it is in the
+list, or saved on the task); `cancelled` or `expired` → 200. A Cancel that meets a running Finish
+or task save waits on that row lock and then sees `attached`, so a committed file row never loses
+its disk file. A piece mid-flight finds the status changed in its step 8 and answers 410; on
+Windows a file still open is left to the cleanup.
+
+**Names** (A, **new** `names.js`, pure and browser-safe, so the browser shows the name the server
+will keep): `cleanFileName(raw)`: NFC; keep the last part after `/` or `\`; remove control
+characters (U+0000 to U+001F, U+007F to U+009F) and bidi and invisible characters (U+202A to
+U+202E, U+2066 to U+2069, U+200E, U+200F, U+200B to U+200D, U+FEFF; a right-to-left override can
+show `report.exe` as a document name); replace `< > : " / \ | ? *` with `_`; trim spaces and dots at
+both ends; put `_` before a Windows reserved base name (CON, PRN, AUX, NUL, COM1 to COM9, LPT1 to
+LPT9, also with an extension); at most 200 characters and 240 UTF-8 bytes, cut in the middle of the
+base name so the extension stays ("a-very-long…name.pdf"); empty → `file` (+ the extension).
+`extOf(name)`: after the last dot (not a leading one), lower case, letters and digits only, at most
+10, else `''`. **Rename** (project and task files) takes the base name only: the server keeps the
+stored `ext` and saves `cleanFileName(name + (ext ? '.' + ext : ''))`, so a rename never changes the
+type, `is_picture` or the download headers (`a.png` renamed to `b.svg` becomes `b.svg.png`). A file
+stored without an extension never gains one: when the cleaned name has one, its last dot becomes
+`_` (`README` renamed to `setup.exe` becomes `setup_exe`, so no program downloads without its
+"Program file" line). The 200-character and 240-byte limits apply to the whole cleaned name. Text-only documents rename their
+`title` through the document route (no extension). React escapes the name everywhere; it is never
+HTML.
+
+**Browser side** (E, **new** `src/components/files/uploadClient.js`, no React; plain `fetch` and
+`XMLHttpRequest`, **never** `api` from `@/lib/apiClient`, so a 401 never navigates the page, as
+`live/liveCheck.js` does):
+
+- **One upload queue per browser tab**: a module-level `sharedUploadQueue` in `uploadQueue.js`
+  (concurrency 2), shared by every `useUploads` and the attach store (`TaskAttachProvider`). One
+  piece at a time per file; at most 2 files at a time per tab, the others "Waiting…". **Start is
+  called only when a file leaves Waiting**, so a tab never holds more than 2 receiving uploads and
+  never reserves space for waiting files. `TOO_MANY_UPLOADS` (other tabs) keeps the file Waiting and
+  tries Start again every 10 s; that isn't a failed try.
+- Pieces go with `XMLHttpRequest` (fetch has no upload progress): `xhr.upload.onprogress` drives the
+  bar within a piece, `xhr.timeout = 120_000`, `xhr.abort()` cancels; listeners are set before
+  `send()`. The piece is `file.slice(offset, offset + pieceSize)` in a `FormData` part named
+  `piece`. When `crypto.subtle` exists, `X-Piece-Sha256` is sent (`digest('SHA-256', await
+piece.arrayBuffer())`). `pieceSize` always comes from the Start answer.
+- **Thumbnail** (`makeThumb.js`): before Finish, for a file whose extension is in `PICTURE_EXTS`
+  and up to 50 MB, `createImageBitmap(file, { resizeWidth: 400, resizeQuality: 'high' })`, drawn on
+  a white canvas, `canvas.toBlob(cb, 'image/jpeg', 0.8)`; at most 512 KB, else none. Any failure
+  means no thumbnail, never an error. It goes with Finish as the `thumb` part.
+- **Retry** (about 1, 2, 4, 8, 16 and 30 s, each ±20%, honouring `Retry-After`) on a network error,
+  a timeout, 408, 429 and **any 5xx** (500 to 599, including the host's own answers such as
+  CloudLinux's 508 or a CDN's 520 to 524), whether or not the body is Daybook's JSON, except
+  Daybook's own `UPDATE_NEEDED`, `FILES_UNAVAILABLE`, `FILES_SPACE_FULL` and `FILES_DISK_FULL`.
+  **Before each retry it asks Status**: if the server already has the piece (a lost answer), it
+  moves on. 409 `UPLOAD_OFFSET` → Status, then go on from the server's offset. 422 `PIECE_CHECKSUM`
+  → the piece again, at most 3 times. While retrying after a 429 the state line reads "Waiting…",
+  after a network error or a 5xx "Connection lost. Trying again…". While `navigator.onLine` is false
+  it waits for the `online` event. After the sixth try the file is **Paused** with a Retry button;
+  Retry asks Status and carries on, sending nothing twice.
+- **`UPLOAD_BUSY` isn't a failed try**: the file shows "Waiting…" and asks Status every
+  `Retry-After` seconds (2, growing to 10), and sends the piece again only when Status says `busy:
+false`, for up to 3 minutes (longer than the 2-minute lease a stopped process leaves); only after
+  that do tries count.
+- **No retry** on Daybook's own 400, 401, 403, 404, 409 (other than `UPLOAD_OFFSET`, handled above),
+  410, 411, 413, 422 (after 3) and 507, nor on `UPDATE_NEEDED` or `FILES_UNAVAILABLE`: the message
+  from `fileMessages.js` for that code shows on the file, with the file's name (401: "You were signed
+  out. Sign in again, then press Retry."). **Any 4xx whose body isn't Daybook's `{ error }` JSON**
+  (the host's firewall: 403, 406, 413, 501 and so on) shows "The server refused part of brief.pdf.
+  Ask an Admin to check the hosting limits." and isn't retried.
+- **The same rules apply to Start, Status, Finish, Cancel and `POST /api/project-tasks/[id]/files`**
+  (all through `uploadClient.js`). Finish and the attach call wait up to 3 minutes for an answer.
+- `NotReadableError` while reading a slice (the file moved or changed): stop, "Couldn't read
+  brief.pdf. It may have been moved or changed. Choose it again."
+- **Cancel** aborts the running request, then calls Cancel (with `keepalive` when the page is
+  leaving). A 409 answer means the file made it (it stays in the list or on the task).
+- **Leaving**: on `pagehide` (when `event.persisted` is false) the tab cancels every running and
+  held upload with `fetch(url, { method: 'DELETE', keepalive: true })`, as `undoQueue` does for
+  deletes (Origin is sent, so `withRoute` accepts it). Unmounting an uploader (the Files tab on a tab
+  switch, the task form) cancels its own running and held uploads the same way.
+- While anything uploads (or a file's text is being read for the AI, Files tab), the page asks
+  before leaving (**new** `leaveGuard.js`, `useLeaveGuard(active, message)`): `beforeunload` (the
+  browser's own "Leave site?") and a capture-phase click listener on links. The listener ignores
+  links to `/api/` (downloads), links with `target` or `download`, and links that keep the pathname
+  and the `tab` value (a missing `tab` counts as `board`; a place, a search, `?task=`); then it
+  calls the existing `isInAppNavigation` (`src/components/useUnsavedChangesWarning.js`, unchanged)
+  and asks
+  `window.confirm('Leave this page? 2 files are still uploading and will stop.')`. The attach store
+  lives around the tabs, so its uploads ask only on a change of page. The browser's Back button
+  leaves without asking (Risks). A download never asks: the browser fires `beforeunload` for a
+  plain link before it knows the answer is an attachment, so while a guard is up a plain click on
+  a link to `/api/` (and the Files tab's row menu Download, `startDownload(url)`) loads it in a
+  hidden frame and the page is never left. A frame only shows a page when the link failed (a
+  missing file, one deleted meanwhile); then the guard's question comes first and, on yes, the
+  error shows as the plain page (Downloads), so a failed download never stops the uploads unasked.
+  With no guard up a download stays a plain link.
+
+**How a file reaches its place:**
+
+| From                                    | Start `target`                   | After Finish                                                                                                                |
+| --------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| New task window                         | `task`, `taskId: null`           | held; **Add task** sends `uploadKeys`                                                                                       |
+| Edit task window                        | `task`, `taskId` the task        | held; **Save changes** sends `addUploadKeys`; closing without saving cancels them                                           |
+| Task window "Add files", drop on a card | `task`, `taskId` the task        | held in `TaskAttachProvider`; when the batch is done the store calls `POST /api/project-tasks/[id]/files` once (Task files) |
+| Files tab                               | `project`, `phase`, `visibility` | attached at once (a project file)                                                                                           |
+
+### Downloads (A: `src/modules/projectFiles/{download,ranges}.js`, new)
+
+| Route                               | Permission  | What                                                                                                                                       | Per person                       |
+| ----------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------- |
+| `GET /api/project-files/[id]`       | `signed_in` | the file as a download, any type                                                                                                           | 600 a min (one bucket with view) |
+| `GET /api/project-files/[id]/view`  | `signed_in` | a **picture** shown inline (the picture viewer, small thumbnails); anything else 404 "This file can't be shown here. Download it instead." | the same bucket                  |
+| `GET /api/project-files/[id]/thumb` | `signed_in` | the picture's thumbnail (`files/<storage_key>.t`), inline `image/jpeg`; 404 when `has_thumb` is 0                                          | the same bucket                  |
+
+- `canSeeFile` (above) on every request, **first**, also before a 304. 404 "We couldn't find that
+  file." for every "no". Only a viewer who may see the file gets `/view`'s "This file can't be shown
+  here. Download it instead.", so probing ids says nothing.
+- **Streaming**: open the file first (`ENOENT` → 404 `FILE_MISSING` "This file is missing. Ask your
+  PM to add it again.", one warning with the id), then `new Response(Readable.toWeb(
+createReadStream(path, { start, end, highWaterMark: 65_536 })), { status, headers })`. Memory stays
+  flat; when the person stops the download, the stream and its handle are destroyed. The UI uses a
+  plain link (`<a href>` without `download`, never `fetch` plus a Blob), so the browser writes
+  straight to disk, shows its own progress and can resume. A failed link shows the error as a plain
+  page: when the request's `Accept` includes `text/html`, the 404 answers `text/plain;
+charset=utf-8` with the message and `Content-Security-Policy: sandbox`; otherwise the usual JSON.
+- **Headers**:
+
+  | Header                                      | Download                                                                                                      | View and thumb (pictures)                                                                                                                                                                               |
+  | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `Content-Type`                              | `application/octet-stream`, always                                                                            | `/view`: `PICTURE_TYPES[ext]` (`png` → `image/png`, `jpg`/`jpeg` → `image/jpeg`, `gif` → `image/gif`, `webp` → `image/webp`; any other `ext` → 404, whatever `is_picture` says); `/thumb`: `image/jpeg` |
+  | `Content-Disposition`                       | `attachment; filename="<ascii>"; filename*=UTF-8''<encoded>`                                                  | `inline; ...`, the same names                                                                                                                                                                           |
+  | `Content-Security-Policy`                   | `default-src 'none'; sandbox`                                                                                 | `default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox`                                                                                                                                |
+  | `Cross-Origin-Resource-Policy`              | `same-origin`                                                                                                 | `same-origin`                                                                                                                                                                                           |
+  | `Cache-Control`                             | `private, no-cache, no-transform` (`no-transform` keeps Next's gzip off, so `Content-Length` and ranges hold) | the same                                                                                                                                                                                                |
+  | `ETag`                                      | `"f<id>-<sizeBytes>-<createdAt ms>"` (strong: files never change after upload)                                | the same                                                                                                                                                                                                |
+  | `Accept-Ranges`, `Content-Length`           | `bytes`; the bytes sent                                                                                       | the same                                                                                                                                                                                                |
+  | `X-Content-Type-Options`, `X-Frame-Options` | `nosniff`, `DENY` (already global, `next.config.mjs`)                                                         | the same                                                                                                                                                                                                |
+
+  `contentDisposition(kind, name)` (pure, `names.js`): the ASCII fallback is the NFKD name without
+  non-ASCII characters, with `"`, `\` and `%` made `_` (`download.<ext>` when nothing is left);
+  `filename*` is `encodeURIComponent(name)` with `'`, `(`, `)` and `*` also encoded (RFC 8187).
+
+- **Inline only for pictures**: `/view` answers only rows with `is_picture = 1` and an `ext` in
+  `PICTURE_TYPES`; `/thumb` only rows with `has_thumb = 1`. SVG, HTML, XHTML,
+  XML, MHT, PDF and every other type are only ever `attachment` + `octet-stream` + `sandbox`:
+  Daybook never opens them, so it never needs to refuse them.
+- **Range**: one range only (`bytes=a-b`, `a-`, `-n`) → 206 with `Content-Range: bytes a-b/size`;
+  out of bounds → 416 with `Content-Range: bytes */size`; several ranges or a bad header → the whole
+  file with 200; `If-Range` not equal to the ETag → the whole file. `If-None-Match` equal to the
+  ETag → 304, no body. Parsing is pure (`ranges.parseRange(header, size)` → `{ start, end } | 'all'
+| 'unsatisfiable'`). Chrome resumes a broken download only with `Accept-Ranges` and a strong ETag.
+- **Thumbnails**: `ProjectFile.thumbUrl` is `/thumb` when `has_thumb` is 1, else `/view` for a
+  picture up to 2 MB, else null (the picture tile; the picture still opens in the viewer). Shown as
+  `<img loading="lazy" decoding="async" width height>` with `object-fit: cover`. The thumbnail is
+  made in the uploader's browser (Uploads, Browser side), so the server does no image work, a photo's
+  location data never reaches the thumbnail, and a list of six phone photos reads about 240 KB from
+  disk instead of 24 MB. On an `<img>` error (a missing disk file) a thumbnail falls back to the
+  FileImage tile. A plain `<img>` needs `{/* eslint-disable-next-line @next/next/no-img-element --
+a signed-in file route, not a static image */}`.
+- Downloads are not audited. `public/sw.js` caches nothing (unchanged).
+
+### Task files (B: `src/modules/projectTasks/taskFiles.js`, new, and `writes.js`)
+
+- **Schemas** (`projectTasks/schemas.js`, using its own private `idValue`): create
+  `uploadKeys: z.array(uploadKeySchema).max(20, { error: 'A task can have up to 20 files. Remove
+one to add more.' }).default([])`; update `addUploadKeys` the same with `.optional()`, and
+  `removeFileIds: z.array(idValue("That file isn't on this task any more.")).max(20).optional()`.
+  "Nothing to change." counts them only when they aren't empty.
+- **Create** (`POST /api/projects/[id]/tasks`): the body gains `uploadKeys` (0 to 20). In the create
+  transaction, after the task insert: `projectFiles.attachUploads({ user, projectId, taskId,
+uploadKeys }, trx)` (A), then the audit row, then `sendAdded` with the files line. Each key must be
+  this person's, on this project, `target 'task'` with `task_id` null or this task, `ready`, not
+  past `expires_at`, and its file on disk; else the whole save is refused with `VALIDATION_FAILED`
+  `fields.uploadKeys` "brief.pdf couldn't be added. Add it again." (the first failing file's name;
+  "A file couldn't be added. Add it again." when the key is unknown). `attachUploads` locks each
+  upload row (`FOR UPDATE`), so two saves can't use one upload.
+- **Update** (`PATCH /api/project-tasks/[id]`): gains `addUploadKeys` (0 to 20) and `removeFileIds`
+  (0 to 20). After `lockForManage` (the task row) and before `editChanges`: remove = soft delete of
+  those files (`projectFiles.removeTaskFiles`; an id already deleted on this task is skipped, as it
+  is gone as asked; only an id that is unknown or on another task is refused with
+  `fields.removeFileIds` "That file isn't on this task any more."), then attach.
+- **Attach later** (**new** `POST /api/project-tasks/[id]/files`, body `{ uploadKeys: [1 to 20] }`,
+  `project.manage`, own project; 60 a minute per person): locks the task row, attaches, writes the
+  audit rows, sends `project_task.files_added` (Notifications), answers 201 `{ data: { files:
+ProjectFile[], told: 'person' | 'members' | null, toldName: string | null } }`.
+- **`told` and `toldName`** come from the people `notify` actually reached (Notifications):
+  `'person'` with their name, `'members'` when one or more members got it, `null` when nobody did
+  (the person was taken off the project or deactivated, the person is the actor, a done task).
+  `PATCH /api/project-tasks/[id]` and `POST /api/projects/[id]/tasks` answer `{ data: { ...task,
+told, toldName } }` too, and every files toast uses them (no body when `told` is null).
+- **At most 20 active files on a task**, counted with a locking read (`.forUpdate()` on the task's
+  active file rows) **after** the task row lock, so a snapshot taken earlier in the transaction
+  can't hide another save's files: `TOO_MANY_FILES` 409 "A task can have up to 20 files. Remove one
+  to add more."
+- **Delete a task** (`remove`): inside its transaction, before the row delete,
+  `projectFiles.deleteFilesOfTask({ user, taskId }, trx)` marks every active file `deleted` (purged
+  at night). Held uploads that named the task lose `task_id` (SET NULL) and expire.
+- **Lock order** everywhere: the task row, then upload rows, then file rows. A file delete or edit
+  locks only its file row.
+- Files never change a task's progress, status or report lines. Moving a task to another phase or
+  person moves its files with it (a task file has no place of its own).
+- **Members' reads** (company rule above): `listForProject({ viewer, projectId })` for a viewer
+  without `team.view` filters `assignee_id = viewer.id OR assignee_id IS NULL` in SQL; `ownOnlyFor`
+  for `latestReport` stays. `pageForProject` (the API) follows, and counts with the same filter
+  (`repo.countForProject({ projectId, status, memberId })`), so `page.total` matches the rows.
+  `tests/services/projectTasks.reads.test.js` changes from all 5 rows to the member's own and Anyone
+  rows.
+- **`countsByPhase(projectId)`** (**new**, counts only, no names): `{ [phase | 'none']: { total,
+done } }` in one query, for the member's band.
+- **Task details** (**new** `GET /api/project-tasks/[id]`, `signed_in`, the service decides;
+  `projectTasks.getForViewer({ viewer, id })`): `team.view` holders get any task; members only their
+  own and Anyone tasks; anyone else 404 "We couldn't find that task." Answer `TaskDetails` (Modules);
+  `canSeeFiles` = `ctx.manages || ctx.member` (`projectFiles.viewerContext`) and `files` come from
+  `projectFiles.listForTask({ viewer, task })`, filtered by `canSeeFile`. So a PM who is a member
+  sees the files of their own and Anyone tasks, and another PM who isn't a member gets `files: []`
+  and `canSeeFiles: false`.
+
+### Notes, project documents and the AI summary (E: `src/modules/projectSummaries/`)
+
+- `documentCreateSchema` gains `visibility` (`'everyone' | 'managers'`, `.optional()`, **no zod
+  default**), `phase` nullable (null = Whole project) and `fileId` (optional id).
+  `documentUpdateSchema` (notes: title and text; text-only documents: title) gains `visibility` and
+  `phase`. **When the body leaves `visibility` out the server uses `'managers'`**, so an older page
+  (a 1.11 tab still open after the Restart), the e2e helper or any script never shares by accident;
+  the 1.12 note window and the Files tab always send the person's choice, preset to Everyone
+  (Choices 4). A body with no `visibility` (or `'managers'`), a phase and no `fileId` is written
+  **without** the new columns (the column default is `'managers'`), so it works the same before and
+  after 019; anything else before 019 answers `UPDATE_NEEDED` (Deploy before migrate).
+  `MAX_DOCUMENTS` goes from 40 to **100** per project ("This project has 100 files and notes with
+  text. Delete some first."). Other limits stay (title 1 to 200, text 1 to 200,000, 100 pages).
+- **The text of a project file**: after a project file's upload finishes in the Files tab (or from
+  the row menu's "Read text for AI", Files tab), the PM's browser reads its text with today's
+  `readDocumentFile` (only `pdf`, `docx`, `txt`, `md`, up to 20 MB, the first 100 pages, 200,000
+  characters, the §22 errors) and posts `POST /api/projects/[id]/documents { kind: 'file', fileId,
+title: <file name>, text, pages, pagesTotal }`. In one transaction the server reads the file with
+  A's `projectFiles.fileForDocument({ projectId, fileId }, trx)` (a locking read: `.forShare()`,
+  which knex writes as `LOCK IN SHARE MODE` on both servers) and checks it is an active **project**
+  file of this project and that the person manages the project (a task file: 400 `fields.fileId`
+  "Only project files are read for the AI summary."; a file deleted meanwhile, or one of another
+  project whether or not it has a text: 404, checked before the second-text check). It takes
+  `phase` from the file, always stores `visibility 'managers'` (the body's are ignored), and refuses
+  a second text for one file (errno 1062 → CONFLICT "This file's text is already saved."). If
+  reading fails, the file stays and the toast says why (Files tab).
+- **A file's text follows its file**: `PATCH /api/project-documents/[id]` on a document with
+  `file_id` answers 400 "This text follows its file. Change the file instead."; `DELETE` removes only
+  the text (the file stays, and "Read text for AI" comes back on its row).
+- `syncFileDocument({ fileId, title?, phase?, remove? }, trx)` (**new**, E; called by A's rename,
+  move and delete inside their transactions) renames, moves or deletes that document (its
+  visibility stays `'managers'`). A rename writes `updatedAt: nowDate()` (the summary goes stale, as
+  an edit does).
+- **`updated_at` and the summary.** `project_documents.updated_at` has `ON UPDATE
+CURRENT_TIMESTAMP` (015), so every UPDATE that changes only `phase` or `visibility`
+  (`syncFileDocument`'s move, and a note's or text-only document's PATCH of place or who sees it)
+  writes `updatedAt` with its current value (the read row's, as `projectSummaries/service.js:257-260`
+  does), else both servers restamp it and the summary goes stale. Only a title or text change
+  writes `updatedAt: nowDate()`.
+- **What the AI summary reads** (unchanged reach): every `project_documents` row of the project,
+  notes and texts, both visibilities, Whole project and phases; never a task file, never the name
+  of a file without a document. The prompt doesn't send a document's phase (`prompt.js`), so `phase:
+null` needs no prompt change. **`sourceKey`** keeps its formula (sha256 of the sorted
+  `"<id>:<updatedAt ISO>"` lines of the project's documents), but `updated_at` now moves only when a
+  title or text changes, and a deleted file's document is deleted with it: moving or re-sharing a
+  file never makes the summary stale, deleting one does.
+- **Reads**: `listDocumentsFor({ viewer, projectId })` (**new**, no body) gives managers every
+  document, members (a PM who is a member included) only what `canReadDocument` allows (Everyone
+  notes and Everyone text-only documents), and `[]` to a viewer who neither manages nor is a member.
+  `getDocument({ user, id })` (the body) follows the same rule (404 otherwise). `listDocuments`,
+  `getSummary`, `writeSummary` and `addActionAsTask` stay managers-only.
+- Writes to documents (notes, texts, who sees them, place, delete) stay managers-only
+  (`project.manage`, own project). Audit rows for documents keep ids and numbers only (§22).
+- **Copy now that files live in the Files tab**: `writeSummary`'s `NO_DOCUMENTS` message becomes
+  "Add a note, or a PDF, Word or text file, in Files first."; the summary card's empty prompt
+  (Summary tab) "Upload a PDF, Word or text file, or write a note, in Files, and AI writes a summary
+  here."
+
+### Notifications (B: `projectTasks/messages.js`; A and E send none)
+
+| Type                                 | When                                                                                                | To                                                                                                                 | Title                                                          | Body                                                                                                    | Link                   | Important |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------- | --------- |
+| `project_task.added` (existing)      | a task is created (as today)                                                                        | as today (`recipients`: the person, or every active member for Anyone; never the actor; the PM only as the person) | as today: "New P1 task on acme-store: Fix the login page"      | as today, plus "2 files attached: brief.pdf, logo.png." right after the first sentence, before the note | `/projects/12?task=88` | no        |
+| `project_task.changed` (existing)    | priority or person changes on an open task (as today)                                               | as today                                                                                                           | as today                                                       | as today, plus the files line when the same save added files                                            | `/projects/12?task=88` | no        |
+| `project_task.files_added` (**new**) | files are added to an open task by Edit task (when no `changed` is sent), the task window or a drop | the same `recipients`                                                                                              | "Riya Kapoor added 2 files to Fix the login page" (cut to 200) | "acme-store: brief.pdf, logo.png"                                                                       | `/projects/12?task=88` | no        |
+
+- The files line lists at most 3 names, then "and 2 more" ("5 files attached: a.pdf, b.png,
+  c.docx and 2 more."; "1 file attached: brief.pdf."); the `files_added` body at most 5. Everything is
+  cut by `fit` (title 200, body 500) **after** the files line is placed, so a long note never cuts
+  the file names.
+- Nothing is sent for removed files, for Files tab uploads (Choices 2), for a done task, or when the
+  only recipient is the actor. The send step returns who it reached, and that becomes `told` and
+  `toldName` in the route's answer (Task files); a toast never says "is told" when nobody was.
+- **Every task link becomes `/projects/[id]?task=<taskId>`**, for everyone (every recipient can open
+  the page: a member or the PM). Stored older links (`?tab=phases`, `/today`) keep working.
+  `project.member_added` (projects, B) links to `/projects/[id]` instead of `/projects`.
+- **`ALERT_TYPES`** (`src/modules/notifications/alerts.js`, B) gains `'project_task.files_added':
+'normal'` (group `task` from its prefix): 44 types, 19 important, 25 normal.
+  `tests/unit/notificationAlerts.test.js` pins 44 and lists it. Nothing goes to Slack: no `slack`
+  import in `projectTasks` or `projectFiles` (a test scans both folders).
+
+### Settings (Admin, Settings → Files; A)
+
+- Keys: `fileMaxMb` (seed `file_max_mb`, default 500; whole MB from 1 to 2,048, "Pick a size from 1
+  to 2,048 MB.") and `fileStorageLimitGb` (`file_storage_limit_gb`, default 10; whole GB from 1 to
+  1,000, "Pick a limit from 1 to 1,000 GB."). Both in `settingsUpdateSchema`, `BOUNDED_KEYS`
+  (clamped on read), the `getAll` JSDoc, `settingsValues.js` `KEYS`, `numberFields.js` `NUMBERS`
+  (the same min, max and message as the API). Cross check (`crossChecks.js`): "The largest file
+  can't be bigger than the storage limit." (`fields.fileMaxMb`) when `fileMaxMb > fileStorageLimitGb
+× 1024`.
+- Section **"Files"** (`FilesSection.jsx`, new; `SettingsNav` `{ id: 'files', label: 'Files' }` after
+  AI; `SettingsForm` places it last), subtitle "Files people add to projects and tasks.":
+  - "Largest file" (MB), help "Each file can be up to this size. Very big files take a few minutes
+    to upload."
+  - "Storage limit" (GB), help "All project files together. Keep it to about half of the free space
+    your hosting shows under Disk Usage."
+  - **Space used** (read on the server in `settings/page.js` like `aiUsage()`, from
+    `projectFiles.spaceUsage()`): "Space used: 1.2 GB of 10 GB" with a `ProgressBar` (primary;
+    marigold from 80%, red from 100%), then "342 files on 12 projects." and, when uploads hold room,
+    "307.2 MB is held by uploads that are still running or waiting to be added to a task."; when
+    deleted files wait for the nightly cleanup, "409.6 MB of deleted files leaves the server
+    tonight." (every size through `formatSize`; as built, the held line is the uploads' share of
+    Space used, as Words and the Storage limit check count it: `usedBytes` = active files plus
+    running and held uploads that haven't expired, `heldBytes` is part of it; deleted files don't
+    count. `spaceUsage()` also returns `updateNeeded: true` before 019, and Settings shows the disk
+    full line only when `diskFullAt` is within the last 7 days).
+  - One muted line when needed (Info icon), one sentence per storage problem (doctor uses the same
+    words after "✗ File storage isn't set up:"): `not_set` "Add FILES_DIR to the settings file on the
+    server, then press Restart."; `not_absolute` "FILES_DIR must be a full path that starts with /,
+    for example /home/cpuser/daybook-files (not ~)."; `inside_app` or `public` "FILES_DIR must be
+    outside the daybook and public_html folders."; `not_empty` "FILES_DIR must be a new, empty
+    folder."; `not_writable` "Daybook can't write to the FILES_DIR folder. Check it exists and its
+    permissions are 700." Disk full (`disk_full_at` within the last 7 days) "On Sat, 21 Nov the
+    server ran out of disk space for files. Free space on the hosting account."; before 019 "Files
+    need the latest database update. Run the migrate line in README, Updating." (Admins read this
+    page, so it never says "Ask an Admin").
+- Pages pass `limits` to the uploaders: `{ maxFileBytes, maxTaskFiles: 20, pickMax: 50 }`
+  (`projectFiles.limits()`), so the browser refuses early with the server's own words
+  (`fileMessages.js`); the server checks again.
+
+### Screens
+
+Every screen matches the prototype. Light and dark come from the tokens; widths 1440, 1024 and 390
+px; no sideways page scroll; a 16 px phone gutter; 44 px tap targets at 640 px and below.
+
+#### The project page: access, frame and tabs (D)
+
+- `[id]/page.js`: `const user = await requirePage('project.request')` (employees, HR, PMs and
+  Admins have it), then `loadProjectHead(projectId, user)` → `head` with **`access`**: `'manage'`
+  (`canManage`), `'team'` (`team.view`, can't manage: another PM), `'member'` (no `team.view`, an
+  active member), else `notFound()`. For a viewer without `team.view` the membership check runs
+  **first**, before anything about the project is read. `head` for a member has no `forecast` (not
+  computed) and gains `hoursThisMonth` (`reports.getMinutesByProject({ from, to, userId })`, the
+  company month) when the viewer has `report.self`. Every `head` carries **`filesAccess`**
+  (`'manage' | 'member' | 'none'`, `filesAccess(await projectFiles.viewerContext({ viewer, project }))`,
+  Who sees). For `'manage'` it also carries `limits` (`projectFiles.limits()`) for the uploaders
+  and `options` (`projectTasks.listAssigneeOptions`, loaded in `loadProjectHead`), so
+  `TaskEditorProvider` has the people list on every tab.
+- `'manage'` and `'team'` render `ProjectView`; `'member'` renders **new** `MemberProjectView`. The
+  tabs take `BoardTab({ head })` (C), `SummaryTab({ head })` (D) and `FilesTab({ head, place })` (E;
+  `place` from `?place=`, `filesTabView.placeOf(place)` falls back to `'all'`).
+- **Header** (`TopBar`): breadcrumb "Projects › acme-store", `ProjectSquare` 36, the name; PM view:
+  the health `Tag` (`forecast.pill`) as today and the Urgent tag; member view: only the Urgent tag.
+  Subtitle "Acme Retail · PM: Riya Kapoor · Active" (PM view adds "· Urgent: Checkout fix before
+  client demo"). Right: **"+ New task"** (primary, Plus) for `'manage'` when the project isn't
+  Completed; it opens the New task window with the current phase (Requirement gathering when Not
+  set).
+- **Tabs** (`ProjectTabs.jsx`, links with `?tab=`, `aria-current`, `prefetch={false}`): PM view
+  "Board", "Summary", "Files", "Timeline", "Hours"; member view "Board", "Files". Default `board`.
+  `chosenTab(query, access)`: `phases` and `overview` → `board` (stored notification rows and the
+  row menu use `?tab=phases`); no tab with `range`, `from` or `to` → `hours` (PM view only, as
+  today); a member asking for summary, timeline or hours → `board`. `tabHref(projectId, tab)` stays.
+- **`?task=<id>`** (task notifications, Today's "Open project", the Files tab) opens the task window
+  over whichever tab loads; closing it removes the parameter with `router.replace` (no history
+  entry). A task the viewer can't open, or a task of another project, shows the window's error
+  state.
+- `ProjectView` mounts, around the tab's `Suspense` (keyed by tab, as today): `TaskUndoProvider`
+  (existing), `TaskEditorProvider` (C, managers only), `TaskAttachProvider` (E, managers only; the
+  attach store, Task files below) and `TaskWindowProvider` (D). Only the chosen tab loads its
+  data. `TabSkeletons` gains `BoardSkeleton`, `SummarySkeleton`, `FilesSkeleton`
+  (their real sizes); `loading.js`/`ProjectLoading.jsx` pick them by tab.
+
+#### Board tab (C: `[id]/BoardTab.jsx` and `[id]/_board/`)
+
+`BoardTab` (server) loads `projectTasks.listForProject({ viewer, projectId })` (all statuses; a
+member gets only theirs and Anyone) and `projectFiles.countsForTasks({ viewer, tasks })` (only the
+files `canSeeFile` allows; `{}` when `head.filesAccess` is `'none'`); the people list comes from
+`head.options`. Tasks become `toBoardTask(task, today)` plus `fileCount` and `createdBy`
+(`phasesView.js`, C). The member band uses `countsByPhase`. Paperclips, the "With files" pill and
+drops follow `head.filesAccess` (paperclips and the pill for `'manage'` and `'member'`, drops for
+`'manage'`), never `access`.
+
+**The band** (`ProgressBand.jsx`, one `Card`, `aria-label="Progress and phases"`):
+
+- **Stats row**: "Progress" with "66%" (Schibsted, large) and "19 of 29 tasks done"; "Deadline" with
+  "16 Dec 2026" and "23 days left" ("Due today", "5 days late" in red text, "No deadline" muted), and
+  for `'manage'` a text button **"Change"** (`DeadlineButton` with its new `label="Change"`; the
+  accessible name is "Change deadline" through a visually hidden " deadline"; the dialog title stays
+  "Change deadline"; "Add deadline" without one); at the right for `'manage'`: **"Move to
+  Testing"** (secondary, `MovePhaseButton` with its confirm as today, `planFormat.movePhaseCopy`:
+  "Move to Testing?" "Development ends today, 4 days early. Testing starts today, 7 days early.",
+  then the toast "Phase changed to Testing."), "Start
+  Requirement gathering" from Not set, the muted "Support is the last phase." at Support, and a 44 px
+  "⋯" ("More phase actions"): "Go back to Design" (the same confirm, moving back, opened through
+  `MovePhaseButton`'s new controlled `open`/`onOpenChange` props; "No earlier phase" disabled).
+  Member view: "Your hours this month" with "10h" in place of the actions (left out for people
+  without `report.self`).
+- **Six parts** (`<ol aria-label="Phases">`): equal parts, 10 px high, 4 px gaps, radius 6; done
+  parts `--green`; the current part `--track` with a `--primary` fill to its done share and a 2 px
+  `--primary` ring; later parts `--track`. A **skipped** phase (`planFormat.phaseStatus`
+  `'skipped'`) is `--track` with no fill and no check; its name is muted, with "Skipped" under it in
+  place of "6 of 12". Under each other part: the name (13 px; the current one semibold; done ones
+  with a check) and "6 of 12" or "No tasks yet" (all tasks of that phase, also for members). Each
+  part is a button, `aria-label="Development, current phase, 6 of 12 tasks done. Show its column."`
+  ("Testing, skipped, 0 of 3 tasks done. Show its column."), that scrolls the board to its column
+  (and opens a done phase's tasks) or, on a phone, shows that column.
+- **The forecast line** (PM view only) under the parts: the health icon and colour, bold
+  `forecast.title`, then `forecast.body` ("**Off track: will miss the deadline by about 12 days.** At
+  the current speed (2 tasks a week) the work ends around 28 Dec. To finish by 16 Dec, the team needs
+  about 3 tasks a week."). Never for members.
+
+**Filter pills** (PM view only; `role="group"`, `aria-label="Highlight cards"`, `aria-pressed`): "All open (10)",
+"Critical (4)", "With files (4)" (open tasks; "With files" only when `head.filesAccess` isn't
+`'none'`, counted from the files the viewer may see). Critical and With files **dim** (40% opacity)
+every other card and every done card; nothing hides; a faded card returns to full opacity on
+`:hover` and `:focus-within`. A visible muted 13 px `role="status"` line under the pills says what
+changed: "4 critical tasks highlighted." / "4 tasks with files highlighted.", or "No critical tasks
+open." / "No tasks with files." `?show=critical` or `?show=files` presses that pill first (the
+Summary tab's "See all tasks"; `chosenTab` ignores it); `?show=files` without a "With files" pill
+(`filesAccess` `'none'`) presses All open, so nothing is dimmed. Right of the pills, when the board scrolls
+sideways, two 44 px buttons "Scroll the board left" / "Scroll the board right".
+
+**Columns** (`<section aria-label="Development">`, `<h3>`):
+
+- Order: **Done phases** (when some phase folds into it), then the six phases in order, then **No
+  phase yet** (only when some task has no phase). **A phase before the current one folds into Done
+  phases only when it has no open tasks** (for a member: none of theirs). A past phase with open
+  tasks stays a normal column in its place, with no tag, its dates line ("7 to 28 Oct · Ended 5 days
+  late") and its open cards on top (done cards folded); it folds once its last open task is
+  done or moved. So an open card, a P1 included, is never hidden inside a tile, and the pill counts
+  always match cards that can be seen.
+- Look: `--surface-muted`, 1 px `--line`, radius 16, padding 12 px, 12 px between cards. Widths:
+  Done phases 196 px; an empty phase after the current one ("slim") 140 px; the others share the
+  rest, the current one 1.25 times; at least 236 px (272 px for the current one), so a card's
+  avatar, due tag, P tag and paperclip fit on one line. When they don't fit, **the board scrolls
+  sideways inside its own area** (scroll snapping to columns); the page never does.
+- **Header**: phase name (Schibsted 15 semibold), "Current" (primary), "Done" (green) or "Skipped"
+  (neutral; a skipped phase never shows "Done" or a check, and its dates line reads "Skipped") tag,
+  and for `'manage'` a "⋯" ("More for Development"): "Files for Development" (to
+  `?tab=files&place=development`; no count, so the board loads no file lists), "Edit dates"
+  (`PhaseDatesDialog`), "Make this the current phase" (disabled on the current;
+  `MovePhaseButton`'s confirm through its controlled props). An opened done phase also has an X
+  "Hide Design tasks". Second line, 13 px muted: dates ("26 Oct to 27 Nov", the actual dates for
+  done phases) and the late note from `phasesView` in its tone as on Phases today
+  (`planFormat.lateNote`: red "Ended 5 days late" and "3 days late", marigold "Started 2 days late"
+  and "Planned start was 2 days ago"; nothing for a phase that ended or started on time or early).
+- **Body**: open cards (P1, P2, P3, then due date, then title), then the fold "› 6 done" (done
+  cards, muted; open by default in a done phase), then "+ Add task" (`'manage'`, not on a Completed
+  project). Empty: "No tasks in Support yet." (PM) / "Nothing for you yet" (member).
+- **Done phases** (`DonePhasesColumn.jsx`): one tile per folded phase: name with a green check (a
+  skipped phase: no check, the neutral "Skipped" tag), "6 of 6 tasks" (member: "4 of yours, done"),
+  the late note in red, text button "Show tasks" / "Hide tasks" (`aria-expanded`; accessible name
+  "Show Design tasks" / "Hide Design tasks") which opens that phase as a normal column right after
+  Done phases until hidden. A member sees only folded phases where they have tasks.
+- **No phase yet** (`NoPhaseColumn` in `PhaseColumn.jsx`): header "No phase yet", no tag, dates or
+  menu; muted line (PM) "Tasks from before phases. Move each one to its phase."; cards as anywhere;
+  no "+ Add task"; **not a drop target**; gone when empty.
+
+**Cards** (`TaskCard.jsx`, `<li>`; white, 1 px `--line`, radius 12, padding 12 px):
+
+- Line one: the round tick (`TaskCheck`, `'manage'` only, with its own label "Done: Fix the login
+  page" (unchanged); C draws it as a 20 px circle through TaskCheck's `className` on the label, for
+  example `.tick input { appearance: none; width: 20px; height: 20px; border-radius: 50%; }`, in a
+  36 px hit area, 44 px on a phone; a member and another PM see a 10 px status dot, `role="img"`
+  "Open" / "Done"), the title as a button (15 px, up to 3 lines, opens the task window), and for
+  `'manage'` a "⋯" ("More for Fix the login page") shown on hover, focus and touch: **Open**,
+  **Edit**, **Move to phase…**, **Delete** (danger).
+- Line two, only with a latest report on an open task (PM view: anyone's; member: their own):
+  "Blocked · Fri, 20 Nov" (red text) or "In progress · Fri, 20 Nov" (primary text), 13 px.
+- Line three: owner (PM view: avatar 24 with a `title` tooltip of the full name and the name
+  visually hidden; when the owner is away, the faded avatar is followed by the visible muted 12 px
+  text "Not on the project" or "Deactivated", so the PM sees whom to reassign; member view: "For
+  you" or the dashed "Anyone" circle and "Anyone"), the `DueTag` (sm), the `PriorityTag`, and at the
+  right the paperclip and count (14 px icon, 13 px muted, `aria-label="2 files"`; never at 0).
+- A click anywhere else on the card opens the task window. Done cards are muted. A card just added,
+  edited or moved is highlighted (`--primary-soft`, fading over 1.5 s; none with reduced motion).
+
+**Quick add** (`QuickAdd.jsx`): "+ Add task" turns into an input (label "Task title for
+Development", placeholder "Task title, then press Enter"), help "Anyone, P2, no date. More options
+for a person, a date or files.", buttons "Add" (secondary small), "More options" (text) and an X
+("Close"). Enter or Add sends `POST /api/projects/[id]/tasks { title, phase, priority: 'p2',
+assigneeId: null }`; under 2 characters: "Write a title of at least 2 characters." (the existing
+rule). After an add the input stays open and empty (focus kept); toast "Task added to
+Development." · "Everyone on the project gets a notification." Escape or X closes it and focus
+returns to "+ Add task". "More options" opens the New task window with the typed title and the
+column's phase.
+
+**Moving a card to another phase** (`useBoardDrag.js`, `boardMoves.js`):
+
+- **Drag** (desktop pointer, `'manage'`, open cards only, never on a phone or while the card's files
+  upload): native HTML5 drag and drop. The lifted card gets `--shadow-menu`; the column under it
+  shows a dashed `--line-dashed` gap where the card will land (its sorted place); the target column
+  is outlined. Dropping on another phase column (an opened done phase included) sends `PATCH
+/api/project-tasks/[id] { phase }` (existing; audited, no notification). Dropping on its own
+  column, Done phases, No phase yet or outside does nothing. No reordering inside a column (order is
+  always P1, P2, P3, due, title).
+- **Keyboard, screen readers and phones**: card "⋯" → **"Move to phase…"** opens a small `Dialog`
+  (`MoveTaskDialog.jsx`, 400 px; a bottom sheet on a phone) titled "Move Fix the login page". It
+  lists the six phases in order as 44 px buttons, each with its name and "6 of 12"; the task's own
+  phase reads "Development (here now)" and is `aria-disabled`. Footer: Cancel. Choosing a phase
+  closes the dialog and moves the card. This is the WCAG 2.5.7 single-click path; Daybook's flat
+  `Menu` stays as it is (it has no sub-lists).
+- Both move the card at once (optimistic), then toast "Moved to Testing." with **Undo** (6 s, the
+  toast slot, polite; Undo sends `PATCH { phase: <old> }` and moves it back). Focus after a dialog
+  move: on desktop the target column is scrolled into view (instantly with reduced motion), then
+  focus goes to the moved card's "⋯"; on a phone the switcher stays on the column the card left and
+  focus goes to the next card's title there, or to "+ Add task", while the toast says where it went.
+  After a drag, focus goes to the card's title. A failed move puts the card back with the error
+  toast "Couldn't move the task" and the API's message.
+
+**Dropping files on a card** (`useCardFileDrop.js`, `'manage'` only, desktop):
+
+- While files are dragged over a card it gets a dashed `--primary` outline and the overlay "Drop to
+  attach" (Paperclip). Files dropped anywhere else on the project page are swallowed (`dragover` and
+  `drop` call `preventDefault` for `Files`), so the browser never opens a file instead of Daybook.
+- On drop: the same checks as the task form (Upload states), then the files upload (`target 'task'`,
+  this task) through E's attach store (`useTaskAttach().add(taskId, files)`, `TaskAttachProvider`
+  mounted by `ProjectView`), so the batch survives the card moving to another list (ticked done,
+  moved by someone else, a refresh) and a closed task window. The card only reads the store: it
+  shows "Adding 2 files…" with a 3 px progress bar (`role="progressbar"`, `aria-label="Adding files
+to Fix the login page"`). **A batch** is every file added to one task while one of its files is
+  still running; it is done when every file has finished, failed or been removed. A file that pauses
+  counts as failed in a batch started by a card drop; in one started from the task window it holds
+  the batch until Retry or Remove while the window is open (closing the window makes it failed).
+  When the batch is done the store makes one `POST /api/project-tasks/[id]/files` (retried as
+  Finish is); the count goes up; the store's own toast "2 files added to Checkout fix before client
+  demo." · "Simran Kaur is told." ("Everyone on the project is told." for Anyone; no body when
+  `told` is null). **No Undo** (the person is already told; Choices 3). Failed files: an error toast
+  "Couldn't upload brief.pdf. Check your connection, then drop it again." (or the file's message),
+  body "1 more file couldn't be added." when there are more. A 4xx answer to the attach call cancels
+  the batch's held uploads (`DELETE /api/uploads/[key]`) and shows its message as an error toast.
+
+**New task and Edit task window** (`TaskFormDialog.jsx` inside `TaskEditorProvider.jsx`; a centred
+`Dialog`, 560 px, own scroll; a full-screen sheet on a phone):
+
+- Title "New task" / "Edit task". Fields: **Task title** (required; placeholder "For example: Fix
+  the login page"; "Write a title of at least 2 characters."); **Note** (optional, 3 rows,
+  `details`, placeholder "Instructions or details for the person doing it"; counter "812 of 1,000"
+  past 800 characters; Edit now saves it too); **Assign to** ("Anyone on the project" first, then
+  `listAssigneeOptions`, the PM as "Riya Kapoor (you)"; help when Anyone "Everyone on the project
+  sees it on their Today page."; an away owner stays listed as today) and **Due date** (optional,
+  native) side by side; **Phase** (the six phases, preset to the column, or the current phase;
+  "No phase yet" listed only when editing a task that has none) and **Priority** (segmented radios
+  "P1 critical", "P2", "P3"; P2 preset) side by side; **Files** (E's `UploadField`).
+- **Files field**: label "Files"; a drop box (1 px dashed `--line-dashed`, radius 12, 88 px,
+  `--surface-muted`) with a Paperclip, "Drag files here, or" and a small secondary **"Choose files"**
+  (the label of a visually hidden `<input type="file" multiple>`, no `accept`); help "Up to 20
+  files, each up to 500 MB. Any type of file." (the numbers from `limits`). Files dragged over the
+  window turn the box `--primary-soft` with a dashed `--primary` border and "Drop to attach"; the
+  whole window takes the drop. On a phone: no box, a full-width secondary "Attach files" (44 px)
+  and the same help. Chips, two per line (one on a phone), as in Upload states. Files join the tab's
+  upload queue as soon as they are picked (Waiting until their turn).
+- **Edit loads the attached files**: `openEdit(taskOrId)` loads `GET /api/project-tasks/[id]`
+  (D's `useTaskDetails`, cached) for the task's files; the Files field shows a 52 px skeleton until
+  it answers. On an error the field reads "Couldn't load this task's files." and Save sends no file
+  changes. `UploadField` shows them as chips with an X (`attached`, `removedIds`, `onToggleRemove`).
+- **Footer**: Cancel (secondary) and **Add task** / **Save changes** (primary); Edit also has
+  **Delete** (danger, left; the board's Undo delete). While anything uploads or waits the primary
+  button reads "Uploading 2 files…", is `aria-disabled` (never `disabled`), keeps focus and does
+  nothing. Error chips never block saving and are never attached. **A paused chip blocks Save too**:
+  the button keeps its label, and pressing it saves nothing, shows the line under the Files field
+  "brief.pdf didn't finish uploading. Press Retry or remove it." (`role="alert"`, once) and moves
+  focus to that chip's Retry.
+- **Closing with unsaved files** (Cancel, X, Escape) while any file is uploading, waiting, paused,
+  or uploaded but not saved: the footer turns into the line "2 files aren't saved yet. Close
+  anyway?" ("2 files are still uploading. Close anyway?" while any is uploading), with "Keep
+  editing" (secondary) and "Discard and close" (danger). The line is announced (`role="status"`)
+  and focus moves to "Keep editing"; Escape or "Keep editing" brings the normal footer back and
+  returns focus to the button that asked. "Discard and close" cancels every upload of this window
+  (DELETE, no wait) and closes. With no unsaved files the window closes at once.
+- **Save**: create sends `{ title, details, assigneeId, phase, dueDate, priority, uploadKeys }`;
+  edit sends only what changed plus `addUploadKeys` and `removeFileIds` (an X on an attached chip
+  marks it: the name struck through, the state line "Removed when you save", and the X becomes an
+  Undo2 button "Keep brief.pdf" that takes the mark off (`onToggleRemove`); it is removed on Save;
+  Cancel keeps it). Then the window closes,
+  `router.refresh()` in a transition, the card is highlighted, focus goes to "+ New task" (new) or
+  the card's title (edit). Toasts (the body from the answer's `told` and `toldName`; no body when
+  `told` is null): new "Task added to Development." · "Vishal Saini gets a notification with the 2
+  file names." (no files: "Vishal Saini gets a notification."; Anyone: "Everyone on the project
+  gets a notification with the 2 file names."); edit "Changes saved." · "2 files added. Simran Kaur
+  is told." / "1 file removed." / "2 files added and 1 removed. Simran Kaur is told." Errors: the
+  field's message under the field, or an error toast.
+
+**Another PM** (`'team'`): the board as above with no ticks, menus, "+ Add task", drag or drops;
+the muted line above the board "Only Riya Kapoor and Admins can change tasks and phases."; cards
+open the task window read-only. Paperclips, "With files" and the window's Files follow
+`head.filesAccess`: none for a PM who isn't on the project; a PM who is a member sees them for their
+own and Anyone tasks. **Completed project**: no "+ New task" and no "+ Add task"; the rest as for
+an active one.
+
+**Phone** (640 px and below): the band keeps its six parts, each a 44 px tall button with every name
+hidden (the switcher names the phase); "Move to Testing" and the "⋯" share a full-width row under
+it, as in the prototype. Under the band a switcher: a 44 px "Previous phase" button, "Development ·
+6 of 12" (`aria-live="polite"`; with Critical or With files pressed it adds the shown phase's
+matches: "Development · 6 of 12 · 2 critical"), a 44 px "Next phase" button. One phase column at a
+time, full width, opening on the current phase (the first phase when Not set); done phases are
+normal columns there (fold open); No phase yet is the last step when it exists; Done phases tiles
+don't show. No dragging: "⋯" → Move to phase…. Band parts, tick, menu and paperclip targets 44 px.
+
+#### Task window (D: `src/components/task/TaskWindow.jsx`, new)
+
+A centred `Dialog` 640 px, at most 90% high, own scroll, over `--overlay`; a full-screen sheet on a
+phone. It loads `GET /api/project-tasks/[id]` when it opens (a 3-line skeleton meanwhile; the
+board's card data shows the title at once).
+
+1. **Header**: `ProjectLabel` (acme-store) and the phase ("Development" with a "Current" tag when it
+   is), the title (20 px semibold Schibsted, `tabIndex={-1}`, focused on open), X ("Close").
+2. **Facts** (`<dl>`, two columns, label 13 px muted): Owner (avatar and full name, or "Anyone on the
+   project"; plus the away label), Due (`DueTag`), Priority (`PriorityTag` and "critical" after P1),
+   Added by ("Riya Kapoor on Mon, 23 Nov").
+3. **Note**: the `details` text, 15 px, line breaks kept; "No note." muted.
+4. **Files (n)** (only when `canSeeFiles`): pictures first as a grid of 120 x 90 thumbnails
+   (`thumbUrl`, else the picture tile; name 12 px and size under each; a click opens the picture
+   viewer); then other files as rows of at least 52 px: type tile, name, meta ("Word · 86 KB"), a
+   **Download** icon button (`aria-label="Download payment-settings-brief.docx"`, a link). For a
+   program file the warning "Program file. Open it only if you trust where it came from." goes on
+   its own line. **Manage mode on a project page only**: an X on each file ("Remove brief.pdf"; soft
+   delete with Undo, toast "File removed.") and a secondary **"Add files"** (Paperclip) that picks
+   files and adds them to the attach store (`useTaskAttach`); the window shows that task's batch as
+   chips (Upload states), so closing the window loses nothing and the card keeps showing the
+   progress. The store's toast ends the batch. Empty: "No files on this task." (manage mode: with
+   "Add files").
+5. **Latest report** (16 px semibold heading): "Simran, Fri, 20 Nov: In progress" (Blocked in red
+   text, `latestReportLabel`); members see only their own line; otherwise "No report on this task
+   yet."
+6. **Footer**: manage mode (a project page with `TaskEditorProvider`): **Delete** (danger, left;
+   `useTaskEditor().remove`, Undo toast "Task deleted."), **Edit** (`useTaskEditor().openEdit`; the
+   window closes first), **Mark done** (primary, Check; `POST /api/project-tasks/[id]/status`, then
+   `useTaskUndo()` "Marked done." with Undo, which stays in that toast); once done: a green "Done"
+   tag and a secondary **"Reopen"** (`POST` status open, toast "Reopened."). In `today` and
+   `member` modes the window never shows Mark done, Reopen, Edit, Delete, the file X or Add files,
+   whatever `canManage` says (Today has no `TaskUndoProvider`, and `limits` live only on the
+   project page); managers change tasks from the project page ("Open project"). Members and HR
+   with `report.self`, on an open task: **"Add to
+   to-do"** (secondary, Plus): on Today through the to-do card's own `addLine`, which shows "In
+   to-do" with a check when already there; elsewhere `POST /api/me/todo/lines { projectId, title,
+projectTaskId }` with the toast "Added to your to-do." or "Already in your to-do.". From Today the
+   text button **"Open project"** (left) goes to `/projects/[id]?task=<id>`.
+7. **Error state**: "This task isn't available. It may have been deleted or given to someone else."
+   with Close. Also shown on a project page when the task's `projectId` isn't the page's project
+   (a hand-made `?task=`).
+
+Escape closes the innermost thing (the viewer, a menu, then the window) and focus returns to what
+opened it. Focus stays inside while open.
+
+#### Picture viewer (E: `src/components/files/PictureViewer.jsx`, new)
+
+A full-window `role="dialog"` (`aria-modal`, labelled by the file name) over the veil token
+`--photo-veil` (the same dark veil in both themes, as a photo viewer). Top bar: the name, "1.2 MB ·
+1 of 2", **Download** and **Close** (44 px, white icons and text, 4.5:1 on the veil); focus goes to
+Close when it opens. The picture (`/view`) centred, at most 90% of the width and 80% of the height;
+"Previous picture" and "Next picture" (44 px) when there are more pictures, Left and Right arrow
+keys too. When the picture fails to load (a missing disk file) the viewer shows the muted line
+"This file is missing. Ask your PM to add it again." in its place, with Download still there.
+Escape closes and returns focus to the thumbnail. On a phone the picture fills the width.
+
+#### Summary tab (D: `[id]/SummaryTab.jsx`, from `OverviewTab.jsx`)
+
+Two columns (one under 1024 px): left the `HealthBox` (as today) and **"Critical tasks"** with
+"4 open" (open P1s by due date, those without a date last, at most 5; a tick for managers; each row:
+title button that opens the task window, "Development · Simran Kaur", `DueTag`; "No critical tasks
+open."; text button "See all tasks" → `?tab=board&show=critical`, which opens the board with
+Critical pressed); right the **AI summary** card (`SummaryCard`, every §22 state; "Go to files" in
+place of "Go to phases" → `?tab=files`; the empty prompt "Upload a PDF, Word or text file, or write
+a note, in Files, and AI writes a summary here."). The card also keeps the **AI phase line** that
+`PhaseCard` drew, under the action items as in the prototype: Sparkles 16 px, "AI suggests moving
+on: “<quote>” · <source>" (`summaryView.aiSuggestion`, unchanged rules: managers only, only when it
+names the next phase, never on a Completed project); it moves nothing. `SummaryTab` loads it with
+the summary, as `OverviewTab` does today. Another PM (a member or not): HealthBox and Critical tasks
+only, at full width (no AI data in props or the stream, as today). `ProgressCard`, `DeadlineCard`
+and `PhaseCard` are deleted (the band replaces them).
+
+#### Timeline and Hours (D)
+
+- Timeline: unchanged, except the empty state: "No planned dates yet. Add dates to each phase from
+  its menu on the Board." with "Go to the board" → `tabHref(id, 'board')`.
+- Hours: unchanged (`team.view` only; never rendered for a member, `getProjectReport` has no access
+  check of its own).
+
+#### Files tab (E: `[id]/FilesTab.jsx` and `[id]/_files/`)
+
+`FilesTab({ head, place })` (server) renders by `head.filesAccess`: `'manage'` the manager tab,
+`'member'` the member tab (a PM who is a member included: no Upload, no menus), `'none'` the lock
+card (below). It loads `projectFiles.listForProject({ viewer, projectId })` (A) and
+`projectSummaries.listDocumentsFor({ viewer, projectId })` (E) and merges them in pure
+`filesTabView.js`. The URL keeps the place: `?tab=files&place=all|project|<phase key>|tasks`
+(default `all`).
+
+**Layout (1024 px and wider)**: a fixed side list (240 px) next to one flat list. **Below 1024 px**
+(tablets and narrow laptops as on a phone) the side list becomes the "Show" `Select`, with the
+buttons in the header row; the phone rules below add the full-width buttons.
+
+- **Side list** (`<nav aria-label="Places">` of plain links, `href="?tab=files&place=design"` with
+  `aria-current="page"` on the chosen one): "All files 23", "Whole project 5", a small "Phases"
+  heading, the six phases with counts (the current one with a "Current" tag), a line, "On tasks 9".
+  A plain click updates the URL with `window.history.replaceState` (Next 16's native History API,
+  synced with `useSearchParams`), so changing place makes no server trip and the leave guard
+  ignores it; a modifier click opens a new tab as usual.
+- **Counts** (pure `filesTabView.placeCounts({ files, documents })`, the same function for the side
+  list and the phone Select) are **per viewer** (only what this viewer may see, so a number never
+  hints at hidden files); a place with 0 stays, muted. Each file, note and text-only document counts
+  once (a file's text is never a row or a count). A phase counts its own items plus the files on its
+  tasks; "Whole project" counts its own items; "On tasks" counts every task file; files on tasks
+  without a phase count only in "All files" and "On tasks"; "All files" counts each item once.
+- **Main header**: the place's name ("Design", with the muted "Current phase" when it is; "All files";
+  "Whole project"; "On tasks"); at the right, for managers, **"New note"** (secondary, StickyNote)
+  and **"Upload files"** (primary, Upload). Under it: a `SearchBox` "Search files and notes"
+  (filters names and note titles in the selected place as you type) and a `Select` "Sort" with
+  "Newest first" (default), "Name A to Z", "Biggest first" (notes and text-only documents last),
+  remembered per person in `localStorage` key `daybook.files.sort` (read and written in try/catch).
+- **Rows** (`FileListRow.jsx`, a card list; at least 64 px): the thumbnail (`thumbUrl`, 44 x 44,
+  radius 8) or the type tile (36 x 36, `--track`, `--ink-2` icon by `kindOf`: FileText for pdf, word
+  and text, FileSpreadsheet for excel, Presentation for slides, FileArchive for archive, FileVideo,
+  FileAudio, FileCode for code, FileImage for picture, File for program and file; **no colour per
+  type**); the name (one line, a middle ellipsis keeping the extension: "checkout-err…steps.pdf"); a
+  muted second line that wraps: "PDF · 2.4 MB · Riya Kapoor, 21 Nov", plus the place in All files
+  ("· Design", "· Whole project") and "On task: Fix the login page" (a button that opens the task
+  window, not a link, so the leave guard never asks); a third 13 px line, when needed, with a Lock
+  icon and "Only PM and Admins" and the program warning "Program file. Open it only if you trust
+  where it came from." A note: StickyNote icon, its title, "Note · Riya Kapoor, 28 Oct". A
+  text-only document: FileText, its title, "Text only · 14 pages · 28 Oct". At the right: a
+  Download icon button (files) and, for managers, "⋯".
+- **A phase place** lists the phase's own files and notes first, then a small heading "On tasks in
+  Design (3)" with the files of that phase's tasks. **Whole project** has no task files. **On tasks**
+  lists every task file the viewer can see, grouped under each task's title (a button opening the
+  task window).
+- **Clicks**: a picture opens the picture viewer (the place's pictures in order); another file's
+  name downloads it; a note or a text-only document opens the note window.
+- **Row menu** (managers): files: "Download", "View text" (when the file has text for the AI) or
+  **"Read text for AI"** (a `pdf`, `docx`, `txt` or `md` project file up to 20 MB without text, for
+  a failed or skipped read, or after deleting documents at the limit), "Edit details", "Delete";
+  task files: "Download", "Open task", "Edit details" (name only), "Delete"; notes: "Open", "Edit",
+  "Delete"; text-only documents: "View text", "Edit details" (title, place, who sees it), "Delete".
+- **Edit details** (`FileEditDialog.jsx`), titled "Edit details" (as the menu item): for a file,
+  **Name** (the base name; the extension shown as a fixed ".pdf" after the input; "Write a name.";
+  the PATCH sends the base name, Names); for a text-only document, **Title** (no extension);
+  **Place** (Select: "Whole project", the six phases; project files and text-only documents only),
+  **Who can see it** (radios "Everyone on the project" / "Only PM and Admins"; project files and
+  text-only documents only). Save → `PATCH /api/project-files/[id]` (or the document route) → toast
+  "Changes saved.". Save stays focusable while it works (`BusyButton`); the window then closes
+  together with the page's new data, and focus goes to the row's "⋯" while the row is still shown,
+  else to the next row's name (the file left the place shown), else Upload files.
+- **Delete**: the row hides at once, toast "File deleted." / "Note deleted." with Undo for 6 s
+  (`useUndoDelete`), then `DELETE /api/project-files/[id]` or `/api/project-documents/[id]`. Chosen
+  from the keyboard (a row's "⋯" or the note window), the toast's Undo takes the focus; after a
+  click, focus goes to the next row's name.
+- **Upload files** (`UploadDialog.jsx`, a `Dialog` 560 px; a full-screen sheet on a phone): title
+  "Upload files"; **Add to** (Select, preset to the selected place; "Whole project" from All files
+  and On tasks; the current phase written "Development (current phase)"); **Who can see it** (radios:
+  "Everyone on the project" (default), help "People on the project can open and download it.";
+  "Only PM and Admins", help "Only Riya Kapoor and Admins can open it."); the drop box with "Choose
+  files" and help "Any type of file, each up to 500 MB."; the picked files as chips marked "Ready"
+  (an X removes one; the early checks run here). Footer: Cancel and **"Upload 3 files"** (primary;
+  "Upload files" and `aria-disabled` while none is ready). Pressing it queues the uploads with the
+  dialog's choices (the radio's value is always sent) and closes the dialog; progress moves to the
+  Uploads card.
+- **Dropping files on the list** (desktop, managers): the list shows the overlay "Drop to add to
+  Design" ("Drop to add to Whole project" from All files and On tasks); the drop opens the Upload
+  files dialog with those files ready, so who can see them is always chosen before anything is sent.
+- **Uploads card** (`UploadsCard.jsx`, above the list while anything uploads, is read for the AI,
+  or failed; a polite region announces milestones): heading "Uploading 3 files" with a text button
+  **"Cancel all"** at its right (it asks with the line "Stop 12 uploads?" and "Keep uploading" /
+  "Stop all", then calls `cancelAll()` and announces "12 uploads cancelled"); one row per file
+  (Upload states) with Cancel or Retry ("Retry brief.pdf") and Remove. As files finish they join the
+  list (one `router.refresh()` at most every 2 s while a batch runs, and one at its end). When all
+  are done the card goes and one toast says "3 files added to Design." Failed rows stay, under the
+  heading "1 file couldn't be uploaded", until removed.
+- **Text for the AI summary** (`useReadForAi.js`): when a `pdf`, `docx`, `txt` or `md` project file
+  up to 20 MB finishes, its text is read in the browser (one file at a time, after the uploads) and
+  posted (Notes). Meanwhile the Uploads card keeps a row "Reading brief.pdf for the AI summary… page
+  12 of 14" (polite milestones), and the leave guard counts it ("Leave this page? Daybook is still
+  reading 2 files for the AI summary."). "Read text for AI" from the row menu fetches the file from
+  its `downloadUrl` into memory (allowed here, unlike downloads: it is the PM's own read of a file
+  of at most 20 MB), then does the same. A failure leaves the file and toasts "The AI summary can't
+  read brief.pdf." · the §22 reason as it is ("No readable text. Is it a scan? Paste the key parts
+  as a note."); at the document limit "brief.pdf's text wasn't kept for the AI summary." · "This
+  project has 100 files and notes with text." Over 20 MB: nothing is read and nothing is said.
+- **New note** (`NoteDialog.jsx`, from `NoteForm.jsx`): "New note" / "Edit note": **Title**,
+  **Text** (textarea), **Add to**, **Who can see it** (the same two radios; default Everyone), footer
+  (Edit: Delete left) Cancel and **"Add note"** / **"Save changes"**; the §22 validation through the
+  API's own schemas (the radio's value is always sent); toast "Note added." / "Changes saved.".
+  **Note window** (`NoteView.jsx`, from `DocumentText.jsx`): the title, "Note · Riya Kapoor, 28 Oct
+  · Design · Everyone on the project", the text (pages split by `\f` for documents); a text-only
+  document adds "The original file wasn't kept. Only its text was saved." "View text" on a project
+  file opens it with the file name and the meta "Text for the AI summary · 14 pages · Design ·
+  Only PM and Admins". Managers get Edit (notes) and Delete in its footer.
+- **Empty states** (one sentence, at most one button):
+
+  | Where         | Managers                                                                                               | Members                         |
+  | ------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------- |
+  | The whole tab | "No files yet. Upload briefs, designs and contracts so the team has them in one place." [Upload files] | "No files shared with you yet." |
+  | One place     | "Nothing in Design yet." [Upload files]                                                                | "Nothing in Design yet."        |
+  | On tasks      | "No task has files yet. Add files to a task from its window."                                          | "None of your tasks has files." |
+  | Search        | "No files match "logo"." [Clear search]                                                                | the same                        |
+
+- **Another PM who isn't on the project** (`filesAccess 'none'`): one muted `Card` with a Lock
+  icon: "Files are only for Riya Kapoor, Admins and people on the project." Nothing about the files
+  is loaded. A PM who is a member sees the member Files tab. **Before 019**: "Files need the latest
+  database update. Ask an Admin." **Storage not set up** (managers, `projectFiles.storageStatus()`
+  `ready` false): one muted line with an Info icon above the list, "File storage isn't set up yet.
+  Ask an Admin.", and "Upload files" is `aria-disabled` (pressing it shows the same toast); the list
+  shows as usual. The task form's Files field shows the same line in place of the drop box.
+- **Phone**: the side list becomes a `Select` "Show" at the top ("Design · 8"; every place with its
+  count); "Upload files" (primary) and "New note" (secondary) full width under it, 44 px; the search
+  and sort under those; rows become two-line cards with 44 px buttons (the third line stays); no
+  drop overlay.
+
+#### Upload states and every message (E: `src/components/files/`, all uploaders)
+
+**Chip** (`UploadChip.jsx`; 52 px, radius 10, 1 px `--line`, `--surface`; an Error or Paused chip
+spans the whole row and grows: `grid-column: 1 / -1`, min-height 52 px, 7 px top and bottom, the
+message wraps): left a 36 px tile: a local preview (`URL.createObjectURL`, revoked when the chip
+goes) **only** when the extension is in `PICTURE_EXTS` and `file.type` is `image/png`,
+`image/jpeg`, `image/gif` or `image/webp` (never SVG or anything else: a `blob:` URL has Daybook's
+origin, and an SVG opened from it as a page would run its script), else the type tile; middle the
+name (14 px, middle ellipsis) and the state line; right a 36 px (44 on a phone) X
+(`aria-label="Remove brief.pdf"`, or "Cancel uploading brief.pdf" while it uploads) and, when
+paused or failed with a retry, "Retry" (text button, accessible name "Retry brief.pdf").
+
+| State             | State line                                                                                                           | Notes                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Ready (Files tab) | "PDF · 340 KB"                                                                                                       | not sent yet                                                                                          |
+| Waiting           | "Waiting…"                                                                                                           | the tab's queue: 2 files at a time; also while the server is busy (`UPLOAD_BUSY`, `TOO_MANY_UPLOADS`) |
+| Uploading         | "Uploading… 45%" and a 3 px bar (`role="progressbar"`, `aria-label="Uploading brief.pdf"`, values 0 to 100)          | when a picked file is over 100 MB, the field's help adds once "Big files take a few minutes."         |
+| Trying again      | "Connection lost. Trying again…"                                                                                     | polite, never `role="alert"`                                                                          |
+| Paused            | "Couldn't upload brief.pdf. Check your connection, then press Retry." + Retry                                        | after the sixth try                                                                                   |
+| Done              | "PDF · 340 KB"                                                                                                       |                                                                                                       |
+| Error             | the message below, red text with a CircleAlert in the tile, border `color-mix(in srgb, var(--red) 40%, var(--line))` | announced once with `role="alert"`                                                                    |
+
+Messages (the early checks run in the browser in this order on every picked or dropped file; the
+server checks again with the same rules; the browser shows these words, with the file's name, for
+the server's code through `fileMessages.js`, since server messages never carry names):
+
+| Situation                                        | Message                                                                                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Empty                                            | "notes.txt is empty."                                                                                                          |
+| Too big                                          | "site-video.mov is 1.2 GB. Each file can be up to 500 MB."                                                                     |
+| Already in the list (same name and size)         | task uploaders: "card-payment-error.png is already attached."; the Files tab: "card-payment-error.png is already in the list." |
+| The 21st file on a task (not added)              | one line under the box: "A task can have up to 20 files. Remove one to add more."                                              |
+| More than 50 picked or dropped at once           | "Pick up to 50 files at a time." (the first 50 are taken)                                                                      |
+| Space full, not an Admin                         | "There isn't enough space for site-video.mov. Ask an Admin to make room."                                                      |
+| Space full, Admin                                | "Daybook's file space is full (9.8 GB of 10 GB). Delete old files or raise the limit in Settings."                             |
+| Server disk full                                 | "The server is out of space for files. Ask an Admin."                                                                          |
+| Storage not set up                               | "File storage isn't set up yet. Ask an Admin."                                                                                 |
+| Before the migration                             | "This needs the latest database update. Ask an Admin."                                                                         |
+| No permission                                    | "You can't add files to this project."                                                                                         |
+| Upload left too long (expired)                   | "This upload stopped because it was left too long. Add the file again."                                                        |
+| Upload stopped elsewhere (cancelled)             | "This upload was stopped. Add the file again."                                                                                 |
+| Removed on the server mid-upload (`UPLOAD_LOST`) | "brief.pdf was removed from the server while it uploaded. Add it again. If it happens again, ask an Admin."                    |
+| Signed out                                       | "You were signed out. Sign in again, then press Retry."                                                                        |
+| The file changed or moved on the computer        | "Couldn't read brief.pdf. It may have been moved or changed. Choose it again."                                                 |
+| The host's firewall refused a piece              | "The server refused part of brief.pdf. Ask an Admin to check the hosting limits."                                              |
+| Too many running uploads                         | "You have 10 files uploading. Wait for some to finish."                                                                        |
+| A held file expired before Save                  | "brief.pdf couldn't be added. Add it again."                                                                                   |
+| Cancelled (polite)                               | "Upload of brief.pdf cancelled."                                                                                               |
+| Download of a missing file                       | "This file is missing. Ask your PM to add it again."                                                                           |
+
+Announcements: **one** visually hidden `role="status"` region per uploader (a progress bar isn't a
+live region): "Uploading 3 files", "brief.pdf uploaded", "45% of site-video.mov" at every 25% for
+files over 50 MB, "All files uploaded", "Upload of brief.pdf cancelled". Failures: the chip's message
+with `role="alert"`, once. After a chip goes, focus moves to the next chip's X, or to "Choose files"
+when none is left.
+
+#### The member's project page (D: `MemberProjectView.jsx`; the board is C's, the Files tab E's)
+
+- Header as above (no health), then the tabs "Board" and "Files". The band is part of the Board
+  tab, as for the PM; the Files tab has no band.
+- **Board**: first the band (read only: no Change, no Move, no "⋯"; "Your hours this month"; no
+  forecast line), then the heading "Your tasks", the phone switcher, the board in member mode (C, no
+  filter pills): only their tasks and Anyone tasks; Done phases tiles "Design · 4 of yours, done";
+  slim phases "Nothing for you yet"; status dots, no ticks, menus, quick add, drags or drops; cards
+  open the task window read-only (with "Add to to-do"). Under it the muted line "Only your tasks and
+  tasks for anyone on the project are shown. Progress counts all 29 tasks." No tasks at all: an
+  `EmptyState` "Nothing for you on this project yet." · "Your PM adds tasks here. Tasks for anyone
+  on the project show here too."
+- **Files**: the Files tab for a member (above). The prototype's "Files on your tasks" card isn't
+  drawn (Choices 5).
+- Never on this page: health, forecast, AI, Summary, Timeline, Hours, other people's tasks, names on
+  them, hours or report lines, attendance, leave, screen time.
+
+#### Today (D: `(app)/today/PriorityCard.jsx`, `todayData.js`)
+
+- `priorityRows` keeps `{ id, priority, title, projectId, project, forYou }` and adds `fileCount`
+  (`projectFiles.countsForTasks({ viewer, tasks })`, which builds one `ctx` per project; read with
+  `safe(..., {})`).
+- After the title, the paperclip and count (`aria-label="1 file"`) when above 0.
+- The title becomes a real button; a click on it or anywhere on the row except the To-do cell opens
+  the task window (`TaskWindowProvider` mounted by the card, mode `today`), with "Open project" and
+  the to-do button. The To-do column's "+" and "In to-do" are unchanged.
+- At 1023 px and below the rows stack as today (DataTable's stacked card: the P tag, title and
+  paperclip on top; then the "Project", "For" and "To-do" rows, label on the left).
+
+#### My projects (D: `(app)/projects/ProjectCard.jsx`, `MyProjectsView.jsx`)
+
+- The project name is a link to `/projects/[id]` and the whole card is clickable (a stretched link,
+  `::after` over the card; the card stays an `article`, CONTRACT §8 `Card as`).
+- Under the client: a 6 px mini band of six parts (done green, the current filled to its share,
+  later `--track`; `aria-hidden`) and the muted line "Development · 66% · Deadline 16 Dec" ("No phase
+  yet · 40%", "No tasks yet"); one `listPlans` and one `progressByProject` for all cards.
+- The priority line adds the files: "2 priority tasks · 1 P1 · 3 files" (Paperclip 14 px; files on
+  their own and Anyone tasks, `projectFiles.countTaskFilesForMember({ userId, projectIds })`).
+- The Completed tab's rows link too.
+
+#### Projects list (PM and Admin)
+
+Unchanged (§22 table; the name links to `/projects/[id]`, which now opens the Board; the row menu's
+"Phases and tasks" link `?tab=phases` opens the Board).
+
+#### Look, phone and accessibility (everyone)
+
+- Light and dark from the tokens only; the photo veil is the one fixed dark colour (a token).
+- Focus: the global ring (2 px surface gap, 2 px primary) on every control; windows trap focus,
+  label themselves by their title, return focus to the opener; Escape closes the innermost thing
+  (menu, viewer, window, quick add); menus move with the arrow keys, Home and End.
+- Announcements: toasts are polite; upload milestones in one region per uploader; errors once as
+  alerts.
+- Drag is never the only way: Move to phase in the menu; Choose files next to every drop area.
+- Tap targets 44 px at 640 px and below (band parts, ticks, menus, X buttons, Download, Retry, the
+  switcher, the viewer's buttons, the Files tab's buttons, the Move to phase buttons).
+- Repeated buttons carry the thing they act on in their accessible name ("Show Design tasks",
+  "Retry brief.pdf", "Download brief.pdf", "Remove brief.pdf"); the band's "Change" reads "Change
+  deadline".
+- `prefers-reduced-motion`: no smooth scrolling, no highlight fade, no sliding.
+
+### Modules
+
+- **`@/modules/projectFiles`** (A, **new**: `index.js` `export const projectFiles = service`; files
+  under ~300 lines each). Its repos read `project_tasks`, `projects` and `project_members`
+  read-only (the task's person and phase, the PM) and never write them; they never touch
+  `project_documents` (E's service does, through `syncFileDocument`).
+  - `ProjectFile` = `{ id, projectId, scope: 'project' | 'task', taskId, phase, visibility, name,
+ext, kind, typeLabel, sizeBytes, isPicture, thumbUrl, width, height, createdBy: { id, name },
+createdAt, task: { id, title, phase, assigneeId } | null, hasText, downloadUrl:
+'/api/project-files/12', viewUrl: '/api/project-files/12/view' | null, canManage }`
+    (`thumbUrl`: `/thumb` with a thumbnail, else `/view` for a picture up to 2 MB, else null;
+    `hasText` = a document holds its text, managers only, else false).
+  - Reads: `viewerContext({ viewer, project })` → `ctx` (Who sees); `listForProject({ viewer,
+projectId })` → `{ files: ProjectFile[], canSee: boolean, canManage: boolean }` (project and
+    task files the viewer may see; `canSee` = `ctx.manages || ctx.member`; `canSee: false` and `[]`
+    only when neither); `listForTask({ viewer, task })` → `ProjectFile[]` (filtered by
+    `canSeeFile`); `countsForTasks({ viewer, tasks })` → `{ [taskId]: n }` (only the files
+    `canSeeFile` allows, `{}` when none; tasks may span projects, as on Today, so one `ctx` per
+    project); `countTaskFilesForMember({ userId, projectIds })` → `{ [projectId]: n }`;
+    `fileForDocument({ projectId, fileId }, trx)` → `{ id, scope, phase, visibility, name } | null`
+    (active files only; `.forShare()` when `trx` is given; for E's text POST); `getForDownload({
+viewer, id })` → `{ file, path }` or NOT_FOUND; `limits()` → `{ maxFileBytes, maxTaskFiles,
+pickMax }`; `spaceUsage()` → `{ usedBytes, heldBytes, deletedBytes, limitBytes, fileCount,
+projectCount, diskFullAt, storage: { ready, problem } }`; `storageStatus()` → `{ ready, problem }`.
+  - Uploads: `startUpload({ user, input })`, `uploadStatus({ user, key })`, `receivePiece({ user,
+key, offset, request })`, `finishUpload({ user, key, thumb })`, `cancelUpload({ user, key })`
+    (Uploads).
+  - Task attachments, inside the caller's transaction (B): `attachUploads({ user, projectId,
+taskId, uploadKeys }, trx)` → `ProjectFile[]`; `removeTaskFiles({ user, taskId, fileIds }, trx)`
+    → `ProjectFile[]`; `deleteFilesOfTask({ user, taskId }, trx)` → count; `countActiveForTask(taskId,
+trx)` (a locking read). Empty lists return `[]` without a query; reads go through
+    `guard019Read` (Deploy before migrate).
+  - Management: `updateFile({ user, id, input, ip })` (rename any file, by base name; place and
+    visibility only for project files: a task file answers 400 "A task's files go where the task
+    goes."; locks the file row, `syncFileDocument`, audit) → `ProjectFile`; `removeFile({ user, id,
+ip })` (soft delete, `syncFileDocument({ remove: true })`, audit) → `{ id }`.
+  - Worker and scripts: `cleanUp({ limit, budgetMs })` → count; `wipeStorageForReset()` →
+    `{ removed }`; server-only `storeFile({ user, projectId, target, taskId, phase, visibility, name,
+bytes })` → a `ProjectFile` or a held `{ key }` (used by `db/demo` and tests, never by a route).
+  - Test seams (`service.js`): `setPieceBytesForTests(n | null)`, `resetStorageForTests()` (clears
+    the 60 s check cache); `checkStorage({ dir, isProduction })` takes its inputs.
+  - Pure, browser-safe (client components may import them, an exception to §2 like
+    `notifications/alerts.js`): `access.js` (`canSeeFile`, `canManageFiles`, `filesAccess`,
+    `canReadDocument`), `names.js` (`cleanFileName`, `extOf`, `middleEllipsis`,
+    `contentDisposition`), `kinds.js` (below), `fileMessages.js`, `pieces.js`, `ranges.js`,
+    `pictures.js`.
+  - **`kinds.js`**: `kindOf(ext)` → `'picture' | 'program' | 'pdf' | 'word' | 'excel' | 'slides' |
+'text' | 'archive' | 'video' | 'audio' | 'code' | 'file'`, checked in that order: picture `png,
+jpg, jpeg, gif, webp, svg, bmp, tif, tiff, heic, heif, ico, psd, ai, eps`; program
+    `PROGRAM_EXTS`; pdf `pdf`; word `doc, docx, docm, odt, rtf, pages`; excel `xls, xlsx, xlsm, ods,
+csv, tsv, numbers`; slides `ppt, pptx, pptm, odp, key`; text `txt, md, log`; archive `zip, rar,
+7z, tar, gz, tgz, bz2, xz`; video `mp4, mov, avi, mkv, webm, m4v, wmv`; audio `mp3, wav, m4a,
+aac, ogg, flac, wma`; code `html, htm, xhtml, mht, mhtml, xml, json, css, ts, jsx, tsx, py, php,
+java, c, cpp, h, cs, go, rb, sql, yml, yaml`; anything else `file`. `typeLabel(ext)`: "Picture",
+    "Program", "PDF", "Word", "Excel", "PowerPoint", "Text", "Zip", "Video", "Audio"; for code and
+    file the extension in capitals ("HTML", "DWG"), or "File" with none. `PICTURE_EXTS` `png, jpg,
+jpeg, gif, webp` (the only ones ever shown); `PICTURE_TYPES` (ext → Content-Type, Downloads);
+    `PROGRAM_EXTS` `exe, msi, msp, msix, appx, bat, cmd, com, cpl, pif, scr, msc, ps1, psm1, vbs,
+vbe, js, jse, wsf, wsh, jar, apk, sh, lnk, scf, url, hta, reg, inf, chm, dll, xll, iso, img, vhd,
+vhdx, dmg, pkg, app, command, deb, rpm, run, appimage`; `isProgram(ext)`; `formatSize(bytes)`;
+    `READABLE_EXTS` `pdf, docx, txt, md`.
+  - **`fileMessages.js`** exports one function per message of Upload states, each taking the file
+    name where the message has one: `empty, tooBig, alreadyAttached, alreadyInList, taskFull,
+pickMax, spaceFull, diskFull, storageOff, updateNeeded, noPermission, expired, stopped,
+removedOnServer, signedOut, notReadable, hostRefused, tooManyUploads, heldExpired, paused,
+notSaved, cancelled, fileMissing`, plus `forCode(code, { name, admin, ... })` for a server code.
+  - Server only: `storage.js`, `uploads.js`, `finish.js`, `attach.js`, `manage.js`, `reads.js`,
+    `download.js`, `space.js`, `cleanup.js`, `migration019.js`, `errors.js` (`fileError(code)` with the
+    codes below, and `retryResponse`), `repo.js`, `uploadRepo.js`, `spaceRepo.js`, `schemas.js`,
+    `service.js`.
+- **`@/modules/projectTasks`** (B): `listForProject` member filter; **new** `getForViewer({ viewer,
+id })` → `TaskDetails` = `{ id, projectId, project: { id, name, color, status, isUrgent }, title,
+details, priority, status, phase, dueDate, assignee: { id, name, initials, avatarUrl, status,
+isMember } | null, createdBy: { id, name } | null, createdAt, doneAt, latestReport | null, files:
+ProjectFile[], fileCount, canManage, canSeeFiles }`; **new** `countsByPhase(projectId)`; **new**
+  `attachFiles({ user, id, uploadKeys, ip })` → `{ files, told, toldName }`; `create` and `update`
+  take the file fields (Task files) and return the task with `told` and `toldName`; `remove`
+  deletes the files; `repo.countForProject({ projectId, status, memberId })` (the member filter).
+  New files `taskFiles.js` (the attach, remove and limit steps), `taskDetails.js`
+  (`getForViewer`), split out to keep `writes.js` and `service.js` under 300 lines.
+- **`@/modules/projects`** (B): **new** `isMember({ projectId, userId })` → boolean (a
+  `project_members` row and an active user; one query; used by D's page access; A reads the same
+  rule from its own repo); `project.member_added` link.
+- **`@/modules/projectSummaries`** (E): `listDocumentsFor`, `syncFileDocument`, the schema and
+  limit changes, the write without new columns, `withFileColumns(read)` (the before-019 read), the
+  new `NO_DOCUMENTS` message.
+- **`@/modules/settings`** (A): `fileMaxMb`, `fileStorageLimitGb` in `getAll`.
+- **Client pieces** (all `'use client'` unless marked pure):
+  - C, `[id]/_board/`: `Board.jsx` (`{ projectId, access, filesAccess, tasks, counts, plan, today,
+options, status, pmName, hoursThisMonth, show }`), `ProgressBand.jsx`, `ForecastLine.jsx`,
+    `BoardFilters.jsx`, `PhaseColumn.jsx` (also No phase yet), `DonePhasesColumn.jsx`,
+    `TaskCard.jsx`, `QuickAdd.jsx`, `CardMenu.jsx`, `MoveTaskDialog.jsx`, `PhoneSwitcher.jsx`,
+    `TaskEditorProvider.jsx` (`{ projectId, options, plan, limits, children }`, `options` from
+    `head.options`; `useTaskEditor()` → `{ openNew({ phase?, title? }), openEdit(taskOrId),
+remove(task, { keyboard, returnFocus }), isHidden(taskId) } | null`), `TaskFormDialog.jsx`,
+    `useBoardDrag.js`, `useCardFileDrop.js`, `useBoardScroll.js`, pure `boardView.js` (columns, the
+    fold rule, skipped phases, widths, slim, sort, dim, phone steps) and `boardMoves.js` (move
+    targets, Undo); `[id]/BoardTab.jsx` (server); `[id]/phasesView.js` (pure, kept; gains
+    `fileCount`, `createdBy`). C also changes three shared project-page files (Files and owners):
+    `MovePhaseButton.jsx` (optional controlled `open` and `onOpenChange`; with `open` given it
+    renders no button, so a menu item can open the confirm), `DeadlineButton.jsx` (optional `label`
+    for the button only), `PhaseDatesDialog.jsx` (its own new `PhaseDatesDialog.module.css` with the
+    classes it uses, copied from `PhaseSection.module.css` before that file is deleted).
+  - D: `src/components/task/TaskWindow.jsx` (+ `TaskWindow.module.css`; `{ taskId, open, onClose,
+mode: 'manage' | 'team' | 'member' | 'today', origin }`), `TaskWindowProvider.jsx` (`{ mode,
+projectId?, children }`; `useTaskWindow()` → `{ open(taskId, { origin }), close() } | null`;
+    reads `?task=` on a project page), `useTaskDetails.js` (the GET, the last 8 kept in memory),
+    pure `taskWindowView.js` (facts, report line, "Added by").
+  - E, `src/components/files/`: `UploadField.jsx` (`{ id, uploads, limits, label = 'Files', help,
+dropText = 'Drop to attach', phoneLabel = 'Attach files', attached = [], removedIds = [],
+onToggleRemove(fileId), loadingAttached = false, attachedError = false, storageReady = true }`),
+    `UploadChip.jsx`, `FileTile.jsx` (`{ file }`), `FileThumbs.jsx` (`{ files, onOpen(file, index),
+onRemove? }`), `FileRows.jsx` (`{ files, showTask?, onOpenTask?, onRemove? }`),
+    `PictureViewer.jsx` (`{ files, index, onIndex, onClose }`), `TaskAttachProvider.jsx` (`{
+projectId, limits, children }`; `useTaskAttach()` → `{ add(taskId, fileList), batchFor(taskId)
+→ { items, busy, count, percent } | null, retry(taskId, id), remove(taskId, id) } | null`; the
+    store shows its own toasts and calls `router.refresh()`), `Files.module.css`; pure or plain JS:
+    `uploadClient.js`, `uploadQueue.js` (`createUploadQueue({ concurrency })` and the tab's
+    `sharedUploadQueue`), `makeThumb.js`, `useUploads.js` (`useUploads({ projectId, target, taskId?,
+phase?, visibility?, limits, autoStart = true })` → `{ items, add(fileList), start(), cancel(id),
+retry(id), remove(id), cancelAll(), busy, paused, unsaved, readyKeys, doneFiles }`),
+    `useFileRemoval.js` (`{ remove(file, opts), isHidden(id), toast }`, over `useUndoDelete`),
+    `leaveGuard.js` (`useLeaveGuard(active, message)`), `uploadAnnouncer.js`. `[id]/FilesTab.jsx`
+    (server) and `[id]/_files/{FilesView, PlaceList, PlaceSelect, FileListRow, FileRowMenu,
+UploadDialog, UploadsCard, NoteDialog, NoteView, FileEditDialog}.jsx` (+ css), pure
+    `filesTabView.js` (`placeOf`, `placeCounts`, rows, search, sorts), `useReadForAi.js`.
+  - Unchanged and reused: `TaskCheck`, `TaskUndoProvider`, `DueTag`, `UndoToast`, `undoQueue.js`,
+    `useUndoDelete.js` (its API doesn't change: Today's to-do imports it), `BusyButton`,
+    `planFormat.js`, `readDocumentFile.js`, `readDocx.js`, `docxText.js`, `RangeForm`, `HoursTab`,
+    `TasksCard`, `DailyLog`, `PeopleTable`, `Menu` (flat, no sub-lists), `useUnsavedChangesWarning.js`
+    (its `isInAppNavigation` is called by `leaveGuard.js`).
+  - Deleted: `PhasesTab`, `PhasesBoard`, `PhaseSection`, `PhaseTasks`, `PhaseTaskRow`,
+    `PhaseTaskForm` (+ css) (C); `OverviewTab`, `ProgressCard`, `DeadlineCard`, `PhaseCard` (D);
+    `PhaseDocuments`, `AddFileButton`, `DocumentRow` (+ css) (E). Nothing outside `[id]/` imports
+    them (checked: only `useUndoDelete`, `UndoToast`, `RangeForm`, `planFormat` are imported from
+    outside). Inside `[id]/`, `PhaseDatesDialog.jsx` imports `PhaseSection.module.css` and
+    `DeadlineButton.jsx` imports `Overview.module.css` (`.deadlineAction`): C gives the first its own
+    css before the delete, and D keeps `.deadlineAction` in `Overview.module.css`.
+
+### API
+
+| Route                                                           | Permission                                        | Body / returns                                                                                   | Errors and limits                                                                                                                                             |
+| --------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/uploads`                                             | `signed_in` (managers)                            | `uploadStartSchema` → 201 `{ key, pieceSize, offset, name, size, expiresAt }`                    | 400, 403, 404, 413 `FILE_TOO_BIG`, 429, 503 `FILES_UNAVAILABLE`/`UPDATE_NEEDED`, 507 `FILES_SPACE_FULL`/`FILES_DISK_FULL`; 60 a min                           |
+| `GET /api/uploads/[key]`                                        | `signed_in` (the uploader)                        | `{ key, offset, size, status, busy, expiresAt }`, `no-store`                                     | 404; 120 a min                                                                                                                                                |
+| `POST /api/uploads/[key]/pieces?offset=N`                       | `signed_in` (the uploader)                        | multipart `piece`, optional `X-Piece-Sha256` → `{ offset }`                                      | 400 `PIECE_BAD`, 404, 409 `UPLOAD_OFFSET`, 410 `UPLOAD_GONE`/`UPLOAD_LOST`, 411, 413, 422 `PIECE_CHECKSUM`, 429 `UPLOAD_BUSY` (`Retry-After`), 507; 300 a min |
+| `POST /api/uploads/[key]/finish`                                | `signed_in` (the uploader)                        | optional multipart `thumb` → 201 `{ file }` (project) or 200 `{ upload }` (task); safe to repeat | 403 (no longer manages), 404, 409 `UPLOAD_INCOMPLETE`, 410, 429 `UPLOAD_BUSY`, 507; 60 a min                                                                  |
+| `DELETE /api/uploads/[key]`                                     | `signed_in` (the uploader)                        | → `{ cancelled: true }`                                                                          | 404, 409 (already added); 120 a min                                                                                                                           |
+| `GET /api/project-files/[id]`                                   | `signed_in` (`canSeeFile`)                        | the file, attachment, streamed; Range; 304                                                       | 404 `NOT_FOUND`/`FILE_MISSING`, 416; 600 a min with view and thumb                                                                                            |
+| `GET /api/project-files/[id]/view`                              | `signed_in` (`canSeeFile`)                        | a picture, inline                                                                                | 404 for anything that isn't a picture (after `canSeeFile`)                                                                                                    |
+| `GET /api/project-files/[id]/thumb` (**new**)                   | `signed_in` (`canSeeFile`)                        | the thumbnail, inline `image/jpeg`                                                               | 404 without a thumbnail                                                                                                                                       |
+| `PATCH /api/project-files/[id]`                                 | `signed_in` (managers)                            | `fileUpdateSchema` (`name` = the base name) → `{ file }`                                         | 400, 403, 404; 120 a min                                                                                                                                      |
+| `DELETE /api/project-files/[id]`                                | `signed_in` (managers)                            | → `{ id }` (soft delete)                                                                         | 403, 404; 120 a min                                                                                                                                           |
+| `GET /api/project-tasks/[id]` (**new** GET)                     | `signed_in` (service)                             | → `TaskDetails`                                                                                  | 404                                                                                                                                                           |
+| `POST /api/project-tasks/[id]/files` (**new**)                  | `project.manage`, own project                     | `{ uploadKeys: [1..20] }` → 201 `{ files, told, toldName }`                                      | 400 `fields.uploadKeys`, 403, 404, 409 `TOO_MANY_FILES`, 503 `UPDATE_NEEDED`; 60 a min                                                                        |
+| `POST /api/projects/[id]/tasks` (existing)                      | `project.manage`, own project                     | gains `uploadKeys` (0..20); answers the task plus `told`, `toldName`                             | as above, plus §13/§22                                                                                                                                        |
+| `PATCH /api/project-tasks/[id]` (existing)                      | `project.manage`, own project                     | gains `addUploadKeys`, `removeFileIds` (0..20 each); answers the task plus `told`, `toldName`    | as above                                                                                                                                                      |
+| `GET /api/projects/[id]/tasks` (existing)                       | `signed_in` (service)                             | members get only their own and Anyone tasks; `page.total` counts the same rows                   | unchanged                                                                                                                                                     |
+| `POST /api/projects/[id]/documents` (existing)                  | `project.manage`, own project                     | gains `visibility` (left out = `'managers'`), `phase: null`, `fileId`                            | 400 `fields.fileId`, 404 (file gone), 409 (text already saved, 100 documents), 503 before 019; the 1 MB body limit stays                                      |
+| `PATCH`, `GET`, `DELETE /api/project-documents/[id]` (existing) | as today; `GET` for members per `canReadDocument` | PATCH gains `visibility`, `phase` (a file's text: 400)                                           | unchanged                                                                                                                                                     |
+
+**Error codes** (none added to `errors.js`; each is `new AppError(code, { status, message })` from
+`projectFiles/errors.js`): `FILES_UNAVAILABLE` 503, `UPDATE_NEEDED` 503 (the 1.10 code),
+`FILES_SPACE_FULL` 507, `FILES_DISK_FULL` 507, `FILE_TOO_BIG` 413, `PAYLOAD_TOO_LARGE` 413 (the
+§22 pattern), `LENGTH_REQUIRED` 411, `UPLOAD_GONE` 410, `UPLOAD_LOST` 410, `UPLOAD_OFFSET` 409,
+`UPLOAD_INCOMPLETE` 409, `TOO_MANY_FILES` 409, `TOO_MANY_UPLOADS` 429, `UPLOAD_BUSY` 429 (sent
+with `Retry-After` through `retryResponse`), `PIECE_BAD` 400, `PIECE_CHECKSUM` 422, `FILE_MISSING` 404. Messages are the ones in this section and never name a file; 5xx answers carry the
+`requestId` as usual.
+
+### Limits
+
+- Piece 4 MiB (`FILES_PIECE_BYTES`); a piece request at most piece + 64 KiB; 2 pieces at once per
+  web process; 1 piece per file and 2 files at a time per tab (one queue per tab); 10 running
+  uploads per person; a receiving upload lives 2 h after Start or its last piece, a held one 24 h
+  after Finish; finished, cancelled and expired upload rows are kept 7 days; a piece lease 2
+  minutes, a Finish lease 5 minutes.
+- Largest file 500 MB by default (1 to 2,048 MB); storage limit 10 GB by default (1 to 1,000 GB);
+  Start refuses under file size + 256 MiB of free disk.
+- 20 files on a task; 50 files per pick or drop; no limit per project or place (the storage limit
+  covers it); names 200 characters and 240 bytes.
+- Pictures inline up to 40 megapixels; thumbnails made in the browser for pictures up to 50 MB (at
+  most 512 KB each); without one, the picture itself only up to 2 MB.
+- Text for the AI: `pdf`, `docx`, `txt`, `md` up to 20 MB, 100 pages, 200,000 characters; 100
+  documents (notes and texts) per project; the summary reads at most 50,000 characters (§22).
+- Rate limits per person per minute: Start 60, Status 120, pieces 300, Finish 60, Cancel 120, attach
+  60, file edit and delete 120, downloads and views together 600.
+- The nightly files step: at most 500 rows per part and 20 s in all.
+- Notification bodies: at most 3 names in the files line, 5 in `files_added`; title 200, body 500.
+
+### Hosting and cost
+
+- **Disk space**: files use the hosting plan's disk quota. Keep the storage limit at most about half
+  of the free space cPanel's Disk Usage shows (the help text says so): the app, `node_modules`, mail,
+  logs and the host's own backup work need room, and cPanel backups can fail on an account near its
+  quota. Rough use: 10 active projects × 50 tasks, 1 in 5 with 2 files of 2 MB, is about 400 MB a
+  year, plus whatever goes in the Files tab.
+- **Disk speed**: CloudLinux's default IO limit is about 1 MB/s for reads and writes together, so a
+  500 MB file needs 8 to 9 minutes whatever the code does. Each byte is written once (positional
+  writes, one `rename`, no joining of pieces, no second read for a hash, no server thumbnails).
+  Each thumbnail view reads about 40 KB from disk once per person (then 304s), not the picture.
+- **Memory and processes**: about 8 to 12 MB per piece being handled, **at most 2 at once per web
+  process** (about 25 MB). The web app's disk thread pool has Node's default 4 threads (Setup
+  Node.js App doesn't set `UV_THREADPOOL_SIZE`; README sets it to 2 only on the cron, migrate and
+  seed lines); the other 2 keep pages, database connections and downloads moving while a big file
+  is written under the host's disk limit. More parallel writes wouldn't be faster: the account's
+  disk limit is the bottleneck. Downloads stream 64 KiB at a time. Short requests only, no
+  long-held connections. No new worker job and no new cron line: one more step in the nightly
+  cleanup.
+- **ModSecurity and LiteSpeed**: a piece is a file part of a `multipart/form-data` POST (only about
+  200 bytes count against the 1 MB no-files limit), far under the 12.5 MB request limit of the
+  recommended rules and LiteSpeed's 500 MB body limit. If the host refuses pieces anyway, set
+  `FILES_PIECE_BYTES=2097152` in `.env.local` and Restart (no new build).
+- **No new npm dependency**: `request.formData()` (multipart), `node:fs`, `node:stream`,
+  `node:crypto` (keys, hashes), `fs.statfs` (Node 18.15+), native drag and drop, `XMLHttpRequest`,
+  `createImageBitmap` and canvas (thumbnails).
+- **Backups**: cPanel's full and Home Directory backups include `~/daybook-files`; JetBackup can
+  restore single folders. **The phpMyAdmin export doesn't include files.** Files are stored in
+  month folders, so the monthly step is one folder (README). A restore needs both: without the files
+  a row shows "This file is missing. Ask your PM to add it again."; files without rows are never
+  served (they take disk space only).
+
+### Files and owners
+
+Six builders, A to F, so no file has two owners; O is the orchestrator. A file listed for one
+builder is edited only by that builder. Where a builder needs another's piece that isn't there yet,
+it codes against this section and adds a stub with the signature (the §6 stub rule); the owner
+replaces it. Each builder writes the tests of its own files.
+
+| Owner                       | Builder                     | Files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| orchestrator                | O (first)                   | `docs/design/project-board-prototype.html`; `db/migrations/019_project_files.js`; `tests/services/migration019.test.js`; `.github/workflows/migration-check.yml` (019 down and up on MySQL 8.4, then `migration019.test.js`); `db/seeds/03_settings.js` (`file_max_mb`, `file_storage_limit_gb`); `src/config/version.js` ('1.12'); `src/lib/env.js` (`FILES_DIR`, `FILES_PIECE_BYTES`, `filesDir`, `filesDirIsDefault`, `filesPieceBytes`; `FILES_DIR` ignored when `NODE_ENV=test`) and `tests/unit/env.test.js`; `.env.example` (a "Files" block); `.gitignore` (`/.daybook-files/`); `src/proxy.js` (the matcher) and `tests/unit/clientIp.test.js`; `src/app/globals.css` (`--photo-veil`, `--photo-veil-text`, and `--shadow-menu: 0 12px 32px color-mix(in srgb, var(--navy) 14%, transparent)`, the value `Menu.module.css` and `ToastProvider.module.css` already use; both themes and the `@supports not` fallback) and `tests/unit/themeFallback.test.js`; **stubs** with the exact signatures of Modules, so every builder starts green and the owner replaces them (the 1.10 pattern): `src/modules/projectFiles/{index,service}.js` (every function; reads return `[]`, `{}` or 0, writes throw `UPDATE_NEEDED`), `src/modules/projectSummaries/fileDocuments.js` (`syncFileDocument` resolves), `[id]/BoardTab.jsx`, `[id]/_board/TaskEditorProvider.jsx`, `src/components/task/{TaskWindowProvider,TaskWindow}.jsx`, `src/components/task/useTaskDetails.js`, `src/components/files/{UploadField,UploadChip,FileThumbs,FileRows,PictureViewer,TaskAttachProvider}.jsx` and `{useUploads,useFileRemoval}.js` |
+| orchestrator                | O (last)                    | `README.md` (below) and `tests/unit/hostScripts.test.js` (the 1.12 steps); `scripts/doctor.js` (a "Files" line: "✓ File storage is ready (1.2 GB of 10 GB used)" or "✗ File storage isn't set up:" plus the problem's sentence (Settings), then "See README Updating, 1.12."); `scripts/reset.js` and `db/demo/seedDemo.js` (`projectFiles.wipeStorageForReset()` after the truncate); `db/demo/*` (on acme-store, through `projectFiles.storeFile`: a PNG and a PDF on one task, a Word file on an Anyone task, two Whole project files, one "Only PM and Admins", a note; the bytes from `db/demo/files/`); `tests/unit/demoProjectPlans.test.js` if the demo builders change; `docs/CONTRACT.md` (this section and "Other section edits")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| projects, system            | A (files core)              | `src/modules/projectFiles/**` (all new: `index, service, repo, uploadRepo, spaceRepo, schemas, errors, access, names, kinds, fileMessages, pieces, ranges, pictures, storage, uploads, finish, attach, manage, reads, download, space, cleanup, migration019`); `src/app/api/uploads/route.js`, `api/uploads/[key]/route.js`, `api/uploads/[key]/pieces/route.js`, `api/uploads/[key]/finish/route.js`, `api/project-files/[id]/route.js`, `api/project-files/[id]/view/route.js`, `api/project-files/[id]/thumb/route.js`; `src/worker/jobs/cleanup.js` (the `projectFiles` step); `src/modules/settings/{schemas,service,crossChecks}.js`; `(app)/settings/FilesSection.jsx` (+ css, new), `SettingsForm.jsx`, `SettingsNav.jsx`, `settingsValues.js`, `numberFields.js`, `page.js`, `loading.js`; tests: `tests/unit/{fileNames,filePieces,fileRanges,fileKinds,fileAccess,fileSpace,fileMessages,settingsValues}.test.js` (`fileRanges` split out of `filePieces`), `tests/services/{projectFilesUploads,projectFilesStorage,projectFilesDownload,projectFilesManage,projectFilesCleanup,projectFilesMigration,settings,runOnce}.test.js` (`runOnce`: the cleanup result gains `projectFiles: 0`) and the shared kit `tests/services/projectFilesKit.js` (new)                                                                                                                                                                                                                                                                                                                                                          |
+| projects, system            | B (tasks and notifications) | `src/modules/projectTasks/{writes,schemas,messages,service,repo,shared}.js` and new `{taskFiles,taskDetails}.js`; `src/modules/projects/{service,repo,messages}.js` (`isMember`, the `member_added` link); `src/app/api/projects/[id]/tasks/route.js`, `api/project-tasks/[id]/route.js` (+ GET), `api/project-tasks/[id]/files/route.js` (new); `src/modules/notifications/alerts.js`; tests: `tests/unit/{notificationAlerts,taskFileMessages,noSlackNoAi}.test.js`, `tests/services/{projectTaskFiles,projectTasks.reads,projectTasks,projectTasksPlan,projects}.test.js` (`projectTasksPlan`: the task link becomes `?task=<id>`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| projects                    | C (Board)                   | `(app)/projects/[id]/BoardTab.jsx` (new), `(app)/projects/[id]/_board/**` (new, above), `phasesView.js`; `MovePhaseButton.jsx` (controlled `open`, `onOpenChange`), `DeadlineButton.jsx` (`label`), `PhaseDatesDialog.jsx` and its new `PhaseDatesDialog.module.css`; deletes `PhasesTab`, `PhasesBoard`, `PhaseSection`, `PhaseTasks`, `PhaseTaskRow`, `PhaseTaskForm` (+ css); `tests/unit/{boardView,projectBoard}.test.js` (new), `tests/unit/phasesBoard.test.js` and `tests/unit/projectPhasesTab.test.js` (rewritten or folded into the new ones; the `undoQueue` cases stay), `tests/services/projectPhasesTab.test.js` → `tests/services/projectBoardTab.test.js`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| projects, attendance, shell | D (page, member, Today)     | `(app)/projects/[id]/{page,projectHead,loading}.js`, `ProjectView.jsx`, `MemberProjectView.jsx` (new), `ProjectTabs.jsx` (+ css), `SummaryTab.jsx` (new, from `OverviewTab`), `HealthBox.jsx`, `CriticalTasksCard.jsx`, `SummaryCard.jsx` (+ css; the AI phase line), `Overview.module.css` (keeps `.deadlineAction`, used by `DeadlineButton`), `TimelineTab.jsx`, `TabSkeletons.jsx`, `ProjectLoading.jsx`, `page.module.css`; deletes `OverviewTab`, `ProgressCard`, `DeadlineCard`, `PhaseCard`; `src/components/task/**` (new); `(app)/today/{PriorityCard.jsx,todayData.js}` (+ css); `(app)/projects/{ProjectCard.jsx,MyProjectsView.jsx}` (+ css); `tests/unit/{projectTabs,projectSummaryTab,memberProjectView,taskWindow}.test.js`, `tests/unit/projectOverview.test.js` (replaced), `tests/unit/todoCardActions.test.js` and `todoCardRender.test.js` (the Priority card rows), `tests/services/projectMemberPage.test.js` (new) and `tests/services/todayTaskFiles.test.js` (new, Today's `fileCount` split out of it)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| projects                    | E (Files tab and uploads)   | `(app)/projects/[id]/FilesTab.jsx` (new), `(app)/projects/[id]/_files/**` (new); `src/components/files/**` (new, `TaskAttachProvider` included); `(app)/projects/[id]/{documentsView,useDocumentBody,readDocumentFile,readDocx,docxText}.js`; deletes `PhaseDocuments`, `AddFileButton`, `DocumentRow`, `NoteForm`, `DocumentText` (+ css; moved into `_files/`); `src/modules/projectSummaries/{documents,schemas,repo,shared,service}.js` and new `fileDocuments.js`; `src/app/api/projects/[id]/documents/route.js`, `api/project-documents/[id]/route.js`; tests: `tests/unit/{filesTabView,uploadClient,uploadQueue,filesTab}.test.js` (new; `filesTab` replaces `phaseDocuments.test.js`), `tests/services/{projectSummariesDocuments,projectSummariesRoutes,projectSummariesMigration,projectPlanMigration}.test.js` (the two migration tests roll back 019 first with `db.migrate.down({ name: '019_project_files.js' })`, then 015, and `latest` restores both; the routes test keeps its member-404 note, now made without `visibility`, and adds a member-200 case for an Everyone note)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| orchestrator                | F (end to end)              | `tests/e2e/{project-board,task-files,project-files}.spec.js` (new), `tests/e2e/project-plan.spec.js` (the new tabs), `tests/e2e/{smoke,todo}.spec.js` (as needed), `tests/e2e/support/files.js` (new), `tests/e2e/support/projectPlan.js`, `tests/fixtures/files/*` (new, all plain and harmless, since the deploy branch copies `tests/` to the host, where a malware scanner could quarantine anything that looks like an attack: `logo.png`, `photo.jpg`, `wrong-bytes.png` (a text file named .png), `drawing.svg` (a plain `<rect>`), `page.html` (`<!doctype html><title>Test</title><p>Test page</p>`; neither has script, event attributes or links), `setup.exe` (16 bytes of plain text), `notes.txt`, `empty.txt`, plus the existing PDF and DOCX fixtures; the tests check headers only), `playwright.config.js` (at the top, next to `DB_NAME` in CI mode: `process.env.FILES_DIR ??= path.join(os.tmpdir(), 'daybook-e2e-files'); process.env.FILES_PIECE_BYTES = '65536';`, both passed in `webServer.env`, so the setup's `seed:demo`, the teardown, `support/files.js` and the server share one folder)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+Contracts the others code against: A's `projectFiles.*` functions and `ProjectFile` (B, C, D, E);
+A's pure files (`access`, `names`, `kinds`, `fileMessages`) (C, D, E); A's `fileForDocument` (E);
+B's `projects.isMember` (D), `projectTasks.getForViewer`, `countsByPhase`, `TaskDetails` and the
+task routes with `told` and `toldName` (C, D, E); E's `syncFileDocument` (A), `listDocumentsFor`
+(E's own tab), `useUploads`, `UploadField`, `TaskAttachProvider` / `useTaskAttach`,
+`useFileRemoval`, `FileThumbs`, `FileRows`, `PictureViewer` (C, D); C's `TaskEditorProvider` /
+`useTaskEditor` and `BoardTab({ head })` (D mounts them); D's `TaskWindowProvider` /
+`useTaskWindow`, `TaskWindow` and `useTaskDetails` (C, E), `SummaryTab({ head })`, and `head` with
+`access`, `filesAccess`, `hoursThisMonth`, `limits`, `options` (C, E); E's `FilesTab({ head, place
+})` (D mounts it). No other file changes: `TopBar`, `Dialog`, `Drawer`, `Menu`, `ToastProvider`,
+`useUndoDelete`, `useUnsavedChangesWarning`, `undoQueue`, `TaskCheck`, `TaskUndoProvider`,
+`apiClient`, `route.js`, `errors.js`, `session.js` and `permissions.js` stay as they are.
+
+**README** (O). (a) "Deployment notes": "Daybook 1.12 (project board, task files and the Files tab):
+a database update (migration 019 adds three tables and two columns to project documents) and a new
+setting, `FILES_DIR`, the private folder for files. Nothing new to install. Without `FILES_DIR`
+Daybook works, but files are off." (b) "Updating", as numbered copy-paste steps: "For 1.12 (project
+board and files), step by step: 1. phpMyAdmin → Export a backup. 2. File Manager → your home folder
+(`/home/cpuser`, where `daybook` and `public_html` are) → + Folder → `daybook-files` (a new, empty
+folder: Daybook refuses a folder that already holds other files); right-click it → Change
+Permissions → 700. Never put it inside `daybook` or `public_html`. 3. Open
+`/home/cpuser/daybook/.env.local` and add the line `FILES_DIR=/home/cpuser/daybook-files` (this file
+is read by the app and by the worker cron; a variable set only in Setup Node.js App isn't seen by
+the worker). 4. Wait for the green "Build for cPanel" run, then in Terminal after the `source`
+command: `git pull origin deploy`, then the migrate line (its own code block); if it stops with
+Aborted, the unlock line, then the migrate line again (each in its own code block). 5. Press Restart
+in Setup Node.js App. 6. As Admin: Settings → Files shows "Space used: 0 KB of 10 GB" and no
+warning; set Storage limit to about half of the free space under cPanel → Disk Usage. 7. Test: open
+a project → Files → Upload files → a small PDF → open it; then one 50 MB file; then check cPanel →
+Resource Usage for faults. In Terminal, after the `source` command, in `~/daybook`:
+`NODE_ENV=production npm run doctor` (its own code block) shows "✓ File storage is ready"." (c)
+"Backups" gains: "Files are not in the phpMyAdmin export. Once a month: File Manager →
+`daybook-files/files/<year>/` → right-click last month's folder (for example `11`) → Compress → Zip;
+right-click the zip → Download; then delete the zip on the server. Keep it with that month's
+database export. If a month folder is over 2 GB, download the folder with an SFTP app (for example
+FileZilla, with your cPanel login) instead of zipping it. cPanel backups (and JetBackup) include the
+folder. To restore: put each month folder back under `daybook-files/files/<year>/` (File Manager →
+Upload the zip → Extract), then import the database export in phpMyAdmin. Files that aren't back
+show 'This file is missing.'" (d) "Fresh start": "`reset` also empties the files folder (only when
+it holds Daybook's marker file, and only the files Daybook made)." (e) Rollback: "To go back to
+1.11: on your computer, revert the 1.12 commit on `main` but keep its database update file: `git
+revert --no-commit <the 1.12 commit>`, then `git checkout <the 1.12 commit> --
+db/migrations/019_project_files.js`, then `git commit -m "Back to 1.11"`, and push. Without that
+file, `npm run doctor` and the migrate line stop with "The migration directory is corrupt" (the
+database has run 019); 1.11 never reads it. After the green build, `git pull origin deploy` and
+Restart. Leave the database as it is (1.11 ignores the new tables; Whole project notes don't show in
+1.11 but are kept) and leave the files folder; nothing reads it."
+
+`tests/unit/hostScripts.test.js` adds: the README contains "For 1.12 (project board and files), step
+by step:" and its code blocks are exactly `git pull origin deploy`, the lean `migrate:latest`, the
+lean `migrate:unlock`, the lean `migrate:latest`, `NODE_ENV=production npm run doctor`; and the 1.12
+steps mention `FILES_DIR=`, `.env.local` and "a new, empty folder"; and the rollback paragraph puts
+`db/migrations/019_project_files.js` back before the push (in prose, so the 1.12 code blocks stay
+exactly those five).
+
+### Tests and version
+
+- **Unit** (node only, fakes for browser APIs):
+  - `tests/unit/fileNames.test.js` (A): `cleanFileName` (NFC; `C:\fakepath\a.pdf` → `a.pdf`; control,
+    bidi and zero-width characters gone, "March 25 \u202Excod.scr" ends `.scr`; `< > : " | ? *` →
+    `_`; trailing dots and spaces; `CON.txt` → `_CON.txt`; 300 characters and 300 bytes of emoji cut
+    in the middle keeping `.pdf`; empty → `file`); `extOf`; the rename rule (base name plus the kept
+    extension: `b.svg` on a PNG → `b.svg.png`); `middleEllipsis`; `contentDisposition` (ASCII
+    fallback, `"` `\` `%`, `filename*` encodes `' ( ) *`, an all-Hindi name).
+  - `tests/unit/filePieces.test.js` (A): `pieceCount`, `expectedPieceBytes` (first, middle, last
+    shorter piece, an offset off a boundary, at the end).
+  - `tests/unit/fileRanges.test.js` (A, split out of `filePieces`, `ranges.js`'s owner):
+    `parseRange` (`bytes=0-99`, `100-`, `-500`, `0-` on an empty range, `5-1` → all, beyond the
+    size → unsatisfiable, two ranges → all, garbage → all), `contentRange`, `unsatisfiedRange`.
+  - `tests/unit/fileKinds.test.js` (A): `kindOf` (each list, the order: `js` is a program), `typeLabel`
+    (the capitals for code and file), `isProgram` (`pif` and `vbe` too), `formatSize` (0 → "0 KB", 1
+    → "1 KB", 1,023 → "1 KB", 348,160 → "340 KB", 1,048,576 → "1 MB", 1,258,291 → "1.2 MB",
+    322,122,547 → "307.2 MB", 524,288,000 → "500 MB", 10,737,418,240 → "10 GB"); `readPicture` on
+    header bytes built in code (no fixture files) for PNG, JPEG with an EXIF block before SOF, JPEG
+    with a 70 KB APP1 before SOF, GIF, WebP VP8, VP8L and VP8X, a PNG named `.jpg`, a text file named
+    `.png`, a PNG of 50,000 × 1,000.
+  - `tests/unit/fileAccess.test.js` (A): the permission table above as data, every row × every kind,
+    plus a deleted file, a task file without a task, an inactive viewer, a ctx for project 1 never
+    seeing a file or document of project 2, `filesAccess` for each row (a PM who is a member →
+    `'member'`).
+  - `tests/unit/fileSpace.test.js` (A): the limit sum (active + receiving + ready, not expired;
+    deleted and attached not counted), the two messages by viewer (neither names the file), the
+    largest-file message, the env piece range.
+  - `tests/unit/fileMessages.test.js` (A): every message of the table, with names and sizes;
+    `forCode` for each server code.
+  - `tests/unit/notificationAlerts.test.js` (B): 44 types, 19 important; `project_task.files_added`
+    normal; the source scan finds the new literal.
+  - `tests/unit/taskFileMessages.test.js` (B): the files line (1, 3, 5 files), placed before the
+    note, kept when a 1,000-character note is cut to 500; the `files_added` title cut to 200.
+  - `tests/unit/noSlackNoAi.test.js` (B): no file under `src/modules/{projectTasks,projectFiles}`
+    imports `@/modules/slack`; no file under `src/modules/{aiAsk,aiSummaries}` matches
+    `/project_?files|file_?uploads/i` (both the snake_case and the camelCase spelling, since
+    `knexfile.js` `wrapIdentifier` turns `projectFiles` into `project_files`) or imports
+    `@/modules/projectFiles`; `src/modules/projectSummaries/{prompt,service}.js` never import
+    `@/modules/projectFiles`.
+  - `tests/unit/boardView.test.js` (C): columns for Not set, a middle phase and Support; the fold
+    rule (a past phase with an open task is a column, not a tile; it folds when its last open task
+    is done); a skipped phase (no check, "Skipped", never "Done"); slim widths; No phase yet only when
+    needed and never a drop target; sort; dimming for Critical and With files; the phone steps and
+    the switcher's match count; move targets and Undo.
+  - `tests/unit/projectBoard.test.js` (C): the rendered board for a manager, another PM who isn't a
+    member (no ticks, menus, paperclips, "With files"), a PM who is a member (`'team'` access with
+    `filesAccess 'member'`: paperclips and "With files" on their own and Anyone tasks, still no ticks
+    or menus), a member (dots, "For you", "Nothing for you yet", the muted line), a Completed project
+    (no Add); the away owner's visible label; the status line under the pills; `?show=critical`.
+  - `tests/unit/projectTabs.test.js` (D): `chosenTab` for each access (`phases` and `overview` →
+    board; range → hours for the PM view only; a member's summary → board; `show` ignored).
+  - `tests/unit/projectSummaryTab.test.js` (D, from `projectOverview`): every AI card state, the AI
+    phase line (only when it names the next phase; never for another PM or on a Completed project),
+    another PM gets no AI data, "Go to files", the new empty prompt.
+  - `tests/unit/memberProjectView.test.js` (D): no health tag, no forecast, no Hours or Summary tab,
+    "Your hours this month", the band inside the Board tab only.
+  - `tests/unit/taskWindow.test.js` (D): facts, "No note.", report line rules, footers per mode
+    (`today` and `member`: no Mark done, Reopen, file X or Add files even with `canManage`; Reopen on a
+    done task in manage mode), Files for a PM who is a member (`'team'` + member), the error state
+    (also for a task of another project).
+  - `tests/unit/filesTabView.test.js` (E): places and `placeCounts` per viewer (each item once; a
+    phase with its task files; files on tasks without a phase only in All files and On tasks), a
+    phase with "On tasks in Design", On tasks grouping, search, the three sorts, every empty state,
+    text-only labels, `placeOf` falling back to `'all'`.
+  - `tests/unit/uploadClient.test.js` (E, a fake XHR, fetch and clock): pieces in order, `pieceSize`
+    from Start, the retry delays and jitter bounds, Status before each retry, a lost answer moves on
+    without resending, 409 → Status, 422 three times, 401 and 507 stop, a host 413 (HTML) message, an
+    HTML 508 is retried and an HTML 406 stops with the hosting message, `UPLOAD_BUSY` for 150 s then
+    success (never Paused, tries not counted), `TOO_MANY_UPLOADS` keeps Waiting, Finish answer lost
+    then Finish again (the same upload), the same rules for Start and the attach call,
+    `NotReadableError`, offline waits for `online`, Cancel aborts then cancels, `pagehide` cancels with
+    `keepalive`, the chip preview never made for an `.svg` with `image/svg+xml`.
+  - `tests/unit/uploadQueue.test.js` (E): one shared queue for the tab, 2 at a time, Start only when
+    a file leaves Waiting, Retry re-queues, cancel of a waiting file.
+  - `tests/unit/filesTab.test.js` (E, replaces `phaseDocuments.test.js`): the rendered tab for a
+    manager (Upload files, New note, menus, "Read text for AI"), a member (Download only, no menus),
+    a PM who is a member (the member tab), another PM who isn't (the lock card, no file data in
+    props) and before 019 (the update card); storage not set up (the line, Upload `aria-disabled`);
+    the Upload dialog's choices (visibility always sent) and "Upload 3 files"; the Uploads card rows,
+    "Cancel all" and the reading row; place links that don't ask the leave guard.
+  - `tests/unit/settingsValues.test.js` (A): the two keys agree with the API.
+  - `tests/unit/clientIp.test.js`, `env.test.js` (`FILES_DIR` ignored under `NODE_ENV=test`),
+    `hostScripts.test.js`, `themeFallback.test.js` (`--shadow-menu` too) (O).
+- **Services** (`DB_NAME=daybook_test_<n>`; `filesDir` is always the test folder under the system
+  temp folder; small pieces through `setPieceBytesForTests(65536)`, never an env value). A's
+  `tests/services/projectFilesKit.js` is the shared kit for B, D and E: `emptyFilesDir()` (refuses a
+  folder outside `os.tmpdir()`), `heldUpload(...)`, `projectFile(...)`, `taskFile(...)` (through
+  `storeFile`, so no one copies storage code).
+  - `tests/services/projectFilesUploads.test.js` (A): Start, three pieces, Finish → the file exists at
+    its key, the `.part` is gone, a project file row, the audit row without the name; Status (with
+    `busy`); a wrong offset 409; a short and a long piece 400 with nothing written; a bad checksum 422
+    and the offset unchanged; a `.part` cut short on disk → 409 and the offset of the last whole
+    piece; three pieces at once (one gets 429 `UPLOAD_BUSY` with a `Retry-After` header); a lease
+    left by a stopped request → 429 with `Retry-After` up to 120; another person's key 404; an
+    expired upload 410; Finish too early 409; Finish twice for a task target returns the same upload,
+    and for a project target the same file; Finish with a `thumb` part (kept for a picture, ignored
+    for a PDF or a non-JPEG part); `pm_id` changed between Start and Finish → 403, no file row, disk
+    file gone; Cancel during Finish (no file row without its disk file); Cancel of a held upload
+    during a task save (409, the file stays); Cancel of a receiving and of a held upload deletes the
+    disk file; too big 413; 10 running uploads (expired ones don't count); the storage limit (two
+    Starts at once both succeed or one gets `FILES_SPACE_FULL`, never a 500; deleted files don't
+    count); Start without `visibility` for a project file → 400; a fake `ENOSPC` and an
+    `UNKNOWN`/-122 error → 507 and `disk_full_at`; a crash after the rename (simulated) is cleaned.
+  - `tests/services/projectFilesStorage.test.js` (A, `checkStorage` with its own inputs): a relative
+    value → `not_absolute`; a folder holding `server.cjs` and `package.json` above FILES_DIR →
+    `inside_app`, also through a symlinked parent and whatever the working folder is; a `public_html`
+    part → `public`; the home folder (not empty, no marker) → `not_empty`; an empty folder gets the
+    marker and `.htaccess`; a marked folder passes again.
+  - `tests/services/projectFilesDownload.test.js` (A): every viewer row of the permission table
+    through the route (PM, Admin, member and the two visibilities, the task's person, Anyone task,
+    HR member, HR not a member, another PM, another PM who is a member, a member taken off, the
+    earlier person of a reassigned task, a deactivated person); headers (attachment, octet-stream,
+    CSP sandbox, CORP, `no-transform`, ETag); `/view` for a PNG, and 404 for SVG, HTML and a text file
+    named `.png`; `/view` of a file the viewer can't see answers "We couldn't find that file."; a
+    renamed PNG still answers `image/png`; `/thumb`; Range 206, 416, If-Range, If-None-Match 304; a
+    missing disk file 404 `FILE_MISSING` (plain text for `Accept: text/html`).
+  - `tests/services/projectFilesManage.test.js` (A): rename (cleaned; the extension kept: a name sent
+    with another extension keeps the original one), move and change who sees it, a task file move
+    refused, soft delete (never listed, counted or served), another PM and a member FORBIDDEN or 404;
+    with `vi.spyOn(projectSummaries, 'syncFileDocument')`, rename, move and delete call it inside
+    their transaction with the right arguments (the document itself is E's test).
+  - `tests/services/projectFilesCleanup.test.js` (A): each of the six parts, the 500 bound, the time
+    budget, a storage problem returns 0 without throwing, a missing `.part` for an expired upload and
+    an `EPERM` on one deleted file don't stop the other rows, only Daybook-named `.part` files go,
+    `wipeStorageForReset` only with the marker and leaves a stranger file in place.
+  - `tests/services/projectFilesMigration.test.js` (A, 019 rolled back in `beforeAll` with
+    `db.migrate.down({ name: '019_project_files.js' })`, `db.migrate.latest()` in `afterAll`): routes
+    503 `UPDATE_NEEDED`, counts 0, `spaceUsage`, cleanup 0.
+  - `tests/services/projectTaskFiles.test.js` (B, after A's uploads land): create with two upload
+    keys (attached, the `added` body has the files line), update add and remove (an already deleted
+    id skipped), the attach route (one `files_added`, to the person; Anyone → active members; never
+    the actor; a done task → none), `told` and `toldName` (null for an away owner), `changed` plus
+    files in one notification, 20 files (two saves at once, under the row lock), someone else's,
+    another project's, an expired or unknown key refused with nothing written, delete task → files
+    deleted, `getForViewer` per viewer (another PM `files: []`; a PM who is a member gets their own
+    and Anyone task files), `countsByPhase`; before 019 (019 rolled back as above): a task with no
+    files is created, edited and deleted; a save with upload keys → `UPDATE_NEEDED`.
+  - `tests/services/projectTasks.reads.test.js` (B, changed): a member reads only their own and Anyone
+    tasks, and `page.total` matches; progress still counts all. `tests/services/projectTasks.test.js`,
+    `projectTasksPlan.test.js` and `projects.test.js` (B, changed): task links
+    `/projects/[id]?task=<id>`, `project.member_added` links to `/projects/[id]`.
+  - `tests/services/projectSummariesDocuments.test.js` (E, changed): Whole project, both visibilities,
+    a POST without `visibility` makes an Only PM and Admins note and a member gets 404 on it, `fileId`
+    (a task file refused, a second text refused, a deleted file 404), a file's text always
+    `managers` and its PATCH 400, members read Everyone notes and text-only documents but not a
+    file's text, 100 documents, the AI prompt holds no task file name (a task file named
+    "secret-contract.pdf" never appears), `sourceKey` per change (a rename makes the summary stale; a
+    move or a change of who sees it keeps it fresh, `updated_at` unchanged), a file's document gone
+    with its file; before 019: `withFileColumns`, a note without `visibility` works, one with
+    `'everyone'` → `UPDATE_NEEDED`.
+  - `tests/services/projectSummariesRoutes.test.js` (E, changed): the member-404 note keeps working
+    (made without `visibility`); a member-200 case for an Everyone note.
+  - `tests/services/projectSummariesMigration.test.js` and `projectPlanMigration.test.js` (E,
+    changed): roll back 019 first, then 015; `latest` restores both.
+  - `tests/services/projectMemberPage.test.js` (D): `loadProjectHead` for a member has no forecast;
+    `filesAccess` per viewer (a PM who is a member → `'member'`); HR not on the project and another
+    PM's non-member employee get null.
+  - `tests/services/todayTaskFiles.test.js` (D, split out of `projectMemberPage`): Today's rows
+    carry `fileCount` (own and Anyone task files; a deleted file and a project file don't count;
+    another member's task never), the card gets the company's `today`, and before 019 the page
+    loads with every count 0 (`countsForTasks` → `{}`).
+  - `tests/services/settings.test.js` (A): the two keys, ranges and the cross check.
+  - `tests/services/runOnce.test.js` (A, changed): the cleanup result gains `projectFiles: 0`.
+  - `tests/services/migration019.test.js` (O, first): up, down, up on a fresh database; each table's
+    columns, keys and foreign keys (`project_documents_file_id_foreign` ON DELETE CASCADE); down
+    keeps notes (a Whole project note → Requirement gathering, `updated_at` unchanged) and turns a
+    file's text into a text-only document; a stopped down (one object already gone) runs again. Also
+    in the MySQL 8.4 workflow. Each owner tests its own before-019 behaviour (above).
+- **E2E** (F, Playwright; `/api/ai/**` stubbed; the test server's own `FILES_DIR`, shared with the
+  setup's `seed:demo`):
+  - `task-files.spec.js`: the PM creates a task in Development for Vishal with a PNG and a PDF
+    (picked with the file chooser); Vishal sees the paperclip "2" on Today, opens the task window, sees
+    the thumbnail, opens the viewer, downloads the PDF (its bytes equal the fixture); an employee not
+    on the project gets 404 on the download URL; the PM drops `notes.txt` on a card and sees the
+    count go up.
+  - `project-files.spec.js`: the PM uploads three files at once to Design for Everyone and one to
+    Whole project as Only PM and Admins; the counts per place; Vishal (a member) sees only the
+    Everyone files and their counts; rename and delete with Undo; a 2 MB generated file uploads in
+    pieces of the size the Start answer gives (64 KB in CI; read from the answer, never assumed) and,
+    with the pieces slowed by `page.route('**/api/uploads/*/pieces*', async (route) => { await new
+Promise((r) => setTimeout(r, 150)); await route.continue(); })` (removed after), shows its
+    progress bar rising (`aria-valuenow` increases) while another one is cancelled (its row goes, the
+    server's Status says cancelled); `page.html` and `drawing.svg` download with
+    `Content-Disposition: attachment` and `application/octet-stream` and their `/view` is 404; the
+    PNG shows as a thumbnail.
+  - `project-board.spec.js`: drag a card from Development to Testing (`dragTo`), the toast "Moved to
+    Testing.", Undo puts it back; the keyboard path (menu → Move to phase… → Launch in the dialog);
+    quick add; the employee's read-only page has no health tag, no forecast line and no Hours tab;
+    another PM who isn't on the project sees no paperclips and the Files tab's lock line, and a file
+    URL answers 404.
+  - `project-plan.spec.js` (changed): the tabs Board, Summary, Files, Timeline, Hours; the deadline
+    and Move from the band; the real PDF and `.docx` read for the AI from the Files tab; another PM's
+    view.
+- `APP_VERSION` '1.12'.
+
+### As built (where the code differs from the text above, for a sound reason)
+
+- **Extra files** (split out to keep files under 300 lines; owners as their folders): A
+  `projectFiles/{disk,receive,store,spaceRules,fileView}.js` (`fileView.toProjectFile` is the one
+  `ProjectFile` mapper, A2 uses it), `api/uploads/uploadRoute.js`, `api/project-files/fileRoute.js`;
+  B none beyond the table; C `_board/{TaskFormFields,useBoard,useBoardParts,useCardMoves,
+useTaskForm,bandView,taskFormModel}` and its css; D `[id]/{ProjectHeader,NewTaskButton,
+OpenTaskButton}.jsx`, `src/components/task/{TaskWindowParts,TaskWindowFiles,TaskWindowFooter}.jsx`,
+  `taskWindowView.js`, `TaskWindow.module.css`, `[id]/{layout.js,FileDropGuard.jsx}`,
+  `_board/useCardFocus.js`, `tests/e2e/board-focus.spec.js`, the Files and Hours skeletons'
+  `[id]/{loadingFiles,loadingHours}.module.css`, Today's `PriorityCard.module.css` (the card's
+  rules, out of `today/page.module.css`) and the projects list moved to `(app)/projects/(list)/{page,loading}.js`; E `src/components/files/{FileName,uploadHttp,
+uploadRetry,uploadCancel,uploadIo,uploadAttach,uploadItems,uploadSet,attachStore}.js(x)`,
+  `[id]/_files/{FilesList,FileChoices,fileRowView,useFilesTab,useFilesUploads}`; test helpers
+  `tests/services/migration019Kit.js` (O) and `tests/unit/uploadFakes.js` (E);
+  `tests/unit/boardCodeSize.test.js` (functions to 50 lines and files to 300 in `_board/` and
+  `components/task/`, and these styles, measured with ESLint's own size rules); demo
+  `db/demo/projectFiles.js` and `db/demo/files/make-files.mjs` (O, the bytes' generator).
+- **Extra tests** (from the review fixes, owners as the files they check): C
+  `tests/unit/{boardFocus,boardLook}.test.js`; D `tests/unit/{taskWindowFocus,projectLayout}.test.js`
+  and `src/modules/reports/todoRead.js` (`todoTakesLines`, re-exported through `todo.js` and
+  `service.js`); E `tests/unit/{filesKeyboard,keyboardFocus,filesLook,leaveGuardDownloads}.test.js`;
+  A `tests/unit/settingsFilesSection.test.js`.
+- **Build**: `storage.js` makes `tmp/` and `files/` with a `turbopackIgnore` hint in its
+  `path.join`, so `next build` doesn't trace the whole project into every route that imports
+  `projectFiles`.
+- **Uploads (A)**: `uploadStatus` reads `'expired'` for a receiving upload past its time, and the
+  browser asks Status after `UPLOAD_GONE`, so `fileMessages.forCode('UPLOAD_GONE', { uploadStatus })`
+  tells "stopped" (cancelled) from "left too long" (expired). `forCode` also takes `HOST_REFUSED`,
+  `NOT_READABLE` and `NETWORK`. `storeFile` also takes `thumb` and `hold`. `attachUploads` checks
+  the 20-file limit and writes the `project_file.add` rows itself (B writes no `project_file.*`
+  row); `limits()` lives in `space.js`. `names.renamedFileName(base, ext)` is the rename rule.
+- **Tasks (B)**: `told`/`toldName` come from who was actually reached; `getForViewer` gives
+  `latestReport: null` for someone else's line to a viewer without `team.view`.
+- **Board (C)**: `Board` takes no `options` (the editor has them); `TaskEditorProvider` gains an
+  optional `viewerId` ("Riya Kapoor (you)"); `openEdit` takes a card, a `TaskDetails` or an id.
+  A card deleted from the keyboard leaves focus on the toast's Undo (CONTRACT 22); Undo, Tab or
+  Escape bring it back to the card, or to the next card when it stayed deleted. A move that fails
+  puts the card back, drawn again in its old column, and focus with it (its "⋯" after Move to
+  phase… on a desktop, else its title). A card opens the task window with
+  `open(taskId, { origin, title, returnFocus })`: the title shows while it loads, a click on the card
+  itself returns focus to its title, and `returnFocus` names the card's title drawn again (marked done
+  in the window), else its column's "› 6 done" button (`foldButtonId`), else "+ Add task"; when
+  the page's refresh draws a focused card again after the window has closed, `_board/useCardFocus`
+  moves the focus to the same control on its new copy, or to that fold's button. The
+  page-wide file swallow for managers is `[id]/FileDropGuard.jsx`, mounted by `ProjectView` beside
+  the attach store on every tab (`useCardFileDrop` no longer swallows). `phasesView.js` keeps only
+  what the Board reads; the old Phases tab's section helpers are gone.
+- **Windows on a phone**: `Dialog` stays as it is, so every project page window (New and Edit
+  task, Move, Edit dates, the deadline and phase windows, Upload files, Edit details, the note
+  windows) passes `[id]/projectWindows.module.css`'s `.window`, which makes its X 44 px at 640 px
+  and below; the task window does the same with its own `.close`, fills the screen there (also
+  from 521 to 640 px) and grows its body so the footer sits at the bottom edge, as New task does.
+- **Page (D), the 404**: `[id]/layout.js` runs `requirePage('project.request')` and
+  `canOpenProject` (the same React-cached check `loadProjectHead` uses) before anything streams, so
+  someone who may not open the page, an unknown project and a bad id get a real HTTP 404 with the
+  not-found screen. A Suspense above would send 200 first, so `/projects`' own page and loading.js
+  live in the `(list)` route group (same URL), and no loading.js sits in `(app)/` or
+  `(app)/projects/`. `page.js` still checks (layouts don't run on every navigation).
+- **Task window (D)**: Mark done and Reopen (and "Add to to-do") are `BusyButton`s, so focus stays
+  on them while they work, and the control drawn in place of the pressed one (Reopen, Mark done,
+  "In to-do") takes it, so focus stays inside the window; the "Marked done." toast doesn't take it
+  from an open window (Reopen does the same as its Undo). The member view's `head` gains
+  `todoOpen` (`report.self` and `reports.todoTakesLines({ user })`: today's to-do still takes lines),
+  passed as `TaskWindowProvider`'s `todoOpen`: "Add to to-do" shows only then, as on Today, and a
+  REPORT_LOCKED answer takes the button away. Close returns focus to the opener, else to
+  `returnFocus()` when the opener left the page. The hidden file input behind "Add files" is
+  `aria-hidden`, so screen readers meet one control.
+- **Page (D)**: `head` carries no `viewer`; the Timeline's empty line "Add dates to each phase from
+  its menu on the Board." shows only to managers. `TaskWindowProvider` gains optional
+  `currentPhase` (the header's "Current" tag; `TaskDetails` has no plan), `today` (the company's
+  date for `DueTag`; the browser's date when left out) and `todo` (Today's to-do card:
+  `{ has(taskId), add(task) | null }`); it holds the file X's Undo toast so a closed window never
+  cuts it short. `useTaskWindow().open(taskId, { origin, title })` (`title` shows while it loads).
+  `useTaskDetails(taskId)` → `{ task, loading, error, reload }` (the remembered task shows while it
+  loads again) and `forgetTaskDetails(taskId?)`. A load that fails with anything but 404 shows the
+  API's words with "Try again". Today's `priority` gains `today`; each row `fileCount`; the title
+  buttons carry `data-open-task` and a row click opens the visible one. A manager's `head` also
+  carries `storageReady` (`projectFiles.storageStatus().ready`), passed through
+  `TaskEditorProvider`'s new optional `storageReady` to the task form's `UploadField`. My
+  projects: `ProjectCard` takes `plan`, `progress` and `fileCount` (pure rules in
+  `projects/projectCardView.js`, tested in `tests/unit/myProjectsCard.test.js`); the mini band's
+  current part is filled to the project's share of done tasks (one `progressByProject` for all
+  cards has no per-phase counts) and parts before the current one are green.
+- **Files (E)**: `UploadField` gains `error`; `useUploads` also returns `forget()`, `notices`,
+  `announcement`, `counts`, `clearNotices()`; `useTaskAttach().add(taskId, files, { title, from,
+existing, fileCount })`, `watch`, and `useTaskBatch(taskId)` for the window; `useLeaveGuard(active,
+message, { scope })` (over `holdLeaveGuard(message, scope)` → release), `startDownload(url)` and
+  `isDownloadClick(link, click, current)` (Leaving: downloads through a hidden frame). `projectSummaries.filesReady()` (a probe of the 019 columns for the Files tab)
+  is new, and `getDocument`/`listDocumentsFor` live in `fileDocuments.js`.
+- **Files from the keyboard (E)**: `FileRowMenu` passes the `Menu` item's click on
+  (`onAction(action, item, event)`), so a Delete with `detail` 0 calls
+  `useFilesTab().remove(item, { keyboard: true })`. Edit details hands its close to
+  `useFilesTab().saved(item)` (`FileEditDialog`'s optional `onSaved`), which closes the window and
+  refreshes in one transition and then focuses `focusAfterEdit(item, next)`. `FileName` hides its
+  two shown parts from screen readers (`aria-hidden`) and adds the whole name once, visually hidden
+  and never selected (`.nameWhole`), so chips, thumbnails and rows read "two-pages.pdf".
+  `UploadChip.focusChipRetry(itemId, within?)` (by the chip's `data-chip-retry`) is how the task
+  form's Save puts focus on a paused file's Retry.
+- **Pictures**: `kindOf` 'picture' is a wider family (svg, psd, ...) for the tile and the type
+  label; only `isPicture` (magic-checked PNG, JPEG, GIF, WebP) with `viewUrl` decides the viewer
+  and thumbnails (`picturesOf`), never `kind`.
+
+### Order of work
+
+1. **O first**: the prototype; migration 019 with its test, run up, down and up on a copy (a
+   `daybook_test_<n>` database, never the live "daybook" database) and once on MySQL 8.4 through the
+   workflow; the two settings keys; `env.js`; the proxy matcher; `.gitignore`; `.env.example`; the
+   veil and shadow tokens; version '1.12'; **the stubs** (Files and owners), so no two builders
+   write one file and every builder starts green.
+2. **A and B in parallel**: A the storage, uploads, downloads, access rule (its own member read),
+   space, settings, cleanup and the test kit (against O's `syncFileDocument` stub); B the task
+   module, `isMember`, the routes and the notification type (against O's `projectFiles` stub). B's
+   services tests that need real uploads (`projectTaskFiles`) run once A's uploads land.
+3. **C, D and E in parallel**, each in its own files, against A's and B's functions and O's stubs of
+   each other's pieces: C the Board, the task form and the three shared dialog files, D the frame,
+   member page, Summary, Today, My projects and the task window, E the uploader, the attach store,
+   the Files tab and the documents. Each owner replaces O's stub of its own file.
+4. **F** once C, D and E are in: fixtures and the three new specs, then the changed ones.
+5. **O last**: demo data, `reset` and `seed:demo` wiping, doctor, README, the CONTRACT edits, review,
+   the full test run and the build.
+
+### Choices made in this section (for the owner to confirm)
+
+1. **Projects list**: stays today's table (it already shows health, phase, progress and deadline);
+   option B's project cards are not part of 1.12.
+2. **Notifications**: task files tell the person (or everyone on the project for Anyone tasks);
+   uploads to the Files tab tell nobody (like a shared folder). Easy to add later.
+3. **"Files added" has no Undo**: the person is told at once, so the toast is a confirmation; a
+   wrong file is removed with its X (which has Undo).
+4. **Who sees a new file or note by default**: "Everyone on the project" is preset in the windows
+   (the choice is always there and always sent); the API itself treats a missing choice as "Only PM
+   and Admins", so an old page or a script never shares by accident; the old "Files and notes" stay
+   "Only PM and Admins" until the PM changes them.
+5. **The employee's page** has the tabs Board and Files only (no Summary, Timeline or Hours); the
+   prototype's "Files on your tasks" card is the Files tab's "On tasks" place.
+6. **Members' task list** in the API now holds only their own and Anyone tasks (before 1.12 it held
+   every task of the project, though no screen showed it).
+7. **Limits**: 20 files a task, 50 files per pick, no limit per project; 100 texts for the AI per
+   project (was 40); thumbnails are small copies the PM's browser makes at upload (research.md 3.7),
+   so the host's slow disk and people's phones never load full photos for a list; pictures over 40
+   megapixels only download.
+8. **A gentle "Program file" line** on programs and scripts; nothing is ever blocked.
+9. **`FILES_DIR` goes in `~/daybook/.env.local`**, not only in Setup Node.js App (the worker cron
+   would not see it); a missing one turns files off with a clear line instead of stopping Daybook.
+   In development the folder is `.daybook-files` inside the project, git-ignored.
+10. **Old links** (`?tab=overview`, `?tab=phases`) open the Board; every task notification now
+    opens the task on the project page.
+11. **Deleting** is a soft delete on the server after the 6 s Undo in the browser; the disk file
+    goes in the nightly cleanup (at least 10 minutes later). There is no restore after that.
+12. **Text for the AI** is read only from PDF, Word (.docx), .txt and .md project files up to 20 MB;
+    task files are never read.
+13. **The "No phase yet" column** (old tasks) shows last, only while it has tasks, and isn't a place
+    to drop cards: each task is moved out to a phase.
+14. **A finished phase folds into "Done phases" only once its tasks are all done**; a past phase with
+    open tasks stays a column, so open work is never hidden.
+15. **Deleted files stop counting against the storage limit at once**, so "Delete old files" helps
+    the same day; the disk room itself comes back in the nightly cleanup.
+16. **The column menu's "Files for Development" has no count** (the prototype showed one); the Files
+    tab's side list has the counts.
+
+### Risks to watch
+
+- **The host's real limits are unknown** until tried: the 1.12 live check uploads a 50 MB and a 500
+  MB file and downloads the big one with a pause and resume, watching cPanel → Resource Usage. If
+  ModSecurity refuses pieces, lower `FILES_PIECE_BYTES`; if LiteSpeed limits big downloads (a cPanel
+  note mentions 500 MB), lower the largest file in Settings.
+- **Disk and quota**: the storage limit is Daybook's own count; the hosting quota can run out first
+  (mail, logs, backups). Write errors are caught (507 and the Settings line), but the PM's upload
+  fails. Keep the limit at half the free space.
+- **Backups**: the phpMyAdmin export holds no files. If the monthly folder step is skipped, a
+  restore brings rows without files ("This file is missing"). Files without rows (a database restore
+  older than the files) take disk space and are never served or cleaned.
+- **Process limits**: 2 pieces at once per web process and 2 files per tab; several PMs uploading
+  big files at once share the 1 MB/s disk and see "Waiting…" (`UPLOAD_BUSY`), which looks like
+  slower progress but never pauses a file.
+- **A crash during Finish** leaves a file row whose disk file isn't renamed only if the machine
+  stops between commit and rename, which the order avoids; a malware scanner on the host (for example
+  Imunify) can move a file away: the download then says "This file is missing".
+- **Reloading or closing the page** loses the picked files (browsers can't keep them); `pagehide`
+  cancels the tab's uploads, and any it couldn't reach expire 2 h after their last piece, so they
+  hold storage room and upload slots for at most that long.
+- **The browser's Back button** leaves the page without the "Leave this page?" question (no browser
+  lets a page stop it); the uploads stop and are cancelled or expire as above.
+- **Deleted files don't count against the storage limit**, so between a delete and the nightly
+  cleanup the disk can hold up to that much more than the limit; the free-disk check at Start and
+  the write errors still protect the disk.
+- **Undo after a delete** only works inside the 6 s toast; the person told about added files keeps
+  their notification even when the PM removes a file later.
+- **Development**: `.daybook-files` sits inside the project folder; if the dev server's file watcher
+  reacts to big writes there, set `FILES_DIR` outside the project in `.env.development.local`.
+- **The production engine** is still unconfirmed; 019 is checked on MySQL 8.4 only in CI.
+- **Rate limits and the piece counter** are per web process (in memory), as every Daybook limit.
+
+### Other section edits
+
+- **§2** (add after the client-imports bullet): "Client components may also import the pure files
+  of `@/modules/projectFiles` (`access`, `names`, `kinds`, `fileMessages`) (CONTRACT 27)."
+- **§6**: settings `getAll` gains `fileMaxMb`, `fileStorageLimitGb` (CONTRACT 27); projects gains
+  "`isMember({ projectId, userId })` → boolean (an active member row) (CONTRACT 27)"; add a block
+  "### projectFiles (owner: projects)" with the Modules list above (reads, uploads, task attachments,
+  management, worker).
+- **§7**, "Later sections add" (append): "projects → `uploads/**`, `project-files/**`,
+  `project-tasks/[id]/files` and `GET project-tasks/[id]` (27)". Downloads (append): "Project and
+  task files → `GET /api/project-files/[id]` (`signed_in`, the file rule of CONTRACT 27; streamed,
+  never `xlsxResponse`)."
+- **§8**: add "**files** (client, `src/components/files/`, CONTRACT 27): `UploadField`,
+  `UploadChip`, `FileTile`, `FileThumbs`, `FileRows`, `PictureViewer`, `TaskAttachProvider` /
+  `useTaskAttach`, the hooks `useUploads`, `useFileRemoval`" and "**task** (client,
+  `src/components/task/`, CONTRACT 27): `TaskWindow`, `TaskWindowProvider` / `useTaskWindow`,
+  `useTaskDetails`".
+- **§9**: add the owner rows of "Files and owners" with "(CONTRACT 27)". Page permissions: replace
+  nothing for `/projects`; add "/projects/[id] `project.request` (`team.view` holders see the PM
+  view, active members the member view, anyone else 404; CONTRACT 27)".
+- **§10** (add): "File tests always use the test folder under the system temp folder, per
+  `DB_NAME` (`FILES_DIR` is ignored under `NODE_ENV=test`); never the dev folder. Service tests make
+  files through `tests/services/projectFilesKit.js` (CONTRACT 27)."
+- **§13** (replace "Members of the project (and PM/Admin) can read them." with): "PM, Admin and
+  `team.view` holders read every task; other members read only the tasks for them and for anyone on
+  the project (CONTRACT 27)." Notifications bullet (append): "Links open the task on the project page
+  (`/projects/[id]?task=<id>`); `project_task.files_added` when files are added later (CONTRACT
+  27)." Add "Tasks can carry files (CONTRACT 27)."
+- **§20**, Version label: "`APP_VERSION` in `src/config/version.js` (now '1.12'; raised with each
+  release)."
+- **§22**: Design (append): "The project page is redrawn by CONTRACT 27 (Board, Summary, Files,
+  Timeline, Hours); its prototype replaces this one for the project page." Data, `project_documents`
+  (append): "`phase` may be null (Whole project), `visibility` and `file_id` (CONTRACT 27)."
+  "Project page" heading: "(`/projects/[id]`, see CONTRACT 27)"; replace the Overview and Phases
+  bullets with "Overview and Phases are replaced by the Board and Summary tabs (CONTRACT 27)." "Files
+  and notes" (first line): "Files and notes now live in the Files tab, with real files (CONTRACT 27);
+  the reading rules below still apply to the text the AI reads." Modules, projectSummaries: "40
+  documents per project" → "100 documents per project (CONTRACT 27)" and "reads return NOT_FOUND to
+  anyone else" → "reads return NOT_FOUND to anyone else, except members reading Everyone notes and
+  text-only documents (CONTRACT 27)". Another PM: append "They get no files unless they are a
+  member of the project, then a member's files (CONTRACT 27)." The AI phase line: "now drawn in the
+  AI summary card on the Summary tab (CONTRACT 27)."
+- **§24**, Priority tasks on Today (append): "Rows show a paperclip and count and open the task
+  window (CONTRACT 27)."
+- **§26**, Important notifications: "43 today: 19 important, 24 normal" → "44: 19 important, 25
+  normal"; add the row "| 44 | `project_task.files_added` | no | task | New files on your task; like
+  the other task types. |"; Tests: "exactly the 43 types" → "exactly the 44 types".

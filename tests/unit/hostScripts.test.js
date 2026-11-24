@@ -1,7 +1,8 @@
 // The npm scripts the cPanel host runs (README "Deploying on cPanel"). Shared hosting caps processes
 // and threads and refuses Node's WebAssembly memory reservation, so each one starts Node itself with
 // the trap handler off and a small V8 pool. A bare `knex migrate:latest` printed only "Aborted" on
-// the live server. The README's cPanel steps run migrations and seeds the same way, without npm.
+// the live server. The README's cPanel steps run migrations and seeds the same way, without npm,
+// one command per code block.
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
@@ -61,5 +62,33 @@ describe('the scripts the host runs', () => {
     expect(blocksOf(stepsFor('1.11')).map((block) => block.trim())).toEqual([
       'git pull origin deploy',
     ]);
+  });
+
+  it('give the 1.12 steps the files folder, then the pull, the migrate line and doctor', () => {
+    // CONTRACT 27: one migration (019), no new npm dependency, and FILES_DIR in .env.local (the
+    // worker cron reads that file, not Setup Node.js App's variables).
+    expect(cpanel).toContain('For 1.12 (project board and files), step by step:');
+    const steps = stepsFor('1.12');
+    expect(blocksOf(steps).map((block) => block.trim())).toEqual([
+      'git pull origin deploy',
+      lean('migrate:latest'),
+      lean('migrate:unlock'),
+      lean('migrate:latest'),
+      'NODE_ENV=production npm run doctor',
+    ]);
+    expect(steps).toContain('FILES_DIR=');
+    expect(steps).toContain('.env.local');
+    expect(steps).toContain('a new, empty folder');
+  });
+
+  it('keep the 1.12 database update file when going back to 1.11', () => {
+    // Knex refuses a migrations folder without a migration the database has run, so after a
+    // plain revert doctor and the migrate line would stop with "The migration directory is
+    // corrupt".
+    const back = cpanel.slice(cpanel.indexOf('To go back to 1.11:')).split('\n\n')[0];
+    expect(back).toContain('git revert --no-commit <the 1.12 commit>');
+    expect(back).toContain('git checkout <the 1.12 commit> -- db/migrations/019_project_files.js');
+    expect(back.indexOf('019_project_files.js')).toBeLessThan(back.indexOf('push'));
+    expect(existsSync(new URL('db/migrations/019_project_files.js', ROOT))).toBe(true);
   });
 });

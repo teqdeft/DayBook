@@ -1,9 +1,11 @@
-// Critical tasks on the Overview: open P1s by due date, tasks without a date last, at most 5. Only the
-// project's PM or Admin gets the checkbox. Server-safe.
+// Critical tasks on the Summary tab (CONTRACT 27): open P1s by due date, tasks without a date last,
+// at most 5. Each title opens the task window; only the project's PM or Admin gets the checkbox.
+// "See all tasks" opens the Board with Critical pressed. Server-safe.
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import { phaseLabel } from '@/modules/projectPlan/phases';
 import DueTag from './DueTag';
+import OpenTaskButton from './OpenTaskButton';
 import { tabHref } from './ProjectTabs';
 import TaskCheck from './TaskCheck';
 import styles from './Overview.module.css';
@@ -23,6 +25,11 @@ export function criticalTasks(tasks) {
     .sort((a, b) => rank(a).localeCompare(rank(b)));
 }
 
+/** '/projects/5?tab=board&show=critical': the Board with Critical pressed. */
+export function seeAllHref(projectId) {
+  return `${tabHref(projectId, 'board')}&show=critical`;
+}
+
 /** "Design · Riya Kapoor" */
 function metaOf(task) {
   const phase = task.phase ? phaseLabel(task.phase) : 'No phase yet';
@@ -35,14 +42,9 @@ function metaOf(task) {
  */
 export default function CriticalTasksCard({ projectId, tasks, today, canManage }) {
   return (
-    <Card
-      as="section"
-      padding="compact"
-      aria-labelledby="overview-critical"
-      className={`${styles.wideCard} ${styles.columnCard}`}
-    >
+    <Card as="section" aria-labelledby="summary-critical" className={styles.columnCard}>
       <div className={styles.titleRow}>
-        <h2 id="overview-critical" className={styles.cardTitle}>
+        <h2 id="summary-critical" className={styles.cardTitle}>
           Critical tasks
         </h2>
         <span className={styles.titleNote}>{tasks.length} open</span>
@@ -53,7 +55,9 @@ export default function CriticalTasksCard({ projectId, tasks, today, canManage }
           <li key={task.id} className={styles.criticalRow}>
             {canManage ? <TaskCheck taskId={task.id} title={task.title} /> : null}
             <span className={styles.criticalText}>
-              <span className={styles.criticalTitle}>{task.title}</span>
+              <OpenTaskButton taskId={task.id} className={styles.criticalTitle}>
+                {task.title}
+              </OpenTaskButton>
               <span className={styles.criticalMeta}>{metaOf(task)}</span>
             </span>
             <DueTag dueDate={task.dueDate} today={today} />
@@ -61,7 +65,12 @@ export default function CriticalTasksCard({ projectId, tasks, today, canManage }
         ))}
       </ul>
       <div className={styles.seeAll}>
-        <Button variant="text" size="compact" href={tabHref(projectId, 'phases')}>
+        <Button
+          variant="text"
+          size="compact"
+          className={styles.seeAllButton}
+          href={seeAllHref(projectId)}
+        >
           See all tasks
         </Button>
       </div>

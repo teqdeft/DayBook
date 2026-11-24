@@ -104,10 +104,20 @@ export function lockById(id, trx) {
   return trx('projectTasks').where({ id }).forUpdate().first('id', 'projectId');
 }
 
-/** A project's tasks with their phase and due date, optionally one status, P1 first then oldest. */
-export function listForProject({ projectId, status, limit, offset = 0 }, trx = db) {
+/** Only the tasks for this person or for anyone on the project (a member's reads, CONTRACT 27). */
+function forMemberOnly(query, memberId, column = 'assigneeId') {
+  if (!memberId) return query;
+  return query.where((where) => where.whereNull(column).orWhere(column, memberId));
+}
+
+/**
+ * A project's tasks with their phase and due date, optionally one status, P1 first then oldest.
+ * With `memberId`, only the tasks for that person or for anyone.
+ */
+export function listForProject({ projectId, status, memberId, limit, offset = 0 }, trx = db) {
   const query = taskQuery(trx).where('pt.projectId', projectId).orderBy(ORDER);
   if (status) query.where('pt.status', status);
+  forMemberOnly(query, memberId, 'pt.assigneeId');
   if (limit) query.limit(limit).offset(offset);
   return withPlanColumns(query);
 }
@@ -137,11 +147,32 @@ export function progressByProject({ projectIds, weeks }, trx = db) {
   return query;
 }
 
-export async function countForProject({ projectId, status }, trx = db) {
+/** How many tasks listForProject finds with the same filters (without paging). */
+export async function countForProject({ projectId, status, memberId }, trx = db) {
   const query = trx('projectTasks').where({ projectId });
   if (status) query.where({ status });
+  forMemberOnly(query, memberId);
   const row = await query.count({ total: '*' }).first();
   return Number(row?.total ?? 0);
+}
+
+/**
+ * All and done tasks per phase of one project in one query: `{ phase, total, done }` rows, phase
+ * null for tasks without one. Before migration 015 every task counts as without a phase.
+ */
+export function countsByPhase(projectId, trx = db) {
+  const counts = (query) =>
+    query
+      .count({ total: '*' })
+      .select(trx.raw("SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done"));
+  return guardPlanRead(
+    () => counts(trx('projectTasks').where({ projectId }).groupBy('phase').select('phase')),
+    async () =>
+      (await counts(trx('projectTasks').where({ projectId }))).map((row) => ({
+        ...row,
+        phase: null,
+      })),
+  );
 }
 
 /** Open tasks for the user across their active projects, with the project's name and colour. */

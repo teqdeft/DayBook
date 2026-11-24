@@ -14,7 +14,10 @@ import {
   CHECKIN_REMINDER_MINUTES,
   checkAutoCheckout,
   checkDayMarks,
+  checkFileLimits,
   checkHrSummary,
+  FILE_MAX_MB,
+  FILE_STORAGE_LIMIT_GB,
   HALF_DAY_UNDER_MINUTES,
   LATE_ALERT_DAYS,
   LEFT_EARLY_GRACE_MINUTES,
@@ -79,6 +82,9 @@ const BOUNDED_KEYS = {
   payrollMonthStartDay: PAYROLL_MONTH_START_DAY,
   checkinReminderMinutes: CHECKIN_REMINDER_MINUTES,
   lateAlertDays: LATE_ALERT_DAYS,
+  // Files (CONTRACT 27)
+  fileMaxMb: FILE_MAX_MB,
+  fileStorageLimitGb: FILE_STORAGE_LIMIT_GB,
 };
 
 // ---------- cache ----------
@@ -207,7 +213,8 @@ export function setCacheTtlForTests(ms) {
  *   aiProjectSummaryEnabled: boolean, halfDayUnderMinutes: number, shortDayUnderMinutes: number,
  *   leftEarlyGraceMinutes: number, payrollMonthStartDay: number, hrMorningSummary: boolean,
  *   hrSummaryAt: string, hrEveningSummary: boolean, checkinReminderMinutes: number,
- *   lateAlertDays: number, slackAttendanceRemind: boolean, slackHrSummary: boolean }>} (AI,
+ *   lateAlertDays: number, slackAttendanceRemind: boolean, slackHrSummary: boolean,
+ *   fileMaxMb: number, fileStorageLimitGb: number }>} (AI,
  *   CONTRACT 20 and 22) a fresh copy, safe to change; activityIdleMinutes is 1-120 and
  *   activityRetentionDays 7-3650 (screen time, CONTRACT 11); pushEnabled switches desktop
  *   notifications for everyone (CONTRACT 14); timers and breaks (CONTRACT 15):
@@ -222,7 +229,9 @@ export function setCacheTtlForTests(ms) {
  *   hrMorningSummary is on; the evening wrap-up goes at officeEnd + 30 minutes),
  *   checkinReminderMinutes 0-240 after each person's own late mark (0 = off), lateAlertDays
  *   1-31 (also the Needs a look threshold); slackAttendanceRemind and slackHrSummary are the
- *   queueDm setting keys of the reminders and of both HR summaries
+ *   queueDm setting keys of the reminders and of both HR summaries; files (CONTRACT 27):
+ *   fileMaxMb 1-2048 (the largest single file, MB) and fileStorageLimitGb 1-1000 (the company's
+ *   room for files, GB), fileMaxMb at most fileStorageLimitGb x 1024
  */
 export async function getAll() {
   if (cacheTtlMs > 0 && cache.value && performance.now() - cache.loadedAt < cacheTtlMs) {
@@ -244,7 +253,8 @@ export async function getAll() {
  *   the auto check-out time isn't later than office end (CONTRACT 19); { halfDayUnderMinutes:
  *   'Half day must be less than the short day time.' } while both marks are on, and, while the
  *   morning HR summary is on, { hrSummaryAt: 'Pick a time at or after the late mark (9:30).' }
- *   or { hrSummaryAt: 'Pick a time before office hours end.' } (CONTRACT 25)
+ *   or { hrSummaryAt: 'Pick a time before office hours end.' } (CONTRACT 25); { fileMaxMb: "The
+ *   largest file can't be bigger than the storage limit." } (CONTRACT 27)
  */
 export async function update({ user, values, ip }) {
   const parsed = parseInput(settingsUpdateSchema, values ?? {});
@@ -253,6 +263,7 @@ export async function update({ user, values, ip }) {
     checkAutoCheckout(current, parsed);
     checkDayMarks(current, parsed);
     checkHrSummary(current, parsed);
+    checkFileLimits(current, parsed);
     const before = {};
     const after = {};
     for (const [key, value] of Object.entries(parsed)) {

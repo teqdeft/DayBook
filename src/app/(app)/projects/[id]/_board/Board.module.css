@@ -1,0 +1,276 @@
+/* The Board tab (CONTRACT 27), as the prototype: the band, the pills row, then the columns side by
+   side. Columns share the width (the current one 1.25 times) down to 236 px (272 px), an empty
+   later phase is slim; when they don't fit the board scrolls sideways inside its own area. On a
+   phone one column shows at a time under the switcher. */
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--block-gap);
+  min-width: 0;
+}
+
+.readOnly,
+.memberNote {
+  margin: 0;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.readOnly {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* The columns */
+.board {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.board > * {
+  scroll-snap-align: start;
+}
+
+.column,
+.doneColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-muted);
+  transition:
+    border-color 0.12s ease,
+    background-color 0.12s ease;
+}
+
+.column {
+  flex: 1 1 0;
+  min-width: 236px;
+}
+
+.current {
+  flex-grow: 1.25;
+  min-width: 272px;
+}
+
+.slim {
+  flex: 0 0 140px;
+  min-width: 0;
+}
+
+.doneColumn {
+  flex: 0 0 196px;
+}
+
+.foldedAway {
+  display: none;
+}
+
+.memberBoard > .column {
+  max-width: 480px;
+}
+
+.noPhase {
+  border-style: dashed;
+}
+
+.dropOn {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary-soft) 45%, var(--surface-muted));
+}
+
+/* A column's header */
+.columnHead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 2px;
+}
+
+.columnTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+}
+
+.columnName {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.slim .columnTitle {
+  flex-wrap: wrap;
+}
+
+.slim .columnName {
+  white-space: normal;
+}
+
+.columnTools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-right: -6px;
+  margin-left: auto;
+}
+
+.toolButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: var(--radius-cell);
+  background: transparent;
+  color: var(--muted);
+}
+
+.toolButton:hover,
+.toolButton[aria-expanded='true'] {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.columnDates,
+.emptyText {
+  margin: 0;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.emptyText {
+  padding: 0 2px;
+}
+
+.toneRed {
+  color: var(--red-text);
+}
+
+.toneMarigold {
+  color: var(--marigold-text);
+}
+
+.toneMuted {
+  color: var(--muted);
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* "› 6 done" */
+.fold {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-cell);
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.fold:hover {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.fold svg {
+  transition: transform 0.15s ease;
+}
+
+.fold[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+
+/* The dashed gap where a dragged card will land */
+.gap {
+  height: 64px;
+  border: 2px dashed var(--line-dashed);
+  border-radius: var(--radius-tile);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .column,
+  .fold svg {
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .board {
+    display: block;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .board > .column,
+  .board > .doneColumn {
+    display: none;
+  }
+
+  .board > .column.selected {
+    display: flex;
+  }
+
+  .memberBoard > .column {
+    max-width: none;
+  }
+
+  /* the switcher above already names the phase */
+  .columnName {
+    display: none;
+  }
+
+  .columnTitle:not(:has(.columnTag, .columnTools)) {
+    display: none;
+  }
+
+  .toolButton {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .hideOnPhone {
+    display: none;
+  }
+
+  .fold {
+    height: 44px;
+  }
+}

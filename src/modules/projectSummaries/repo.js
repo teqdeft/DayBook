@@ -1,6 +1,8 @@
 // Every Knex query of the projectSummaries module: project_documents and project_summaries. Reading
 // the team's names and locking a project row are the two steps outside them: the names only feed the
 // AI's prompt (CONTRACT 4 allows that for read-only queries), and the lock only counts documents.
+// Reads that name `visibility` and `file_id` (migration 019) take `fileColumns`, so the service can
+// read again without them before 019 (`withFileColumns`, shared.js).
 import { db } from '@/lib/db';
 
 /** Everything but the text: lists never carry it. */
@@ -19,17 +21,37 @@ const DOCUMENT_COLUMNS = [
   'updatedAt',
 ];
 
+/** The columns migration 019 adds (CONTRACT 27): who sees a document, and the file it is the text of. */
+export const FILE_COLUMNS = Object.freeze(['visibility', 'fileId']);
+
+const columnsOf = (fileColumns) =>
+  fileColumns ? [...DOCUMENT_COLUMNS, ...FILE_COLUMNS] : DOCUMENT_COLUMNS;
+
 // ---------- documents ----------
 
-/** A project's documents without their text, newest first. */
-export function listDocuments(projectId, trx = db) {
-  return trx('projectDocuments')
-    .where({ projectId })
+/**
+ * A project's documents without their text, newest first.
+ * @param {number} projectId
+ * @param {{ fileColumns?: boolean, names?: boolean }} [options] fileColumns: also `visibility` and
+ *   `fileId` (019); names: also `createdByName`, the name of who added it
+ */
+export function listDocuments(projectId, { fileColumns = false, names = false } = {}, trx = db) {
+  const columns = columnsOf(fileColumns).map((column) => `d.${column}`);
+  const query = trx('projectDocuments as d')
+    .where('d.projectId', projectId)
     .orderBy([
-      { column: 'createdAt', order: 'desc' },
-      { column: 'id', order: 'desc' },
-    ])
-    .select(DOCUMENT_COLUMNS);
+      { column: 'd.createdAt', order: 'desc' },
+      { column: 'd.id', order: 'desc' },
+    ]);
+  if (!names) return query.select(columns);
+  return query
+    .leftJoin('users as u', 'u.id', 'd.createdBy')
+    .select(...columns, 'u.name as createdByName');
+}
+
+/** Reads no row; fails with errno 1054 (or 1146) until migration 019 has added its columns. */
+export function probeFileColumns(trx = db) {
+  return trx('projectDocuments').select(FILE_COLUMNS).limit(0);
 }
 
 /** The text of these documents of a project. */
@@ -39,18 +61,31 @@ export function listDocumentBodies(projectId, ids, trx = db) {
 }
 
 /** One document with its text, or undefined. */
-export function findDocument(id, trx = db) {
+export function findDocument(id, { fileColumns = false } = {}, trx = db) {
   return trx('projectDocuments')
     .where({ id })
-    .first(...DOCUMENT_COLUMNS, 'body');
+    .first(...columnsOf(fileColumns), 'body');
 }
 
 /** Locks one document for the rest of the transaction, and returns it with its text. */
-export function lockDocument(id, trx) {
+export function lockDocument(id, { fileColumns = false } = {}, trx) {
   return trx('projectDocuments')
     .where({ id })
     .forUpdate()
-    .first(...DOCUMENT_COLUMNS, 'body');
+    .first(...columnsOf(fileColumns), 'body');
+}
+
+/** The id of the document holding a file's text, or undefined (019). */
+export function findFileDocument(fileId, trx = db) {
+  return trx('projectDocuments').where({ fileId }).first('id');
+}
+
+/** Locks the document holding a file's text, when there is one (019). */
+export function lockFileDocument(fileId, trx) {
+  return trx('projectDocuments')
+    .where({ fileId })
+    .forUpdate()
+    .first('id', 'phase', 'title', 'updatedAt');
 }
 
 export function countDocuments(projectId, trx = db) {

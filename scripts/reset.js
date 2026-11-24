@@ -1,10 +1,13 @@
 // `npm run reset -- --confirm=<database name>`: a fresh start for a live database. Empties every
 // table (people, attendance, reports, projects, settings, notifications, sign-ins, everything
 // except the migration bookkeeping), then runs the base seeds again: departments, the Internal
-// client, default settings and the Admin from SEED_ADMIN_EMAIL. It cannot be undone, so it needs
-// the database name typed in --confirm. Without it, it only shows what would be emptied.
+// client, default settings and the Admin from SEED_ADMIN_EMAIL. CONTRACT 27: it also empties the
+// files folder (FILES_DIR), only when it holds Daybook's marker file and only the files Daybook
+// made. It cannot be undone, so it needs the database name typed in --confirm. Without it, it only
+// shows what would be emptied.
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
+import { projectFiles } from '@/modules/projectFiles';
 import { seed as seedDepartments } from '../db/seeds/01_departments.js';
 import { seed as seedClients } from '../db/seeds/02_clients.js';
 import { seed as seedSettings } from '../db/seeds/03_settings.js';
@@ -85,9 +88,12 @@ async function main() {
       await trx.raw('SELECT RELEASE_LOCK(?)', [WORKER_LOCK]);
     }
   });
+  // The rows that named the files are gone: their files go too (never a stranger's file).
+  const { removed } = await projectFiles.wipeStorageForReset();
   const admin = await db('users').where({ email: adminEmail }).first('name', 'email', 'role');
   console.log(
-    `\nDone: emptied ${counts.length} tables and ran the base seeds. ` +
+    `\nDone: emptied ${counts.length} tables, removed ${removed} ` +
+      `${removed === 1 ? 'file' : 'files'} from the files folder and ran the base seeds. ` +
       `Admin: ${admin?.name} <${admin?.email}> (${admin?.role}).`,
   );
   console.log(

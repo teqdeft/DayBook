@@ -2,3 +2,4 @@ node_modules
 .next
 docs/design
 package-lock.json
+tests/fixtures/files/page.html

@@ -1,11 +1,6 @@
-// Shared steps for project-plan.spec.js (CONTRACT 22): every AI request answered in the browser, the
-// real file picker, a document's stored text, and the AI switches in Settings.
-import { fileURLToPath } from 'node:url';
-
-const FIXTURES = new URL('../../fixtures/', import.meta.url);
-
-/** The path of a file in tests/fixtures, for example 'pdf/two-pages.pdf'. */
-export const fixture = (relative) => fileURLToPath(new URL(relative, FIXTURES));
+// Shared steps for project-plan.spec.js (CONTRACT 22 and 27): every AI request answered in the
+// browser, a file's text as the Files tab saves it for the AI summary, and the AI switches in
+// Settings. Picking files and the file fixtures are in support/files.js.
 
 const BUSY = {
   status: 503,
@@ -32,29 +27,24 @@ export async function stubAi(page, answer = () => null) {
 }
 
 /**
- * Picks a file through the real file picker that a button opens.
+ * Waits until the browser saves a file's text for the AI summary (the Files tab reads a PDF, Word
+ * or text file after its upload, or on "Read text for AI") and returns the stored text, through
+ * the API as the signed-in person. Start waiting before the upload.
  * @param {import('@playwright/test').Page} page
- * @param {import('@playwright/test').Locator} button
- * @param {string} file a path on disk
+ * @returns {Promise<{ id: number, kind: string, title: string, body: string, fileId: number,
+ *   visibility: string, pages: number | null, pagesTotal: number | null }>}
  */
-export async function pickFile(page, button, file) {
-  const chooser = page.waitForEvent('filechooser');
-  await button.click();
-  await (await chooser).setFiles(file);
-}
-
-/**
- * A file's or note's stored text, through the API as the signed-in person.
- * @param {import('@playwright/test').Page} page on the Phases tab, with the document's row shown
- * @param {string} title
- * @returns {Promise<{ id: number, kind: string, title: string, body: string,
- *   pages: number | null, pagesTotal: number | null }>}
- */
-export async function storedDocument(page, title) {
-  const id = await page.getByRole('button', { name: title, exact: true }).getAttribute('id');
-  const documentId = Number(/^phases-doc-(\d+)-name$/.exec(id)?.[1]);
-  const response = await page.request.get(`/api/project-documents/${documentId}`);
-  if (!response.ok()) throw new Error(`GET document ${documentId}: ${response.status()}`);
+export async function savedText(page) {
+  const saved = await page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      /\/api\/projects\/\d+\/documents$/.test(new URL(response.url()).pathname),
+    { timeout: 60_000 },
+  );
+  if (saved.status() !== 201) throw new Error(`Saving the text: ${saved.status()}`);
+  const { id } = (await saved.json()).data;
+  const response = await page.request.get(`/api/project-documents/${id}`);
+  if (!response.ok()) throw new Error(`GET document ${id}: ${response.status()}`);
   return (await response.json()).data;
 }
 

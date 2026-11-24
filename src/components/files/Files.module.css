@@ -1,0 +1,480 @@
+/* The file pieces of CONTRACT 27 (Upload states, the task window's Files, the picture viewer), as
+   the prototype draws them (docs/design/project-board-prototype.html: pm-new-task, pm-upload,
+   pm-uploads, task-detail, file-preview). Tokens only; the viewer's veil is --photo-veil. */
+
+/* ---------- names cut in the middle, so the end and the type stay visible ---------- */
+.fileName {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.nameHead {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nameTail {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* The whole name for screen readers (with .visually-hidden): never selected, so a copied name
+   isn't there twice. */
+.nameWhole {
+  user-select: none;
+}
+
+/* ---------- the 36 px type tile ---------- */
+.tile {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: var(--radius-cell);
+  background: var(--track);
+  color: var(--ink-2);
+}
+
+.tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tileBad {
+  background: var(--red-soft);
+  color: var(--red-on-surface);
+}
+
+/* ---------- chips (Upload states) ---------- */
+.chips {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips:empty {
+  display: none;
+}
+
+.chipsOne {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 52px;
+  padding: 0 4px 0 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+/* an Error or Paused chip spans the row and grows; its message wraps */
+.chipWide {
+  grid-column: 1 / -1;
+  height: auto;
+  min-height: 52px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.chipBad {
+  border-color: color-mix(in srgb, var(--red) 40%, var(--line));
+}
+
+.chipText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chipName {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+  white-space: nowrap;
+}
+
+.chipOff .chipName {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.meta {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.chipWide .meta {
+  white-space: normal;
+}
+
+.metaError {
+  color: var(--red-text);
+  white-space: normal;
+}
+
+.percent {
+  font-family: var(--font-heading-stack);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 160px;
+  height: 3px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--track);
+}
+
+.barFill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--primary);
+}
+
+.retry {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.retry:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* the small square buttons: X, Download */
+.iconButton {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-cell);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: var(--track);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* ---------- the drop box (task form, Upload files); label, help and error as Field ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.label {
+  margin-bottom: 4px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
+.drop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 10px;
+  min-height: 88px;
+  padding: 14px;
+  border: 1px dashed var(--line-dashed);
+  border-radius: var(--radius-tile);
+  background: var(--surface-muted);
+  color: var(--ink-2);
+  font-size: 14px;
+  text-align: center;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.drop > svg {
+  color: var(--muted);
+}
+
+.dropOn {
+  display: none;
+  font-weight: 600;
+  color: var(--primary-text);
+}
+
+.dragIn .drop {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.dragIn .drop > :not(.dropOn) {
+  display: none;
+}
+
+.dragIn .dropOn {
+  display: inline;
+}
+
+/* "Choose files" and the phone's "Attach files" are labels of one visually hidden file input,
+   drawn as Button's small secondary (and default, full width) buttons */
+.choose,
+.attachPhone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 37px;
+  padding: 2px 18px 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.choose:hover,
+.attachPhone:hover {
+  background: var(--surface-muted);
+}
+
+.choose:has(input:focus-visible),
+.attachPhone:has(input:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+
+.attachPhone {
+  display: none;
+  width: 100%;
+  height: var(--control-height);
+}
+
+.attachedSkeleton {
+  display: block;
+  margin-top: 10px;
+}
+
+.help {
+  margin-top: 5px;
+  font-size: var(--text-tag);
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.notice {
+  margin-top: 5px;
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}
+
+.line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.line > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* ---------- thumbnails (task window) ---------- */
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.thumb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 120px;
+}
+
+.thumbButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 90px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-cell);
+  background: var(--track);
+  color: var(--ink-2);
+  cursor: zoom-in;
+}
+
+.thumbButton img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbName {
+  margin-top: 6px;
+  overflow: hidden;
+  font-size: var(--text-tag);
+  line-height: 16px;
+}
+
+.thumbSize {
+  font-size: var(--text-tag);
+  color: var(--muted);
+}
+
+.thumbX {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-cell);
+  background: var(--surface);
+}
+
+/* a bigger hit area than the 28 px box */
+.thumbX::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+/* ---------- file rows (task window) ---------- */
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.thumbs + .rows {
+  margin-top: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 0;
+  border-top: 1px solid var(--track);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.rowText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.taskLink {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.taskLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  .chips {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .drop {
+    display: none;
+  }
+
+  .attachPhone {
+    display: inline-flex;
+  }
+
+  .iconButton,
+  .retry {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .iconButton {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* a thumbnail's X stays a 28 px box on the picture: its ::before already gives the 44 px target */
+  .thumbX {
+    width: 28px;
+    height: 28px;
+    min-width: 0;
+    min-height: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drop {
+    transition: none;
+  }
+}

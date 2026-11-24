@@ -276,12 +276,13 @@ describe("the project's PM as an assignee", () => {
     expect(row.assignee.isMember).toBe(true);
   });
 
-  it('hears about it when someone else assigns it, with a link to the Phases tab', async () => {
+  it('hears about it when someone else assigns it, with a link to the task', async () => {
     const task = await add(lyra, { title: 'Told', assigneeId: pm.id }, admin);
     const added = await db('notifications').where({ type: 'project_task.added' });
     expect(added.map((row) => [row.userId, row.link])).toEqual([
-      [pm.id, `/projects/${lyra.id}?tab=phases`],
+      [pm.id, `/projects/${lyra.id}?task=${task.id}`],
     ]);
+    expect(task).toMatchObject({ told: 'person', toldName: 'Paul Manager' });
     await db('notifications').del();
     await projectTasks.update({ user: admin, id: task.id, input: { priority: 'p1' } });
     const changed = await db('notifications').where({ type: 'project_task.changed' });
@@ -289,8 +290,9 @@ describe("the project's PM as an assignee", () => {
   });
 
   it("doesn't notify the PM who assigns it to themselves", async () => {
-    await add(lyra, { title: 'My own', assigneeId: pm.id });
+    const task = await add(lyra, { title: 'My own', assigneeId: pm.id });
     expect(await db('notifications')).toEqual([]);
+    expect(task).toMatchObject({ told: null, toldName: null });
   });
 
   it("doesn't bring the PM into tasks for anyone", async () => {

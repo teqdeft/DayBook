@@ -103,6 +103,8 @@ describe('settings.getAll', () => {
       aiAskEnabled: true,
       aiProjectSummaryEnabled: false,
       ...DEFAULTS_1_10,
+      fileMaxMb: 500,
+      fileStorageLimitGb: 10,
     });
   });
 
@@ -492,6 +494,107 @@ describe('attendance marks and HR updates (CONTRACT 25)', () => {
       values: { lateAfter: '09:30', hrSummaryAt: '10:00', hrMorningSummary: true },
     });
     expect(pick110(await settings.getAll())).toEqual(DEFAULTS_1_10);
+  });
+});
+
+// CONTRACT 27: Settings → Files, the largest file and the storage limit.
+describe('files (CONTRACT 27)', () => {
+  const FILE_KEYS = { file_max_mb: 'fileMaxMb', file_storage_limit_gb: 'fileStorageLimitGb' };
+  const FILE_DEFAULTS = { fileMaxMb: 500, fileStorageLimitGb: 10 };
+  const pickFiles = (values) =>
+    Object.fromEntries(Object.values(FILE_KEYS).map((key) => [key, values[key]]));
+  const TOO_BIG = "The largest file can't be bigger than the storage limit.";
+
+  beforeEach(() => settings.setCacheTtlForTests(null));
+
+  it('reads the defaults when the rows are missing (the live server never seeds)', async () => {
+    const rows = await db('settings').whereIn('key', Object.keys(FILE_KEYS)).select('key', 'value');
+    expect(rows).toHaveLength(2);
+    await db('settings').whereIn('key', Object.keys(FILE_KEYS)).delete();
+    expect(pickFiles(await settings.getAll())).toEqual(FILE_DEFAULTS);
+    const saved = await settings.update({ user: admin, values: { fileStorageLimitGb: 25 } });
+    expect(pickFiles(saved)).toEqual({ fileMaxMb: 500, fileStorageLimitGb: 25 });
+    await db('settings').whereIn('key', Object.keys(FILE_KEYS)).delete();
+    await db('settings').insert(rows);
+    expect(pickFiles(await settings.getAll())).toEqual(FILE_DEFAULTS);
+  });
+
+  it('keeps a hand-edited value inside its range', async () => {
+    await setSettings({ file_max_mb: 99999, file_storage_limit_gb: 0 });
+    expect(pickFiles(await settings.getAll())).toEqual({ fileMaxMb: 2048, fileStorageLimitGb: 1 });
+    await setSettings({ file_max_mb: 'lots', file_storage_limit_gb: -3 });
+    expect(pickFiles(await settings.getAll())).toEqual({ fileMaxMb: 500, fileStorageLimitGb: 1 });
+    await setSettings({ file_max_mb: 500, file_storage_limit_gb: 10 });
+  });
+
+  it('saves both keys with an audit row', async () => {
+    const saved = await settings.update({
+      user: admin,
+      values: { fileMaxMb: '750', fileStorageLimitGb: 40 },
+    });
+    expect(pickFiles(saved)).toEqual({ fileMaxMb: 750, fileStorageLimitGb: 40 });
+    const log = await db('audit_logs')
+      .where({ action: 'settings.update' })
+      .orderBy('id', 'desc')
+      .first();
+    expect(parseJson(log.before)).toEqual(FILE_DEFAULTS);
+    expect(parseJson(log.after)).toEqual({ fileMaxMb: 750, fileStorageLimitGb: 40 });
+    await settings.update({ user: admin, values: FILE_DEFAULTS });
+    expect(pickFiles(await settings.getAll())).toEqual(FILE_DEFAULTS);
+  });
+
+  it('refuses values out of range with the Settings messages', async () => {
+    const size = 'Pick a size from 1 to 2,048 MB.';
+    const limit = 'Pick a limit from 1 to 1,000 GB.';
+    const cases = [
+      ['fileMaxMb', 0, size],
+      ['fileMaxMb', 2049, size],
+      ['fileMaxMb', 1.5, size],
+      ['fileMaxMb', 'big', size],
+      ['fileStorageLimitGb', 0, limit],
+      ['fileStorageLimitGb', 1001, limit],
+      ['fileStorageLimitGb', null, limit],
+    ];
+    for (const [key, value, message] of cases) {
+      const error = await expectAppError(
+        settings.update({ user: admin, values: { [key]: value } }),
+        'VALIDATION_FAILED',
+      );
+      expect(error.fields, `${key} = ${value}`).toEqual({ [key]: message });
+    }
+    const edges = await settings.update({
+      user: admin,
+      values: { fileMaxMb: 2048, fileStorageLimitGb: 1000 },
+    });
+    expect(pickFiles(edges)).toEqual({ fileMaxMb: 2048, fileStorageLimitGb: 1000 });
+    await settings.update({ user: admin, values: FILE_DEFAULTS });
+  });
+
+  it('checkFileLimits: the largest file fits in the storage limit (1 GB = 1,024 MB)', async () => {
+    const refused = await expectAppError(
+      settings.update({ user: admin, values: { fileMaxMb: 1025, fileStorageLimitGb: 1 } }),
+      'VALIDATION_FAILED',
+    );
+    expect(refused.fields).toEqual({ fileMaxMb: TOO_BIG });
+    expect(refused.message).toBe(TOO_BIG);
+    // Lowering the limit alone under the stored largest file is checked on the values after it.
+    await settings.update({ user: admin, values: { fileMaxMb: 2048, fileStorageLimitGb: 5 } });
+    const lowered = await expectAppError(
+      settings.update({ user: admin, values: { fileStorageLimitGb: 1 } }),
+      'VALIDATION_FAILED',
+    );
+    expect(lowered.fields).toEqual({ fileMaxMb: TOO_BIG });
+    expect(pickFiles(await settings.getAll())).toEqual({ fileMaxMb: 2048, fileStorageLimitGb: 5 });
+    const fits = await settings.update({
+      user: admin,
+      values: { fileMaxMb: 1024, fileStorageLimitGb: 1 },
+    });
+    expect(pickFiles(fits)).toEqual({ fileMaxMb: 1024, fileStorageLimitGb: 1 });
+    // Other keys never run the check.
+    await setSettings({ file_max_mb: 2048, file_storage_limit_gb: 1 });
+    await settings.update({ user: admin, values: { lateAlertDays: 5 } });
+    await settings.update({ user: admin, values: { ...FILE_DEFAULTS, lateAlertDays: 4 } });
+    expect(pickFiles(await settings.getAll())).toEqual(FILE_DEFAULTS);
   });
 });
 

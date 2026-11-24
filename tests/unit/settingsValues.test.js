@@ -1,12 +1,13 @@
 // The Settings form's values (settingsValues.js): auto check-out (CONTRACT 19) shows "Check at" as
 // "8:00 PM", must come after the office ends while it is on, and keeps the saved time while it is
-// off and hidden; only changed keys are sent. Attendance marks and HR updates (CONTRACT 25) use
-// the API's limits, messages and cross checks.
+// off and hidden; only changed keys are sent. Attendance marks and HR updates (CONTRACT 25) and
+// Files (CONTRACT 27) use the API's limits, messages and cross checks.
 import { describe, expect, it } from 'vitest';
 import {
   AUTO_CHECKOUT_TOO_EARLY,
   changedKeys,
   CLOCKS,
+  FILE_BIGGER_THAN_LIMIT,
   HALF_DAY_TOO_LONG,
   HR_CLOCKS,
   isShown,
@@ -21,7 +22,10 @@ import { NUMBERS } from '@/app/(app)/settings/numberFields';
 import {
   CHECKIN_REMINDER_MINUTES,
   checkDayMarks,
+  checkFileLimits,
   checkHrSummary,
+  FILE_MAX_MB,
+  FILE_STORAGE_LIMIT_GB,
   HALF_DAY_UNDER_MINUTES,
   LATE_ALERT_DAYS,
   LEFT_EARLY_GRACE_MINUTES,
@@ -71,6 +75,9 @@ const SAVED = {
   lateAlertDays: 4,
   slackAttendanceRemind: true,
   slackHrSummary: true,
+  // CONTRACT 27
+  fileMaxMb: 500,
+  fileStorageLimitGb: 10,
 };
 
 const edit = (changes) => ({ ...toForm(SAVED), ...changes });
@@ -346,5 +353,70 @@ describe('Settings form values: attendance marks and HR updates', () => {
     const moved = toValues(edit({ lateAfter: '1:05 PM' }), SAVED).errors;
     expect(moved).toEqual({ hrSummaryAt: 'Pick a time at or after the late mark (1:05).' });
     expect(crossMessage(checkHrSummary, SAVED, { lateAfter: '13:05' })).toEqual(moved);
+  });
+});
+
+// CONTRACT 27: Settings → Files, the largest file and the storage limit.
+describe('Settings form values: files', () => {
+  const apiResult = (values) => settingsUpdateSchema.safeParse(values);
+  const apiMessage = (key, value) => {
+    const result = apiResult({ [key]: value });
+    return result.success ? null : result.error.issues[0].message;
+  };
+
+  it('edits the two keys last, after AI, as the Files section comes last', () => {
+    expect(KEYS.slice(-3)).toEqual(['aiProjectSummaryEnabled', 'fileMaxMb', 'fileStorageLimitGb']);
+  });
+
+  it('uses the API limits and messages', () => {
+    const bounds = { fileMaxMb: FILE_MAX_MB, fileStorageLimitGb: FILE_STORAGE_LIMIT_GB };
+    expect(bounds).toEqual({
+      fileMaxMb: { min: 1, max: 2048 },
+      fileStorageLimitGb: { min: 1, max: 1000 },
+    });
+    for (const [key, { min, max }] of Object.entries(bounds)) {
+      expect({ min: NUMBERS[key].min, max: NUMBERS[key].max }, key).toEqual({ min, max });
+      for (const wrong of [max + 1, min - 1, 1.5, 'ten']) {
+        expect(apiMessage(key, wrong), `${key} ${wrong}`).toBe(NUMBERS[key].message);
+      }
+      expect(apiMessage(key, max), key).toBeNull();
+      expect(apiMessage(key, String(min)), key).toBeNull();
+      const { errors } = toValues(edit({ [key]: String(max + 1) }), SAVED);
+      expect(errors[key], key).toBe(NUMBERS[key].message);
+    }
+    expect(NUMBERS.fileMaxMb.message).toBe('Pick a size from 1 to 2,048 MB.');
+    expect(NUMBERS.fileStorageLimitGb.message).toBe('Pick a limit from 1 to 1,000 GB.');
+  });
+
+  it('shows the numbers as text and sends only what changed', () => {
+    expect(toForm(SAVED)).toMatchObject({ fileMaxMb: '500', fileStorageLimitGb: '10' });
+    const { values, errors } = toValues(
+      edit({ fileMaxMb: ' 750 ', fileStorageLimitGb: '40' }),
+      SAVED,
+    );
+    expect(errors).toEqual({});
+    expect(changedKeys(values, SAVED)).toEqual({ fileMaxMb: 750, fileStorageLimitGb: 40 });
+  });
+
+  it('refuses a largest file bigger than the storage limit, as the API does', () => {
+    const refused = toValues(edit({ fileMaxMb: '2048', fileStorageLimitGb: '1' }), SAVED).errors;
+    expect(refused).toEqual({ fileMaxMb: FILE_BIGGER_THAN_LIMIT });
+    expect(FILE_BIGGER_THAN_LIMIT).toBe("The largest file can't be bigger than the storage limit.");
+    let thrown = null;
+    try {
+      checkFileLimits(SAVED, { fileMaxMb: 2048, fileStorageLimitGb: 1 });
+    } catch (error) {
+      thrown = error.fields;
+    }
+    expect(thrown).toEqual(refused);
+    // 1 GB is 1,024 MB: a 1,024 MB file fits a 1 GB limit.
+    expect(toValues(edit({ fileMaxMb: '1024', fileStorageLimitGb: '1' }), SAVED).errors).toEqual(
+      {},
+    );
+    expect(() => checkFileLimits(SAVED, { fileMaxMb: 1024, fileStorageLimitGb: 1 })).not.toThrow();
+    // A number that can't be read is the only error shown.
+    expect(toValues(edit({ fileMaxMb: 'x', fileStorageLimitGb: '1' }), SAVED).errors).toEqual({
+      fileMaxMb: NUMBERS.fileMaxMb.message,
+    });
   });
 });

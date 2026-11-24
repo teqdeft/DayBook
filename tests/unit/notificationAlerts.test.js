@@ -1,4 +1,4 @@
-// Important notifications (CONTRACT 26): ALERT_TYPES is exactly the table of 43 types (19
+// Important notifications (CONTRACT 26, 27): ALERT_TYPES is exactly the table of 44 types (19
 // important), every prefix has a group, and a source scan fails for any notification type the code
 // creates that isn't classified (literals and templates on lines with `type:` or `TYPE =`).
 import fs from 'node:fs';
@@ -58,6 +58,7 @@ const TABLE = [
   ['project_request.declined', false, 'project'],
   ['project_task.added', false, 'task'],
   ['project_task.changed', false, 'task'],
+  ['project_task.files_added', false, 'task'],
   ['report_edit.sent', false, 'report'],
   ['report_edit.approved', false, 'report'],
   ['report_edit.declined', false, 'report'],
@@ -136,10 +137,11 @@ function scanSources() {
 }
 
 describe('ALERT_TYPES', () => {
-  it('is exactly the 43 types of the table, 19 of them important', () => {
+  it('is exactly the 44 types of the table, 19 of them important', () => {
     expect(Object.isFrozen(ALERT_TYPES)).toBe(true);
     expect(Object.keys(ALERT_TYPES).sort()).toEqual(TABLE.map(([type]) => type).sort());
-    expect(Object.keys(ALERT_TYPES)).toHaveLength(43);
+    expect(Object.keys(ALERT_TYPES)).toHaveLength(44);
+    expect(ALERT_TYPES['project_task.files_added']).toBe('normal');
     for (const [type, important] of TABLE) {
       expect(ALERT_TYPES[type], type).toBe(important ? 'important' : 'normal');
       expect(alertLevel(type), type).toBe(important ? 'important' : 'normal');
@@ -197,6 +199,12 @@ describe('every type the code creates is classified (source scan)', () => {
     expect(places('project_request.approved').some((where) => where.startsWith('db/demo/'))).toBe(
       true,
     );
+    // CONTRACT 27's new type, sent by the task messages.
+    expect(
+      places('project_task.files_added').some((where) =>
+        where.startsWith('src/modules/projectTasks/messages.js:'),
+      ),
+    ).toBe(true);
     const unclassified = literals.filter(({ value }) => !isClassified(value));
     expect(unclassified).toEqual([]);
   });

@@ -1,6 +1,7 @@
 // Input schemas for the priority task endpoints (CONTRACT 13). Every string length is checked
 // here: the local MariaDB silently truncates long strings, production MySQL rejects them.
 import { z } from 'zod';
+import { uploadKeySchema } from '@/modules/projectFiles/schemas';
 import { planDate, taskPhase } from '@/modules/projectPlan/schemas';
 
 /** Highest first. */
@@ -51,6 +52,20 @@ const assigneeId = z.preprocess(
 /** A 'YYYY-MM-DD' date; null (or "") means no due date. */
 const dueDate = planDate('Pick a real due date, or leave it empty.');
 
+/** At most this many files on one task (CONTRACT 27). */
+export const MAX_TASK_FILES = 20;
+export const TASK_FILES_MESSAGE = 'A task can have up to 20 files. Remove one to add more.';
+
+/** Held uploads to attach to the task, 0 to 20. */
+const uploadKeys = z
+  .array(uploadKeySchema, { error: 'Send the files as a list.' })
+  .max(MAX_TASK_FILES, { error: TASK_FILES_MESSAGE });
+
+/** Files of the task to remove, 0 to 20. */
+const removeFileIds = z
+  .array(idValue("That file isn't on this task any more."), { error: 'Send the files as a list.' })
+  .max(MAX_TASK_FILES, { error: TASK_FILES_MESSAGE });
+
 /** POST /api/projects/:id/tasks */
 export const projectTaskCreateSchema = z.object(
   {
@@ -60,20 +75,43 @@ export const projectTaskCreateSchema = z.object(
     assigneeId: assigneeId.optional().default(null),
     phase: taskPhase.optional().default(null),
     dueDate: dueDate.optional().default(null),
+    uploadKeys: uploadKeys.default([]),
   },
   { error: BODY_MESSAGE },
 );
 
+/** True when a field of an edit changes something: an empty file list doesn't. */
+const changesSomething = (field) => (Array.isArray(field) ? field.length > 0 : field !== undefined);
+
 /** PATCH /api/project-tasks/:id — only the fields sent change. */
 export const projectTaskUpdateSchema = z
   .object(
-    { title, details, priority, assigneeId, phase: taskPhase, dueDate },
+    {
+      title: title.optional(),
+      details: details.optional(),
+      priority: priority.optional(),
+      assigneeId: assigneeId.optional(),
+      phase: taskPhase.optional(),
+      dueDate: dueDate.optional(),
+      addUploadKeys: uploadKeys.optional(),
+      removeFileIds: removeFileIds.optional(),
+    },
     { error: BODY_MESSAGE },
   )
-  .partial()
-  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+  .refine((value) => Object.values(value).some(changesSomething), {
     message: 'Nothing to change.',
   });
+
+/** POST /api/project-tasks/:id/files: held uploads to add to the task, 1 to 20. */
+export const projectTaskFilesSchema = z.object(
+  {
+    uploadKeys: z
+      .array(uploadKeySchema, { error: 'Pick files to add.' })
+      .min(1, { error: 'Pick files to add.' })
+      .max(MAX_TASK_FILES, { error: TASK_FILES_MESSAGE }),
+  },
+  { error: BODY_MESSAGE },
+);
 
 /** POST /api/project-tasks/:id/status */
 export const projectTaskStatusSchema = z.object(

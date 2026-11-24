@@ -3,12 +3,15 @@
 // adds a row every 5 minutes): rows older than 90 days go, long after their run keys stopped
 // mattering (every key names its own day, hour or 5-minute slot). Screen time is kept for
 // settings.activityRetentionDays days (work dates before today minus that many days go), and
-// attendance reminders for 180 days (CONTRACT 25; the step counts 0 before migration 018).
+// attendance reminders for 180 days (CONTRACT 25; the step counts 0 before migration 018). The
+// files step (CONTRACT 27) handles at most 500 rows per part in at most 20 s and never throws; it
+// counts 0 before migration 019 or while file storage isn't set up.
 import { addDays, now } from '@/lib/time';
 import { activity } from '@/modules/activity';
 import { attendance } from '@/modules/attendance';
 import { auth } from '@/modules/auth';
 import { notifications } from '@/modules/notifications';
+import { projectFiles } from '@/modules/projectFiles';
 import { slack } from '@/modules/slack';
 import { companyNow, isAtOrAfter } from '../clock';
 import * as repo from '../repo';
@@ -19,6 +22,8 @@ const KEEP_SENT_OUTBOX_DAYS = 90;
 const KEEP_READ_NOTIFICATIONS_DAYS = 180;
 const KEEP_JOB_RUNS_DAYS = 90;
 const KEEP_REMINDER_DAYS = 180;
+const FILES_ROWS_PER_PART = 500;
+const FILES_BUDGET_MS = 20_000;
 
 /**
  * Runs every step even if one fails, then fails the run if any step did.
@@ -34,6 +39,8 @@ async function cleanUp(date, current) {
     jobRuns: () => repo.deleteRunsStartedBefore(now().subtract(KEEP_JOB_RUNS_DAYS, 'day').toDate()),
     activitySegments: () => activity.deleteOlderThan(addDays(date, -current.activityRetentionDays)),
     oldReminders: () => attendance.deleteOldReminders(addDays(date, -KEEP_REMINDER_DAYS)),
+    projectFiles: () =>
+      projectFiles.cleanUp({ limit: FILES_ROWS_PER_PART, budgetMs: FILES_BUDGET_MS }),
   };
   const deleted = {};
   const errors = [];

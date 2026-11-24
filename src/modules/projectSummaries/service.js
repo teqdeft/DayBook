@@ -1,5 +1,7 @@
-// AI summaries of a project's files and notes (CONTRACT 22). Documents live in documents.js; this file
-// re-exports them so the module has one service object. The AI has no tools and its answer only
+// AI summaries of a project's files and notes (CONTRACT 22 and 27). Documents live in documents.js and
+// fileDocuments.js; this file re-exports them so the module has one service object. The summary reads
+// only project_documents (notes and the text of project files), never a task's file or a file's name
+// without a document. The AI has no tools and its answer only
 // passes through schemas.js and checks.js, so a document that says "move to Launch" can at most become
 // a suggestion the PM has to click. Logs and audit rows never hold document or summary text. Ask
 // Daybook never reads these tables.
@@ -19,13 +21,8 @@ import * as repo from './repo';
 import { summaryTaskSchema } from './schemas';
 import { guardDocumentWrite, manageableProject, parseInput, readableProject } from './shared';
 
-export {
-  addDocument,
-  getDocument,
-  listDocuments,
-  removeDocument,
-  updateDocument,
-} from './documents';
+export { addDocument, listDocuments, removeDocument, updateDocument } from './documents';
+export { filesReady, getDocument, listDocumentsFor, syncFileDocument } from './fileDocuments';
 
 /** A summary reads up to 50,000 characters, so it may take longer than the usual 30 s. */
 const SUMMARY_TIMEOUT_MS = 55_000;
@@ -203,7 +200,7 @@ export async function writeSummary({ user, projectId, ip = null }) {
     if (documents.length === 0) {
       throw new AppError('NO_DOCUMENTS', {
         status: 409,
-        message: 'Add a file or a note first.',
+        message: 'Add a note, or a PDF, Word or text file, in Files first.',
       });
     }
     const request = await prepareRequest(project, documents);

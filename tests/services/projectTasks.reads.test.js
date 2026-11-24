@@ -113,9 +113,14 @@ describe('listForProject', () => {
   });
 
   it('is readable by members, PMs and Admin, not by others', async () => {
-    for (const viewer of [alice, bob, pm, pm2, admin]) {
+    for (const viewer of [pm, pm2, admin]) {
       const rows = await projectTasks.listForProject({ viewer, projectId: lyra.id });
       expect(rows).toHaveLength(5);
+    }
+    // Members without team.view read only their own and Anyone tasks (CONTRACT 27).
+    for (const viewer of [alice, bob]) {
+      const rows = await projectTasks.listForProject({ viewer, projectId: lyra.id });
+      expect(rows).toHaveLength(4);
     }
     for (const viewer of [carol, hr]) {
       await expect(
@@ -125,6 +130,49 @@ describe('listForProject', () => {
     await expect(
       projectTasks.listForProject({ viewer: pm, projectId: 999999 }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe("a member's reads (CONTRACT 27)", () => {
+  it('lists only the tasks for them and for anyone on the project, in order', async () => {
+    const forAlice = await projectTasks.listForProject({ viewer: alice, projectId: lyra.id });
+    expect(titles(forAlice)).toEqual(['P1 older', 'P1 newer', 'P2 done', 'P3 oldest']);
+    const forBob = await projectTasks.listForProject({ viewer: bob, projectId: lyra.id });
+    expect(titles(forBob)).toEqual(['P1 older', 'P2 done', 'P2 for Bob', 'P3 oldest']);
+    const open = await projectTasks.listForProject({
+      viewer: bob,
+      projectId: lyra.id,
+      status: 'open',
+    });
+    expect(titles(open)).toEqual(['P1 older', 'P2 for Bob', 'P3 oldest']);
+    // A PM who is a member of another PM's project keeps team.view: every task.
+    const forPm = await projectTasks.listForProject({ viewer: pm2, projectId: lyra.id });
+    expect(forPm).toHaveLength(5);
+  });
+
+  it('pages the same rows, with a total that counts only them', async () => {
+    const page = await projectTasks.pageForProject({
+      viewer: alice,
+      projectId: lyra.id,
+      limit: 2,
+      offset: 1,
+    });
+    expect(page.total).toBe(4);
+    expect(titles(page.rows)).toEqual(['P1 newer', 'P2 done']);
+    const done = await projectTasks.pageForProject({
+      viewer: bob,
+      projectId: lyra.id,
+      status: 'done',
+    });
+    expect(done.total).toBe(1);
+    expect(titles(done.rows)).toEqual(['P2 done']);
+    const all = await projectTasks.pageForProject({ viewer: pm, projectId: lyra.id });
+    expect(all.total).toBe(5);
+  });
+
+  it('still counts every task in the progress numbers', async () => {
+    const progress = await projectTasks.progressByProject([lyra.id]);
+    expect(progress[lyra.id]).toMatchObject({ total: 5, done: 1 });
   });
 });
 

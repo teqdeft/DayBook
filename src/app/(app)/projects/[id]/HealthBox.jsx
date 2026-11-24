@@ -1,4 +1,5 @@
-// The box at the top of the Overview: what the forecast says, in its colour. Server-safe.
+// The box at the top of the Summary tab (CONTRACT 27): what the forecast says, in its colour.
+// Server-safe.
 import { CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react';
 import { healthTone } from '@/modules/projectPlan/forecast';
 import styles from './Overview.module.css';
