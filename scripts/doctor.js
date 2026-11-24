@@ -1,7 +1,8 @@
 // `npm run doctor`: a read-only check for a live server. It prints whether every database update
-// has run, whether the worker cron is running, whether Slack works (token, report channel, queue)
-// and whether desktop notifications can be delivered (keys, the Settings switch, who turned them
-// on, the latest notifications).
+// has run, whether the worker cron is running, whether Slack works (token, report channel, queue),
+// whether file storage is ready (CONTRACT 27: the FILES_DIR folder and the space used, never the
+// folder's path) and whether desktop notifications can be delivered (keys, the Settings switch, who
+// turned them on, the latest notifications).
 // It never prints tokens, private keys or push endpoints, so its output is safe to share.
 //
 // `npm run doctor -- --notify=person@company.com` also adds a test bell notification for that
@@ -11,6 +12,9 @@ import { env } from '@/lib/env';
 import { db } from '@/lib/db';
 import { minutesBetween, now, toLocal } from '@/lib/time';
 import { notifications } from '@/modules/notifications';
+import { projectFiles } from '@/modules/projectFiles';
+import { formatSize } from '@/modules/projectFiles/kinds';
+import { storageProblem } from '@/modules/projectFiles/fileMessages';
 import { settings } from '@/modules/settings';
 import { slack } from '@/modules/slack';
 import * as slackClient from '@/modules/slack/client';
@@ -118,6 +122,22 @@ async function checkSlack(current) {
   }
 }
 
+async function checkFiles() {
+  console.log('\nFiles');
+  // The same check the app runs (an absolute folder outside the app, with Daybook's marker).
+  const space = await projectFiles.spaceUsage();
+  if (!space.storage.ready) {
+    const reason = storageProblem(space.storage.problem) ?? space.storage.problem;
+    console.log(`${BAD} File storage isn't set up: ${reason} See README Updating, 1.12.`);
+    return;
+  }
+  // Before migration 019 the numbers can't be read; the Database part says so.
+  const used = space.updateNeeded
+    ? ''
+    : ` (${formatSize(space.usedBytes)} of ${formatSize(space.limitBytes)} used)`;
+  console.log(`${OK} File storage is ready${used}`);
+}
+
 async function checkPush(current, tz) {
   console.log('\nDesktop notifications');
   const publicKey = env.VAPID_PUBLIC_KEY;
@@ -219,6 +239,7 @@ async function main() {
   await checkDatabase();
   await checkWorker();
   await checkSlack(current);
+  await checkFiles();
   await checkPush(current, tz);
   const email = notifyArg();
   if (email) await sendTest(email);

@@ -1,7 +1,8 @@
 // What Today's to-do draws (CONTRACT 24), rendered: the empty state, groups with their lines, tags,
 // Play only where a timer can start, the header's count and buttons, every state of the Slack
 // button, the card after submit, the suggestion box and the reminder line, the paste dialog's
-// preview, the Priority tasks card's To-do column and the report strip's copy.
+// preview, the Priority tasks card's To-do column (and, CONTRACT 27, its paperclips, its title
+// buttons that open the task window and the to-do the window uses) and the report strip's copy.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -344,6 +345,64 @@ describe('the Priority tasks card', () => {
       labels(withTodo(todo({ submitted: true }))).some((label) => label.startsWith('Add to to-do')),
     ).toBe(false);
     expect(text(withTodo(null))).not.toContain('To-do');
+  });
+});
+
+describe('the Priority tasks card with files (CONTRACT 27)', () => {
+  const rows = [
+    { id: 7, priority: 'p1', title: 'Fix the booking form', projectId: 12, project: ACME },
+    { id: 8, priority: 'p2', title: 'Payment settings page', projectId: 5, project: SU },
+  ];
+  const render = (fileCounts) => {
+    ctx.current = null;
+    const priority = {
+      initial: 6,
+      today: '2026-11-13',
+      rows: rows.map((row) => ({ ...row, forYou: true, fileCount: fileCounts[row.id] ?? 0 })),
+    };
+    return renderToStaticMarkup(createElement(PriorityCard, { priority }));
+  };
+
+  it('puts a paperclip and count after the title when the task has files', () => {
+    const html = render({ 8: 2 });
+    expect(labels(html)).toContain('2 files');
+    expect(labels(html)).not.toContain('0 files');
+    expect(labels(render({ 7: 1 }))).toContain('1 file');
+  });
+
+  it('makes each title a button that opens the task window', () => {
+    const html = render({});
+    expect(buttons(html)).toEqual(
+      expect.arrayContaining(['Fix the booking form', 'Payment settings page']),
+    );
+    expect(html.match(/data-open-task/g)).toHaveLength(4); // the phone title and the Task cell
+  });
+
+  it("offers the window the to-do card's own adding, and no adding once the report is in", async () => {
+    const { todoForWindow } = await import('@/app/(app)/today/PriorityCard.jsx');
+    const added = [];
+    const linked = todo({
+      groups: [
+        {
+          entryId: 2,
+          project: SU,
+          minutes: 0,
+          lines: [line(21, 'Update the sitemap', { projectTaskId: 8 })],
+        },
+      ],
+    });
+    const adapter = todoForWindow({ todo: linked, addLine: (...args) => added.push(args) });
+    expect(adapter.has(8)).toBe(true);
+    expect(adapter.has(7)).toBe(false);
+    adapter.add({ id: 7, projectId: 12, title: 'Fix the booking form', project: ACME });
+    expect(added).toEqual([
+      [
+        { project: { id: 12, name: ACME.name, color: ACME.color } },
+        { title: 'Fix the booking form', projectTaskId: 7, added: 'Added to your to-do.' },
+      ],
+    ]);
+    expect(todoForWindow({ todo: todo({ submitted: true }), addLine: () => {} }).add).toBeNull();
+    expect(todoForWindow(null)).toBeNull();
   });
 });
 

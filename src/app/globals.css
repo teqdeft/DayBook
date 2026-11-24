@@ -85,6 +85,12 @@
   /* overlay behind drawers and dialogs */
   --overlay: light-dark(rgba(21, 24, 51, 0.36), rgba(5, 6, 16, 0.6));
   --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--primary);
+  /* menus, toasts and a card lifted on the board (CONTRACT 27): navy follows the theme */
+  --shadow-menu: 0 12px 32px color-mix(in srgb, var(--navy) 14%, transparent);
+  /* the picture viewer's veil and its icons and text: the same dark in both themes, as a photo
+     viewer (white is above 4.5:1 on it over any page) */
+  --photo-veil: rgba(5, 6, 16, 0.86);
+  --photo-veil-text: #ffffff;
 
   /* type */
   --font-heading-stack: var(--font-heading), 'Schibsted Grotesk', system-ui, sans-serif;
@@ -135,7 +141,9 @@
 
 /* Browsers without light-dark() (before Chrome and Edge 123, Firefox 120 and Safari 17.5, such as
    iPhones that stop at iOS 16) would lose every colour above. They get the light theme instead.
-   tests/unit/themeFallback.test.js keeps this list equal to the light side of each colour. */
+   tests/unit/themeFallback.test.js keeps this list equal to the light side of each colour. The
+   menu shadow is written without color-mix() too (older than light-dark(), still missing before
+   Safari 16.2): the light navy at 14%. The veil is the same in both themes and needs none. */
 @supports not (color: light-dark(#000, #fff)) {
   :root {
     --paper: #f5f6fa;
@@ -186,6 +194,7 @@
     --switch-off: #c9ccdb;
     --placeholder: #757575;
     --overlay: rgba(21, 24, 51, 0.36);
+    --shadow-menu: 0 12px 32px rgba(21, 24, 51, 0.14);
   }
 }
 

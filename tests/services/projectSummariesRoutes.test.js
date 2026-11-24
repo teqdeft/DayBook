@@ -1,5 +1,7 @@
-// The document and AI summary API (CONTRACT 22): permissions, ids, response shapes, 413 for a raw
-// body over 1 MB before anything parses it, and 4 summaries a minute per person. Fake transport only.
+// The document and AI summary API (CONTRACT 22 and 27): permissions, ids, response shapes, 413 for a
+// raw body over 1 MB before anything parses it, and 4 summaries a minute per person. A note sent
+// without `visibility` stays for the PM and Admins (members get 404); a member reads an Everyone
+// note. Fake transport only.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setNowForTests } from '@/lib/time';
 import { createUser, resetDatabase, setSettings } from '../helpers/db.js';
@@ -130,7 +132,9 @@ describe('documents', () => {
   });
 
   it('answers everyone else 404 on reads and 403 on writes', async () => {
+    // Made without `visibility`, as an older page or a script sends it: Only PM and Admins.
     const note = await newNote();
+    expect(note.visibility).toBe('managers');
     for (const user of [otherPm, hr, member]) {
       signInAs(user);
       const read = await getDocument(note.id);
@@ -143,6 +147,21 @@ describe('documents', () => {
     }
     signInAs(admin);
     expect((await getDocument(note.id)).json.data.body).toBe(NOTE_TEXT);
+  });
+
+  it('lets a member read an Everyone note, and change nothing', async () => {
+    const shared = (await addDocument(project.id, { ...NOTE, visibility: 'everyone' })).json.data;
+    expect(shared).toMatchObject({ visibility: 'everyone', fileId: null });
+    signInAs(member);
+    const read = await getDocument(shared.id);
+    expect(read.status).toBe(200);
+    expect(read.json.data).toMatchObject({ id: shared.id, body: NOTE_TEXT });
+    expect((await patchDocument(shared.id, { title: 'x' })).status).toBe(403);
+    expect((await deleteDocument(shared.id)).status).toBe(403);
+    for (const user of [otherPm, hr]) {
+      signInAs(user);
+      expect((await getDocument(shared.id)).status, user.name).toBe(404);
+    }
   });
 
   it('asks for a session first', async () => {

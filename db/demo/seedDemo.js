@@ -2,16 +2,19 @@
 // on the design canvas, so every screen looks like its artboard, plus three project plans (an off
 // track, an at risk and an on track project, projectPlans.js) for the project management screens,
 // a to-do with unfinished tasks to suggest (todo.js) for Today's to-do, and the 1.10 HR tools'
-// holiday, leave, breaks, missing check-outs and marks (hrTools.js, hrTimers.js).
+// holiday, leave, breaks, missing check-outs and marks (hrTools.js, hrTimers.js), and acme-store's
+// real files (CONTRACT 27, projectFiles.js).
 //
 //   npm run seed:demo                 evening state (the dashboards, 6:52 PM on the canvas)
 //   npm run seed:demo -- --midday     Vishal still checked in with a draft report (01 and 02)
 //
-// It empties every table (except the migration tables), runs the four base seeds, then inserts the
-// demo data. Safe to run again at any time; it refuses to run in production.
+// It empties every table (except the migration tables) and the files folder (only with Daybook's
+// marker in it, and only the files Daybook made), runs the four base seeds, then inserts the demo
+// data. Safe to run again at any time; it refuses to run in production.
 import { db, parseJson, toJson } from '@/lib/db';
 import { env } from '@/lib/env';
 import { workDate } from '@/lib/time';
+import { projectFiles } from '@/modules/projectFiles';
 import { seed as seedDepartments } from '../seeds/01_departments.js';
 import { seed as seedClients } from '../seeds/02_clients.js';
 import { seed as seedSettings } from '../seeds/03_settings.js';
@@ -34,6 +37,7 @@ import { checkDesignNumbers } from './checks.js';
 import { buildHrRows, planHrTools } from './hrTools.js';
 import { buildTimerDays } from './hrTimers.js';
 import { PEOPLE } from './people.js';
+import { addStoreFiles } from './projectFiles.js';
 import { buildProjectPlanRows } from './projectPlanRows.js';
 import { COMPLETED_PROJECTS, PROJECTS } from './projects.js';
 import {
@@ -234,6 +238,8 @@ async function main() {
   checkPriorityTasks({ projects: [...PROJECTS, ...COMPLETED_PROJECTS], people: PEOPLE });
   const slackChannel = await readSavedSlackChannel();
   const emptied = await wipe();
+  // The rows that named the files are gone: their files go too (never a stranger's file).
+  const { removed } = await projectFiles.wipeStorageForReset();
   await runBaseSeeds();
   const settings = await readSettings();
   const anchor = anchorDate(settings.tz, settings.workingDays);
@@ -241,7 +247,9 @@ async function main() {
   const counts = await db.transaction((trx) =>
     insertDemo(trx, { settings, anchor, days, midday, slackChannel }),
   );
-  console.log(`Emptied ${emptied} tables and ran the base seeds.`);
+  const store = await db('projects').where({ name: 'acme-store' }).first('id');
+  const files = await addStoreFiles({ projectId: store.id });
+  console.log(`Emptied ${emptied} tables and ${removed} files, and ran the base seeds.`);
   console.log(
     `Demo data for ${anchor} (${midday ? 'midday' : 'evening'} state), ${days.length} working days:`,
   );
@@ -249,6 +257,11 @@ async function main() {
     `  ${Object.entries(counts)
       .map(([name, count]) => `${name} ${count}`)
       .join(', ')}`,
+  );
+  console.log(
+    files.problem
+      ? `  No files added: file storage isn't set up (${files.problem}).`
+      : `  projectFiles ${files.files} (acme-store)`,
   );
 }
 

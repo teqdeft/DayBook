@@ -1,5 +1,6 @@
-// The Timeline tab (CONTRACT 22): plan against actual, one row per phase, from timelineLayout.js. The
-// tab needs nothing more than the page's plan and forecast. Server-safe.
+// The Timeline tab (CONTRACT 22 and 27): plan against actual, one row per phase, from
+// timelineLayout.js. The tab needs nothing more than the page's plan and forecast. With no planned
+// dates the project's PM is sent to the Board, where each column's menu edits its dates. Server-safe.
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
@@ -150,11 +151,11 @@ export default function TimelineTab({ project, plan, forecast, today, canManage 
         <EmptyState
           compact
           title="No planned dates yet."
-          body={canManage ? 'Add dates to each phase in the Phases tab.' : undefined}
+          body={canManage ? 'Add dates to each phase from its menu on the Board.' : undefined}
           action={
             canManage ? (
-              <Button variant="secondary" size="compact" href={tabHref(project.id, 'phases')}>
-                Go to phases
+              <Button variant="secondary" size="compact" href={tabHref(project.id, 'board')}>
+                Go to the board
               </Button>
             ) : undefined
           }

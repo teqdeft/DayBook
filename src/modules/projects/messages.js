@@ -52,8 +52,9 @@ export async function sendNewPm({ project, pmId, body }, trx) {
 }
 
 /**
- * People newly added to a project's team hear about it in the bell (and on the desktop). The
- * person who added them, and anyone in `skipIds`, is left out.
+ * People newly added to a project's team hear about it in the bell (and on the desktop), linked to
+ * the project's page, which members now open (CONTRACT 27). The person who added them, and anyone
+ * in `skipIds`, is left out.
  * @returns {Promise<number>} how many were notified
  */
 export async function sendMemberAdded({ project, userIds, actor, skipIds = [] }, trx) {
@@ -66,7 +67,7 @@ export async function sendMemberAdded({ project, userIds, actor, skipIds = [] },
       type: 'project.member_added',
       title: `You were added to ${project.name}`,
       body: `${actor.name} added you to the project team.`,
-      link: '/projects',
+      link: `/projects/${project.id}`,
     },
     trx,
   );

@@ -1,46 +1,41 @@
-// The Phases tab's rules (CONTRACT 22): the sections in order and which one opens, the order of the
-// tasks, the words in each section's header and rows (phasesView.js), who the add and edit row offers
-// as owner, and Delete with Undo's queue (undoQueue.js): sent when the toast ends, taken back by
-// Undo, sent with keepalive when the page is left, and never sent twice.
+// The phases' rules (CONTRACT 22 and 27): the order of the tasks, the words beside them and a task
+// as the board's cards read it (phasesView.js, which keeps nothing of the old Phases tab: the
+// Board's columns are boardView.js's, tests/unit/boardView.test.js); the New task and Edit task
+// window's rules (taskFormModel.js): who it offers as owner, its first values, the request a save
+// sends and every sentence it says; and Delete with Undo's queue (undoQueue.js): sent when the toast
+// ends, taken back by Undo, sent with keepalive when the page is left, and never sent twice.
 import { describe, expect, it, vi } from 'vitest';
+import * as phasesView from '@/app/(app)/projects/[id]/phasesView';
 import {
-  NO_PHASE,
-  actualText,
   awayLabel,
-  doneToggleLabel,
-  emptyTasksText,
-  firstOpenSection,
   latestReportLabel,
-  phaseSections,
-  plannedText,
-  sectionDates,
   sortDoneTasks,
   sortOpenTasks,
-  taskCount,
   toBoardTask,
 } from '@/app/(app)/projects/[id]/phasesView';
+import {
+  addedToast,
+  closeQuestion,
+  createBody,
+  editBody,
+  editable,
+  initialValues,
+  noteCount,
+  ownerOptions,
+  pausedLine,
+  phaseOptions,
+  saveError,
+  saveRequest,
+  savedResult,
+  savedToast,
+  titleError,
+  uploadCounts,
+  uploadingLabel,
+} from '@/app/(app)/projects/[id]/_board/taskFormModel';
 import { createDeleteQueue } from '@/app/(app)/projects/[id]/undoQueue';
 import { PROJECT_PHASES } from '@/modules/projectPlan/phases';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => {} }) }));
-
-const { ownerOptions } = await import('@/app/(app)/projects/[id]/PhaseTaskForm.jsx');
-
 const TODAY = '2026-10-30';
-
-const planOf = (currentPhase, dates = {}) => ({
-  currentPhase,
-  deadline: null,
-  phases: PROJECT_PHASES.map(({ key, label }) => ({
-    key,
-    label,
-    plannedStart: null,
-    plannedEnd: null,
-    actualStart: null,
-    actualEnd: null,
-    ...dates[key],
-  })),
-});
 
 const task = (id, more = {}) => ({
   id,
@@ -55,41 +50,17 @@ const task = (id, more = {}) => ({
 const titles = (list) => list.map((row) => row.title);
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-describe('the sections', () => {
-  it('has one per phase, in order, without No phase yet when every task has a phase', () => {
-    const sections = phaseSections({ plan: planOf('design'), tasks: [task(1)] });
-    expect(sections.map((section) => section.key)).toEqual(PROJECT_PHASES.map(({ key }) => key));
-    expect(sections[1]).toMatchObject({ label: 'Design', status: 'current', total: 1 });
-    expect(sections[0].status).toBe('skipped');
-    expect(sections[2].status).toBe('later');
-  });
-
-  it('adds No phase yet last for tasks without a phase', () => {
-    const sections = phaseSections({
-      plan: planOf('design'),
-      tasks: [task(1, { phase: null }), task(2, { phase: 'not_a_phase' }), task(3)],
-    });
-    const last = sections.at(-1);
-    expect(sections).toHaveLength(7);
-    expect(last).toMatchObject({ key: NO_PHASE, label: 'No phase yet', phase: null, status: null });
-    expect(titles(last.open)).toEqual(['Task 1', 'Task 2']);
-    expect(sectionDates(last, TODAY)).toEqual({ planned: null, actual: null, note: null });
-  });
-
-  it('splits open from done and counts both', () => {
-    const [, design] = phaseSections({
-      plan: planOf('design'),
-      tasks: [task(1), task(2, { status: 'done' }), task(3, { status: 'done' })],
-    });
-    expect(titles(design.open)).toEqual(['Task 1']);
-    expect(titles(design.done)).toEqual(['Task 2', 'Task 3']);
-    expect(design.total).toBe(3);
-  });
-
-  it('opens the current phase, or the first with no phase yet', () => {
-    expect(firstOpenSection('testing')).toBe('testing');
-    expect(firstOpenSection(null)).toBe('requirement_gathering');
-    expect(firstOpenSection('nonsense')).toBe('requirement_gathering');
+describe('phasesView', () => {
+  it("keeps only what the Board reads, none of the old Phases tab's section helpers", () => {
+    expect(Object.keys(phasesView).sort()).toEqual([
+      'NO_PHASE',
+      'NO_PHASE_LABEL',
+      'awayLabel',
+      'latestReportLabel',
+      'sortDoneTasks',
+      'sortOpenTasks',
+      'toBoardTask',
+    ]);
   });
 });
 
@@ -130,85 +101,6 @@ describe('the order of the tasks', () => {
 });
 
 describe('the words', () => {
-  it('counts tasks', () => {
-    expect(taskCount(3, 12)).toBe('3 of 12 tasks');
-    expect(taskCount(0, 1)).toBe('0 of 1 task');
-    expect(taskCount(0, 0)).toBe('No tasks yet');
-  });
-
-  it('shows and hides the done ones', () => {
-    expect(doneToggleLabel(false, 10)).toBe('Show 10 done tasks');
-    expect(doneToggleLabel(false, 1)).toBe('Show 1 done task');
-    expect(doneToggleLabel(true, 10)).toBe('Hide done tasks');
-  });
-
-  it('says why no open task is listed', () => {
-    expect(emptyTasksText(4)).toBe('All tasks are done.');
-    expect(emptyTasksText(0)).toBe('No tasks yet.');
-  });
-
-  it('writes the planned dates, with one or none', () => {
-    const dates = (plannedStart, plannedEnd) => plannedText({ plannedStart, plannedEnd }, TODAY);
-    expect(dates('2026-10-06', '2026-10-23')).toBe('Planned 6 to 23 Oct');
-    expect(dates('2026-12-16', '2027-01-15')).toBe('Planned 16 Dec to 15 Jan 2027');
-    expect(dates('2026-10-06', null)).toBe('Planned from 6 Oct');
-    expect(dates(null, '2026-10-23')).toBe('Planned until 23 Oct');
-    expect(dates(null, null)).toBe('No planned dates');
-  });
-
-  it('writes the actual dates of the current and done phases only', () => {
-    const ran = { actualStart: '2026-10-06', actualEnd: '2026-10-26' };
-    expect(actualText('current', { actualStart: '2026-10-26' }, TODAY)).toBe('Started 26 Oct');
-    expect(actualText('done', ran, TODAY)).toBe('Actual 6 to 26 Oct');
-    expect(actualText('done', { actualEnd: '2026-10-26' }, TODAY)).toBe('Ended 26 Oct');
-    expect(actualText('current', {}, TODAY)).toBeNull();
-    expect(actualText('skipped', ran, TODAY)).toBeNull();
-    expect(actualText('later', ran, TODAY)).toBeNull();
-  });
-
-  it('writes one day when both dates are the same', () => {
-    expect(plannedText({ plannedStart: '2026-12-14', plannedEnd: '2026-12-14' }, TODAY)).toBe(
-      'Planned 14 Dec',
-    );
-    const sameDay = { actualStart: '2026-10-30', actualEnd: '2026-10-30' };
-    expect(actualText('done', sameDay, TODAY)).toBe('Actual 30 Oct');
-  });
-
-  it('takes the late note from planFormat', () => {
-    const plan = planOf('design', {
-      requirement_gathering: { plannedEnd: '2026-10-20', actualEnd: '2026-10-26' },
-      design: { plannedStart: '2026-10-19', plannedEnd: '2026-10-23', actualStart: '2026-10-26' },
-      development: { plannedStart: '2026-10-27' },
-    });
-    const [done, current, later] = phaseSections({ plan, tasks: [] });
-    expect(sectionDates(done, TODAY)).toEqual({
-      planned: 'Planned until 20 Oct',
-      actual: 'Ended 26 Oct',
-      note: { text: 'Ended 6 days late', tone: 'red' },
-    });
-    expect(sectionDates(current, TODAY)).toEqual({
-      planned: 'Planned 19 to 23 Oct',
-      actual: 'Started 26 Oct',
-      note: { text: '7 days late', tone: 'red' },
-    });
-    expect(sectionDates(later, TODAY)).toEqual({
-      planned: 'Planned from 27 Oct',
-      actual: null,
-      note: { text: 'Planned start was 3 days ago', tone: 'marigold' },
-    });
-  });
-
-  it('leaves the start out when the note already says it started late', () => {
-    const plan = planOf('design', {
-      design: { plannedStart: '2026-10-19', plannedEnd: '2026-11-23', actualStart: '2026-10-26' },
-    });
-    expect(sectionDates(phaseSections({ plan, tasks: [] })[1], TODAY)).toEqual({
-      planned: 'Planned 19 Oct to 23 Nov',
-      actual: null,
-      note: { text: 'Started 7 days late', tone: 'marigold' },
-    });
-  });
-
   it('names the latest report on a task', () => {
     const latest = (status, workDate) =>
       latestReportLabel({ status, userName: 'Neha Arora', workDate }, TODAY);
@@ -238,6 +130,7 @@ describe('a task on the board', () => {
         phase: 'design',
         dueDate: '2026-11-13',
         createdBy: 7,
+        createdByName: 'Riya Kapoor',
         doneByName: null,
         assignee: {
           id: 9,
@@ -245,10 +138,12 @@ describe('a task on the board', () => {
           status: 'active',
           isMember: false,
           role: 'employee',
+          avatarUrl: null,
         },
         latestReport: { status: 'blocked', userId: 9, userName: 'Neha Arora', workDate: TODAY },
       },
       TODAY,
+      2,
     );
     expect(row).toEqual({
       id: 4,
@@ -258,30 +153,42 @@ describe('a task on the board', () => {
       status: 'open',
       phase: 'design',
       dueDate: '2026-11-13',
-      assignee: { id: 9, name: 'Neha Arora', away: 'Not on the project' },
+      assignee: { id: 9, name: 'Neha Arora', avatarUrl: null, away: 'Not on the project' },
       latest: 'Neha, today: Blocked',
       latestStatus: 'blocked',
+      latestOn: TODAY,
+      fileCount: 2,
+      createdBy: { id: 7, name: 'Riya Kapoor' },
     });
   });
 
-  it('copes with a task from before phases, for anyone, never reported', () => {
+  it('copes with a task from before phases, for anyone, never reported, with no files', () => {
     const row = toBoardTask({ id: 1, title: 'Old', priority: 'p3', status: 'open' }, TODAY);
-    expect(row).toMatchObject({ phase: null, dueDate: null, assignee: null, latest: null });
+    expect(row).toMatchObject({
+      phase: null,
+      dueDate: null,
+      assignee: null,
+      latest: null,
+      latestOn: null,
+      fileCount: 0,
+      createdBy: null,
+    });
   });
 });
 
-describe('owners in the add and edit row', () => {
+describe('the task window: owners and phases', () => {
   const owners = [
     { id: 7, name: 'Riya Kapoor' },
     { id: 9, name: 'Neha Arora' },
   ];
 
-  it('offers anyone, then the people who can be picked', () => {
-    expect(ownerOptions(owners, null)).toEqual([
+  it('offers anyone, then the people who can be picked, the viewer as (you)', () => {
+    expect(ownerOptions(owners, null, 7)).toEqual([
       { value: '', label: 'Anyone on the project' },
-      { value: '7', label: 'Riya Kapoor' },
+      { value: '7', label: 'Riya Kapoor (you)' },
       { value: '9', label: 'Neha Arora' },
     ]);
+    expect(ownerOptions(owners, null)[1].label).toBe('Riya Kapoor');
   });
 
   it('keeps an owner who left the project, and says so', () => {
@@ -291,6 +198,217 @@ describe('owners in the add and edit row', () => {
       label: 'Karan Mehta (not on the project)',
     });
     expect(ownerOptions(owners, { assignee: { id: 9, name: 'Neha Arora' } })).toHaveLength(3);
+  });
+
+  it('lists No phase yet only when editing a task that has none', () => {
+    expect(phaseOptions(null).map((option) => option.label)).toEqual(
+      PROJECT_PHASES.map(({ label }) => label),
+    );
+    expect(phaseOptions({ phase: null }).at(-1)).toEqual({ value: '', label: 'No phase yet' });
+    expect(phaseOptions({ phase: 'design' })).toHaveLength(6);
+  });
+
+  it('reads a card and the task window details alike', () => {
+    const details = {
+      id: 3,
+      title: 'Fix the login page',
+      details: null,
+      priority: 'p1',
+      phase: 'design',
+      dueDate: null,
+      assignee: { id: 9, name: 'Neha Arora', status: 'deactivated', isMember: true },
+    };
+    expect(editable(details).assignee).toEqual({ id: 9, name: 'Neha Arora', away: 'Deactivated' });
+    expect(editable({ ...details, phase: 'old' }).phase).toBeNull();
+  });
+});
+
+describe('the task window: values and requests', () => {
+  const task = editable({
+    id: 3,
+    title: 'Fix the login page',
+    details: 'Steps in the brief',
+    priority: 'p2',
+    phase: 'design',
+    dueDate: '2026-11-25',
+    assignee: { id: 9, name: 'Neha Arora', away: null },
+  });
+
+  it('presets a new task to the column, else the current phase, else the first', () => {
+    const preset = { phase: 'testing', title: 'Go' };
+    expect(initialValues({ preset, currentPhase: 'design' })).toEqual({
+      title: 'Go',
+      details: '',
+      owner: '',
+      dueDate: '',
+      phase: 'testing',
+      priority: 'p2',
+    });
+    expect(initialValues({ currentPhase: 'design' }).phase).toBe('design');
+    expect(initialValues({ currentPhase: null }).phase).toBe('requirement_gathering');
+    expect(initialValues({ task, currentPhase: 'launch' })).toMatchObject({
+      owner: '9',
+      phase: 'design',
+      details: 'Steps in the brief',
+    });
+  });
+
+  it('sends everything for a new task, with its held files', () => {
+    const values = { ...initialValues({ currentPhase: 'design' }), title: ' Fix it ', owner: '9' };
+    expect(createBody(values, ['a'.repeat(32)])).toEqual({
+      title: 'Fix it',
+      details: null,
+      assigneeId: 9,
+      phase: 'design',
+      dueDate: null,
+      priority: 'p2',
+      uploadKeys: ['a'.repeat(32)],
+    });
+  });
+
+  it('sends only what changed for an edit, plus the files added and removed', () => {
+    const values = initialValues({ task, currentPhase: 'design' });
+    expect(editBody(values, task)).toEqual({});
+    expect(editBody({ ...values, details: '', priority: 'p1' }, task)).toEqual({
+      details: null,
+      priority: 'p1',
+    });
+    expect(editBody(values, task, { addUploadKeys: ['k1'], removeFileIds: [4] })).toEqual({
+      addUploadKeys: ['k1'],
+      removeFileIds: [4],
+    });
+  });
+
+  it("posts a new task, patches an edit, and drops the files when the task's didn't load", () => {
+    const values = initialValues({ task, currentPhase: 'design' });
+    const files = { readyKeys: ['k1'], removedIds: [4] };
+    const [method, path, body] = saveRequest({
+      task: null,
+      projectId: 5,
+      values: { ...values, title: 'New one' },
+      ...files,
+      attachedError: false,
+    });
+    expect([method, path, body.title, body.uploadKeys]).toEqual([
+      'post',
+      '/api/projects/5/tasks',
+      'New one',
+      ['k1'],
+    ]);
+    const edit = { task, projectId: 5, values, ...files };
+    expect(saveRequest({ ...edit, attachedError: false })).toEqual([
+      'patch',
+      '/api/project-tasks/3',
+      { addUploadKeys: ['k1'], removeFileIds: [4] },
+    ]);
+    expect(saveRequest({ ...edit, attachedError: true })).toEqual([
+      'patch',
+      '/api/project-tasks/3',
+      {},
+    ]);
+  });
+
+  it('hands the editor the saved task, whether it was an edit, and the toast of who was told', () => {
+    const told = { told: 'person', toldName: 'Simran Kaur' };
+    expect(
+      savedResult({
+        data: { id: 8, ...told },
+        task: null,
+        body: { phase: 'design', uploadKeys: ['k1'] },
+      }),
+    ).toEqual({
+      id: 8,
+      edited: false,
+      toast: {
+        title: 'Task added to Design.',
+        body: 'Simran Kaur gets a notification with the file name.',
+      },
+    });
+    expect(
+      savedResult({ data: told, task, body: { addUploadKeys: ['k1', 'k2'], removeFileIds: [4] } }),
+    ).toEqual({
+      id: 3,
+      edited: true,
+      toast: { title: 'Changes saved.', body: '2 files added and 1 removed. Simran Kaur is told.' },
+    });
+    expect(savedResult({ data: null, task, body: { priority: 'p1' } })).toEqual({
+      id: 3,
+      edited: true,
+      toast: { title: 'Changes saved.' },
+    });
+  });
+
+  it('checks the title and counts the note past 800 characters', () => {
+    expect(titleError(' a ')).toBe('Write a title of at least 2 characters.');
+    expect(titleError('Ok')).toBeNull();
+    expect(noteCount('x'.repeat(800))).toBeNull();
+    expect(noteCount('x'.repeat(812))).toBe('812 of 1,000');
+  });
+
+  it('puts an error under its field, under Files, or in a toast', () => {
+    expect(saveError({ fields: { title: 'Too short' }, message: 'Check' })).toEqual({
+      field: 'title',
+      files: null,
+      message: 'Too short',
+    });
+    const held = "brief.pdf couldn't be added. Add it again.";
+    expect(saveError({ fields: { uploadKeys: held } }).files).toBe(held);
+    expect(saveError({ message: 'Offline' })).toEqual({
+      field: null,
+      files: null,
+      message: 'Offline',
+    });
+  });
+});
+
+describe('the task window: what it says', () => {
+  it('toasts who was told after adding', () => {
+    const vishal = { told: 'person', toldName: 'Vishal Saini' };
+    expect(addedToast({ phase: 'development', ...vishal, files: 2 })).toEqual({
+      title: 'Task added to Development.',
+      body: 'Vishal Saini gets a notification with the 2 file names.',
+    });
+    expect(addedToast({ phase: 'development', ...vishal }).body).toBe(
+      'Vishal Saini gets a notification.',
+    );
+    expect(addedToast({ phase: 'design', told: 'members', files: 1 }).body).toBe(
+      'Everyone on the project gets a notification with the file name.',
+    );
+    expect(addedToast({ phase: 'design', told: null, files: 2 })).toEqual({
+      title: 'Task added to Design.',
+    });
+  });
+
+  it('toasts what happened to the files after an edit', () => {
+    const told = { told: 'person', toldName: 'Simran Kaur' };
+    expect(savedToast({ ...told, added: 2 }).body).toBe('2 files added. Simran Kaur is told.');
+    expect(savedToast({ ...told, removed: 1 }).body).toBe('1 file removed.');
+    expect(savedToast({ ...told, added: 2, removed: 1 }).body).toBe(
+      '2 files added and 1 removed. Simran Kaur is told.',
+    );
+    expect(savedToast({ told: null, added: 1 }).body).toBe('1 file added.');
+    expect(savedToast({ told: 'person' })).toEqual({ title: 'Changes saved.' });
+  });
+
+  it('counts the files on their way and asks before closing', () => {
+    const items = [
+      { state: 'uploading', name: 'a.pdf' },
+      { state: 'waiting', name: 'b.pdf' },
+      { state: 'done', name: 'c.pdf' },
+      { state: 'paused', name: 'brief.pdf' },
+      { state: 'error', name: 'big.mov' },
+    ];
+    const counts = uploadCounts(items);
+    expect(counts).toMatchObject({ running: 2, unsaved: 4, paused: items[3] });
+    expect(uploadingLabel(2)).toBe('Uploading 2 files…');
+    expect(closeQuestion(counts)).toBe('4 files are still uploading. Close anyway?');
+    expect(closeQuestion({ unsaved: 2, running: 0 })).toBe(
+      "2 files aren't saved yet. Close anyway?",
+    );
+    expect(closeQuestion({ unsaved: 1, running: 0 })).toBe("1 file isn't saved yet. Close anyway?");
+    expect(pausedLine('brief.pdf')).toBe(
+      "brief.pdf didn't finish uploading. Press Retry or remove it.",
+    );
   });
 });
 

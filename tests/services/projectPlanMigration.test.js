@@ -1,7 +1,8 @@
 // Deploy before migrate (CONTRACT 22): a deploy that runs before `npm run migrate` has added migration
 // 015 keeps every screen working. Plan reads answer Not set with one warning per process, writes to
 // the new tables and columns answer a clear error, and everything works once the migration has run,
-// without a restart.
+// without a restart. Migration 019 changes project_documents, so it is rolled back first and
+// `latest` puts both back (CONTRACT 27); its own "1.12 update is missing" warning isn't counted here.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
@@ -20,11 +21,12 @@ vi.mock('@/modules/reports', () => ({
 }));
 
 const MIGRATION = '015_project_plan.js';
+const MIGRATION_019 = '019_project_files.js';
 const T0 = '2026-10-30T06:00:00Z';
 const NOT_SET = { currentPhase: null, deadline: null };
 
-// Every logger.warn call. Vitest clears a spy's calls before each test (clearMocks), so the file
-// counts them itself: the warning is once per process, across the tests below.
+// Every logger.warn call but 1.12's. Vitest clears a spy's calls before each test (clearMocks), so
+// the file counts them itself: the warning is once per process, across the tests below.
 const warnings = [];
 let warn;
 let pm;
@@ -70,12 +72,13 @@ beforeAll(async () => {
   await projectTasks.setStatus({ user: pm, id: doneTask.id, status: 'done' });
   setNowForTests(T0);
 
+  await db.migrate.down({ name: MIGRATION_019 });
   await db.migrate.down({ name: MIGRATION });
   expect(await hasTable('project_plans')).toBe(false);
   expect(await db.schema.hasColumn('project_tasks', 'phase')).toBe(false);
   // One spy for the whole file: the warning is once per process, whichever read comes first.
   warn = vi.spyOn(logger, 'warn').mockImplementation((...args) => {
-    warnings.push(args);
+    if (!String(args[0]).includes('The 1.12 database update is missing')) warnings.push(args);
   });
 });
 
@@ -253,6 +256,7 @@ describe('a column missing from a plan table (errno 1054)', () => {
 describe('the migration', () => {
   it('goes down and up again cleanly, keeping tasks and their rows', async () => {
     const before = await db('projectTasks').count({ total: '*' }).first();
+    await db.migrate.down({ name: MIGRATION_019 });
     await db.migrate.down({ name: MIGRATION });
     for (const table of [
       'project_plans',
@@ -266,6 +270,8 @@ describe('the migration', () => {
     expect(await db('projectTasks').count({ total: '*' }).first()).toEqual(before);
     await db.migrate.latest();
     expect(await db.schema.hasColumn('project_tasks', 'due_date')).toBe(true);
+    expect(await db.schema.hasColumn('project_documents', 'visibility')).toBe(true);
+    expect(await hasTable('project_files')).toBe(true);
     const [rows] = await db.raw(
       "SHOW INDEX FROM project_tasks WHERE Column_name = 'done_at' AND Seq_in_index = 3",
     );
@@ -308,6 +314,9 @@ describe('the migration', () => {
       'updated_by',
       'created_at',
       'updated_at',
+      // migration 019 (CONTRACT 27)
+      'visibility',
+      'file_id',
     ]);
     expect(await columns('project_summaries')).toEqual([
       'project_id',

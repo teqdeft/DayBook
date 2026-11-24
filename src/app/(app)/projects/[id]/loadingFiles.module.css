@@ -1,0 +1,61 @@
+/* The Files tab's skeleton (CONTRACT 27): the side list of places beside the list of files. */
+.files {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--block-gap);
+}
+
+.placesCard {
+  --card-pad: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.filesMain {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.filesHead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 44px;
+}
+
+.fileRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--track);
+}
+
+.fileRow:last-child {
+  border-bottom: 0;
+}
+
+.fileText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+@media (max-width: 1023px) {
+  .files {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  /* The side list becomes the "Show" select. */
+  .placesCard {
+    display: none;
+  }
+}

@@ -4,7 +4,10 @@
 // ("Important only"); every other type is 'normal'. Pure and browser-safe (no imports), so the bell's
 // client code imports it too, an exception to CONTRACT 2 like @/modules/reports/todoText.
 
-/** Every type Daybook creates, with its level. The table in CONTRACT 26 is the contract. */
+/**
+ * Every type Daybook creates, with its level: 44 types, 19 important. The table in CONTRACT 26 is
+ * the contract (CONTRACT 27 adds project_task.files_added).
+ */
 export const ALERT_TYPES = Object.freeze({
   // Important (19)
   'attendance.checkin_reminder': 'important',
@@ -26,7 +29,7 @@ export const ALERT_TYPES = Object.freeze({
   'timer.reminder': 'important',
   'timer.stopped_midnight': 'important',
   'system.test': 'important',
-  // Normal (24)
+  // Normal (25)
   'attendance_correction.approved': 'normal',
   'attendance_correction.rejected': 'normal',
   'attendance.self_checkout_past': 'normal',
@@ -46,6 +49,7 @@ export const ALERT_TYPES = Object.freeze({
   'project_request.declined': 'normal',
   'project_task.added': 'normal',
   'project_task.changed': 'normal',
+  'project_task.files_added': 'normal',
   'report_edit.sent': 'normal',
   'report_edit.approved': 'normal',
   'report_edit.declined': 'normal',

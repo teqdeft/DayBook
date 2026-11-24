@@ -1,0 +1,86 @@
+/* "+ Add task" under a column and its quick add field (CONTRACT 27, Quick add). */
+.addTask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 40px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.addTask:hover {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.quick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+input.quickInput {
+  height: 40px;
+  font-size: 14px;
+}
+
+.quickHelp,
+.quickError {
+  margin: 0;
+  font-size: var(--text-tag);
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.quickError {
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}
+
+.quickRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.quickClose {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-cell);
+  background: transparent;
+  color: var(--muted);
+}
+
+.quickClose:hover {
+  background: var(--track);
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .addTask,
+  .quickClose {
+    height: 44px;
+  }
+
+  .quickClose {
+    width: 44px;
+  }
+}

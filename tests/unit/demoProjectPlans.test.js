@@ -1,7 +1,9 @@
 // The demo's project plans (db/demo/projectPlans.js): on every day of the week and across a year end,
 // acme-store reads off track, internal-tool at risk and iwilltillimwell on track; nothing is dated
-// later than now; Vishal gets no new task (his artboard counts stay); and the hand-written summary
-// keeps every point, with the page Daybook finds for its quote.
+// later than now; Vishal gets no new task (his artboard counts stay); the hand-written summary
+// keeps every point, with the page Daybook finds for its quote; and acme-store's real files
+// (CONTRACT 27) are the small harmless ones the contract lists.
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { localToUtc, setNowForTests, workDate } from '@/lib/time';
 import { forecastProject } from '@/modules/projectPlan/forecast';
@@ -9,6 +11,7 @@ import { lastFullWeeks } from '@/modules/projectPlan/weeks';
 import { anchorDate, at, dateAtOffset, workingDaysBack } from '../../db/demo/calendar.js';
 import { PEOPLE } from '../../db/demo/people.js';
 import { buildPriorityTasks } from '../../db/demo/priority.js';
+import { STORE_FILES } from '../../db/demo/projectFiles.js';
 import { buildProjectPlanRows } from '../../db/demo/projectPlanRows.js';
 import { COMPLETED_PROJECTS, PROJECTS } from '../../db/demo/projects.js';
 
@@ -112,9 +115,18 @@ describe('demo project plans', () => {
   it('stores the summary with every point, its page and its source', () => {
     const seed = seedContext('2026-11-12');
     const { documents, summaries } = buildProjectPlanRows(seed.ctx, seed.priority);
-    expect(documents.map(({ kind, title, pages }) => [kind, title, pages])).toEqual([
-      ['note', 'Weekly call with Acme Retail', null],
-      ['file', 'Acme-store-SOW-v2.pdf', 4],
+    expect(
+      documents.map(({ kind, title, pages, phase, visibility }) => [
+        kind,
+        title,
+        pages,
+        phase,
+        visibility,
+      ]),
+    ).toEqual([
+      ['note', 'Weekly call with Acme Retail', null, 'development', 'managers'],
+      ['file', 'Acme-store-SOW-v2.pdf', 4, 'requirement_gathering', 'managers'],
+      ['note', 'Who to call at Acme Retail', null, null, 'everyone'],
     ]);
     expect(documents[1].body.split('\f')).toHaveLength(4);
     expect(summaries).toHaveLength(1);
@@ -136,6 +148,34 @@ describe('demo project plans', () => {
     });
     expect(summaries[0]).toMatchObject({ truncated: false, droppedCount: 0, model: null });
     expect(summaries[0].sourceKey).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("lists acme-store's real files (CONTRACT 27): small, harmless and as the contract says", () => {
+    const onTask = (title) => STORE_FILES.filter((file) => file.task === title);
+    expect(onTask('Checkout fix before client demo').map((file) => file.name)).toEqual([
+      'card-payment-error.png',
+      'checkout-error-steps.pdf',
+    ]);
+    const anyone = seedContext('2026-11-12').priority.find(
+      (task) => task.title === 'Product image zoom',
+    );
+    expect(anyone.assigneeId).toBeNull();
+    expect(onTask('Product image zoom').map((file) => file.name)).toEqual(['zoom-notes.docx']);
+    expect(
+      STORE_FILES.filter((file) => !file.task).map((file) => [file.phase, file.visibility]),
+    ).toEqual([
+      [null, 'everyone'],
+      [null, 'managers'],
+    ]);
+    const magic = { png: '89504e47', pdf: '25504446', docx: '504b0304' };
+    for (const file of STORE_FILES) {
+      const bytes = readFileSync(new URL(`../../db/demo/files/${file.name}`, import.meta.url));
+      expect(bytes.length, file.name).toBeLessThan(100 * 1024);
+      expect(bytes.subarray(0, 4).toString('hex'), file.name).toBe(magic[file.name.split('.')[1]]);
+      expect(bytes.toString('latin1'), file.name).not.toMatch(
+        /<script|JavaScript|\/JS\b|OpenAction/i,
+      );
+    }
   });
 
   it('refuses data that would not show the health it is meant to', () => {

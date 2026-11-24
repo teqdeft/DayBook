@@ -1,6 +1,7 @@
 // Deploy before migrate (CONTRACT 22): until `npm run migrate` has added migration 015, files, notes
 // and summaries read as empty and writes answer a clear error. Once it has run they work, without a
-// restart.
+// restart. Migration 019 changes project_documents, so it is rolled back first and `latest` puts both
+// back (CONTRACT 27).
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
@@ -14,6 +15,7 @@ import { geminiAnswers, T0 } from './projectSummariesKit.js';
 vi.mock('@/modules/reports', () => ({ reports: {} }));
 
 const MIGRATION = '015_project_plan.js';
+const MIGRATION_019 = '019_project_files.js';
 const NOTE = { phase: 'design', kind: 'note', title: 'Notes', text: 'Words' };
 
 let warn;
@@ -41,6 +43,7 @@ beforeAll(async () => {
   pm = await createUser({ name: 'Riya Kapoor', role: 'pm', tracksAttendance: false });
   project = await createProject(pm, { name: 'lyra' });
   requests = geminiAnswers({ overview: 'A short overview.' });
+  await db.migrate.down({ name: MIGRATION_019 });
   await db.migrate.down({ name: MIGRATION });
   warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 });
@@ -91,8 +94,15 @@ describe('after migration 015', () => {
   it('works at once', async () => {
     await db.migrate.latest();
     const projectId = project.id;
+    expect(await db.schema.hasColumn('project_documents', 'visibility')).toBe(true);
     await projectSummaries.addDocument({ user: pm, projectId, input: NOTE });
-    expect(await projectSummaries.listDocuments({ user: pm, projectId })).toHaveLength(1);
+    const shared = await projectSummaries.addDocument({
+      user: pm,
+      projectId,
+      input: { ...NOTE, phase: null, visibility: 'everyone' },
+    });
+    expect(shared).toMatchObject({ phase: null, visibility: 'everyone' });
+    expect(await projectSummaries.listDocuments({ user: pm, projectId })).toHaveLength(2);
     const summary = await projectSummaries.writeSummary({ user: pm, projectId });
     expect(summary.body.overview).toBe('A short overview.');
   });

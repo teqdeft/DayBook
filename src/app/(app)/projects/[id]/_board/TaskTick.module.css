@@ -1,0 +1,85 @@
+/* The left of a card's first line (CONTRACT 27, Cards): TaskCheck's checkbox drawn as the
+   prototype's round tick, 20 px in a 36 px target (44 px on a phone), and the 10 px status dot for
+   people who can't tick. */
+label.tick {
+  width: 36px;
+  height: 36px;
+  margin: -8px -4px -8px -8px;
+  border-radius: 50%;
+}
+
+label.tick input {
+  display: grid;
+  place-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1.8px solid color-mix(in srgb, var(--muted) 55%, var(--line-strong));
+  border-radius: 50%;
+  background: var(--surface);
+  appearance: none;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+label.tick input::before {
+  width: 10px;
+  height: 10px;
+  background: var(--muted);
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+  content: '';
+  transform: scale(0);
+}
+
+label.tick:hover input {
+  border-color: var(--muted);
+}
+
+label.tick:hover input::before,
+label.tick input:focus-visible::before {
+  transform: scale(1);
+}
+
+label.tick input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+label.tick input:checked {
+  border-color: var(--green);
+  background: var(--green);
+}
+
+label.tick input:checked::before {
+  background: var(--on-fill);
+  transform: scale(1);
+}
+
+/* The status dot for people who can't tick */
+.dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin: 5px 4px 0 1px;
+  border: 1.5px solid color-mix(in srgb, var(--muted) 55%, var(--line-strong));
+  border-radius: 50%;
+}
+
+.dotDone {
+  border-color: var(--green);
+  background: var(--green);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  label.tick input {
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  label.tick {
+    width: 44px;
+    height: 44px;
+    margin: -12px -8px -12px -12px;
+  }
+}

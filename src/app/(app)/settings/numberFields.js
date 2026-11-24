@@ -1,6 +1,7 @@
 // Whole-number settings: shown as text, saved as numbers. The limits and messages are the API's
 // (src/modules/settings/schemas.js); tests/services/timersSettings.test.js,
-// tests/services/aiSettings.test.js and tests/unit/settingsValues.test.js check they agree.
+// tests/services/aiSettings.test.js, tests/services/settings.test.js and
+// tests/unit/settingsValues.test.js check they agree.
 // Plain data, so the client form and the tests can both import it.
 
 export const NUMBERS = Object.freeze({
@@ -68,6 +69,17 @@ export const NUMBERS = Object.freeze({
     min: 1,
     max: 31,
     message: 'Late days must be between 1 and 31.',
+  },
+  // Files (CONTRACT 27): the largest file in MB and the storage limit in GB
+  fileMaxMb: {
+    min: 1,
+    max: 2048,
+    message: 'Pick a size from 1 to 2,048 MB.',
+  },
+  fileStorageLimitGb: {
+    min: 1,
+    max: 1000,
+    message: 'Pick a limit from 1 to 1,000 GB.',
   },
 });
 

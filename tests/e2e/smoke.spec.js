@@ -1,7 +1,7 @@
 // Every main screen opens for the roles that can use it, without console or page errors, and the
 // sidebar shows each role the right items (company rule: PMs have no Today or My log), with the
 // screen's item marked as the current page. Screens are [path, page title, sidebar item]. A
-// project page opens on each of its four tabs (CONTRACT 22), and the hours range works both on
+// project page opens on each of its five tabs (CONTRACT 27), and the hours range works both on
 // the projects table and on a project's Hours tab.
 import { PEOPLE, expect, open, problemsOf, sidebarLinks, test } from './support/fixtures.js';
 
@@ -179,7 +179,7 @@ test('PM: the hours range on the projects table stays with the tabs and the sear
   expect(problemsOf(page), 'console and page errors').toEqual([]);
 });
 
-const PROJECT_TABS = ['Overview', 'Phases', 'Timeline', 'Hours'];
+const PROJECT_TABS = ['Board', 'Summary', 'Files', 'Timeline', 'Hours'];
 
 for (const [role, person] of [
   ['PM', PEOPLE.pm],

@@ -1,0 +1,87 @@
+/* The Done phases column's tiles (CONTRACT 27), as the prototype. */
+.title {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  margin: 0;
+  padding: 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.tiles {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-tile);
+  background: var(--surface);
+}
+
+.name {
+  display: flex;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 19px;
+  color: var(--ink);
+}
+
+.check {
+  flex: none;
+  margin-top: 2px;
+  color: var(--green);
+}
+
+.tag {
+  flex: none;
+  margin-left: auto;
+}
+
+.line {
+  padding-left: 22px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.late {
+  color: var(--red-text);
+}
+
+.toggle {
+  align-self: flex-start;
+  margin: 6px 0 0 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.toggle:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  .toggle {
+    margin-top: -6px;
+    margin-bottom: -12px;
+    padding: 12px 0;
+  }
+}

@@ -1,6 +1,6 @@
 // The AI summary card's buttons (CONTRACT 22): Write summary, Update summary and Add to tasks keep
 // keyboard focus while they work, so they are aria-disabled, never disabled, and every button in the
-// card is secondary, as in the prototype: the Overview's one primary button is the phase move.
+// card is secondary, as in the prototype: the page's one primary button is "+ New task".
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -61,6 +61,15 @@ describe('BusyButton', () => {
     expect(html).not.toContain('aria-busy');
     expect(html).not.toContain('lucide-loader-circle');
   });
+
+  it('shows its icon when idle and the spinner in its place while busy (Mark done)', () => {
+    const icon = createElement('svg', { className: 'lucide-check', 'aria-hidden': 'true' });
+    const button = (busy) =>
+      renderToStaticMarkup(createElement(BusyButton, { busy, icon, onClick: () => {} }, 'Done'));
+    expect(button(false)).toContain('lucide-check');
+    expect(button(true)).not.toContain('lucide-check');
+    expect(button(true)).toContain('lucide-loader-circle');
+  });
 });
 
 describe('the summary card’s buttons', () => {
@@ -91,6 +100,6 @@ describe('the summary card’s buttons', () => {
       }),
     });
     expect(html).toMatch(/<span id="summary-added-a1" tabindex="-1"[^>]*>Added<\/span>/);
-    expect(html).toMatch(/<h2 id="overview-ai" tabindex="-1"/);
+    expect(html).toMatch(/<h2 id="summary-ai" tabindex="-1"/);
   });
 });

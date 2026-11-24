@@ -1,0 +1,3 @@
+module.exports=[488166,a=>{"use strict";var b=a.i(572131),c=a.i(50944);a.s(["default",0,function({seconds:a=60}){let d=(0,c.useRouter)();return(0,b.useEffect)(()=>{let b=()=>{"visible"===document.visibilityState&&d.refresh()},c=setInterval(b,1e3*a);return document.addEventListener("visibilitychange",b),()=>{clearInterval(c),document.removeEventListener("visibilitychange",b)}},[d,a]),null}])}];
+
+//# sourceMappingURL=src_app_%28app%29_today_AutoRefresh_jsx_1eqdr9f._.js.map

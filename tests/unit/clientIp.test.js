@@ -64,6 +64,27 @@ describe('client IP (guide 15.1: X-Forwarded-For only when TRUST_PROXY=true)', (
     expect(matcher.test('/_next/static/chunk.js')).toBe(false);
   });
 
+  it('the proxy leaves out the upload routes children only (CONTRACT 27)', () => {
+    const matcher = new RegExp(`^${config.matcher[0]}$`);
+    for (const path of [
+      '/api/uploads/abc/pieces',
+      '/api/uploads/0123456789abcdef0123456789abcdef',
+      '/api/uploads/0123456789abcdef0123456789abcdef/finish',
+    ]) {
+      expect(matcher.test(path), path).toBe(false);
+    }
+    for (const path of [
+      '/api/attendance/check-in',
+      '/api/project-files/5',
+      '/api/project-files/5/view',
+      '/api/uploadsx',
+      '/api/uploads', // Start: a small JSON body
+      '/projects/5',
+    ]) {
+      expect(matcher.test(path), path).toBe(true);
+    }
+  });
+
   it('clientIp() reads Server Component headers the same way', () => {
     expect(clientIp({ headers: headers('::1') })).toBe('::1');
     expect(clientIp({ headers: headers('203.0.113.24, ::1') })).toBeNull();

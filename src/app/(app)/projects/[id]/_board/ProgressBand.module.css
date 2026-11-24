@@ -1,0 +1,269 @@
+/* The band (CONTRACT 27), as the prototype: the stats row, the six 10 px parts 4 px apart and the
+   forecast line under a rule. On a phone the parts lose their names (the switcher names the phase)
+   and become 44 px buttons; the move button and its "⋯" take a full-width row. */
+.band {
+  --card-pad: 22px 24px 20px;
+}
+
+.stats {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px 32px;
+  margin-bottom: 20px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.big,
+.mid {
+  font-family: var(--font-heading-stack);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.big {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 32px;
+  letter-spacing: -0.01em;
+}
+
+.mid {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 32px;
+}
+
+.none {
+  color: var(--muted);
+}
+
+.late {
+  color: var(--red-text);
+}
+
+.value button.change {
+  margin-top: 0;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.last {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+}
+
+.more:hover,
+.more[aria-expanded='true'] {
+  background: var(--track);
+  color: var(--ink);
+}
+
+/* The six parts */
+.parts {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0 4px;
+  border: 0;
+  border-radius: var(--radius-cell);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.bar {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--track);
+}
+
+.fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 6px 0 0 6px;
+  background: var(--primary);
+}
+
+.done .bar {
+  background: var(--green);
+}
+
+.current .bar {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  padding-right: 6px;
+}
+
+.name {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: var(--text-small);
+  line-height: 17px;
+  color: var(--ink-2);
+}
+
+.name svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--green);
+}
+
+.current .name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.skipped .name {
+  color: var(--muted);
+}
+
+.part:hover .name {
+  color: var(--ink);
+}
+
+.count {
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+/* The forecast line */
+.forecast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+
+.forecast svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--muted);
+}
+
+.forecast strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.red svg {
+  color: var(--red-on-surface);
+}
+
+.red strong {
+  color: var(--red-text);
+}
+
+.marigold svg,
+.marigold strong {
+  color: var(--marigold-text);
+}
+
+.green svg,
+.green strong {
+  color: var(--green-text);
+}
+
+@media (max-width: 640px) {
+  .band {
+    --card-pad: 16px;
+  }
+
+  .stats {
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    margin-bottom: 16px;
+  }
+
+  .actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .move {
+    flex: 1 1 auto;
+  }
+
+  .text {
+    display: none;
+  }
+
+  .part {
+    justify-content: center;
+    min-height: 44px;
+    padding: 0;
+  }
+
+  .value button.change {
+    margin-block: -12px;
+    padding-block: 12px;
+  }
+}

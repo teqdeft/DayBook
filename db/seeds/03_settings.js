@@ -65,6 +65,9 @@ export const DEFAULT_SETTINGS = {
   // Slack (CONTRACT 25)
   slack_attendance_remind: true, // check-in reminders and the ones HR sends from Attendance
   slack_hr_summary: true, // the morning summary and the evening wrap-up
+  // Files (CONTRACT 27): a missing row reads as these, since the live server never seeds
+  file_max_mb: 500, // the largest single file, whole MB from 1 to 2,048
+  file_storage_limit_gb: 10, // all project files together, whole GB from 1 to 1,000
 };
 
 export async function seed(knex) {

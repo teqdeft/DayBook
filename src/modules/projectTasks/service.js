@@ -1,36 +1,21 @@
 // Priority tasks (CONTRACT 13): reads for the project page, Today, My projects and the daily
-// report's suggestions. Writes live in writes.js; this file re-exports them so the module has one
+// report's suggestions. Writes live in writes.js and taskFiles.js (files on tasks, CONTRACT 27),
+// the task window's read in taskDetails.js; this file re-exports them so the module has one
 // service object. Order everywhere: P1, P2, P3, then oldest first.
 import { AppError } from '@/lib/errors';
 import { can } from '@/lib/permissions';
+import { PHASE_KEYS } from '@/modules/projectPlan/phases';
 import { projects } from '@/modules/projects';
 import * as repo from './repo';
-import { projectNotFound, toId, toTask } from './shared';
+import { projectNotFound, toId, toTask, withLatestReports } from './shared';
 
 export { create, remove, setStatus, update } from './writes';
+export { attachFiles } from './taskFiles';
+export { getForViewer } from './taskDetails';
 
-/**
- * Adds `latestReport` ({ status, userId, userName, workDate } | null) to each task. With
- * `ownOnlyFor` (a viewer who can't see everyone's reports), a line someone else reported is left
- * out: employees see their own report data only.
- */
-async function withLatestReports(tasks, { ownOnlyFor = null } = {}) {
-  const lines = await repo.listReportLines(tasks.map((task) => task.id));
-  const latest = new Map();
-  for (const line of lines) {
-    if (latest.has(line.projectTaskId)) continue;
-    latest.set(line.projectTaskId, {
-      status: line.status,
-      userId: line.userId,
-      userName: line.userName,
-      workDate: line.workDate,
-    });
-  }
-  return tasks.map((task) => {
-    const line = latest.get(task.id) ?? null;
-    const hidden = ownOnlyFor && line && Number(line.userId) !== Number(ownOnlyFor);
-    return { ...task, latestReport: hidden ? null : line };
-  });
+/** The member filter of a viewer without team.view (their own and Anyone tasks), else null. */
+function memberFilterFor(viewer) {
+  return can(viewer, 'team.view') ? null : viewer.id;
 }
 
 /** PMs and Admin read every project's tasks; anyone else only their own projects'. */
@@ -53,9 +38,11 @@ async function readableProject(viewer, projectId) {
 }
 
 /**
- * A project's priority tasks, open and done (or one status), P1 first then oldest.
+ * A project's priority tasks, open and done (or one status), P1 first then oldest. A viewer
+ * without team.view (a member of the project) gets only the tasks for them and for anyone on the
+ * project (CONTRACT 27); progress numbers still count every task (progressByProject).
  * `latestReport` is the newest submitted report line linked to the task; a viewer without
- * team.view (an employee on the project) gets null when that line is someone else's.
+ * team.view gets null when that line is someone else's.
  * @param {{ viewer: object, projectId: number, status?: 'open'|'done', limit?: number,
  *   offset?: number }} args members of the project, PMs and Admin may read; limit is optional
  *   (all tasks without it), at most 100 when given
@@ -69,18 +56,20 @@ async function readableProject(viewer, projectId) {
 export async function listForProject({ viewer, projectId, status, limit, offset = 0 }) {
   const project = await readableProject(viewer, projectId);
   const size = limit ? Math.min(Math.max(Math.trunc(Number(limit)) || 100, 1), 100) : undefined;
+  const ownOnlyFor = memberFilterFor(viewer);
   const rows = await repo.listForProject({
     projectId: project.id,
     status,
+    memberId: ownOnlyFor,
     limit: size,
     offset: Math.max(Math.trunc(Number(offset)) || 0, 0),
   });
-  const ownOnlyFor = can(viewer, 'team.view') ? null : viewer.id;
   return withLatestReports(rows.map(toTask), { ownOnlyFor });
 }
 
 /**
- * One page of a project's tasks with the total (GET /api/projects/:id/tasks).
+ * One page of a project's tasks with the total (GET /api/projects/:id/tasks). For a member the
+ * total counts the same rows as the list: their own and Anyone tasks (CONTRACT 27).
  * @param {{ viewer: object, projectId: number, status?: 'open'|'done', limit?: number,
  *   offset?: number }} args
  * @returns {Promise<{ rows: object[], total: number }>}
@@ -88,8 +77,33 @@ export async function listForProject({ viewer, projectId, status, limit, offset 
  */
 export async function pageForProject({ viewer, projectId, status, limit = 100, offset = 0 }) {
   const rows = await listForProject({ viewer, projectId, status, limit, offset });
-  const total = await repo.countForProject({ projectId: toId(projectId), status });
+  const total = await repo.countForProject({
+    projectId: toId(projectId),
+    status,
+    memberId: memberFilterFor(viewer),
+  });
   return { rows, total };
+}
+
+/**
+ * All and done tasks per phase of one project, in one query (the member's band, CONTRACT 27). No
+ * access check and no names: counts only. Every phase is listed, with zeros when it has no tasks;
+ * `none` counts the tasks without a phase (every task before migration 015).
+ * @param {number} projectId
+ * @returns {Promise<Record<string, { total: number, done: number }>>} keyed by PHASE_KEYS and
+ *   'none'
+ */
+export async function countsByPhase(projectId) {
+  const counts = { none: { total: 0, done: 0 } };
+  for (const key of PHASE_KEYS) counts[key] = { total: 0, done: 0 };
+  const id = toId(projectId);
+  if (!id) return counts;
+  for (const row of await repo.countsByPhase(id)) {
+    const key = row.phase && Object.hasOwn(counts, row.phase) ? row.phase : 'none';
+    counts[key].total += Number(row.total ?? 0);
+    counts[key].done += Number(row.done ?? 0);
+  }
+  return counts;
 }
 
 /**

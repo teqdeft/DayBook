@@ -1,5 +1,7 @@
-// POST /api/projects/:id/documents { phase, kind, title, text, pages?, pagesTotal? } adds a file's
-// text or a note to a phase (the project's PM or Admin) and returns it without its text. A body over
+// POST /api/projects/:id/documents { phase?, kind, title, text, pages?, pagesTotal?, visibility?,
+// fileId? } adds a note (phase null = Whole project) or the text of a project file (`fileId`, read in
+// the PM's browser) and returns it without its text: the project's PM or Admin (CONTRACT 22 and 27).
+// A body without `visibility` is stored as "Only PM and Admins"; a file's text always is. A body over
 // 1 MB is refused with 413 before it is parsed; the service validates the fields.
 import { AppError } from '@/lib/errors';
 import { withRoute } from '@/lib/route';

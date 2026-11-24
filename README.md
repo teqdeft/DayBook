@@ -38,7 +38,11 @@ Today and Daily report artboards). It refuses to run in production. It also give
 a plan for the project management screens: acme-store is off track (with a file, a note and an AI
 summary written by hand, no AI asked), internal-tool is at risk and iwilltillimwell is on track;
 the other projects have none (`db/demo/projectPlans.js`). greenleaf-shop has the yellow colour
-label.
+label. acme-store also gets real files (`db/demo/projectFiles.js`, the small files in
+`db/demo/files/`): a picture and a PDF on Simran's checkout task, a Word file on an Anyone task
+and two Whole project files, one only for the PM and Admins. They go in the files folder
+(`FILES_DIR`, in development `.daybook-files` by default), which `seed:demo` empties first (only
+the files Daybook made).
 
 Without Slack credentials, set `DEV_LOGIN_ENABLED=true` in `.env.local`: the sign-in page then shows
 a "Development sign-in" list. It never exists when `NODE_ENV=production`. Demo accounts:
@@ -305,7 +309,9 @@ Daybook looks and works as before. The worker needs outbound HTTPS to
 
 Project files and notes: a PM adds a **PDF, Word .docx, .txt or .md** file (up to 20 MB; the
 first 100 pages and 200,000 characters are kept) or types a note. The file is read in the PM's
-browser and **only its text is stored; the file itself never is**. A scanned PDF has no text to
+browser and **only its text goes to the AI** (from 1.12 the file itself is kept too, in the
+private files folder `FILES_DIR`, and only the PM, Admins and people on the project open it; task
+files are never read for the AI). A scanned PDF has no text to
 read: paste the key parts as a note instead (an old Word .doc must be saved as .docx or PDF
 first). When a PM writes a summary, up to 50,000 characters of that text **go to Google**, with
 contact details masked and people's names as tokens. Client documents are often confidential, so
@@ -344,6 +350,10 @@ hold the text of files and notes, and Ask Daybook never reads it.
 - Daybook 1.11 (bell sound and preview): no database update and nothing new to install. People
   choose the sound and the preview in My settings; the default is a chime for important
   notifications only. Each person can also pick the sound: Chime, Soft bell, Ding or Pop.
+- Daybook 1.12 (project board, task files and the Files tab): a database update (migration 019
+  adds three tables and two columns to project documents) and a new setting, `FILES_DIR`, the
+  private folder for files. Nothing new to install. Without `FILES_DIR` Daybook works, but files
+  are off.
 
 ## Deploying on cPanel (Setup Node.js App)
 
@@ -484,15 +494,82 @@ For 1.11 (bell sound and preview), step by step:
 
 Pages that are already open keep working as in 1.10 until they are loaded again.
 
+For 1.12 (project board and files), step by step:
+
+1. phpMyAdmin → your Daybook database → Export → Go: keep the file as a backup.
+2. File Manager → your home folder (`/home/cpuser`, where `daybook` and `public_html` are) →
+   \+ Folder → `daybook-files` (a new, empty folder: Daybook refuses a folder that already holds
+   other files); right-click it → Change Permissions → 700. Never put it inside `daybook` or
+   `public_html`.
+3. File Manager → open `/home/cpuser/daybook/.env.local` (right-click → Edit) and add the line
+   `FILES_DIR=/home/cpuser/daybook-files` → Save Changes. This file is read by the app and by the
+   worker cron; a variable set only in Setup Node.js App isn't seen by the worker.
+4. Wait for the green "Build for cPanel" run on GitHub. Then in Terminal, after the `source`
+   command (it also goes to `~/daybook`):
+
+   ```bash
+   git pull origin deploy
+   ```
+
+   then the migrate line:
+
+   ```bash
+   NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:latest
+   ```
+
+   It ends with "Batch … run". If it stops with `Aborted` (or says the migration table is already
+   locked), run this line once:
+
+   ```bash
+   NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:unlock
+   ```
+
+   then the migrate line again; it continues where it stopped:
+
+   ```bash
+   NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:latest
+   ```
+
+5. Press Restart in Setup Node.js App.
+6. As Admin: Settings → Files shows "Space used: 0 KB of 10 GB" and no warning. Set Storage limit
+   to about half of the free space under cPanel → Disk Usage, then Save.
+7. Test: open a project → Files → Upload files → a small PDF → open it; then one 50 MB file; then
+   check cPanel → Resource Usage for faults. In Terminal, after the `source` command, in
+   `~/daybook`:
+
+   ```bash
+   NODE_ENV=production npm run doctor
+   ```
+
+   It shows "✓ File storage is ready".
+
+To go back to 1.11: on your computer, revert the 1.12 commit on `main` but keep its database update
+file: `git revert --no-commit <the 1.12 commit>`, then
+`git checkout <the 1.12 commit> -- db/migrations/019_project_files.js`, then
+`git commit -m "Back to 1.11"`, and push. Without that file, `npm run doctor` and the migrate line
+stop with "The migration directory is corrupt" (the database has run 019); 1.11 never reads it.
+After the green build, `git pull origin deploy` and Restart. Leave the database as it is (1.11
+ignores the new tables; Whole project notes don't show in 1.11 but are kept) and leave the files
+folder; nothing reads it.
+
 **Checking** — `NODE_ENV=production npm run doctor` (after the `source` command, in `~/daybook`)
 shows whether every database update has run ("✓ Database is up to date"), whether the worker cron
-is running, whether Slack works and who gets desktop notifications; it prints no secrets. Adding `-- --notify=person@company.com` also sends that person a test
+is running, whether Slack works, whether file storage is ready ("✓ File storage is ready (1.2 GB
+of 10 GB used)") and who gets desktop notifications; it prints no secrets. Adding `-- --notify=person@company.com` also sends that person a test
 notification.
 
 **Fresh start** — `NODE_ENV=production npm run reset` shows what's in the database;
 `NODE_ENV=production npm run reset -- --confirm=<DB_NAME>` empties every table (people, data,
 settings, sign-ins) and runs the base seeds again, leaving only the Admin from `SEED_ADMIN_EMAIL`.
-It can't be undone: export a backup in phpMyAdmin first.
+`reset` also empties the files folder (only when it holds Daybook's marker file, and only the
+files Daybook made). It can't be undone: export a backup in phpMyAdmin first.
 
 **Backups**: enable cPanel backups, or add a nightly cron with `mysqldump`, and test a restore once
-a month.
+a month. Files are not in the phpMyAdmin export. Once a month: File Manager →
+`daybook-files/files/<year>/` → right-click last month's folder (for example `11`) → Compress →
+Zip; right-click the zip → Download; then delete the zip on the server. Keep it with that month's
+database export. If a month folder is over 2 GB, download the folder with an SFTP app (for example
+FileZilla, with your cPanel login) instead of zipping it. cPanel backups (and JetBackup) include
+the folder. To restore: put each month folder back under `daybook-files/files/<year>/` (File
+Manager → Upload the zip → Extract), then import the database export in phpMyAdmin. Files that
+aren't back show 'This file is missing.'

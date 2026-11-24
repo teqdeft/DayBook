@@ -1,0 +1,184 @@
+/* Today's "Priority tasks" card (CONTRACT 13, 24 and 27; not on the canvas): the My tasks card's
+   table, full width, with the title buttons, the paperclips and the To-do column. */
+
+/* The artboard's table header is 1 px taller than the shared divider header. */
+.priority .tasksHead {
+  min-height: 55px;
+  padding-bottom: 16px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.priority {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.priorityCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* CONTRACT 27: the title opens the task window (so does a click on the row); the paperclip and
+   count follow it. */
+.priorityRows tbody tr {
+  cursor: pointer;
+}
+
+.titleLine {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+/* The Priority cell's copy of the title, for a phone's stacked rows only (after .titleLine, which
+   it shares). */
+.phoneTitle {
+  display: none;
+}
+
+.titleButton {
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.titleButton:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.clip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.forYou {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* The To-do column (CONTRACT 24): a 32 px Plus, or a muted check and "In to-do". */
+.todoAdd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-right: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.todoAdd:hover {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.inTodo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.inTodoIcon {
+  flex: none;
+  color: var(--green);
+}
+
+/* "Show 2 more priority tasks": a quiet text button under the table, like a table footer. */
+.priorityMore {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 20px 14px;
+  border: 0;
+  border-top: 1px solid var(--track);
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  background: none;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.priorityMore:hover {
+  text-decoration: underline;
+}
+
+.priorityMore:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.moreChevron {
+  flex: none;
+  transition: transform 0.15s ease;
+}
+
+.moreChevronOpen {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 1023px) {
+  /* Sixth in the page's one column (page.module.css has the order of the others). Its rows
+     become cards with 16 px sides; the header lines up with them. */
+  .priority {
+    order: 6;
+  }
+
+  .priority .tasksHead {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .priorityMore {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .phoneTitle {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 640px) {
+  /* The To-do column's Plus: 44 px on phones */
+  .todoAdd {
+    width: 44px;
+    height: 44px;
+    margin-right: 0;
+  }
+}

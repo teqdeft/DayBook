@@ -1,0 +1,156 @@
+/* The New task and Edit task window (CONTRACT 27), as the prototype: 18 px between fields, two
+   fields side by side, the priority as a segmented row of radios, and a full-screen sheet on a
+   phone with the main button first. */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-bottom: 2px;
+}
+
+.two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px 16px;
+}
+
+.optional {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* Priority: "P1 critical", "P2", "P3" */
+.priority {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  margin-bottom: 4px;
+  padding: 0;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
+.segment {
+  display: flex;
+  height: var(--control-height);
+  padding: 3px;
+  border-radius: var(--radius-control);
+  background: var(--track);
+}
+
+.segmentItem {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-cell);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.segmentItem input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.segmentItem:has(input:checked) {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.segmentItem:has(input:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+
+.fileError,
+.unavailable {
+  margin: 5px 0 0;
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}
+
+.unavailable {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: 400;
+  line-height: 22px;
+  color: var(--ink-2);
+}
+
+/* Footer */
+.delete {
+  margin-right: auto;
+}
+
+.ask {
+  flex: 1 1 auto;
+  margin: 0 auto 0 0;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* A phone: the sheet fills the screen (also between 521 and 640 px, where the Dialog's frame keeps
+   its margins) and the body grows, so the footer sits at the bottom edge however short the body. */
+@media (max-width: 640px) {
+  [role='dialog'].panel {
+    position: fixed;
+    inset: 0;
+    width: auto;
+    height: auto;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  [role='dialog'].panel > form,
+  [role='dialog'].panel > [data-modal-body],
+  .panel > form > [data-modal-body] {
+    flex: 1 1 auto;
+  }
+
+  .two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .segment {
+    padding: 0;
+  }
+
+  .segmentItem:has(input:checked) {
+    box-shadow: inset 0 0 0 3px var(--track);
+  }
+
+  .main {
+    order: -1;
+    flex-basis: 100%;
+  }
+
+  .cancel {
+    flex: 1 1 0;
+  }
+
+  .delete {
+    order: 2;
+    flex: 1 1 0;
+    margin-right: 0;
+  }
+
+  .ask {
+    flex-basis: 100%;
+  }
+}

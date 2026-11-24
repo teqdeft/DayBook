@@ -1,0 +1,141 @@
+/* The picture viewer (CONTRACT 27, Picture viewer; the prototype's file-preview): one fixed dark
+   veil in both themes (--photo-veil, a token), white text and icons at 4.5:1 on it, 44 px buttons. */
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  background: var(--photo-veil);
+  color: var(--photo-veil-text);
+}
+
+.viewerTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 12px 20px;
+  background: color-mix(in srgb, var(--photo-veil) 70%, transparent);
+}
+
+.viewerTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.viewerName {
+  display: block;
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.viewerMeta {
+  font-size: var(--text-small);
+  color: color-mix(in srgb, var(--photo-veil-text) 82%, transparent);
+}
+
+/* a size is set in the heading font with its own figures, so "5.4 MB" has no gaps round the point */
+.viewerSize {
+  font-family: var(--font-heading-stack);
+}
+
+.viewerButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--photo-veil-text);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.viewerButton:hover {
+  background: color-mix(in srgb, var(--photo-veil-text) 14%, transparent);
+  text-decoration: none;
+}
+
+.viewerButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--photo-veil-text);
+}
+
+.viewerMiddle {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 8px 64px 24px;
+}
+
+.viewerMiddle img {
+  max-width: 90%;
+  max-height: 80%;
+  border-radius: var(--radius-label);
+  object-fit: contain;
+}
+
+.viewerMissing {
+  max-width: 420px;
+  text-align: center;
+  color: color-mix(in srgb, var(--photo-veil-text) 82%, transparent);
+}
+
+.viewerNav {
+  position: absolute;
+  top: 50%;
+  margin-top: -22px;
+  padding: 0;
+  background: color-mix(in srgb, var(--photo-veil-text) 10%, transparent);
+}
+
+.viewerPrev {
+  left: 12px;
+}
+
+.viewerNext {
+  right: 12px;
+}
+
+/* on a phone the picture fills the width, Previous and Next sit under it (never on top of a light
+   picture, where they would not show) and the top bar keeps only its icons, so the name has room */
+@media (max-width: 640px) {
+  .viewerMiddle {
+    padding: 8px 0 72px;
+  }
+
+  .viewerMiddle img {
+    max-width: 100%;
+    border-radius: 0;
+  }
+
+  .viewerNav {
+    top: auto;
+    bottom: 16px;
+    margin: 0;
+  }
+
+  .viewerPrev {
+    left: 16px;
+  }
+
+  .viewerNext {
+    right: 16px;
+  }
+
+  .viewerWord {
+    display: none;
+  }
+}

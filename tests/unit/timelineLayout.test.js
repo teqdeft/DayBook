@@ -1,7 +1,6 @@
 // The Timeline tab's chart (CONTRACT 22, timelineLayout.js). The first block is the prototype's own
 // sample, so its percentages and labels are the approved design's numbers.
 import { describe, expect, it } from 'vitest';
-import { plannedText } from '@/app/(app)/projects/[id]/phasesView';
 import { timelineLayout } from '@/app/(app)/projects/[id]/timelineLayout';
 import { PROJECT_PHASES } from '@/modules/projectPlan/phases';
 
@@ -136,11 +135,10 @@ describe('timelineLayout: the range', () => {
     expect(rowOf(layout, 'testing').bars.planned).toBeNull();
   });
 
-  it('writes a phase planned for one day as that day, as the Phases tab does', () => {
+  it('writes a phase planned for one day as that day', () => {
     const design = planned('2026-11-11', '2026-11-11');
     const layout = timelineLayout({ plan: planOf({ design }), today: '2026-11-12' });
     expect(rowOf(layout, 'design').planned).toBe('11 Nov');
-    expect(plannedText(design, '2026-11-12')).toBe('Planned 11 Nov');
   });
 
   it('is at least 8 weeks long', () => {

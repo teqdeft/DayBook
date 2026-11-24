@@ -1,4 +1,4 @@
-// Checks across several settings, made on the values after a save (CONTRACT 19 and 25). Each
+// Checks across several settings, made on the values after a save (CONTRACT 19, 25 and 27). Each
 // one runs only when one of its keys is sent, and throws VALIDATION_FAILED on the field to fix.
 // Re-exported from schemas.js.
 import { validationError } from '@/lib/errors';
@@ -72,4 +72,24 @@ export function checkHrSummary(current, parsed) {
     message = 'Pick a time before office hours end.';
   }
   if (message) throw validationError({ hrSummaryAt: message }, message);
+}
+
+const FILE_KEYS = ['fileMaxMb', 'fileStorageLimitGb'];
+
+/** The cross-check message of Settings → Files (CONTRACT 27). */
+export const FILE_BIGGER_THAN_LIMIT = "The largest file can't be bigger than the storage limit.";
+
+/**
+ * CONTRACT 27: the largest file (MB) fits in the storage limit (GB, 1 GB = 1,024 MB). Checked on
+ * the values after the save whenever one of the two keys is sent.
+ * @param {{ fileMaxMb: number, fileStorageLimitGb: number }} current the stored settings
+ * @param {object} parsed settingsUpdateSchema output (keys not sent are undefined)
+ * @throws VALIDATION_FAILED on fileMaxMb ("The largest file can't be bigger than the storage
+ *   limit.")
+ */
+export function checkFileLimits(current, parsed) {
+  if (!FILE_KEYS.some((key) => parsed[key] !== undefined)) return;
+  const pick = after(current, parsed);
+  if (pick('fileMaxMb') <= pick('fileStorageLimitGb') * 1024) return;
+  throw validationError({ fileMaxMb: FILE_BIGGER_THAN_LIMIT }, FILE_BIGGER_THAN_LIMIT);
 }

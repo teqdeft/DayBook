@@ -1,0 +1,12 @@
+/* The project page's windows on a phone (CONTRACT 27, Look, phone and accessibility): the X is a
+   44 px tap target at 640 px and below, as the prototype's `.win-h .ib`, its icon where it was.
+   Dialog stays as it is, so each window passes `.window` as its className (the Board's New task,
+   Edit task, Move, Edit dates, deadline and phase windows; the Files tab's Upload files, Edit
+   details, note and New note windows). The task window has its own X (TaskWindow.module.css). */
+@media (max-width: 640px) {
+  .window > :first-child > button[aria-label='Close'] {
+    width: 44px;
+    height: 44px;
+    margin: -4px -6px 0 auto;
+  }
+}

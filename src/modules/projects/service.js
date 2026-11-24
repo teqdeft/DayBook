@@ -35,6 +35,21 @@ export async function isActive(id) {
 }
 
 /**
+ * True when the person is on the project's team now: a project_members row and an active user
+ * (CONTRACT 27). The project's PM counts only with a member row of their own; people taken off the
+ * project or deactivated get false. The project page's access and the files rule read this.
+ * @param {{ projectId: number, userId: number }} args
+ * @returns {Promise<boolean>}
+ */
+export async function isMember({ projectId, userId } = {}) {
+  const project = Number(projectId);
+  const user = Number(userId);
+  if (!Number.isSafeInteger(project) || project <= 0) return false;
+  if (!Number.isSafeInteger(user) || user <= 0) return false;
+  return repo.isActiveMember({ projectId: project, userId: user });
+}
+
+/**
  * A page of projects with their active members, oldest first.
  * @param {{ status?: 'active'|'on_hold'|'completed', memberId?: number, mineFor?: number,
  *   q?: string, limit?: number, offset?: number }} filters memberId: only projects this person is

@@ -1,14 +1,15 @@
 // Settings (artboard 12): company, office hours and reports, check-in networks and switches,
 // attendance marks and HR updates (CONTRACT 25), Slack, screen time, timers and breaks, desktop
-// notifications and AI. One "Save changes" saves every section. Admin only.
+// notifications, AI and files (CONTRACT 27). One "Save changes" saves every section. Admin only.
 import { headers } from 'next/headers';
 import TopBar from '@/components/TopBar';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { clientIp } from '@/lib/route';
 import { requirePage } from '@/lib/session';
-import { nowDate } from '@/lib/time';
+import { formatDayShort, nowDate, workDate } from '@/lib/time';
 import { ai } from '@/modules/ai';
+import { projectFiles } from '@/modules/projectFiles';
 import { push } from '@/modules/push';
 import { settings } from '@/modules/settings';
 import { slack } from '@/modules/slack';
@@ -39,14 +40,47 @@ async function aiUsage() {
   }
 }
 
+/** Space used by files for Settings → Files (CONTRACT 27), or null when it can't be read. */
+async function filesUsage() {
+  try {
+    return await projectFiles.spaceUsage();
+  } catch (error) {
+    logger.warn({ err: error }, 'settings: could not read the space used by files');
+    return null;
+  }
+}
+
+const DISK_FULL_SHOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * The plain values FilesSection shows: the numbers, the storage problem (null when ready) and the
+ * company day of a disk-full refusal within the last 7 days ("Sat, 21 Nov").
+ */
+function filesSpace(usage, timezone) {
+  if (!usage) return null;
+  const fullAt = usage.diskFullAt ? new Date(usage.diskFullAt) : null;
+  const recent = fullAt && nowDate().getTime() - fullAt.getTime() <= DISK_FULL_SHOWN_MS;
+  return {
+    usedBytes: Number(usage.usedBytes) || 0,
+    heldBytes: Number(usage.heldBytes) || 0,
+    deletedBytes: Number(usage.deletedBytes) || 0,
+    fileCount: Number(usage.fileCount) || 0,
+    projectCount: Number(usage.projectCount) || 0,
+    updateNeeded: Boolean(usage.updateNeeded),
+    problem: usage.storage?.ready ? null : (usage.storage?.problem ?? 'not_set'),
+    diskFullOn: recent ? formatDayShort(workDate(timezone, fullAt)) : null,
+  };
+}
+
 export default async function SettingsPage() {
   await requirePage('settings.manage');
-  const [values, networks, connection, requestHeaders, usage] = await Promise.all([
+  const [values, networks, connection, requestHeaders, usage, space] = await Promise.all([
     settings.getAll(),
     settings.listOfficeNetworks(),
     slackConnection(),
     headers(),
     aiUsage(),
+    filesUsage(),
   ]);
   // Whether the server has a Gemini key: the page only ever gets this boolean, never the key.
   const aiConfigured = Boolean(env.GEMINI_API_KEY);
@@ -68,6 +102,7 @@ export default async function SettingsPage() {
           connection={connection}
           pushConfigured={push.isConfigured()}
           ai={{ configured: aiConfigured, usage }}
+          files={filesSpace(space, values.timezone)}
         />
       </div>
     </SettingsProvider>

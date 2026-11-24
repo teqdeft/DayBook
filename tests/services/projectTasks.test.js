@@ -197,7 +197,7 @@ describe('notifications and audit', () => {
       userId: alice.id,
       title: 'New P1 task on lyra: API for leave form',
       body: 'Paul Manager assigned it to you. Before Friday',
-      link: '/today',
+      link: `/projects/${lyra.id}?task=${task.id}`,
     });
     const [line] = await auditRows('project_task.create', task.id);
     expect(line).toMatchObject({ actorId: pm.id, entityType: 'project_task', ip: '10.0.0.1' });
@@ -219,8 +219,8 @@ describe('notifications and audit', () => {
     expect(full[row.body.length - 1]).toBe(' ');
   });
 
-  it('tells every active member about a task for anyone, PMs on the team get the project link', async () => {
-    await add(admin, lyra, { title: 'Permissions check', priority: 'p2' });
+  it('tells every active member about a task for anyone, all linked to the task', async () => {
+    const task = await add(admin, lyra, { title: 'Permissions check', priority: 'p2' });
     const rows = await notes('project_task.added');
     const byUser = Object.fromEntries(rows.map((row) => [row.userId, row]));
     expect(Object.keys(byUser).map(Number).sort()).toEqual(
@@ -229,9 +229,11 @@ describe('notifications and audit', () => {
     expect(byUser[alice.id]).toMatchObject({
       title: 'New P2 task on lyra: Permissions check',
       body: 'Ada Admin added it for anyone on the project.',
-      link: '/today',
+      link: `/projects/${lyra.id}?task=${task.id}`,
     });
-    expect(byUser[pm2.id].link).toBe(`/projects/${lyra.id}?tab=phases`);
+    // Every recipient opens the task on the project page, PMs on the team too (CONTRACT 27).
+    expect(byUser[pm2.id].link).toBe(`/projects/${lyra.id}?task=${task.id}`);
+    expect(task).toMatchObject({ told: 'members', toldName: null });
   });
 
   it('notifies on a new priority or assignee, not on a new title', async () => {
@@ -321,6 +323,77 @@ describe('notifications and audit', () => {
   });
 });
 
+describe('told and toldName (CONTRACT 27)', () => {
+  it('names the person a new task reached, or says members for a task for anyone', async () => {
+    const forAlice = await add(pm, lyra, { title: 'For Alice', assigneeId: alice.id });
+    expect(forAlice).toMatchObject({ told: 'person', toldName: 'Alice Dev' });
+    const forAnyone = await add(pm, lyra, { title: 'For anyone' });
+    expect(forAnyone).toMatchObject({ told: 'members', toldName: null });
+  });
+
+  it('is null when nobody was told: the actor, an away person, a done task', async () => {
+    const own = await add(pm, lyra, { title: 'My own', assigneeId: pm.id });
+    expect(own).toMatchObject({ told: null, toldName: null });
+    const forBob = await add(pm, lyra, { title: 'For Bob', assigneeId: bob.id });
+    await db('projectMembers').where({ projectId: lyra.id, userId: bob.id }).del();
+    try {
+      // Bob was taken off the project: the edit is saved, nobody hears about it.
+      const moved = await projectTasks.update({
+        user: pm,
+        id: forBob.id,
+        input: { priority: 'p1' },
+      });
+      expect(moved).toMatchObject({ priority: 'p1', told: null, toldName: null });
+    } finally {
+      await addMembers(lyra, [bob]);
+    }
+    await projectTasks.setStatus({ user: pm, id: forBob.id, status: 'done' });
+    const done = await projectTasks.update({ user: pm, id: forBob.id, input: { priority: 'p3' } });
+    expect(done).toMatchObject({ told: null, toldName: null });
+  });
+
+  it('names the new person on a changed task, and is null for a title change', async () => {
+    const task = await add(pm, lyra, { title: 'Hand over', assigneeId: alice.id });
+    const handed = await projectTasks.update({
+      user: pm,
+      id: task.id,
+      input: { assigneeId: bob.id },
+    });
+    expect(handed).toMatchObject({ told: 'person', toldName: 'Bob Dev' });
+    const renamed = await projectTasks.update({
+      user: pm,
+      id: task.id,
+      input: { title: 'Renamed' },
+    });
+    expect(renamed).toMatchObject({ title: 'Renamed', told: null, toldName: null });
+    const same = await projectTasks.update({ user: pm, id: task.id, input: { title: 'Renamed' } });
+    expect(same).toMatchObject({ told: null, toldName: null });
+  });
+
+  it('refuses an edit that sends only empty file lists', async () => {
+    const task = await add(pm, lyra, { title: 'Nothing new' });
+    await expectField(
+      projectTasks.update({
+        user: pm,
+        id: task.id,
+        input: { addUploadKeys: [], removeFileIds: [] },
+      }),
+      '_',
+    );
+    await expectField(
+      projectTasks.update({ user: pm, id: task.id, input: { addUploadKeys: ['not-a-key'] } }),
+      'addUploadKeys.0',
+    );
+    await expectField(
+      add(pm, lyra, {
+        title: 'Too many',
+        uploadKeys: Array.from({ length: 21 }, () => 'a'.repeat(32)),
+      }),
+      'uploadKeys',
+    );
+  });
+});
+
 describe('member added', () => {
   it('notifies people newly added to a project, not the person adding them', async () => {
     const { projects } = await import('@/modules/projects');
@@ -333,7 +406,7 @@ describe('member added', () => {
     expect(rows[0]).toMatchObject({
       title: 'You were added to nova',
       body: 'Paul Manager added you to the project team.',
-      link: '/projects',
+      link: `/projects/${project.id}`,
     });
 
     await db('notifications').del();

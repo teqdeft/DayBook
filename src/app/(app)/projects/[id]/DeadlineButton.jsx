@@ -1,6 +1,8 @@
 'use client';
 // "Change deadline" or "Add deadline" and its one-field dialog. Saving an empty date removes the
-// deadline. Errors show under the field; success toasts and refreshes the page.
+// deadline. Errors show under the field; success toasts and refreshes the page. The band passes its
+// own button words (`label`, CONTRACT 27: "Change" with a hidden " deadline"); the dialog keeps its
+// title.
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/Button';
@@ -10,9 +12,13 @@ import Input from '@/components/Input';
 import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/apiClient';
 import styles from './Overview.module.css';
+import windowStyles from './projectWindows.module.css';
 
-/** @param {{ projectId: number, deadline: string | null }} props */
-export default function DeadlineButton({ projectId, deadline }) {
+/**
+ * @param {{ projectId: number, deadline: string | null, label?: import('react').ReactNode,
+ *   className?: string }} props label: the button's words only (the dialog's title stays)
+ */
+export default function DeadlineButton({ projectId, deadline, label, className }) {
   const router = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -50,11 +56,17 @@ export default function DeadlineButton({ projectId, deadline }) {
 
   return (
     <>
-      <Button variant="text" size="compact" className={styles.deadlineAction} onClick={start}>
-        {title}
+      <Button
+        variant="text"
+        size="compact"
+        className={[styles.deadlineAction, className].filter(Boolean).join(' ')}
+        onClick={start}
+      >
+        {label ?? title}
       </Button>
       <Dialog
         open={open}
+        className={windowStyles.window}
         onClose={() => setOpen(false)}
         title={title}
         onSubmit={save}

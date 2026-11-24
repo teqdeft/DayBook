@@ -363,6 +363,30 @@ describe('members', () => {
     const members = await projects.setMembers({ user: admin, id: project.id, userIds: [] });
     expect(members).toEqual([]);
   });
+
+  it('links the member_added notification to the project page (CONTRACT 27)', async () => {
+    await db('notifications').del();
+    await projects.setMembers({ user: pm, id: project.id, userIds: [carol.id] });
+    const rows = await db('notifications').where({ type: 'project.member_added' });
+    expect(rows.map((row) => [row.userId, row.link])).toEqual([
+      [carol.id, `/projects/${project.id}`],
+    ]);
+  });
+
+  it('isMember: an active person with a member row, nobody else (CONTRACT 27)', async () => {
+    // Now: carol (active) and gone (deactivated, kept for history); the PM has no member row.
+    expect(await projects.isMember({ projectId: project.id, userId: carol.id })).toBe(true);
+    expect(await projects.isMember({ projectId: String(project.id), userId: carol.id })).toBe(true);
+    expect(await projects.isMember({ projectId: project.id, userId: gone.id })).toBe(false);
+    expect(await projects.isMember({ projectId: project.id, userId: pm.id })).toBe(false);
+    // Taken off the project: no row, so no access at once.
+    expect(await projects.isMember({ projectId: project.id, userId: alice.id })).toBe(false);
+    expect(await projects.isMember({ projectId: 999999, userId: carol.id })).toBe(false);
+    for (const bad of [{}, { projectId: 'x', userId: carol.id }, { projectId: project.id }]) {
+      expect(await projects.isMember(bad)).toBe(false);
+    }
+    expect(await projects.isMember()).toBe(false);
+  });
 });
 
 describe('urgent', () => {

@@ -1,7 +1,10 @@
-// The skeleton of each tab of the project page, at the same sizes as the tab. Server-safe.
+// The skeleton of each tab of the project page (CONTRACT 27), at the same sizes as the tab: the
+// Board (band, pills, columns), Summary, Files, Timeline and Hours. Server-safe.
 import Card from '@/components/Card';
 import Skeleton from '@/components/Skeleton';
-import { PROJECT_TABS } from './ProjectTabs';
+import { tabsFor } from './ProjectTabs';
+import filesStyles from './loadingFiles.module.css';
+import hoursStyles from './loadingHours.module.css';
 import styles from './loading.module.css';
 
 const KPIS = [0, 1, 2, 3, 4];
@@ -9,7 +12,10 @@ const BARS = [0, 1, 2, 3, 4];
 const COLUMNS = [0, 1, 2, 3, 4, 5, 6];
 const ROWS = [0, 1, 2, 3];
 const PHASES = [0, 1, 2, 3, 4, 5];
-const STEPS = [0, 1, 2, 3, 4, 5];
+const PILLS = [96, 92, 110];
+const BOARD_COLUMNS = [3, 2, 1, 0];
+const PLACES = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+const FILE_ROWS = [0, 1, 2, 3, 4];
 
 function Busy({ label, children }) {
   return (
@@ -20,57 +26,121 @@ function Busy({ label, children }) {
   );
 }
 
-function OverviewSkeleton() {
+/** The band: the stats row, the six parts with their names, a line for the forecast. */
+function BandBlock() {
   return (
-    <Busy label="Loading the overview">
-      <Skeleton width="100%" height={70} radius={12} />
-      <div className={styles.row}>
-        <Card padding="compact" className={styles.smallCard}>
-          <Skeleton width={90} height={20} />
-          <Skeleton width={140} height={140} radius={70} className={styles.centered} />
-          <Skeleton width={120} height={14} className={styles.centered} />
-        </Card>
-        <Card padding="compact" className={styles.smallCard}>
-          <Skeleton width={90} height={20} />
-          <Skeleton width={170} height={34} radius={8} />
-          <Skeleton width={90} height={14} />
-          <Skeleton width={120} height={14} />
-        </Card>
-        <Card padding="compact" className={styles.phaseCard}>
-          <Skeleton width={70} height={20} />
-          <div className={styles.steps}>
-            {STEPS.map((step) => (
-              <Skeleton key={step} width={26} height={26} radius={13} />
-            ))}
-          </div>
-          <Skeleton width={190} height={44} radius={10} />
-        </Card>
+    <Card className={styles.band}>
+      <div className={styles.bandStats}>
+        <Skeleton width={170} height={52} radius={8} />
+        <Skeleton width={190} height={52} radius={8} />
+        <Skeleton width={150} height={44} radius={10} className={styles.cell} />
       </div>
-      <div className={styles.row}>
-        {[0, 1].map((card) => (
-          <Card key={card} padding="compact" className={styles.wideCard}>
-            <Skeleton width={130} height={20} />
+      <div className={styles.parts}>
+        {PHASES.map((phase) => (
+          <div key={phase} className={styles.part}>
+            <Skeleton width="100%" height={10} radius={6} />
+            <Skeleton width="70%" height={14} className={styles.partName} />
+            <Skeleton width="40%" height={14} className={styles.partName} />
+          </div>
+        ))}
+      </div>
+      <Skeleton width="80%" height={18} />
+    </Card>
+  );
+}
+
+/** Columns of task cards, the busiest first. */
+function BoardColumns() {
+  return (
+    <div className={styles.boardColumns}>
+      {BOARD_COLUMNS.map((cards, column) => (
+        <div key={column} className={styles.boardColumn}>
+          <Skeleton width={120} height={20} />
+          <Skeleton width={150} height={14} />
+          {Array.from({ length: cards }, (_, card) => (
+            <div key={card} className={styles.taskCard}>
+              <Skeleton width="85%" height={18} />
+              <Skeleton width="60%" height={22} radius={11} />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The band, the pills (PM view) or "Your tasks" (member view), then the columns. */
+export function BoardSkeleton({ member }) {
+  return (
+    <Busy label="Loading the board">
+      <BandBlock />
+      <div className={styles.pills}>
+        {member ? (
+          <Skeleton width={110} height={22} />
+        ) : (
+          PILLS.map((width) => <Skeleton key={width} width={width} height={36} radius={18} />)
+        )}
+      </div>
+      <BoardColumns />
+    </Busy>
+  );
+}
+
+/** Health box and Critical tasks on the left, the AI summary on the right. */
+export function SummarySkeleton() {
+  return (
+    <Busy label="Loading the summary">
+      <div className={styles.summary}>
+        <div className={styles.summaryColumn}>
+          <Skeleton width="100%" height={70} radius={12} />
+          <Card padding="compact" className={styles.cardStack}>
+            <Skeleton width={150} height={20} />
             {ROWS.map((row) => (
-              <Skeleton key={row} width="100%" height={36} radius={8} />
+              <Skeleton key={row} width="100%" height={40} radius={8} />
             ))}
           </Card>
-        ))}
+        </div>
+        <Card padding="compact" className={styles.cardStack}>
+          <Skeleton width={140} height={20} />
+          <Skeleton width="100%" height={120} radius={10} />
+          <Skeleton width="100%" height={14} />
+          <Skeleton width="90%" height={14} />
+          <Skeleton width="60%" height={14} />
+        </Card>
       </div>
     </Busy>
   );
 }
 
-function PhasesSkeleton() {
+/** The side list of places beside the list of files. */
+export function FilesSkeleton() {
   return (
-    <Busy label="Loading the phases">
-      <Card padding="none">
-        {PHASES.map((phase) => (
-          <div key={phase} className={styles.tableRow}>
-            <Skeleton width="30%" height={16} />
-            <Skeleton width={90} height={14} className={styles.cell} />
+    <Busy label="Loading the files">
+      <div className={filesStyles.files}>
+        <Card className={filesStyles.placesCard}>
+          {PLACES.map((place) => (
+            <Skeleton key={place} width="100%" height={28} radius={8} />
+          ))}
+        </Card>
+        <div className={filesStyles.filesMain}>
+          <div className={filesStyles.filesHead}>
+            <Skeleton width={130} height={22} />
+            <Skeleton width={150} height={44} radius={10} className={styles.cell} />
           </div>
-        ))}
-      </Card>
+          <Skeleton width="100%" height={40} radius={10} />
+          <Card padding="none">
+            {FILE_ROWS.map((row) => (
+              <div key={row} className={filesStyles.fileRow}>
+                <Skeleton width={36} height={36} radius={8} />
+                <div className={filesStyles.fileText}>
+                  <Skeleton width="45%" height={16} />
+                  <Skeleton width="65%" height={14} />
+                </div>
+              </div>
+            ))}
+          </Card>
+        </div>
+      </div>
     </Busy>
   );
 }
@@ -95,11 +165,11 @@ function TimelineSkeleton() {
 function TableBlock({ title }) {
   return (
     <Card padding="none">
-      <div className={styles.tableHead}>
+      <div className={hoursStyles.tableHead}>
         <Skeleton width={title} height={20} />
       </div>
       {ROWS.map((row) => (
-        <div key={row} className={styles.tableRow}>
+        <div key={row} className={hoursStyles.tableRow}>
           <Skeleton width={34} height={34} radius={17} />
           <Skeleton width="18%" height={14} />
           <Skeleton width="12%" height={14} />
@@ -115,20 +185,20 @@ function TableBlock({ title }) {
 function HoursSkeleton() {
   return (
     <Busy label="Loading the hours">
-      <div className={styles.actions}>
+      <div className={hoursStyles.actions}>
         <Skeleton width={330} height={40} radius={10} />
         <Skeleton width={150} height={44} radius={10} />
       </div>
-      <div className={styles.kpis}>
+      <div className={hoursStyles.kpis}>
         {KPIS.map((kpi) => (
-          <Card key={kpi} className={styles.kpi}>
+          <Card key={kpi} className={hoursStyles.kpi}>
             <Skeleton width={100} height={14} />
             <Skeleton width={90} height={32} radius={8} />
             <Skeleton width="100%" height={8} radius={4} />
           </Card>
         ))}
       </div>
-      <div className={styles.charts}>
+      <div className={hoursStyles.charts}>
         <Card className={styles.block}>
           <Skeleton width={160} height={20} />
           {BARS.map((bar) => (
@@ -137,7 +207,7 @@ function HoursSkeleton() {
         </Card>
         <Card className={styles.block}>
           <Skeleton width={160} height={20} />
-          <div className={styles.columns}>
+          <div className={hoursStyles.columns}>
             {COLUMNS.map((column) => (
               <Skeleton key={column} width={34} height={150} radius={8} />
             ))}
@@ -152,23 +222,29 @@ function HoursSkeleton() {
 }
 
 const SKELETONS = {
-  overview: OverviewSkeleton,
-  phases: PhasesSkeleton,
+  board: BoardSkeleton,
+  summary: SummarySkeleton,
+  files: FilesSkeleton,
   timeline: TimelineSkeleton,
   hours: HoursSkeleton,
 };
 
-/** @param {{ tab: 'overview'|'phases'|'timeline'|'hours' }} props */
-export function TabSkeleton({ tab }) {
-  const Chosen = SKELETONS[tab] ?? OverviewSkeleton;
-  return <Chosen />;
+/**
+ * @param {{ tab: 'board'|'summary'|'files'|'timeline'|'hours', member?: boolean }} props member:
+ *   the member's Board ("Your tasks" in place of the pills)
+ */
+export function TabSkeleton({ tab, member = false }) {
+  const Chosen = SKELETONS[tab] ?? BoardSkeleton;
+  return <Chosen member={member} />;
 }
 
 /**
- * Breadcrumb, title and health, the tabs and a tab, at the same sizes as the page.
- * @param {{ tab?: 'overview'|'phases'|'timeline'|'hours' }} props
+ * Breadcrumb, title and tags, the tabs and a tab, at the same sizes as the page.
+ * @param {{ tab?: 'board'|'summary'|'files'|'timeline'|'hours',
+ *   access?: 'manage'|'team'|'member' }} props access: how many tabs to draw (the PM view's when
+ *   left out)
  */
-export function ProjectSkeleton({ tab = 'overview' }) {
+export function ProjectSkeleton({ tab = 'board', access }) {
   return (
     <div className={styles.page} aria-busy="true" aria-live="polite">
       <span className="visually-hidden">Loading the project</span>
@@ -182,11 +258,11 @@ export function ProjectSkeleton({ tab = 'overview' }) {
         <Skeleton width={300} height={16} />
       </div>
       <div className={styles.tabs}>
-        {PROJECT_TABS.map(({ key }) => (
+        {tabsFor(access).map(({ key }) => (
           <Skeleton key={key} width={64} height={16} />
         ))}
       </div>
-      <TabSkeleton tab={tab} />
+      <TabSkeleton tab={tab} member={access === 'member'} />
     </div>
   );
 }

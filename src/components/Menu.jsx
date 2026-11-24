@@ -1,7 +1,8 @@
 'use client';
 // Menu button: the row "⋯" menu (Edit, Mark urgent, Deactivate) and the signed-in person's menu.
 // The list opens below (or above) the trigger in a fixed layer, so a table or drawer that scrolls
-// never clips it. Arrow keys move, Escape and Tab close, focus returns to the trigger.
+// never clips it. Arrow keys move, Escape and Tab close, focus returns to the trigger. onSelect gets
+// the click, so a Delete can tell Enter or Space (detail 0: its Undo toast takes focus) from a tap.
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Ellipsis } from 'lucide-react';
@@ -26,8 +27,9 @@ function placeNextTo(rect, { placement, align, width }) {
 }
 
 /**
- * @typedef {{ label: string, onSelect?: () => void, href?: string, tone?: 'default'|'danger',
- *   disabled?: boolean, icon?: import('react').ReactNode }} MenuItem
+ * @typedef {{ label: string, onSelect?: (event: import('react').MouseEvent) => void,
+ *   href?: string, tone?: 'default'|'danger', disabled?: boolean,
+ *   icon?: import('react').ReactNode }} MenuItem
  */
 
 /**
@@ -150,10 +152,10 @@ export default function Menu({
     }
   }
 
-  function select(item) {
+  function select(item, event) {
     if (item.disabled) return;
     close();
-    item.onSelect?.();
+    item.onSelect?.(event);
   }
 
   return (
@@ -210,7 +212,7 @@ export default function Menu({
                 tabIndex={-1}
                 className={itemClass}
                 aria-disabled={item.disabled ? 'true' : undefined}
-                onClick={() => select(item)}
+                onClick={(event) => select(item, event)}
               >
                 {content}
               </button>

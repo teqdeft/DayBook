@@ -1,13 +1,17 @@
 // Employee view of /projects (artboard 04): the projects the person is a member of, as cards,
 // with Active and Completed tabs, a name search (MyProjectsFilter, in the browser) and "Request a
-// project".
+// project". CONTRACT 27: the open tab's cards get their plan, progress and files in one read each
+// (listPlans, progressByProject, countTaskFilesForMember), and every card links to its project.
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
 import TopBar from '@/components/TopBar';
 import { logger } from '@/lib/logger';
 import { monthOf, monthRange, workDate } from '@/lib/time';
+import { projectFiles } from '@/modules/projectFiles';
+import { projectPlan } from '@/modules/projectPlan';
 import { projects } from '@/modules/projects';
+import { projectTasks } from '@/modules/projectTasks';
 import { reports } from '@/modules/reports';
 import { settings } from '@/modules/settings';
 import MyProjectsFilter, { MyProjectsList, MyProjectsSearch } from './MyProjectsFilter';
@@ -91,7 +95,8 @@ export default async function MyProjectsView({ user, params }) {
   const { timezone } = await settings.getAll();
   const today = workDate(timezone);
   const month = monthRange(monthOf(today));
-  const [minutes, lastDates] = await Promise.all([
+  const shownIds = (tab === 'completed' ? completed : active).map((project) => project.id);
+  const [minutes, lastDates, plans, progress, files] = await Promise.all([
     safely(
       reports.getMinutesByProject({ from: month.from, to: month.to, userId: user.id }),
       {},
@@ -102,6 +107,19 @@ export default async function MyProjectsView({ user, params }) {
       reports.getLastReportDateByProject(user.id),
       {},
       'my projects: could not load last updates',
+      user.id,
+    ),
+    safely(projectPlan.listPlans(shownIds), {}, 'my projects: could not load plans', user.id),
+    safely(
+      projectTasks.progressByProject(shownIds),
+      {},
+      'my projects: could not load progress',
+      user.id,
+    ),
+    safely(
+      projectFiles.countTaskFilesForMember({ userId: user.id, projectIds: shownIds }),
+      {},
+      'my projects: could not load file counts',
       user.id,
     ),
   ]);
@@ -118,6 +136,9 @@ export default async function MyProjectsView({ user, params }) {
           minutes={Number(minutes[project.id] ?? 0)}
           lastDate={lastDates[project.id] ?? null}
           today={today}
+          plan={plans[project.id] ?? null}
+          progress={progress[project.id] ?? null}
+          fileCount={Number(files[project.id] ?? 0)}
         />
       ),
     }));

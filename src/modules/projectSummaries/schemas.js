@@ -1,13 +1,18 @@
-// Input schemas for files, notes and AI summaries (CONTRACT 22), and the shape an AI answer must have
-// before anything of it is kept. Safe in the browser: the PDF reader and the note form share the
-// limits. Every string of an answer is tidied and cut to length here, and stays plain text.
+// Input schemas for files, notes and AI summaries (CONTRACT 22 and 27), and the shape an AI answer
+// must have before anything of it is kept. Safe in the browser: the PDF reader and the note window
+// share the limits. Every string of an answer is tidied and cut to length here, and stays plain text.
+// `visibility` has no default on purpose: a body without it is stored as "Only PM and Admins" by the
+// service, so an old page or a script never shares a note by accident.
 import { z } from 'zod';
 import { PHASE_KEYS } from '@/modules/projectPlan/phases';
 
 export const MAX_TITLE_LENGTH = 200;
 export const MAX_TEXT_LENGTH = 200_000;
 export const MAX_PAGES = 100;
-export const MAX_DOCUMENTS = 40;
+export const MAX_DOCUMENTS = 100;
+
+/** Who sees a note or a text-only document (CONTRACT 27). */
+export const DOCUMENT_VISIBILITIES = Object.freeze(['everyone', 'managers']);
 
 /** Longest strings kept from an answer. A task title is at most 200, so action text is too. */
 export const ANSWER_CAPS = Object.freeze({ overview: 400, text: 200, when: 80, quote: 300 });
@@ -48,6 +53,20 @@ const textSchema = z
       .refine((value) => value.length <= MAX_TEXT_LENGTH, TEXT_LONG),
   );
 
+const ID = /^[1-9]\d{0,15}$/;
+const FILE_GONE = "We couldn't find that file.";
+
+/** A file's id, as a number or a string of digits. */
+const fileIdSchema = z
+  .union([z.number(), z.string().trim()], { error: FILE_GONE })
+  .refine((value) => ID.test(String(value)), FILE_GONE)
+  .transform(Number);
+
+/** A place: one of the six phases, or null for Whole project. */
+const placeSchema = z.enum(PHASE_KEYS, { error: 'Pick a place from the list.' }).nullable();
+
+const visibilitySchema = z.enum(DOCUMENT_VISIBILITIES, { error: 'Pick who can see it.' });
+
 const pagesSchema = z
   .number({ error: 'Pages must be a whole number.' })
   .int('Pages must be a whole number.')
@@ -55,11 +74,15 @@ const pagesSchema = z
   .nullish()
   .transform((value) => value ?? null);
 
-/** POST /api/projects/:id/documents. A note has no pages. */
+/**
+ * POST /api/projects/:id/documents. A note has no pages. A file's text names its file (`fileId`) and
+ * takes its place from it, so it needs no phase; a note and a text-only document need one (null is
+ * Whole project).
+ */
 export const documentCreateSchema = z
   .object(
     {
-      phase: z.enum(PHASE_KEYS, { error: 'Pick a phase from the list.' }),
+      phase: placeSchema.optional(),
       kind: z.enum(['file', 'note'], { error: 'Choose a file or a note.' }),
       title: titleSchema,
       text: textSchema,
@@ -68,6 +91,8 @@ export const documentCreateSchema = z
         `Daybook reads the first ${MAX_PAGES} pages at most.`,
       ),
       pagesTotal: pagesSchema,
+      visibility: visibilitySchema.optional(),
+      fileId: fileIdSchema.optional(),
     },
     { error: BODY_MESSAGE },
   )
@@ -75,14 +100,33 @@ export const documentCreateSchema = z
     path: ['pagesTotal'],
     message: "A file can't have fewer pages than were read.",
   })
+  .refine(({ kind, fileId }) => kind === 'file' || fileId === undefined, {
+    path: ['fileId'],
+    message: 'Only project files are read for the AI summary.',
+  })
+  .refine(({ phase, fileId }) => phase !== undefined || fileId !== undefined, {
+    path: ['phase'],
+    message: 'Pick a place from the list.',
+  })
   .transform((value) =>
     value.kind === 'note' ? { ...value, pages: null, pagesTotal: null } : value,
   );
 
-/** PATCH /api/project-documents/:id: a note's title, its text, or both. */
+/**
+ * PATCH /api/project-documents/:id: a note's title and text, a text-only document's title, and for
+ * both the place and who sees it (only the fields sent).
+ */
 export const documentUpdateSchema = z
-  .object({ title: titleSchema.optional(), text: textSchema.optional() }, { error: BODY_MESSAGE })
-  .refine(({ title, text }) => title !== undefined || text !== undefined, EMPTY_MESSAGE);
+  .object(
+    {
+      title: titleSchema.optional(),
+      text: textSchema.optional(),
+      phase: placeSchema.optional(),
+      visibility: visibilitySchema.optional(),
+    },
+    { error: BODY_MESSAGE },
+  )
+  .refine((value) => Object.values(value).some((field) => field !== undefined), EMPTY_MESSAGE);
 
 /** POST /api/ai/projects/:id/summary/tasks */
 export const summaryTaskSchema = z.object(

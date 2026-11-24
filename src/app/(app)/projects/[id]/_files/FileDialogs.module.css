@@ -1,0 +1,208 @@
+/* The Files tab's windows (CONTRACT 27, Files tab): Upload files, the note window, New note and Edit
+   note, Edit details. Built on Daybook's Dialog (each passes `.panel`); a full-screen sheet on a
+   phone with the main button first (below). */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
+.error {
+  margin-top: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}
+
+/* ---------- who can see it ---------- */
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choices legend {
+  padding: 0;
+}
+
+.radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.radio:has(input:checked) {
+  border-color: var(--primary);
+}
+
+.radio input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--primary);
+}
+
+.radioTitle {
+  display: block;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.radioHelp {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+/* ---------- Edit details ---------- */
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nameRow > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ext {
+  flex: none;
+  color: var(--muted);
+}
+
+/* ---------- the note window ---------- */
+
+.info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px dashed var(--line-dashed);
+  border-radius: var(--radius-tile);
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.info svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--muted);
+}
+
+.text {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pageBreak {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.pageBreak::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--line);
+}
+
+.quiet {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.retry {
+  margin-top: 8px;
+}
+
+.left {
+  margin-right: auto;
+}
+
+.ask {
+  flex: 1 1 auto;
+  margin-right: auto;
+  font-weight: 600;
+}
+
+/* The note window's meta line under its title: "Note · Riya Kapoor, 19 Nov · Development · Only PM
+   and Admins", a small muted line (inside Dialog's description, which is set at body size). */
+.meta {
+  display: block;
+  font-size: var(--text-small);
+  line-height: 18px;
+}
+
+/* On a phone every Files window is a full-screen sheet (as New task and the task window; also
+   between 521 and 640 px, where the Dialog's frame keeps its margins): the body takes the height,
+   the main button comes first at full width, the others share the row under it and Delete goes
+   last. `button.` outranks Dialog's own footer rule whatever order the CSS loads. */
+@media (max-width: 640px) {
+  [role='dialog'].panel {
+    position: fixed;
+    inset: 0;
+    width: auto;
+    height: auto;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .panel > form,
+  .panel [data-modal-body] {
+    flex: 1 1 auto;
+  }
+
+  button.main {
+    order: -1;
+    flex: 1 1 100%;
+  }
+
+  button.second {
+    flex: 1 1 0;
+  }
+
+  .radio {
+    min-height: 44px;
+  }
+
+  button.left {
+    order: 2;
+    flex: 1 1 0;
+    margin-right: 0;
+  }
+}

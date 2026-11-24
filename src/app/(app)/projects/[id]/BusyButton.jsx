@@ -9,10 +9,12 @@ import styles from './BusyButton.module.css';
 
 /**
  * @param {{ busy: boolean, onClick: (event: import('react').MouseEvent) => void,
- *   className?: string, children: import('react').ReactNode }} props and any other Button prop
- *   (variant, size, aria-label); `loading` and `disabled` are never set, so focus stays
+ *   icon?: import('react').ReactNode, className?: string,
+ *   children: import('react').ReactNode }} props and any other Button prop (variant, size,
+ *   aria-label, ref); icon: shown when not busy (the spinner takes its place); `loading` and
+ *   `disabled` are never set, so focus stays
  */
-export default function BusyButton({ busy, onClick, className, children, ...rest }) {
+export default function BusyButton({ busy, onClick, icon, className, children, ...rest }) {
   return (
     <Button
       {...rest}
@@ -20,7 +22,9 @@ export default function BusyButton({ busy, onClick, className, children, ...rest
       icon={
         busy ? (
           <LoaderCircle className={styles.spinner} size={18} strokeWidth={1.8} aria-hidden="true" />
-        ) : undefined
+        ) : (
+          icon
+        )
       }
       aria-disabled={busy || undefined}
       aria-busy={busy || undefined}

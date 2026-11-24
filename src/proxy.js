@@ -33,6 +33,11 @@ export function proxy(request) {
 }
 
 export const config = {
-  // Everything except Next.js internals and static files.
-  matcher: ['/((?!_next/|icons/|favicon.ico|robots.txt).*)'],
+  // Everything except Next.js internals, static files and the upload routes' children (CONTRACT
+  // 27). While the proxy runs, Next clones every non-GET body and keeps a copy in memory up to
+  // 10 MB, cutting it silently past that; an upload piece skips that copy. Those routes never use
+  // the client IP (a client-sent X-Forwarded-For isn't stripped there), and withRoute checks the
+  // session on every route anyway. Start (POST /api/uploads itself) still passes through here.
+  // A constant, as Next reads it at build time.
+  matcher: ['/((?!_next/|icons/|favicon.ico|robots.txt|api/uploads/).*)'],
 };

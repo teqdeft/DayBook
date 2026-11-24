@@ -56,9 +56,13 @@ async function expectAppError(promise, code) {
 }
 
 describe('Settings → AI form', () => {
-  it('edits every AI key, last on the page, in the AI section', () => {
-    expect(KEYS.slice(-AI_KEYS.length)).toEqual(AI_KEYS);
-    expect(SECTIONS.at(-1)).toEqual({ id: 'ai', label: 'AI' });
+  it('edits every AI key in the AI section, last on the page before Files (CONTRACT 27)', () => {
+    const files = ['fileMaxMb', 'fileStorageLimitGb'];
+    expect(KEYS.slice(-AI_KEYS.length - files.length)).toEqual([...AI_KEYS, ...files]);
+    expect(SECTIONS.slice(-2)).toEqual([
+      { id: 'ai', label: 'AI' },
+      { id: 'files', label: 'Files' },
+    ]);
   });
 
   it('shows the defaults: AI off, 200 a day, features on at 7:00 PM, project summaries off', () => {

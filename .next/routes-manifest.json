@@ -203,6 +203,30 @@
       "namedRegex": "^/api/project\\-documents/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/api/project-files/[id]",
+      "regex": "^/api/project\\-files/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/project\\-files/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/project-files/[id]/thumb",
+      "regex": "^/api/project\\-files/([^/]+?)/thumb(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/project\\-files/(?<nxtPid>[^/]+?)/thumb(?:/)?$"
+    },
+    {
+      "page": "/api/project-files/[id]/view",
+      "regex": "^/api/project\\-files/([^/]+?)/view(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/project\\-files/(?<nxtPid>[^/]+?)/view(?:/)?$"
+    },
+    {
       "page": "/api/project-requests/[id]/approve",
       "regex": "^/api/project\\-requests/([^/]+?)/approve(?:/)?$",
       "routeKeys": {
@@ -225,6 +249,14 @@
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/api/project\\-tasks/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/project-tasks/[id]/files",
+      "regex": "^/api/project\\-tasks/([^/]+?)/files(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/project\\-tasks/(?<nxtPid>[^/]+?)/files(?:/)?$"
     },
     {
       "page": "/api/project-tasks/[id]/status",
@@ -386,6 +418,30 @@
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/api/timers/entries/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/uploads/[key]",
+      "regex": "^/api/uploads/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPkey": "nxtPkey"
+      },
+      "namedRegex": "^/api/uploads/(?<nxtPkey>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/uploads/[key]/finish",
+      "regex": "^/api/uploads/([^/]+?)/finish(?:/)?$",
+      "routeKeys": {
+        "nxtPkey": "nxtPkey"
+      },
+      "namedRegex": "^/api/uploads/(?<nxtPkey>[^/]+?)/finish(?:/)?$"
+    },
+    {
+      "page": "/api/uploads/[key]/pieces",
+      "regex": "^/api/uploads/([^/]+?)/pieces(?:/)?$",
+      "routeKeys": {
+        "nxtPkey": "nxtPkey"
+      },
+      "namedRegex": "^/api/uploads/(?<nxtPkey>[^/]+?)/pieces(?:/)?$"
     },
     {
       "page": "/api/users/[id]",
@@ -854,6 +910,12 @@
       "regex": "^/api/timers/stop(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/timers/stop(?:/)?$"
+    },
+    {
+      "page": "/api/uploads",
+      "regex": "^/api/uploads(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/uploads(?:/)?$"
     },
     {
       "page": "/api/users",

@@ -23,6 +23,7 @@ import {
 import { can } from '@/lib/permissions';
 import { activity } from '@/modules/activity';
 import { attendance } from '@/modules/attendance';
+import { projectFiles } from '@/modules/projectFiles';
 import { projects } from '@/modules/projects';
 import { projectTasks } from '@/modules/projectTasks';
 import { reports } from '@/modules/reports';
@@ -118,10 +119,16 @@ function weekDays({ today, current, submitted, dayStatus, presentToday, dayOf })
 /**
  * The "Priority tasks" card (CONTRACT section 13): every open priority task of the person, P1
  * first (the order listOpenForUser gives); the card shows the first MAX_PRIORITY_TASKS and opens
- * the rest with "Show more".
- * @returns {{ rows: Array<{ id, priority, title, project, forYou }>, initial: number }}
+ * the rest with "Show more". CONTRACT 27: each row carries the files on it this person may see
+ * (`fileCount`, the paperclip), and the card gets the company's date for the task window.
+ * @param {object[]} tasks listOpenForUser's tasks
+ * @param {number} userId
+ * @param {Record<number, number>} fileCounts projectFiles.countsForTasks ({} when unread)
+ * @param {string} today the company's date
+ * @returns {{ rows: Array<{ id, priority, title, projectId, project, forYou, fileCount }>,
+ *   initial: number, today: string }}
  */
-function priorityRows(tasks, userId) {
+export function priorityRows(tasks, userId, fileCounts = {}, today = null) {
   const rows = tasks.map((task) => ({
     id: task.id,
     priority: task.priority,
@@ -129,8 +136,9 @@ function priorityRows(tasks, userId) {
     projectId: Number(task.projectId ?? task.project?.id) || null,
     project: { name: task.project?.name ?? '', color: task.project?.color ?? null },
     forYou: Number(task.assigneeId ?? task.assignee?.id) === Number(userId),
+    fileCount: Number(fileCounts?.[task.id]) || 0,
   }));
-  return { rows, initial: MAX_PRIORITY_TASKS };
+  return { rows, initial: MAX_PRIORITY_TASKS, today };
 }
 
 /**
@@ -209,6 +217,10 @@ export async function loadToday({ user, ip }) {
       ]),
     ]);
   const [timerState, wfhParts, todo] = cards;
+  // The files on the priority tasks this person may see (CONTRACT 27; {} before migration 019).
+  const fileCounts = priority.length
+    ? await safe(projectFiles.countsForTasks({ viewer: user, tasks: priority }), {})
+    : {};
   const row = mine.row;
   const presentToday = mine.presentMinutes;
   // Today's bar shows worked time (present minus breaks, CONTRACT 15) until the report is in.
@@ -261,7 +273,7 @@ export async function loadToday({ user, ip }) {
     missing: mine.missing,
     comingUp: comingUpLines({ upcoming: mine.upcoming, today }),
     screenTime: screenTracked ? screenTimeLine(screen) : null,
-    priority: priorityRows(priority, user.id),
+    priority: priorityRows(priority, user.id, fileCounts, today),
     timer: timerCard({ row, parts: timerState, breaks: mine.breaks, tz }),
     // Today's to-do (CONTRACT 24): { initialTodo, picker, priority }, null without report.self.
     todo,

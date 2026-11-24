@@ -5,10 +5,17 @@
       "runtime": "nodejs",
       "matchers": [
         {
-          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?(?:\\/((?!_next\\/|icons\\/|favicon.ico|robots.txt).*))(\\.json|\\.rsc|\\.segments\\/.+\\.segment\\.rsc)?[\\/#\\?]?$",
-          "originalSource": "/((?!_next/|icons/|favicon.ico|robots.txt).*)"
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?(?:\\/((?!_next\\/|icons\\/|favicon.ico|robots.txt|api\\/uploads\\/).*))(\\.json|\\.rsc|\\.segments\\/.+\\.segment\\.rsc)?[\\/#\\?]?$",
+          "originalSource": "/((?!_next/|icons/|favicon.ico|robots.txt|api/uploads/).*)"
         }
       ]
-    }
+    },
+    "/api/project-files/[id]": {},
+    "/api/project-files/[id]/thumb": {},
+    "/api/project-files/[id]/view": {},
+    "/api/uploads": {},
+    "/api/uploads/[key]": {},
+    "/api/uploads/[key]/finish": {},
+    "/api/uploads/[key]/pieces": {}
   }
 }

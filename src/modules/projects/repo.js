@@ -251,6 +251,15 @@ export function listMembers(projectIds, trx = db) {
     ]);
 }
 
+/** True when the person has a member row on the project and is an active user (one query). */
+export async function isActiveMember({ projectId, userId }, trx = db) {
+  const row = await trx('projectMembers as m')
+    .join('users as u', 'u.id', 'm.userId')
+    .where({ 'm.projectId': projectId, 'm.userId': userId, 'u.status': 'active' })
+    .first('m.userId');
+  return Boolean(row);
+}
+
 export function insertMembers(rows, trx) {
   if (rows.length === 0) return Promise.resolve();
   return trx('projectMembers').insert(rows);

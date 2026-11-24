@@ -244,6 +244,8 @@ describe('cleanup (03:00 company time, once a day)', () => {
         jobRuns: 1,
         activitySegments: 0,
         oldReminders: 0,
+        // The files step (CONTRACT 27): nothing to clean in an empty files folder.
+        projectFiles: 0,
       },
     });
     expect(deleteOldReminders).toHaveBeenCalledWith('2026-04-08'); // 180 days back

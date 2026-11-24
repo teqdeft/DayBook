@@ -1,7 +1,8 @@
-# Migration 018 (CONTRACT 25) on MySQL 8.4, the engine production may run. Local development runs
-# MariaDB 10.4 (XAMPP), so this is where 018 meets MySQL 8.4 before the live migrate: migrate up
-# from an empty database, down for 018 only, up again, then the 018 service test. It runs on main
-# and pull requests to main only, never on the deploy branch, and publishes nothing.
+# Migrations 018 (CONTRACT 25) and 019 (CONTRACT 27) on MySQL 8.4, the engine production may run.
+# Local development runs MariaDB 10.4 (XAMPP), so this is where they meet MySQL 8.4 before the live
+# migrate: migrate up from an empty database, down for 019 only, up again, down for 018 only, up
+# again, then the 018 and 019 service tests. It runs on main and pull requests to main only, never
+# on the deploy branch, and publishes nothing.
 name: Migration check
 
 on:
@@ -20,7 +21,7 @@ concurrency:
 jobs:
   mysql-8-4:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       mysql:
         image: mysql:8.4
@@ -87,6 +88,12 @@ jobs:
       - name: Migrate up from an empty database
         run: node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:latest
 
+      - name: Migrate down for 019 only
+        run: node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:down 019_project_files.js
+
+      - name: Migrate up again after 019
+        run: node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:latest
+
       - name: Migrate down for 018 only
         run: node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:down 018_hr_tools.js
 
@@ -102,3 +109,7 @@ jobs:
           else
             echo "tests/services/migration018.test.js is not written yet; skipped."
           fi
+
+      # Under Vitest NODE_ENV is test, so FILES_DIR is ignored (the 019 test never touches files).
+      - name: Migration 019 service test
+        run: npx vitest run tests/services/migration019.test.js

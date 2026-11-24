@@ -1,0 +1,44 @@
+/* The Move to phase dialog (CONTRACT 27): one 44 px button per phase, 6 px apart. */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.target {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-body);
+  text-align: left;
+}
+
+.target:hover {
+  background: var(--surface-muted);
+}
+
+.target[aria-disabled='true'] {
+  background: var(--surface-muted);
+  color: var(--muted);
+  cursor: default;
+}
+
+.count {
+  flex: none;
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}

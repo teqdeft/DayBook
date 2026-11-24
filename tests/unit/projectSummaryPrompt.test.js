@@ -407,11 +407,12 @@ describe('input limits', () => {
     expect(parsed.text).toBe('ab\tc\nde\ff');
   });
 
-  it('only takes a phase on the list and a known kind', () => {
-    for (const change of [{ phase: 'launched' }, { phase: null }, { kind: 'folder' }, {}]) {
+  it('only takes a phase on the list (or null, Whole project) and a known kind', () => {
+    for (const change of [{ phase: 'launched' }, { kind: 'folder' }, {}]) {
       const input = Object.keys(change).length ? file(change) : { ...file(), phase: undefined };
       expect(documentCreateSchema.safeParse(input).success).toBe(false);
     }
+    expect(documentCreateSchema.parse(file({ phase: null })).phase).toBeNull();
   });
 
   it('checks the page counts', () => {
@@ -431,9 +432,17 @@ describe('input limits', () => {
     }
   });
 
-  it('edits a title, a text or both, and needs one', () => {
+  it('edits a title, a text, the place or who sees it, and needs one', () => {
     expect(documentUpdateSchema.parse({ title: ' New ' })).toEqual({ title: 'New' });
-    expect(documentUpdateSchema.parse({ text: 'New', phase: 'launch' })).toEqual({ text: 'New' });
+    expect(documentUpdateSchema.parse({ text: 'New', phase: 'launch' })).toEqual({
+      text: 'New',
+      phase: 'launch',
+    });
+    expect(documentUpdateSchema.parse({ phase: null, visibility: 'everyone' })).toEqual({
+      phase: null,
+      visibility: 'everyone',
+    });
+    expect(documentUpdateSchema.safeParse({ visibility: 'all' }).success).toBe(false);
     expect(documentUpdateSchema.safeParse({}).success).toBe(false);
     expect(documentUpdateSchema.safeParse({ text: ' ' }).success).toBe(false);
     expect(documentUpdateSchema.safeParse('text').success).toBe(false);

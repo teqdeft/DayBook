@@ -1,9 +1,9 @@
 // Settings form values: which keys the form edits, how saved settings become field text and back,
 // the checks made before saving and which keys changed. Plain functions, so the form and the tests
 // can both import them. The clock labels and the cross-check messages are the API's
-// (src/modules/settings/schemas.js and crossChecks.js); tests/unit/settingsValues.test.js,
-// tests/services/autoCheckoutSettings.test.js and tests/services/aiSettings.test.js check they
-// agree.
+// (src/modules/settings/schemas.js and crossChecks.js, Files from CONTRACT 27);
+// tests/unit/settingsValues.test.js, tests/services/autoCheckoutSettings.test.js and
+// tests/services/aiSettings.test.js check they agree.
 import { formatClockShort } from '@/lib/time';
 import { NUMBERS } from './numberFields';
 import { clockText, parseClockText } from './timeText';
@@ -61,6 +61,9 @@ export function summaryTooEarly(lateAfter) {
 
 /** The morning HR summary at or after office end (CONTRACT 25): the API's message. */
 export const SUMMARY_TOO_LATE = 'Pick a time before office hours end.';
+
+/** The largest file bigger than the storage limit (CONTRACT 27): the API's message. */
+export const FILE_BIGGER_THAN_LIMIT = "The largest file can't be bigger than the storage limit.";
 
 /** The evening wrap-up goes out this long after office hours end (CONTRACT 25, not a setting). */
 const WRAP_UP_AFTER_MINUTES = 30;
@@ -129,6 +132,9 @@ export const KEYS = Object.freeze([
   'aiHrNotesAt',
   'aiAskEnabled',
   'aiProjectSummaryEnabled',
+  // Files (CONTRACT 27)
+  'fileMaxMb',
+  'fileStorageLimitGb',
 ]);
 
 /** Saved settings -> what the fields show (clocks as "9:30 AM"). */
@@ -142,9 +148,10 @@ export function toForm(saved) {
 
 /**
  * The checks across fields the API makes too: the office closes after it opens, auto check-out
- * after office end (CONTRACT 19), and (CONTRACT 25) a half day below a short day while both are
- * on, the morning HR summary at or after the late mark and before office end while it is on.
- * Fields that already have an error are left to that error.
+ * after office end (CONTRACT 19), (CONTRACT 25) a half day below a short day while both are on,
+ * the morning HR summary at or after the late mark and before office end while it is on, and
+ * (CONTRACT 27) the largest file within the storage limit. Fields that already have an error are
+ * left to that error.
  */
 function crossCheck(form, values, errors) {
   const clean = (...keys) => keys.every((key) => !errors[key]);
@@ -163,6 +170,8 @@ function crossCheck(form, values, errors) {
       errors.hrSummaryAt = summaryTooEarly(values.lateAfter);
     } else if (values.hrSummaryAt >= values.officeEnd) errors.hrSummaryAt = SUMMARY_TOO_LATE;
   }
+  const tooBig = values.fileMaxMb > values.fileStorageLimitGb * 1024;
+  if (clean('fileMaxMb', 'fileStorageLimitGb') && tooBig) errors.fileMaxMb = FILE_BIGGER_THAN_LIMIT;
 }
 
 /**
