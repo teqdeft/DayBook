@@ -47,7 +47,7 @@
   color: var(--ink);
   text-align: left;
   white-space: normal;
-  animation: card-in 0.12s ease-out;
+  animation: card-in var(--dur-fade) var(--ease-out);
 }
 
 .card:focus {
@@ -124,13 +124,7 @@
 
 @keyframes card-in {
   from {
-    transform: translateY(-4px);
+    transform: translateY(var(--shift-menu));
     opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .card {
-    animation: none;
   }
 }

@@ -1,10 +1,11 @@
-// CONTRACT 27 (Daybook 1.12): files on tasks. The PM creates a task in Development for Vishal Saini
-// with a PNG and a PDF picked through the real file chooser; Vishal sees the paperclip "2" on
-// Today's Priority tasks card, opens the task window, sees the picture's thumbnail, opens it in the
+// CONTRACT 27 (Daybook 1.12) and 28 (1.13): files on tasks. The PM creates a task in Development
+// for Vishal Saini (the "Assign to" radio chips) with a PNG and a PDF picked through the real file
+// chooser ("Upload files"); the card shows both as chips. Vishal sees the paperclip "2" on Today's
+// Priority tasks card, opens the task window, sees the picture's thumbnail, opens it in the
 // picture viewer and downloads the PDF (the same bytes as the fixture). Karan Mehta, an employee
 // who isn't on the project, gets 404 for the files and the task. The PM then drops notes.txt on the
-// task's card and the count goes up. Cancelling the only upload in the task window keeps focus in
-// the window, on Add files.
+// task's card and the card shows "+1" (3 files). Cancelling the only upload in the task window
+// (Add files → Upload files) keeps focus in the window, on Add files.
 //
 // project-plan.spec.js, which runs first, moves acme-store on to Testing, so the task's phase is
 // picked rather than left at the current one. Every /api/ai/** request is answered in the
@@ -53,17 +54,24 @@ test('the PM creates a task for Vishal with a PNG and a PDF', async ({ signInAs 
     }
   });
 
-  await page.getByRole('button', { name: 'New task' }).click();
+  await page
+    .getByRole('group', { name: 'Task tools' })
+    .getByRole('button', { name: 'Add task', exact: true })
+    .click();
   const dialog = page.getByRole('dialog', { name: 'New task' });
   await dialog.getByLabel('Task title').fill(TITLE);
-  await dialog.getByLabel('Assign to').selectOption({ label: PEOPLE.vishal.name });
+  await dialog
+    .getByRole('group', { name: 'Assign to' })
+    .getByRole('radio', { name: PEOPLE.vishal.name, exact: true })
+    .check();
   await dialog.getByLabel('Phase').selectOption('development');
-  await expect(dialog).toContainText('Up to 20 files, each up to 500 MB. Any type of file.');
-  await chooseFiles(
-    page,
-    dialog.getByText('Choose files', { exact: true }).filter({ visible: true }),
-    [fileFixture(PICTURE), fileFixture(`pdf/${PDF}`)],
+  await expect(dialog).toContainText(
+    'Up to 20 files, each up to 500 MB. Any type of file. Files from the project stay in Files.',
   );
+  await chooseFiles(page, dialog.getByText('Upload files', { exact: true }), [
+    fileFixture(PICTURE),
+    fileFixture(`pdf/${PDF}`),
+  ]);
   for (const name of [PICTURE, PDF]) {
     await expect(
       dialog.getByRole('button', { name: new RegExp(`^(Remove|Cancel uploading) ${name}$`) }),
@@ -99,7 +107,11 @@ test('the PM creates a task for Vishal with a PNG and a PDF', async ({ signInAs 
   ).toBeVisible();
   const development = page.getByRole('region', { name: 'Development', exact: true });
   await expect(development.getByRole('button', { name: TITLE, exact: true })).toBeVisible();
-  await expect(card(page, TITLE).getByRole('img', { name: '2 files' })).toBeVisible();
+  // The files line: the picture first (its thumbnail opens the viewer), then the PDF's chip.
+  await expect(
+    card(page, TITLE).getByRole('button', { name: `Open picture ${PICTURE}` }),
+  ).toBeVisible();
+  await expect(card(page, TITLE).getByText(PDF, { exact: true })).toBeVisible();
   expect(problemsOf(page), 'console and page errors').toEqual([]);
 });
 
@@ -178,10 +190,11 @@ test('an employee who isn’t on the project gets 404 for the files and the task
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('the PM drops a file on the card and the count goes up', async ({ signInAs }) => {
+test('the PM drops a file on the card and it shows "+1"', async ({ signInAs }) => {
   const page = await openAs(signInAs, PEOPLE.pm, `/projects/${projectId}`);
   const target = card(page, TITLE);
-  await expect(target.getByRole('img', { name: '2 files' })).toBeVisible();
+  await expect(target.getByText(PDF, { exact: true })).toBeVisible();
+  await expect(target.getByTitle('3 files')).toHaveCount(0);
 
   const attached = page.waitForResponse(
     (response) =>
@@ -195,11 +208,11 @@ test('the PM drops a file on the card and the count goes up', async ({ signInAs 
   expect(response.request().postDataJSON().uploadKeys).toHaveLength(1);
   await expect(toasts(page).getByText(`1 file added to ${TITLE}.`)).toBeVisible();
   await expect(toasts(page).getByText(`${PEOPLE.vishal.name} is told.`)).toBeVisible();
-  await expect(target.getByRole('img', { name: '3 files' })).toBeVisible();
+  await expect(target.getByTitle('3 files')).toHaveText('+1');
 
   await test.step('after a reload the card still counts 3', async () => {
     await open(page, `/projects/${projectId}`);
-    await expect(card(page, TITLE).getByRole('img', { name: '3 files' })).toBeVisible();
+    await expect(card(page, TITLE).getByTitle('3 files')).toHaveText('+1');
   });
   expect(problemsOf(page), 'console and page errors').toEqual([]);
 });
@@ -209,12 +222,14 @@ test('cancelling the only upload in the task window keeps focus in it, on Add fi
 }) => {
   const page = await openAs(signInAs, PEOPLE.pm, `/projects/${projectId}?task=${made.taskId}`);
   const window = page.getByRole('dialog', { name: TITLE });
-  await expect(window.getByRole('button', { name: 'Add files', exact: true })).toBeVisible();
+  const addFiles = window.getByRole('button', { name: 'Add files', exact: true });
+  await expect(addFiles).toBeVisible();
   // The piece is never answered, so the file stays on its way until it is cancelled.
   const held = [];
   await page.route('**/api/uploads/*/pieces*', (route) => held.push(route));
   try {
-    await chooseFiles(page, window.getByRole('button', { name: 'Add files', exact: true }), [
+    await addFiles.click();
+    await chooseFiles(page, page.getByRole('menuitem', { name: 'Upload files' }), [
       fileFixture('drawing.svg'),
     ]);
     const cancel = window.getByRole('button', { name: 'Cancel uploading drawing.svg' });

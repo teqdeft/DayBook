@@ -235,20 +235,25 @@ describe('the readers that run before the migration', () => {
     const sql = [];
     const record = (query) => sql.push(query.sql);
     db.on('query', record);
+    // Today's rows read the phase and due date since CONTRACT 28 (through the guarded read, its
+    // fallback reads neither before migration 015: projectPlanMigration.test.js).
     const reads = [
-      projectTasks.listOpenForUser(alice.id),
       projectTasks.countOpenByProjectForUser(alice.id),
       projectTasks.findOpenForPicker({ userId: alice.id, projectId: project.id }),
       projectTasks.findOpenForPickerByProject({ userId: alice.id, projectIds: [project.id] }),
       projectTasks.findByIds([task.id]),
       projectTasks.findById(task.id),
     ];
-    const [today] = await Promise.all(reads);
+    await Promise.all(reads);
     db.removeListener('query', record);
 
     expect(sql.length).toBeGreaterThan(0);
     for (const text of sql) expect(text).not.toMatch(/`phase`|`due_date`/);
-    expect(today.find((row) => row.id === task.id)).not.toHaveProperty('phase');
+    const today = await projectTasks.listOpenForUser(alice.id);
+    expect(today.find((row) => row.id === task.id)).toMatchObject({
+      phase: 'design',
+      dueDate: '2026-11-20',
+    });
   });
 });
 
@@ -310,15 +315,20 @@ describe("the project's PM as an assignee", () => {
       viewer: pmOnTeam,
       projectId: vega.id,
     });
-    expect(options.map((option) => option.name)).toEqual(['Alice Dev', 'Pia Manager']);
+    // CONTRACT 28: the viewer (the PM, who manages) first as Me, then the members, nobody twice.
+    expect(options.map((option) => [option.name, option.kind])).toEqual([
+      ['Pia Manager', 'me'],
+      ['Alice Dev', 'member'],
+    ]);
   });
 
-  it('is offered once, by name, with the tracked members', async () => {
-    const options = await projectTasks.listAssigneeOptions({ viewer: pm, projectId: lyra.id });
+  it('is offered once, after the viewer, with the members (CONTRACT 28)', async () => {
+    const options = await projectTasks.listAssigneeOptions({ viewer: admin, projectId: lyra.id });
     expect(options).toEqual([
-      expect.objectContaining({ id: alice.id, name: 'Alice Dev' }),
-      expect.objectContaining({ id: bob.id, name: 'Bob Dev' }),
-      expect.objectContaining({ id: pm.id, name: 'Paul Manager', role: 'pm' }),
+      expect.objectContaining({ id: admin.id, name: 'Ada Admin', kind: 'me' }),
+      expect.objectContaining({ id: pm.id, name: 'Paul Manager', role: 'pm', kind: 'pm' }),
+      expect.objectContaining({ id: alice.id, name: 'Alice Dev', kind: 'member' }),
+      expect.objectContaining({ id: bob.id, name: 'Bob Dev', kind: 'member' }),
     ]);
   });
 
@@ -331,7 +341,8 @@ describe("the project's PM as an assignee", () => {
       viewer: admin,
       projectId: project.id,
     });
-    expect(options).toEqual([]);
+    // Only the Admin viewer (Me, CONTRACT 28); never the deactivated PM.
+    expect(options.map((option) => option.id)).toEqual([admin.id]);
   });
 
   it('still refuses someone who is neither a member nor the PM', async () => {

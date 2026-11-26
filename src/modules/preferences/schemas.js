@@ -9,12 +9,19 @@ export { THEMES };
 export const SUBMIT_BUTTONS = Object.freeze(['both', 'checkout', 'submit']);
 /** The status of a task line added by hand. */
 export const NEW_TASK_STATUSES = Object.freeze(['in_progress', 'done']);
-/** When the bell's sound plays for a new notification (CONTRACT 26). */
+/**
+ * When the bell's sound plays for a new notification (CONTRACT 26); All is the default since
+ * CONTRACT 28 (My settings shows it first, this order is unchanged).
+ */
 export const BELL_SOUNDS = Object.freeze(['important', 'all', 'off']);
 /** Which sound plays: Chime, Soft bell, Ding or Pop (CONTRACT 26). */
 export const BELL_TONES = Object.freeze(['chime', 'bell', 'ding', 'pop']);
 
-/** Every key with its default (what a person who never changed it gets). */
+/**
+ * Every key with its default (what a person who never changed it gets). A value equal to its
+ * default is never stored, so a new default reaches everyone who never chose one at once
+ * (bellSound became 'all' in CONTRACT 28 with no migration).
+ */
 export const PREFERENCE_DEFAULTS = Object.freeze({
   submitButtons: 'both',
   newTaskStatus: 'in_progress',
@@ -24,7 +31,7 @@ export const PREFERENCE_DEFAULTS = Object.freeze({
   polishLines: true,
   polishAfterTimers: true,
   bellRing: true,
-  bellSound: 'important',
+  bellSound: 'all',
   bellTone: 'chime',
   bellPreview: true,
   theme: 'system',

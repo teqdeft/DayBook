@@ -1,6 +1,9 @@
-/* The band (CONTRACT 27), as the prototype: the stats row, the six 10 px parts 4 px apart and the
-   forecast line under a rule. On a phone the parts lose their names (the switcher names the phase)
-   and become 44 px buttons; the move button and its "⋯" take a full-width row. */
+/* The band (CONTRACT 27 and 28), as the prototype: the stats row, the six 10 px parts 4 px apart and
+   the forecast line under a rule. Every part draws its fill (scaleX of its share, so it can grow
+   without animating its width) and its green layer (on for a done phase) over the track, and one
+   2 px ring sits over the current part (it slides by transform in a phase move). On a phone the
+   parts lose their names (the switcher names the phase) and become 44 px buttons; the move button
+   and its "⋯" take a full-width row. */
 .band {
   --card-pad: 22px 24px 20px;
 }
@@ -97,7 +100,11 @@
   color: var(--ink);
 }
 
-/* The six parts */
+/* The six parts, with the one ring over them */
+.partsWrap {
+  position: relative;
+}
+
 .parts {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -131,21 +138,49 @@
   background: var(--track);
 }
 
-.fill {
+.fill,
+.doneLayer {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  border-radius: 6px 0 0 6px;
+  inset: 0;
+  transform-origin: left center;
+}
+
+.fill {
   background: var(--primary);
+  transform: scaleX(var(--share, 0));
 }
 
-.done .bar {
+.doneLayer {
   background: var(--green);
+  opacity: 0;
 }
 
-.current .bar {
+.doneLayer[data-on] {
+  opacity: 1;
+}
+
+/* the current phase's ring: one part wide, moved to its part */
+.ring {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  width: calc((100% - 20px) / 6);
+  height: 10px;
+  border-radius: 6px;
   box-shadow: 0 0 0 2px var(--primary);
+  transform: translateX(calc(var(--i) * (100% + 4px)));
+  pointer-events: none;
+}
+
+/* a done phase's check, drawn with stroke-dashoffset in a phase move */
+.check {
+  flex: none;
+  margin-top: 1px;
+  color: var(--green);
+}
+
+.check path {
+  stroke-dasharray: 1;
 }
 
 .text {
@@ -161,12 +196,6 @@
   font-size: var(--text-small);
   line-height: 17px;
   color: var(--ink-2);
-}
-
-.name svg {
-  flex: none;
-  margin-top: 1px;
-  color: var(--green);
 }
 
 .current .name {
@@ -188,48 +217,6 @@
   font-variant-numeric: tabular-nums;
   line-height: 18px;
   color: var(--muted);
-}
-
-/* The forecast line */
-.forecast {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin: 18px 0 0;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--ink-2);
-}
-
-.forecast svg {
-  flex: none;
-  margin-top: 1px;
-  color: var(--muted);
-}
-
-.forecast strong {
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.red svg {
-  color: var(--red-on-surface);
-}
-
-.red strong {
-  color: var(--red-text);
-}
-
-.marigold svg,
-.marigold strong {
-  color: var(--marigold-text);
-}
-
-.green svg,
-.green strong {
-  color: var(--green-text);
 }
 
 @media (max-width: 640px) {
@@ -260,6 +247,10 @@
     justify-content: center;
     min-height: 44px;
     padding: 0;
+  }
+
+  .ring {
+    top: 17px;
   }
 
   .value button.change {

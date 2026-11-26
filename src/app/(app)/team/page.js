@@ -2,7 +2,8 @@
 // projects and the team board. PM and Admin; Admins' attendance shows to another Admin only.
 // Refreshes every minute so check-ins, breaks and running timers stay live. People off today
 // (CONTRACT 25) have their own board group and donut segment; the legend lists "Off today" only
-// when someone is.
+// when someone is. A PM's My tasks card (CONTRACT 28) sits between the numbers and the three cards,
+// full width; the minute's refresh brings a task taken on another page.
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import Card, { CardHeader } from '@/components/Card';
@@ -15,6 +16,8 @@ import { requirePage } from '@/lib/session';
 import { plural } from '@/lib/text';
 import { dashboard } from '@/modules/dashboard';
 import { teamTodayQuerySchema, weekMonthQuerySchema } from '@/modules/dashboard/schemas';
+import MyTasksCard from '../my-tasks/MyTasksCard';
+import { loadMyTasksCard } from '../my-tasks/myTasksData';
 import AutoRefresh from '../today/AutoRefresh';
 import HoursCard from './HoursCard';
 import TeamBoard from './TeamBoard';
@@ -37,9 +40,11 @@ export default async function TeamPage({ searchParams }) {
   const range = weekMonthQuerySchema.safeParse({ range: query.range }).data?.range ?? 'week';
   const filter =
     teamTodayQuerySchema.safeParse({ filter: query.filter }).data?.filter ?? 'everyone';
-  const [today, hours] = await Promise.all([
+  const [today, hours, mine] = await Promise.all([
     dashboard.getTeamToday({ filter, viewer: user }),
     dashboard.getHoursCard({ range, scope: 'team' }),
+    // My tasks is the PM's here; an Admin's is on /overview (null when it can't be read).
+    user.role === 'pm' ? loadMyTasksCard({ user }) : null,
   ]);
   const { attendance, counts, urgent } = today;
 
@@ -67,6 +72,8 @@ export default async function TeamPage({ searchParams }) {
           />
         ))}
       </section>
+
+      {mine ? <MyTasksCard mine={mine} /> : null}
 
       <section className={styles.row} aria-label="Hours and attendance">
         <HoursCard

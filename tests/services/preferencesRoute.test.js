@@ -130,26 +130,30 @@ describe('GET and PATCH /api/me/preferences', () => {
   it('reads and saves the bell sound, the tone and the preview (CONTRACT 26)', async () => {
     expect(DEFAULTS).toMatchObject({
       bellRing: true,
-      bellSound: 'important',
+      bellSound: 'all', // CONTRACT 28
       bellTone: 'chime',
       bellPreview: true,
     });
-    const saved = await call(PATCH, 'PATCH', { bellSound: 'all', bellTone: 'pop' });
+    expect((await call(GET, 'GET')).data.bellSound).toBe('all');
+    const saved = await call(PATCH, 'PATCH', { bellSound: 'important', bellTone: 'pop' });
     expect(saved).toEqual({
       status: 200,
-      data: { ...DEFAULTS, bellSound: 'all', bellTone: 'pop' },
+      data: { ...DEFAULTS, bellSound: 'important', bellTone: 'pop' },
     });
     expect((await call(PATCH, 'PATCH', { bellPreview: false })).data).toMatchObject({
-      bellSound: 'all',
+      bellSound: 'important',
       bellTone: 'pop',
       bellPreview: false,
     });
     expect(await storedRow(alice)).toEqual({
-      bellSound: 'all',
+      bellSound: 'important',
       bellTone: 'pop',
       bellPreview: false,
     });
-    await call(PATCH, 'PATCH', { bellSound: 'important', bellTone: 'chime', bellPreview: true });
+    // All, the default, removes the key; the others stay until they go back too.
+    expect((await call(PATCH, 'PATCH', { bellSound: 'all' })).data.bellSound).toBe('all');
+    expect(await storedRow(alice)).toEqual({ bellTone: 'pop', bellPreview: false });
+    await call(PATCH, 'PATCH', { bellSound: 'all', bellTone: 'chime', bellPreview: true });
     expect(await storedRow(alice)).toEqual({});
 
     for (const [body, field, message] of [

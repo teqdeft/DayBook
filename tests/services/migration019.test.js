@@ -89,6 +89,7 @@ describe('migration 019: tables, columns, keys', () => {
   });
 
   it('down takes it all away and up makes it again', async () => {
+    await db.migrate.down({ name: '020_task_file_links.js' });
     await db.migrate.down({ name: MIGRATION });
     await expectNoSchema(expect);
     await db.migrate.latest();
@@ -197,6 +198,7 @@ describe('migration 019 with data', () => {
 
   it('down keeps every note and text: Whole project goes to Requirement gathering', async () => {
     const before = await documents();
+    await db.migrate.down({ name: '020_task_file_links.js' });
     await db.migrate.down({ name: MIGRATION });
     await expectNoSchema(expect);
     const after = await documents();
@@ -233,6 +235,7 @@ describe('migration 019 with data', () => {
 
 describe('migration 019 run again after a stop', () => {
   it('a stopped down (the foreign key already gone) runs again, and a second down too', async () => {
+    await db.migrate.down({ name: '020_task_file_links.js' });
     await db.raw(
       'ALTER TABLE `project_documents` DROP FOREIGN KEY `project_documents_file_id_foreign`',
     );

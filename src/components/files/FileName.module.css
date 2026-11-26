@@ -1,0 +1,24 @@
+/* A file name on one line, cut in the middle, so the end and the type stay visible. */
+.fileName {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.nameHead {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nameTail {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* The whole name for screen readers (with .visually-hidden): never selected, so a copied name
+   isn't there twice. */
+.nameWhole {
+  user-select: none;
+}

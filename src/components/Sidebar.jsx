@@ -1,6 +1,7 @@
 'use client';
 // The navy sidebar: logo, workspace box, nav items (from config/navigation.js, with count badges)
-// and the signed-in person with a menu (Sign out). The active item follows the current path.
+// and the signed-in person with a menu (Sign out). The active item follows the current path. A
+// badge's visually hidden word comes with the item (" waiting"; My tasks " due now", CONTRACT 28).
 // `footer` sits just above the person (the timer chip, CONTRACT 15). The version label
 // ("Daybook v1.05", CONTRACT 20) closes the column.
 import Link from 'next/link';
@@ -17,7 +18,7 @@ import styles from './Sidebar.module.css';
 /**
  * @param {{
  *   items: { key: string, label: string, href: string, icon: string, matches?: string[],
- *     badge?: number }[],
+ *     badge?: number, badgeLabel?: string }[],
  *   companyName?: string, homeHref?: string,
  *   user: { name: string, email?: string, designation?: string, initials?: string, roleLabel?: string },
  *   footer?: import('react').ReactNode, className?: string,
@@ -72,7 +73,7 @@ export default function Sidebar({
                   {item.badge > 0 ? (
                     <span className={styles.badge}>
                       {item.badge > 99 ? '99+' : item.badge}
-                      <span className="visually-hidden"> waiting</span>
+                      <span className="visually-hidden"> {item.badgeLabel ?? 'waiting'}</span>
                     </span>
                   ) : null}
                 </Link>

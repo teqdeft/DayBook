@@ -37,6 +37,13 @@
   }
 }
 
+/* Reduced motion: the dot stays still (green still says the timer runs). */
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
+  }
+}
+
 /* The link runs the chip's full height (44 px), the focus ring stays around the text. */
 .name {
   display: flex;
@@ -105,7 +112,7 @@
   background: var(--navy-active);
   color: var(--on-fill);
   cursor: pointer;
-  transition: background-color 0.12s ease;
+  transition: background-color var(--dur-press) var(--ease-press);
 }
 
 /* a 44 px tap target around the 30 px square, inside the chip */

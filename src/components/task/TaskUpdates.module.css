@@ -1,0 +1,50 @@
+/* The task window's Updates and Latest report (CONTRACT 28, Task window), as the prototype's
+   `.upd`: each line a 28 px avatar, the 13 px muted "Simran Kaur · Mon, 23 Nov · In progress" over
+   the 15 px text, a --track line between lines; the latest report's lead in 600 and its tone. */
+.updatesHeading {
+  margin-bottom: 8px;
+}
+
+.small {
+  margin-top: 6px;
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.updates {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.update {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--track);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.update:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.updateText {
+  min-width: 0;
+}
+
+.updateLead {
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.updateText p {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}

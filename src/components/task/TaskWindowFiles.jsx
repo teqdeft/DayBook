@@ -1,60 +1,72 @@
 'use client';
-// The task window's "Files (n)" (CONTRACT 27, Task window), only when the viewer may see the
+// The task window's "Files (n)" (CONTRACT 27 and 28, Task window), only when the viewer may see the
 // task's files (`canSeeFiles`): pictures first as thumbnails (a click opens the picture viewer),
-// then the other files as rows with Download. In manage mode on a project page the PM and Admins
-// also get an X on each file (soft delete with Undo, "File removed.") and "Add files", which hands
-// the picked files to the page's attach store: the window shows that task's batch as chips, so
-// closing it loses nothing and the card keeps showing the progress. The store's toast ends the
-// batch.
+// then the other files as rows with Download; a linked project file adds " · From Files: Design".
+// In manage mode on a project page the PM and Admins also get an X on each file (an own file:
+// soft delete with Undo, "File removed."; a linked one leaves only this task, "Removed from this
+// task. It stays in Files.", the unlink sent after the toast) and "Add files", a menu of "Upload
+// files" (the page's attach store: the window shows that task's batch as chips, so closing it loses
+// nothing and the card keeps showing the progress) and "From project files" (the picker, which
+// links at once).
 import { useRef, useState } from 'react';
-import { Paperclip } from 'lucide-react';
-import Button from '@/components/Button';
+import { useRouter } from 'next/navigation';
+import { ChevronDown, Folder, Paperclip, Upload } from 'lucide-react';
+import buttonStyles from '@/components/Button.module.css';
+import Menu from '@/components/Menu';
 import FileRows from '@/components/files/FileRows';
+import FilesPicker from '@/components/files/FilesPicker';
 import FileThumbs from '@/components/files/FileThumbs';
 import PictureViewer from '@/components/files/PictureViewer';
 import { useTaskAttach, useTaskBatch } from '@/components/files/TaskAttachProvider';
 import { UploadChips } from '@/components/files/UploadChip';
 import { NO_FILES, filesPart } from './taskWindowView';
+import { useLinkAttach } from './useLinkAttach';
 import styles from './TaskWindow.module.css';
 
-/** "Files (n)" and, for the PM and Admins, "Add files" with the file input it opens. */
-function FilesHead({ headingId, count, canChange, pickRef, onPick }) {
-  const inputRef = useRef(null);
+const ADD_CLASS = [
+  buttonStyles.button,
+  buttonStyles.secondary,
+  buttonStyles.sizeSmall,
+  styles.addFiles,
+].join(' ');
+
+/** "Add files": a menu of Upload files (the hidden file input) and From project files. */
+function AddFiles({ inputRef, onPick, onProject }) {
+  const items = [
+    {
+      label: 'Upload files',
+      icon: <Upload size={16} strokeWidth={1.8} aria-hidden="true" />,
+      onSelect: () => inputRef.current?.click(),
+    },
+    {
+      label: 'From project files',
+      icon: <Folder size={16} strokeWidth={1.8} aria-hidden="true" />,
+      onSelect: onProject,
+    },
+  ];
   return (
-    <div className={styles.sectionHead}>
-      <h3 id={headingId} className={styles.heading}>
-        Files <span className={`${styles.muted} num`}>({count})</span>
-      </h3>
-      {canChange ? (
-        <>
-          <Button
-            ref={pickRef}
-            variant="secondary"
-            size="small"
-            className={styles.addFiles}
-            icon={<Paperclip size={16} strokeWidth={1.8} aria-hidden="true" />}
-            onClick={() => inputRef.current?.click()}
-          >
-            Add files
-          </Button>
-          {/* Opened only through "Add files", so screen readers meet one control, not two. */}
-          <input
-            ref={inputRef}
-            type="file"
-            multiple
-            className="visually-hidden"
-            tabIndex={-1}
-            aria-hidden="true"
-            onChange={onPick}
-          />
-        </>
-      ) : null}
-    </div>
+    <>
+      <Menu label="Add files" items={items} width={200} triggerClassName={ADD_CLASS}>
+        <Paperclip size={16} strokeWidth={1.8} aria-hidden="true" />
+        <span aria-hidden="true">Add files</span>
+        <ChevronDown size={14} strokeWidth={1.8} aria-hidden="true" />
+      </Menu>
+      {/* Opened only through the menu, so screen readers meet one control, not two. */}
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        className="visually-hidden"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={onPick}
+      />
+    </>
   );
 }
 
 /** The files on their way to this task (its batch in the attach store), as chips. */
-function BatchChips({ items, taskId, attach, pickRef }) {
+function BatchChips({ items, taskId, attach, focusAdd }) {
   if (items.length === 0) return null;
   return (
     <div className={styles.chips}>
@@ -63,22 +75,26 @@ function BatchChips({ items, taskId, attach, pickRef }) {
         one
         onRetry={(id) => attach.retry(taskId, id)}
         onRemove={(id) => attach.remove(taskId, id)}
-        focusFallback={() => pickRef.current?.focus()}
+        focusFallback={focusAdd}
       />
     </div>
   );
 }
 
 /**
- * Add files (the picked files go to the attach store) and X (soft delete with Undo); focus comes
- * back to "Add files" (`pickRef`) after either.
+ * Upload files (the picked files go to the attach store) and X (an own file: soft delete with
+ * Undo; a linked one: unlink with Undo); focus comes back to "Add files" after either.
  */
-function useFileActions({ task, attach, removal }) {
-  const pickRef = useRef(null);
+function useFileActions({ task, attach, removal, sectionRef }) {
+  const inputRef = useRef(null);
+  const focusAdd = () =>
+    sectionRef.current?.querySelector('button[aria-haspopup="menu"]')?.focus({
+      preventScroll: true,
+    });
   function pick(event) {
     const files = [...(event.target.files ?? [])];
     event.target.value = '';
-    pickRef.current?.focus();
+    focusAdd();
     if (files.length === 0) return;
     attach.add(task.id, files, {
       title: task.title,
@@ -87,43 +103,83 @@ function useFileActions({ task, attach, removal }) {
       fileCount: task.fileCount ?? 0,
     });
   }
-  function remove(file) {
+  function remove(file, event) {
+    const keyboard = event?.detail === 0;
+    if (file.linked) {
+      removal.unlink(file, task, { keyboard, returnFocus: focusAdd });
+      return;
+    }
     removal.remove(
       { ...file, taskId: task.id },
-      { label: 'File removed.', returnFocus: () => pickRef.current },
+      { label: 'File removed.', keyboard, returnFocus: focusAdd },
     );
   }
-  return { pickRef, pick, remove };
+  return { inputRef, pick, remove, focusAdd };
+}
+
+/**
+ * The picker for this task: the person the confirm names is the task's. Its "Open Files" (a
+ * project with no files yet) closes the windows and opens the Files tab.
+ */
+function Picker({ task, links, onCloseWindow }) {
+  const router = useRouter();
+  const openFiles = () => {
+    links.hide();
+    onCloseWindow?.({ restore: false });
+    router.push(`/projects/${task.projectId}?tab=files`);
+  };
+  const existing = (task.files ?? []).filter((file) => file.linked).map((file) => file.id);
+  return (
+    <FilesPicker
+      projectId={task.projectId}
+      taskId={task.id}
+      assignee={task.assignee ?? null}
+      project={{ id: task.projectId, pmId: task.project?.pmId ?? null }}
+      existing={existing}
+      phase={task.phase ?? null}
+      open={links.open}
+      onAttach={links.attach}
+      onClose={links.hide}
+      onOpenFiles={openFiles}
+    />
+  );
 }
 
 /**
  * @param {{ task: object, mode: string, headingId: string,
- *   removal?: { remove: Function, isHidden: (id: number) => boolean } | null }} props removal:
- *   the project page's useFileRemoval (TaskWindowProvider)
+ *   removal?: { remove: Function, unlink: Function, isHidden: (id: number) => boolean,
+ *   isLinkHidden: (taskId: number, fileId: number) => boolean } | null,
+ *   onCloseWindow?: (opts?: { restore?: boolean }) => void }} props removal: the project page's
+ *   useFileRemoval (TaskWindowProvider); onCloseWindow: closes the task window (the picker's
+ *   "Open Files")
  */
-export default function TaskWindowFiles({ task, mode, headingId, removal }) {
+export default function TaskWindowFiles({ task, mode, headingId, removal, onCloseWindow }) {
   const attach = useTaskAttach();
   const part = filesPart({
     mode,
     task,
     canAttach: Boolean(attach && removal),
     isHidden: removal?.isHidden,
+    isLinkHidden: removal?.isLinkHidden,
   });
   const batch = useTaskBatch(part.canChange ? task.id : null);
+  const sectionRef = useRef(null);
+  const links = useLinkAttach({ task });
   const [viewing, setViewing] = useState(null);
-  const { pickRef, pick, remove } = useFileActions({ task, attach, removal });
+  const actions = useFileActions({ task, attach, removal, sectionRef });
   if (!part.show) return null;
   const items = part.canChange ? (batch?.items ?? []) : [];
-  const onRemove = part.canChange ? remove : undefined;
+  const onRemove = part.canChange ? actions.remove : undefined;
   return (
-    <section className={styles.section} aria-labelledby={headingId}>
-      <FilesHead
-        headingId={headingId}
-        count={part.count}
-        canChange={part.canChange}
-        pickRef={pickRef}
-        onPick={pick}
-      />
+    <section ref={sectionRef} className={styles.section} aria-labelledby={headingId}>
+      <div className={styles.sectionHead}>
+        <h3 id={headingId} className={styles.heading}>
+          Files <span className={`${styles.muted} num`}>({part.count})</span>
+        </h3>
+        {part.canChange ? (
+          <AddFiles inputRef={actions.inputRef} onPick={actions.pick} onProject={links.show} />
+        ) : null}
+      </div>
       <FileThumbs
         files={part.pictures}
         onOpen={(file, index) => setViewing(index)}
@@ -132,7 +188,7 @@ export default function TaskWindowFiles({ task, mode, headingId, removal }) {
       {part.pictures.length && part.others.length ? <div className={styles.gap} /> : null}
       <FileRows files={part.others} onRemove={onRemove} />
       {part.count === 0 && items.length === 0 ? <p className={styles.muted}>{NO_FILES}</p> : null}
-      <BatchChips items={items} taskId={task.id} attach={attach} pickRef={pickRef} />
+      <BatchChips items={items} taskId={task.id} attach={attach} focusAdd={actions.focusAdd} />
       {viewing !== null ? (
         <PictureViewer
           files={part.pictures}
@@ -141,6 +197,7 @@ export default function TaskWindowFiles({ task, mode, headingId, removal }) {
           onClose={() => setViewing(null)}
         />
       ) : null}
+      {part.canChange ? <Picker task={task} links={links} onCloseWindow={onCloseWindow} /> : null}
     </section>
   );
 }

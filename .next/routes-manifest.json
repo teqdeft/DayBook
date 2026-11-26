@@ -259,6 +259,15 @@
       "namedRegex": "^/api/project\\-tasks/(?<nxtPid>[^/]+?)/files(?:/)?$"
     },
     {
+      "page": "/api/project-tasks/[id]/links/[fileId]",
+      "regex": "^/api/project\\-tasks/([^/]+?)/links/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid",
+        "nxtPfileId": "nxtPfileId"
+      },
+      "namedRegex": "^/api/project\\-tasks/(?<nxtPid>[^/]+?)/links/(?<nxtPfileId>[^/]+?)(?:/)?$"
+    },
+    {
       "page": "/api/project-tasks/[id]/status",
       "regex": "^/api/project\\-tasks/([^/]+?)/status(?:/)?$",
       "routeKeys": {
@@ -289,6 +298,14 @@
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/api/projects/(?<nxtPid>[^/]+?)/documents(?:/)?$"
+    },
+    {
+      "page": "/api/projects/[id]/files",
+      "regex": "^/api/projects/([^/]+?)/files(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/projects/(?<nxtPid>[^/]+?)/files(?:/)?$"
     },
     {
       "page": "/api/projects/[id]/members",
@@ -338,6 +355,14 @@
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/api/projects/(?<nxtPid>[^/]+?)/tasks(?:/)?$"
+    },
+    {
+      "page": "/api/projects/[id]/tasks/bulk",
+      "regex": "^/api/projects/([^/]+?)/tasks/bulk(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/projects/(?<nxtPid>[^/]+?)/tasks/bulk(?:/)?$"
     },
     {
       "page": "/api/projects/[id]/urgent",
@@ -1000,6 +1025,12 @@
       "regex": "^/my\\-settings(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/my\\-settings(?:/)?$"
+    },
+    {
+      "page": "/my-tasks",
+      "regex": "^/my\\-tasks(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/my\\-tasks(?:/)?$"
     },
     {
       "page": "/no-access",

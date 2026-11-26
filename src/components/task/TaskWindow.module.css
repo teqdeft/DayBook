@@ -1,6 +1,9 @@
-/* The task window (CONTRACT 27), as the prototype: the Dialog's frame at 640 px and at most 90%
-   high, the project and phase line over a 20 px title, the facts in two columns, sections parted
-   by a line, and a full-screen sheet on a phone with the main button first. */
+/* The task window (CONTRACT 27 and 28), as the prototype: the Dialog's frame at 720 px and at most
+   90% high, "#8", the project and phase line over a 20 px title, then two columns (the sections at
+   the left, parted by a line; the 220 px rail at the right, TaskWindowRail.module.css), one column
+   below a 720 px window, and a full-screen sheet on a phone (rising in) with the main button
+   first. Its exit and a link's window without an entrance come from Dialog.module.css
+   (`data-closing`, `data-instant` on the shared root). */
 .panel {
   max-height: min(90vh, calc(100vh - 48px));
 }
@@ -24,6 +27,15 @@
   gap: 8px;
   margin-bottom: 8px;
   font-size: 14px;
+  color: var(--muted);
+}
+
+/* "#8": Schibsted 13, muted, tabular */
+.number {
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-small);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
 
@@ -62,62 +74,29 @@
   text-align: center;
 }
 
-/* Owner, Due, Priority, Added by */
-.facts {
+/* The two columns: minmax(0, 1fr) and the 220 px rail, 24 px apart */
+.columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 14px 24px;
-  margin: 0;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 0 24px;
 }
 
-.facts div {
+.mainColumn {
   min-width: 0;
 }
 
-.facts dt {
-  font-size: var(--text-small);
-  color: var(--muted);
-}
-
-.facts dd {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-height: 26px;
-  margin: 4px 0 0;
-  font-size: 15px;
-  color: var(--ink);
-}
-
-/* "Anyone on the project": the dashed circle of the board's cards (the prototype's `.av-any`). */
-.anyone {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: 1.5px dashed var(--line-dashed);
-  border-radius: 50%;
-  background: transparent;
-  color: var(--muted);
-}
-
-.away {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-/* Note, Files, Latest report. The page's line height (1.45), as the prototype, so a thumbnail's
-   12 px size line stays 17 px high. */
+/* Note, Files, Updates, Latest report. The page's line height (1.45), as the prototype, so a
+   thumbnail's 12 px size line stays 17 px high. */
 .section {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
   font-size: 15px;
   line-height: 1.45;
   color: var(--ink);
+}
+
+.section + .section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
 }
 
 .sectionHead {
@@ -125,7 +104,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .heading {
@@ -138,6 +117,11 @@
 
 .sectionHead .heading {
   margin-bottom: 0;
+}
+
+/* "Add files": a small secondary button with its chevron */
+.addFiles {
+  gap: 8px;
 }
 
 .note {
@@ -194,9 +178,24 @@
   color: var(--green);
 }
 
+@keyframes window-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--shift-sheet));
+  }
+}
+
+/* Below a 720 px window (the panel's 720 px plus the overlay's 16 px sides): one column, the rail
+   first (TaskWindowRail.module.css). */
+@media (max-width: 751px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* A phone: the sheet fills the screen (also between 521 and 640 px, where the Dialog's frame keeps
-   its margins), the body grows so the footer sits at the bottom edge, and the X and "Add files"
-   are 44 px tap targets, as the prototype's `.win-h .ib` and `.btn-sm`. */
+   its margins) and comes up from below, the body grows so the footer sits at the bottom edge, and
+   the X and "Add files" are 44 px tap targets, as the prototype's `.win-h .ib` and `.btn-sm`. */
 @media (max-width: 640px) {
   [role='dialog'].panel {
     position: fixed;
@@ -206,6 +205,7 @@
     max-height: none;
     border: 0;
     border-radius: 0;
+    animation-name: window-sheet-in;
   }
 
   [role='dialog'].panel > [data-modal-body] {
@@ -220,24 +220,6 @@
 
   .sectionHead .addFiles {
     height: 44px;
-  }
-
-  .facts {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-  }
-
-  .facts > div {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .facts dd {
-    justify-content: flex-end;
-    margin: 0;
-    text-align: right;
   }
 
   .main {

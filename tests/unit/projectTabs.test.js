@@ -2,9 +2,10 @@
 // (`phases` and `overview` open the Board, old range links open Hours in the PM view only, a member
 // asking for Summary, Timeline or Hours gets the Board, `show` never changes the tab), and only the
 // chosen tab is mounted, so only that tab loads its data. The PM view's header carries the health
-// tag, the Urgent tag and "+ New task" (the project's PM and Admins, never on a Completed project);
-// the New task window and the attach store are mounted for managers only, the task window for
-// everyone. The tabs and providers are stubbed here: the tabs are async and renderToStaticMarkup
+// tag, the Urgent tag and, for the project's PM and Admins on every tab but the Board (whose
+// toolbar has "Add task", CONTRACT 28), "+ New task", or "Reopen project" on a Completed project;
+// the task actions, the New task window and the attach store are mounted for managers only, the
+// task window for everyone. The tabs and providers are stubbed here: the tabs are async and renderToStaticMarkup
 // can't wait for them (projectSummaryTab.test.js and the Board's own tests render them). Vite can't
 // read JSX in page.js, so this renders ProjectView, which is all page.js renders for the PM view.
 import { createElement } from 'react';
@@ -39,6 +40,10 @@ const provider = (name, keys) =>
     const given = keys.map((key) => `${key}=${props[key]}`).join(',');
     return createElement('div', { 'data-provider': name, 'data-props': given }, props.children);
   };
+vi.mock('@/app/(app)/projects/[id]/_board/TaskActionsProvider', () => ({
+  TaskActionsProvider: provider('actions', ['projectId', 'project', 'status', 'viewerId']),
+  useTaskActions: () => null,
+}));
 vi.mock('@/app/(app)/projects/[id]/_board/TaskEditorProvider', () => ({
   TaskEditorProvider: provider('editor', ['projectId', 'viewerId']),
   useTaskEditor: () => ({ openNew }),
@@ -81,6 +86,7 @@ const HEAD = {
     statusLabel: 'Active',
     isUrgent: false,
     urgentNote: null,
+    pmId: 7,
   },
   plan: { currentPhase: 'development', deadline: null, phases: [] },
   forecast: { kind: 'off', pill: 'Off track' },
@@ -90,6 +96,8 @@ const HEAD = {
   filesAccess: 'manage',
   limits: LIMITS,
   options: [{ id: 9, name: 'Vishal Saini' }],
+  viewerId: 7,
+  viewerName: 'Riya Kapoor',
 };
 
 const OTHER_PM = { ...HEAD, canManage: false, access: 'team', filesAccess: 'none' };
@@ -246,21 +254,41 @@ describe('the project page', () => {
     expect(html).toContain('Urgent: Checkout fix before demo');
   });
 
-  it('offers "+ New task" to the project’s PM and Admins', () => {
-    const html = page();
-    expect(noTags(html)).toContain('New task');
-    expect(html).toContain('lucide-plus');
+  it('offers "+ New task" to the project’s PM and Admins on every tab but the Board', () => {
+    for (const tab of ['summary', 'files', 'timeline', 'hours']) {
+      const html = page({ tab });
+      expect(noTags(html)).toContain('New task');
+      expect(html).toContain('id="project-new-task"');
+    }
+    // the Board tab's header has no button: the toolbar's Add task is its one add
+    expect(page()).not.toContain('id="project-new-task"');
+    expect(page({ tab: 'board' })).not.toContain('New task');
   });
 
-  it('has no "+ New task" on a Completed project or for another PM', () => {
+  it('offers "Reopen project" in place of it on a Completed project, to managers only', () => {
     const completed = { ...HEAD.project, status: 'completed', statusLabel: 'Completed' };
-    expect(noTags(page({}, { ...HEAD, project: completed }))).not.toContain('New task');
-    expect(noTags(page({}, OTHER_PM))).not.toContain('New task');
+    const done = {
+      ...HEAD,
+      project: completed,
+      forecast: { kind: 'completed', pill: 'Completed' },
+    };
+    expect(page({ tab: 'summary' }, done)).toContain('id="project-reopen"');
+    const html = noTags(page({ tab: 'summary' }, done));
+    expect(html).not.toContain('New task');
+    expect(html).toContain('Reopen project');
+    expect(html).toContain('Completed');
+    expect(noTags(page({}, done))).not.toContain('Reopen project'); // the toolbar has it there
+    const other = noTags(page({ tab: 'summary' }, { ...OTHER_PM, project: completed }));
+    expect(other).not.toContain('New task');
+    expect(other).not.toContain('Reopen project');
   });
 
-  it('mounts the New task window and the attach store for managers, around every tab', () => {
+  it('mounts the task actions, the New task window and the attach store for managers', () => {
     for (const tab of ['board', 'summary', 'files', 'timeline', 'hours']) {
       const html = page({ tab });
+      expect(html).toContain(
+        'data-provider="actions" data-props="projectId=5,project=[object Object],status=active,viewerId=7"',
+      );
       expect(html).toContain('data-provider="editor" data-props="projectId=5,viewerId=7"');
       expect(html).toContain('data-provider="attach" data-props="projectId=5"');
       expect(html).toContain('data-provider="window" data-props="mode=manage,projectId=5"');
@@ -275,6 +303,7 @@ describe('the project page', () => {
 
   it('gives another PM only the task window, read only', () => {
     const html = page({}, OTHER_PM);
+    expect(html).not.toContain('data-provider="actions"');
     expect(html).not.toContain('data-provider="editor"');
     expect(html).not.toContain('data-provider="attach"');
     expect(html).not.toContain('data-drop-guard');
@@ -285,6 +314,9 @@ describe('the project page', () => {
 
   it('puts the header inside the providers, so "+ New task" opens the shared window', () => {
     const html = page();
+    expect(html.indexOf('data-provider="actions"')).toBeLessThan(
+      html.indexOf('data-provider="editor"'),
+    );
     expect(html.indexOf('data-provider="editor"')).toBeLessThan(html.indexOf('<header>'));
     expect(html.indexOf('data-provider="window"')).toBeLessThan(html.indexOf('<header>'));
   });

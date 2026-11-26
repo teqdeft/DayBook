@@ -1,0 +1,125 @@
+/* A My tasks row (CONTRACT 28, My tasks: sidebar, page and home cards), as the prototype's home
+   card draws it: 52 px, the round tick (or an empty 36 px cell), the title, then the project label,
+   the phase, the due tag, the P tag and the paperclip in their columns. From 641 to 1023 px the
+   phase and the paperclip step aside; on a phone the rest goes under the title. Also the parts the
+   page's table cells share (title button, paperclip, project cell, phase). */
+
+.row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 130px 96px 96px 36px 40px;
+  justify-items: start;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 20px;
+  border-bottom: 1px solid var(--track);
+  cursor: pointer;
+  transition: background-color var(--dur-press) var(--ease-press);
+}
+
+.row:hover {
+  background: var(--surface-muted);
+}
+
+/* Ticked done, before it leaves the list (useMineTick) */
+.row[data-ticking] {
+  opacity: 0.6;
+}
+
+.row[data-ticking] .title {
+  color: var(--muted);
+}
+
+.meta {
+  display: contents;
+}
+
+.noTick {
+  width: 36px;
+}
+
+/* The title: a button that opens the task window */
+.title {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  line-height: 20px;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.title:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.project {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.phase {
+  font-size: var(--text-small);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.clip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* A computer narrower than the sidebar's breakpoint: the tick, the title, project, due and P */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .row {
+    grid-template-columns: 28px minmax(0, 1fr) auto auto auto;
+  }
+
+  .rowPhase,
+  .rowClip {
+    display: none;
+  }
+}
+
+/* A phone: the title on the first line, the project, phase, due, P and paperclip under it */
+@media (max-width: 640px) {
+  .row {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 4px 10px;
+    padding: 10px 16px;
+  }
+
+  .row > :first-child {
+    grid-row: 1 / span 2;
+  }
+
+  .rowTitle {
+    grid-column: 2 / 4;
+    margin-block: -12px;
+    padding-block: 12px;
+  }
+
+  .meta {
+    display: flex;
+    grid-column: 2 / 4;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+  }
+}

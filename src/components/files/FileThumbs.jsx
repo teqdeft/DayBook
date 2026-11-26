@@ -1,13 +1,15 @@
 'use client';
-// A task's pictures as thumbnails (CONTRACT 27, Task window): 120 x 90, the small JPEG the
-// uploader's browser made (`thumbUrl`), else the picture tile; the name (12 px, cut in the middle)
-// and the size under each; a click opens the picture viewer. Managers on a project page get an X
-// on each ("Remove brief.png"). Only real pictures come here (`picturesOf`): a PNG, JPEG, GIF or
+// A task's pictures as thumbnails (CONTRACT 27, Task window; CONTRACT 28): 120 x 90, the small JPEG
+// the uploader's browser made (`thumbUrl`), else the picture tile; the name (12 px, cut in the
+// middle) and the size under each (" · From Files: Design" for a linked project file); a click
+// opens the picture viewer. Managers on a project page get an X on each ("Remove brief.png"; a
+// linked one "Remove homepage.png from this task"). Only real pictures come here (`picturesOf`): a PNG, JPEG, GIF or
 // WebP whose first bytes matched (`isPicture`), never an SVG.
 import { useState } from 'react';
 import { FileImage, X } from 'lucide-react';
 import { formatSize } from '@/modules/projectFiles/kinds';
 import FileName from './FileName';
+import { fromFiles, removeLabel } from './FileRows';
 import styles from './Files.module.css';
 
 /**
@@ -44,6 +46,7 @@ function Thumb({ file, index, onOpen, onRemove }) {
             height={90}
             loading="lazy"
             decoding="async"
+            draggable={false}
             onError={() => setBroken(true)}
           />
         ) : (
@@ -53,14 +56,17 @@ function Thumb({ file, index, onOpen, onRemove }) {
       <span className={styles.thumbName} title={file.name}>
         <FileName name={file.name} />
       </span>
-      <span className={styles.thumbSize}>{formatSize(file.sizeBytes)}</span>
+      <span className={styles.thumbSize}>
+        {formatSize(file.sizeBytes)}
+        {fromFiles(file)}
+      </span>
       {onRemove ? (
         <button
           type="button"
           className={`${styles.iconButton} ${styles.thumbX}`}
-          aria-label={`Remove ${file.name}`}
-          title={`Remove ${file.name}`}
-          onClick={() => onRemove(file)}
+          aria-label={removeLabel(file)}
+          title={removeLabel(file)}
+          onClick={(event) => onRemove(file, event)}
         >
           <X size={14} strokeWidth={1.8} aria-hidden="true" />
         </button>
@@ -79,7 +85,13 @@ export default function FileThumbs({ files, onOpen, onRemove }) {
   return (
     <ul className={styles.thumbs}>
       {files.map((file, index) => (
-        <Thumb key={file.id} file={file} index={index} onOpen={onOpen} onRemove={onRemove} />
+        <Thumb
+          key={`${file.linked ? 'link' : 'file'}-${file.id}`}
+          file={file}
+          index={index}
+          onOpen={onOpen}
+          onRemove={onRemove}
+        />
       ))}
     </ul>
   );

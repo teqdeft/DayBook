@@ -1,0 +1,130 @@
+/* The toolbar's faces (CONTRACT 28, Board toolbar, item 6), as the prototype: up to 5 avatars of 28 px
+   overlapping by 4 px (a 24 px step, so each face keeps a 24 x 28 px target of its own) with a 2 px
+   --surface ring, "+2" for the rest and the dashed Anyone circle 8 px apart. A pressed face gets a
+   2 px --ink ring. At 640 px and below they don't overlap: 44 px buttons with a 32 px avatar, 2 px
+   apart, the pressed ring drawn on the avatar, the row scrolling inside itself. */
+.faces {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+  padding-left: 4px;
+}
+
+.face {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  margin-left: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.face:first-child {
+  margin-left: 0;
+}
+
+/* "+2" is the first child of its menu's wrapper, and still overlaps the face before it */
+.face.moreFace {
+  margin-left: -4px;
+}
+
+.face:hover {
+  z-index: 1;
+}
+
+.face[aria-pressed='true'] {
+  z-index: 2;
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--ink);
+}
+
+.face:focus-visible {
+  z-index: 3;
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--primary);
+}
+
+.face[aria-pressed='true']:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--ink),
+    0 0 0 6px var(--primary);
+}
+
+.anyone {
+  margin-left: 8px;
+  box-shadow: none;
+}
+
+/* "+2": a 28 px circle */
+.more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--line);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* Anyone on the project: a dashed circle */
+.anyoneCircle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border: 1.5px dashed var(--line-dashed);
+  border-radius: 50%;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .faces {
+    flex: 1 1 100%;
+    gap: 2px;
+    margin-left: 0;
+    padding: 4px 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .face,
+  .face.moreFace,
+  .anyone {
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin-left: 0;
+    box-shadow: none;
+  }
+
+  .face[aria-pressed='true'] {
+    box-shadow: none;
+  }
+
+  .face > span {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  .face[aria-pressed='true'] > span {
+    box-shadow:
+      0 0 0 2px var(--surface),
+      0 0 0 4px var(--ink);
+  }
+}

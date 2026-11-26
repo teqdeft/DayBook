@@ -1,11 +1,52 @@
-/* The canvas sets the header text 1-2 px lower than the shared card header. */
+/* The canvas sets the header text 1-2 px lower than the shared card header. The Copy button
+   (CONTRACT 28) stays top right: the title and subtitle take the rest of the row and the subtitle
+   wraps under the title, so the button never drops under them on a narrow card. */
 .card .header {
+  flex-wrap: nowrap;
+  align-items: flex-start;
   padding-top: 16px;
   padding-bottom: 14px;
 }
 
+.card .header > :first-child {
+  flex: 1 1 auto;
+}
+
 .card .header p {
   margin-top: 2px;
+}
+
+/* Copy and Check share one 16 px place and crossfade; Check is in the success colour. The span
+   is lifted as the button lifts a bare icon (Button.module.css). */
+.icons {
+  display: inline-grid;
+  flex-shrink: 0;
+  translate: 0 calc(var(--btn-pad-top, 0px) * -0.75);
+}
+
+.icons > svg {
+  grid-area: 1 / 1;
+  transition: opacity var(--dur-out) var(--ease-standard);
+}
+
+.checkIcon {
+  opacity: 0;
+  color: var(--green);
+}
+
+.icons[data-copied] .copyIcon {
+  opacity: 0;
+}
+
+.icons[data-copied] .checkIcon {
+  opacity: 1;
+}
+
+/* Reduced motion: the icons swap at once (CONTRACT 28, Copy button). */
+@media (prefers-reduced-motion: reduce) {
+  .icons > svg {
+    transition: none;
+  }
 }
 
 .body {

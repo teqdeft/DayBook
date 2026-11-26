@@ -133,12 +133,14 @@
   margin: 4px 0 0 -4px;
 }
 
-.panelSwatch .dot {
-  transition: transform 100ms ease;
+/* Hover is a colour only (CONTRACT 28, Motion, Moments: no scale): a ring round the dot, the 40 px
+   box's own background. */
+.panelSwatch {
+  transition: background-color var(--dur-press) var(--ease-press);
 }
 
-.panelSwatch:hover .dot {
-  transform: scale(1.08);
+.panelSwatch:hover {
+  background: var(--line-strong);
 }
 
 .panelSwatch[aria-pressed='true'] .dot {
@@ -172,7 +174,7 @@
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: background-color var(--dur-press) var(--ease-press);
 }
 
 .anyColour:hover {

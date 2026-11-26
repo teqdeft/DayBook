@@ -1,5 +1,5 @@
-// Important notifications (CONTRACT 26, 27): ALERT_TYPES is exactly the table of 44 types (19
-// important), every prefix has a group, and a source scan fails for any notification type the code
+// Important notifications (CONTRACT 26, 27, 28): ALERT_TYPES is exactly the table of 45 types (19
+// important, 26 normal), every prefix has a group, and a source scan fails for any notification type the code
 // creates that isn't classified (literals and templates on lines with `type:` or `TYPE =`).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -59,6 +59,7 @@ const TABLE = [
   ['project_task.added', false, 'task'],
   ['project_task.changed', false, 'task'],
   ['project_task.files_added', false, 'task'],
+  ['project_task.reassigned', false, 'task'],
   ['report_edit.sent', false, 'report'],
   ['report_edit.approved', false, 'report'],
   ['report_edit.declined', false, 'report'],
@@ -137,11 +138,14 @@ function scanSources() {
 }
 
 describe('ALERT_TYPES', () => {
-  it('is exactly the 44 types of the table, 19 of them important', () => {
+  it('is exactly the 45 types of the table, 19 of them important and 26 normal', () => {
     expect(Object.isFrozen(ALERT_TYPES)).toBe(true);
     expect(Object.keys(ALERT_TYPES).sort()).toEqual(TABLE.map(([type]) => type).sort());
-    expect(Object.keys(ALERT_TYPES)).toHaveLength(44);
+    expect(Object.keys(ALERT_TYPES)).toHaveLength(45);
     expect(ALERT_TYPES['project_task.files_added']).toBe('normal');
+    // CONTRACT 28: the earlier person's notice, normal, in the task group.
+    expect(ALERT_TYPES['project_task.reassigned']).toBe('normal');
+    expect(alertGroup('project_task.reassigned')).toBe('task');
     for (const [type, important] of TABLE) {
       expect(ALERT_TYPES[type], type).toBe(important ? 'important' : 'normal');
       expect(alertLevel(type), type).toBe(important ? 'important' : 'normal');
@@ -149,6 +153,7 @@ describe('ALERT_TYPES', () => {
       expect(isClassified(type), type).toBe(true);
     }
     expect(TABLE.filter(([, important]) => important)).toHaveLength(19);
+    expect(TABLE.filter(([, important]) => !important)).toHaveLength(26);
   });
 
   it('gives every type a group from its prefix', () => {
@@ -199,12 +204,13 @@ describe('every type the code creates is classified (source scan)', () => {
     expect(places('project_request.approved').some((where) => where.startsWith('db/demo/'))).toBe(
       true,
     );
-    // CONTRACT 27's new type, sent by the task messages.
-    expect(
-      places('project_task.files_added').some((where) =>
-        where.startsWith('src/modules/projectTasks/messages.js:'),
-      ),
-    ).toBe(true);
+    // CONTRACT 27's and 28's new types, sent by the task messages.
+    for (const type of ['project_task.files_added', 'project_task.reassigned']) {
+      expect(
+        places(type).some((where) => where.startsWith('src/modules/projectTasks/messages.js:')),
+        type,
+      ).toBe(true);
+    }
     const unclassified = literals.filter(({ value }) => !isClassified(value));
     expect(unclassified).toEqual([]);
   });

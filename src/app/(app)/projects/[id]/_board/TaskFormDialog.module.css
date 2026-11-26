@@ -1,5 +1,6 @@
-/* The New task and Edit task window (CONTRACT 27), as the prototype: 18 px between fields, two
-   fields side by side, the priority as a segmented row of radios, and a full-screen sheet on a
+/* The New task and Edit task window (CONTRACT 27 and 28), as the prototype: 18 px between fields,
+   "Assign to" as wrapping radio chips, Due date and Priority side by side, the priority as a
+   segmented row of radios, the share confirm in place of the footer, and a full-screen sheet on a
    phone with the main button first. */
 .fields {
   display: flex;
@@ -17,6 +18,108 @@
 .optional {
   font-weight: 400;
   color: var(--muted);
+}
+
+/* "Assign to": 38 px chips (44 px on a phone), each a label with a 28 px avatar and the name */
+.assignBox {
+  min-width: 0;
+}
+
+.assign {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.find {
+  flex: 1 1 100%;
+}
+
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  height: 38px;
+  padding: 0 12px 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-press) var(--ease-press),
+    background-color var(--dur-press) var(--ease-press),
+    color var(--dur-press) var(--ease-press);
+}
+
+.chip > span:last-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chip:hover {
+  background: var(--surface-muted);
+}
+
+.chip input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.chip:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-text);
+  font-weight: 600;
+}
+
+.chip:has(input:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+
+/* "Anyone on the project": the dashed circle of the cards, 28 px */
+.anyone {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1.5px dashed var(--line-dashed);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+
+.help {
+  margin-top: 5px;
+  font-size: var(--text-tag);
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.fieldError {
+  margin-top: 5px;
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}
+
+/* the share confirm fills the footer's row */
+.share {
+  margin: -4px 0;
 }
 
 /* Priority: "P1 critical", "P2", "P3" */
@@ -125,6 +228,10 @@
 
   .two {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chip {
+    height: 44px;
   }
 
   .segment {

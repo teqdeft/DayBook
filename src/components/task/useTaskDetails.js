@@ -1,5 +1,5 @@
 'use client';
-// One task's details for the task window and the Edit task window (CONTRACT 27): the
+// One task's details for the task window and the Edit task window (CONTRACT 27 and 28): the
 // `GET /api/project-tasks/[id]` answer (TaskDetails). The last 8 stay in memory for this tab, so
 // a task opened again shows at once while it loads again behind. forgetTaskDetails drops one after
 // a save, an attach or a file removal; a window still showing that task then loads it again and
@@ -47,10 +47,11 @@ function startState(key, id, previous) {
 /**
  * @param {number | null} taskId null loads nothing
  * @returns {{ task: object | null, loading: boolean, error: object | null,
- *   reload: () => void }} task: TaskDetails (`{ id, projectId, project, title, details, priority,
- *   status, phase, dueDate, assignee, createdBy, createdAt, doneAt, latestReport, files,
- *   fileCount, canManage, canSeeFiles }`), shown from memory while it loads again; error: the
- *   ApiError of a failed load (task null then)
+ *   reload: () => void }} task: TaskDetails (`{ id, projectId, project: { …, pmId }, title,
+ *   details, priority, status, phase, dueDate, assignee: { …, role, status } | null, createdBy,
+ *   createdAt, doneAt, latestReport, updates, updateCount, minutes, privateLinkCount, files (own,
+ *   then linked with `linked: true`), fileCount, canManage, canSeeFiles }`, CONTRACT 28), shown
+ *   from memory while it loads again; error: the ApiError of a failed load (task null then)
  */
 export function useTaskDetails(taskId) {
   const id = Number(taskId) > 0 ? Number(taskId) : null;

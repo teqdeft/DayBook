@@ -37,7 +37,7 @@ const NOTIFICATION_ROWS = [
   ],
   [
     'Sound',
-    'A short sound for new notifications while Daybook is open. Important ones ask you to act, like a reminder to check in or a request to approve.',
+    'A short sound for every new notification while Daybook is open. Important only plays it just for reminders and requests that ask you to act.',
   ],
   ['Choose a sound', 'Pick one to hear it.'],
   [
@@ -92,8 +92,9 @@ test('an employee changes the theme, the submit buttons and the Slack preview', 
     }
 
     const sound = section.getByRole('group', { name: 'Sound', exact: true });
-    await expect(sound.getByRole('button')).toHaveText(['Important only', 'All', 'Off']);
-    await expect(sound.getByRole('button', { name: 'Important only' })).toHaveAttribute(
+    // All is the default since CONTRACT 28 (an owner request).
+    await expect(sound.getByRole('button')).toHaveText(['All', 'Important only', 'Off']);
+    await expect(sound.getByRole('button', { name: 'All', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
     );

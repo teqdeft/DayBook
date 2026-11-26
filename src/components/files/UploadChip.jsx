@@ -1,6 +1,6 @@
 'use client';
 // One file on its way in, or one already on the task in the Edit window (CONTRACT 27, Upload
-// states): a 36 px tile (a local preview only for a real PNG, JPEG, GIF or WebP, never SVG; the
+// states; CONTRACT 28: the bar fills by scaleX): a 36 px tile (a local preview only for a real PNG, JPEG, GIF or WebP, never SVG; the
 // type tile otherwise; an alert on an Error chip), the name cut in the middle, the state line with
 // a 3 px progress bar while it uploads, Retry on a Paused chip, and the X ("Remove brief.pdf",
 // "Cancel uploading brief.pdf"; on an attached file it marks it "Removed when you save" and turns
@@ -13,6 +13,7 @@ import FileName from './FileName';
 import FileTile from './FileTile';
 import { RUNNING, stateLine } from './uploadItems';
 import styles from './Files.module.css';
+import upload from './UploadChip.module.css';
 
 /**
  * Focus the Retry of one chip (a paused chip that blocks the task form's Save), found by the item's
@@ -28,14 +29,17 @@ export function focusChipRetry(itemId, within) {
 function ProgressLine({ item }) {
   return (
     <span
-      className={styles.bar}
+      className={upload.bar}
       role="progressbar"
       aria-label={`Uploading ${item.name}`}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={item.percent}
     >
-      <span className={styles.barFill} style={{ width: `${item.percent}%` }} />
+      <span
+        className={upload.barFill}
+        style={{ '--fill': Math.min(100, Math.max(0, item.percent ?? 0)) / 100 }}
+      />
     </span>
   );
 }
@@ -106,7 +110,7 @@ export default function UploadChip({ item, onRemove, onRetry, removed = false, o
           {item.state === 'uploading' ? (
             <>
               {' '}
-              <span className={styles.percent}>{item.percent}%</span>
+              <span className={upload.percent}>{item.percent}%</span>
             </>
           ) : null}
         </span>
@@ -136,8 +140,10 @@ export default function UploadChip({ item, onRemove, onRetry, removed = false, o
  * The chips of one uploader, two a line (one with `one`, and on a phone).
  * @param {{ items: object[], onRemove?: (id: string) => void, onRetry?: (id: string) => void,
  *   removedIds?: number[], onToggleRemove?: (fileId: number) => void, one?: boolean,
- *   focusFallback?: () => void, label?: string, labelledBy?: string }} props focusFallback:
- *   where focus goes when the last chip goes (Choose files)
+ *   focusFallback?: () => void, label?: string, labelledBy?: string,
+ *   after?: import('react').ReactNode }} props focusFallback: where focus goes when the last chip
+ *   goes (Choose files); after: more chips drawn last in the same list (the task form's linked
+ *   project files, LinkChip)
  */
 export function UploadChips({
   items,
@@ -148,6 +154,7 @@ export function UploadChips({
   one = false,
   focusFallback,
   labelledBy,
+  after = null,
 }) {
   const listRef = useRef(null);
   const pending = useRef(null);
@@ -214,6 +221,7 @@ export function UploadChips({
           onToggleRemove={onToggleRemove}
         />
       ))}
+      {after}
     </ul>
   );
 }

@@ -15,6 +15,19 @@
   }
 }
 
+/* Reduced motion: no turning; a slow pulse still shows the work is going on. */
+@keyframes polish-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: polish-pulse 2s ease-in-out infinite;
+  }
+}
+
 /* 1024–1199 px beside Submit and check out and Submit report (three buttons): the row is too
    wide and squeezes the page title onto two lines, so Polish with AI shows its icon only. Its
    name stays for screen readers (and as the button's tooltip). */

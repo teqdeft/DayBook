@@ -206,3 +206,15 @@
     margin-right: 0;
   }
 }
+
+/* CONTRACT 28: Edit details' line under "Who can see it" (empty, and so without room, otherwise) */
+.keep {
+  margin: 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted);
+}
+
+.keep:not(:empty) {
+  margin-top: 8px;
+}

@@ -1,13 +1,17 @@
-// One task for the task window (CONTRACT 27, Task details): GET /api/project-tasks/[id]. PMs and
-// Admin (team.view) read any task; a member of the project only their own and Anyone tasks; anyone
-// else gets the same 404, so an id says nothing. Files come from projectFiles, filtered by its own
-// rule (canSeeFile), never by the task rights.
+// One task for the task window (CONTRACT 27, Task details; CONTRACT 28 adds the number, updates,
+// minutes and links): GET /api/project-tasks/[id]. PMs and Admin (team.view) read any task; a
+// member of the project only their own and Anyone tasks; anyone else gets the same 404, so an id
+// says nothing. Files (own and linked) come from projectFiles, filtered by its own rule
+// (canSeeLinkedOnTask), never by the task rights. Updates and minutes follow the per-viewer rule:
+// without team.view, only the viewer's own lines and timer minutes.
 import { AppError } from '@/lib/errors';
 import { can } from '@/lib/permissions';
 import { projectFiles } from '@/modules/projectFiles';
 import { projects } from '@/modules/projects';
+import { timers } from '@/modules/timers';
 import * as repo from './repo';
-import { toId, toTask, withLatestReports } from './shared';
+import { toId, toTask } from './shared';
+import { updatesFor } from './updates';
 
 function notAvailable() {
   return new AppError('NOT_FOUND', { message: "We couldn't find that task." });
@@ -33,8 +37,24 @@ async function filesFor(viewer, project, task) {
   return { files, canSeeFiles };
 }
 
-/** The contract's TaskDetails from a task (with latestReport), its project and its files. */
-function toDetails(task, project, { files, canSeeFiles }, canManage) {
+/** Updates, minutes and private links for the viewer (CONTRACT 28). */
+async function extrasFor(viewer, task, canManage) {
+  const teamView = can(viewer, 'team.view');
+  const [{ updates, updateCount }, minutes, privateLinks] = await Promise.all([
+    updatesFor({ viewer, taskId: task.id }),
+    timers.minutesByTask({ taskIds: [task.id], userId: teamView ? null : viewer.id }),
+    canManage ? projectFiles.privateLinkCounts([task.id]) : {},
+  ]);
+  return {
+    updates,
+    updateCount,
+    minutes: Number(minutes?.[task.id] ?? 0),
+    privateLinkCount: Number(privateLinks?.[task.id] ?? 0),
+  };
+}
+
+/** The contract's TaskDetails from a task, its project, its files and the viewer's extras. */
+function toDetails(task, project, { files, canSeeFiles }, canManage, extras) {
   const { assignee } = task;
   return {
     id: task.id,
@@ -45,6 +65,7 @@ function toDetails(task, project, { files, canSeeFiles }, canManage) {
       color: project.color,
       status: project.status,
       isUrgent: Boolean(project.isUrgent),
+      pmId: project.pmId ?? null,
     },
     title: task.title,
     details: task.details,
@@ -58,6 +79,7 @@ function toDetails(task, project, { files, canSeeFiles }, canManage) {
           name: assignee.name,
           initials: assignee.initials,
           avatarUrl: assignee.avatarUrl,
+          role: assignee.role,
           status: assignee.status,
           isMember: assignee.isMember,
         }
@@ -65,7 +87,11 @@ function toDetails(task, project, { files, canSeeFiles }, canManage) {
     createdBy: task.createdBy ? { id: task.createdBy, name: task.createdByName } : null,
     createdAt: task.createdAt,
     doneAt: task.doneAt,
-    latestReport: task.latestReport ?? null,
+    latestReport: extras.updates[0] ?? null,
+    updates: extras.updates,
+    updateCount: extras.updateCount,
+    minutes: extras.minutes,
+    privateLinkCount: extras.privateLinkCount,
     files,
     fileCount: files.length,
     canManage,
@@ -76,13 +102,17 @@ function toDetails(task, project, { files, canSeeFiles }, canManage) {
 /**
  * One task for the task window (GET /api/project-tasks/[id]).
  * @param {{ viewer: object, id: number | string }} args
- * @returns {Promise<{ id, projectId, project: { id, name, color, status, isUrgent }, title,
- *   details, priority, status, phase, dueDate, assignee: { id, name, initials, avatarUrl, status,
- *   isMember } | null, createdBy: { id, name } | null, createdAt, doneAt,
- *   latestReport: { status, userId, userName, workDate } | null, files: object[],
- *   fileCount: number, canManage: boolean, canSeeFiles: boolean }>} TaskDetails (CONTRACT 27):
- *   latestReport is null for a viewer without team.view when the line is someone else's; files are
- *   projectFiles' ProjectFile rows the viewer may see ([] with canSeeFiles false for another PM who
+ * @returns {Promise<{ id, projectId, project: { id, name, color, status, isUrgent, pmId }, title,
+ *   details, priority, status, phase, dueDate, assignee: { id, name, initials, avatarUrl, role,
+ *   status, isMember } | null, createdBy: { id, name } | null, createdAt, doneAt,
+ *   latestReport: Update | null, updates: Update[], updateCount: number, minutes: number,
+ *   privateLinkCount: number, files: object[], fileCount: number, canManage: boolean,
+ *   canSeeFiles: boolean }>} TaskDetails (CONTRACT 27, 28): `updates` the newest 10 report lines
+ *   the viewer may see (`Update = { userId, userName, initials, avatarUrl, workDate, status,
+ *   title }`), `latestReport` the first of them; `updateCount` all of them; `minutes` from
+ *   finished timers (everyone's with team.view, else the viewer's own; 0 = none);
+ *   `privateLinkCount` links to "Only PM and Admins" files (managers, else 0); files: own then
+ *   linked ProjectFile rows the viewer may see ([] with canSeeFiles false for another PM who
  *   isn't on the project)
  * @throws NOT_FOUND "We couldn't find that task." (unknown, or not the viewer's to open)
  */
@@ -93,9 +123,10 @@ export async function getForViewer({ viewer, id }) {
   if (!task || !(await mayOpen(viewer, task))) throw notAvailable();
   const project = await projects.findById(task.projectId);
   if (!project) throw notAvailable();
-  const ownOnlyFor = can(viewer, 'team.view') ? null : viewer.id;
-  const [withReport] = await withLatestReports([task], { ownOnlyFor });
-  const files = await filesFor(viewer, project, task);
   const canManage = can(viewer, 'project.manage') && projects.canManage(viewer, project);
-  return toDetails(withReport, project, files, canManage);
+  const [files, extras] = await Promise.all([
+    filesFor(viewer, project, task),
+    extrasFor(viewer, task, canManage),
+  ]);
+  return toDetails(task, project, files, canManage, extras);
 }

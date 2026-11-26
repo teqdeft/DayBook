@@ -2,7 +2,10 @@
 // Toasts: short confirmations and errors after an action ("Report submitted"). Mounted once in
 // the app shell; any Client Component calls `const toast = useToast()` then
 // `toast({ title, body?, tone: 'success' | 'error' })`. A toast with its own controls (the bell's
-// Undo) portals into `useToastSlot()`, under these, so the two never cover each other.
+// Undo) portals into `useToastSlot()`, under these, so the two never cover each other. Since 1.13
+// (CONTRACT 28, Motion) a toast that goes fades out first (`data-leaving`, removed on its own
+// animationend, with a safety timeout), and the corner sits `--toast-offset` higher while the
+// Table's bulk bar shows.
 import {
   createContext,
   useCallback,
@@ -13,6 +16,8 @@ import {
   useState,
 } from 'react';
 import { CircleAlert, CircleCheck, X } from 'lucide-react';
+import { DUR } from '@/lib/motion/tokens';
+import { exitTimeout } from '@/lib/motion/presence';
 import styles from './ToastProvider.module.css';
 
 const ToastContext = createContext(null);
@@ -40,18 +45,32 @@ export function useToastSlot() {
   return useContext(SlotContext);
 }
 
-/** @param {{ children: import('react').ReactNode }} props */
-export function ToastProvider({ children }) {
+/**
+ * The toasts and their clocks: `dismiss` marks one leaving (its fade plays), `remove` takes it
+ * off the page.
+ */
+function useToastList() {
   const [toasts, setToasts] = useState([]);
-  const [slot, setSlot] = useState(null);
   const timers = useRef(new Map());
   const nextId = useRef(0);
 
-  const dismiss = useCallback((id) => {
+  const remove = useCallback((id) => {
     clearTimeout(timers.current.get(id));
     timers.current.delete(id);
     setToasts((list) => list.filter((t) => t.id !== id));
   }, []);
+
+  const dismiss = useCallback(
+    (id) => {
+      clearTimeout(timers.current.get(id));
+      setToasts((list) => list.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
+      timers.current.set(
+        id,
+        setTimeout(() => remove(id), exitTimeout(DUR.toastOut)),
+      );
+    },
+    [remove],
+  );
 
   const toast = useCallback(
     ({ title, body, tone = 'success' }) => {
@@ -74,6 +93,43 @@ export function ToastProvider({ children }) {
     };
   }, []);
 
+  return { toasts, toast, dismiss, remove };
+}
+
+/** One toast; a leaving one is inert and goes when its own fade ends. */
+function ToastItem({ item, onDismiss, onGone }) {
+  const Icon = item.tone === 'error' ? CircleAlert : CircleCheck;
+  return (
+    <li
+      className={`${styles.toast} ${styles[item.tone] ?? ''}`}
+      role={item.tone === 'error' ? 'alert' : undefined}
+      data-leaving={item.leaving ? '' : undefined}
+      inert={item.leaving || undefined}
+      onAnimationEnd={(event) => {
+        if (item.leaving && event.target === event.currentTarget) onGone(item.id);
+      }}
+    >
+      <Icon className={styles.icon} size={20} strokeWidth={1.8} aria-hidden="true" />
+      <div className={styles.text}>
+        <p className={styles.title}>{item.title}</p>
+        {item.body ? <p className={styles.body}>{item.body}</p> : null}
+      </div>
+      <button
+        type="button"
+        className={styles.close}
+        onClick={() => onDismiss(item.id)}
+        aria-label="Dismiss"
+      >
+        <X size={16} strokeWidth={1.8} aria-hidden="true" />
+      </button>
+    </li>
+  );
+}
+
+/** @param {{ children: import('react').ReactNode }} props */
+export function ToastProvider({ children }) {
+  const { toasts, toast, dismiss, remove } = useToastList();
+  const [slot, setSlot] = useState(null);
   const value = useMemo(() => toast, [toast]);
 
   return (
@@ -82,39 +138,7 @@ export function ToastProvider({ children }) {
       <div className={styles.region} role="region" aria-label="Updates">
         <ol className={styles.list} aria-live="polite" aria-relevant="additions">
           {toasts.map((t) => (
-            <li
-              key={t.id}
-              className={`${styles.toast} ${styles[t.tone] ?? ''}`}
-              role={t.tone === 'error' ? 'alert' : undefined}
-            >
-              {t.tone === 'error' ? (
-                <CircleAlert
-                  className={styles.icon}
-                  size={20}
-                  strokeWidth={1.8}
-                  aria-hidden="true"
-                />
-              ) : (
-                <CircleCheck
-                  className={styles.icon}
-                  size={20}
-                  strokeWidth={1.8}
-                  aria-hidden="true"
-                />
-              )}
-              <div className={styles.text}>
-                <p className={styles.title}>{t.title}</p>
-                {t.body ? <p className={styles.body}>{t.body}</p> : null}
-              </div>
-              <button
-                type="button"
-                className={styles.close}
-                onClick={() => dismiss(t.id)}
-                aria-label="Dismiss"
-              >
-                <X size={16} strokeWidth={1.8} aria-hidden="true" />
-              </button>
-            </li>
+            <ToastItem key={t.id} item={t} onDismiss={dismiss} onGone={remove} />
           ))}
         </ol>
         <div ref={setSlot} className={styles.slot} />

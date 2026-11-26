@@ -1,8 +1,10 @@
 // GET /api/projects/:id/tasks?status=&limit=&offset= (members of the project, PMs and Admin) and
 // POST /api/projects/:id/tasks (the project's PM or Admin): its priority tasks. A member without
 // team.view reads only the tasks for them and for anyone on the project, and page.total counts
-// the same rows (CONTRACT 27). POST takes `uploadKeys` (0 to 20 held uploads) and answers the task
-// with `told` and `toldName`.
+// the same rows (CONTRACT 27). POST takes `uploadKeys` (0 to 20 held uploads), `linkFileIds` (0 to
+// 20 files of the project's Files tab), `shareConfirmed` and `shareWith` (the share confirm of an
+// "Only PM and Admins" file, CONTRACT 28) and answers 201 with the task plus `told`, `toldName`
+// and `toldEarlierName` (null on create).
 import { AppError } from '@/lib/errors';
 import { listResult, withRoute } from '@/lib/route';
 import { projectTasks } from '@/modules/projectTasks';

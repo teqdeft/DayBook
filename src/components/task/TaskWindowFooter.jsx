@@ -1,10 +1,11 @@
 'use client';
-// The task window's footer for each mode (CONTRACT 27, Task window). Manage (the project's PM and
-// Admins on a project page): Delete with the board's Undo, Edit (the window closes first), Mark
-// done with "Marked done." and its Undo, or the green Done tag and Reopen. Today: "Open project"
-// and the to-do card's own "Add to to-do" ("In to-do" when a line links the task). A member on the
-// project page: "Add to to-do" through the to-do API, while today's to-do takes lines. Another PM:
-// no footer. Busy buttons keep the focus (BusyButton), and the control that takes a pressed one's
+// The task window's footer for each mode (CONTRACT 27 and 28, Task window). Manage (the project's
+// PM and Admins on a project page): Delete with the board's Undo, Edit (the window closes first),
+// Mark done with "Marked done." and its Undo, or the green Done tag and Reopen. Today: "Open
+// project" and the to-do card's own "Add to to-do" ("In to-do" when a line links the task). A
+// member on the project page: "Add to to-do" through the to-do API, while today's to-do takes
+// lines. My tasks (`mine`): "Open project" and, when the viewer manages that task's project, Mark
+// done or Reopen (the page's TaskUndoProvider). Another PM: no footer. Busy buttons keep the focus (BusyButton), and the control that takes a pressed one's
 // place (Reopen for Mark done, "In to-do" for Add to to-do) gets it, so focus stays in the window.
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -14,6 +15,7 @@ import Tag from '@/components/Tag';
 import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/apiClient';
 import BusyButton from '@/app/(app)/projects/[id]/BusyButton';
+import { sayReopened } from '@/app/(app)/projects/[id]/taskEvents';
 import { useTaskUndo } from '@/app/(app)/projects/[id]/TaskUndoProvider';
 import { useTaskEditor } from '@/app/(app)/projects/[id]/_board/TaskEditorProvider';
 import { footerFor, projectTaskHref } from './taskWindowView';
@@ -99,7 +101,10 @@ function TodoButton({ task, todo }) {
   );
 }
 
-/** Mark done (with Undo in the page's toast) and Reopen. */
+/**
+ * Mark done (with Undo in the page's toast) and Reopen, which tells the page's tick holds as that
+ * Undo does: a card ticked a moment ago is open again at once, not after its hold ends.
+ */
 function useStatus(task) {
   const router = useRouter();
   const toast = useToast();
@@ -112,7 +117,10 @@ function useStatus(task) {
         await api.post(`/api/project-tasks/${task.id}/status`, { status });
         forgetTaskDetails(task.id);
         if (status === 'done') offerUndo?.({ taskId: task.id });
-        else toast({ title: 'Reopened.' });
+        else {
+          sayReopened(task.id);
+          toast({ title: 'Reopened.' });
+        }
         startTransition(() => router.refresh());
       } catch (error) {
         toast({ title: "Couldn't change the task", body: error.message, tone: 'error' });
@@ -122,8 +130,11 @@ function useStatus(task) {
   return [busy, change];
 }
 
-/** Mark done, or the green Done tag and Reopen; the one drawn after a press takes the focus. */
-function StatusButtons({ task, done }) {
+/**
+ * Mark done, or the green Done tag (not in My tasks) and Reopen; the one drawn after a press takes
+ * the focus.
+ */
+function StatusButtons({ task, done, doneTag = true }) {
   const [busy, change] = useStatus(task);
   const swapRef = useFocusOnSwap(done);
   if (!done) {
@@ -141,10 +152,12 @@ function StatusButtons({ task, done }) {
   }
   return (
     <>
-      <Tag tone="green" size="md" className={styles.doneTag}>
-        {checkIcon}
-        Done
-      </Tag>
+      {doneTag ? (
+        <Tag tone="green" size="md" className={styles.doneTag}>
+          {checkIcon}
+          Done
+        </Tag>
+      ) : null}
       <BusyButton ref={swapRef} variant="secondary" busy={busy} onClick={() => change('open')}>
         Reopen
       </BusyButton>
@@ -185,7 +198,8 @@ function ManageFooter({ task, done, onClose }) {
 
 /**
  * @param {{ task: object, mode: string, todo?: object | null, todoOpen?: boolean,
- *   onClose: (opts?: { restore?: boolean }) => void }} props todo: Today's to-do card
+ *   onClose: (opts?: { restore?: boolean }) => void }} props mode: 'manage', 'team', 'member',
+ *   'today' or 'mine'; todo: Today's to-do card
  *   (`{ has(taskId), add(task) | null }`, add null once the report is in), only in `today` mode;
  *   todoOpen: on the member's project page, today's to-do takes lines (`head.todoOpen`)
  * @returns {import('react').ReactNode | null} null when the mode has no footer
@@ -204,7 +218,7 @@ export function useTaskWindowFooter({ task, mode, todo, todoOpen = false, onClos
   }
   if (footer.kind === 'none') return null;
   const openProject =
-    footer.kind === 'today' ? (
+    footer.kind === 'today' || footer.kind === 'mine' ? (
       <Button variant="text" size="compact" className={styles.left} href={projectTaskHref(task)}>
         Open project
       </Button>
@@ -214,6 +228,9 @@ export function useTaskWindowFooter({ task, mode, todo, todoOpen = false, onClos
     <>
       {openProject}
       {footer.todo ? <TodoButton task={task} todo={todo} /> : null}
+      {footer.kind === 'mine' && footer.status ? (
+        <StatusButtons task={task} done={footer.done} doneTag={false} />
+      ) : null}
     </>
   );
 }

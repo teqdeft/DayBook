@@ -8,14 +8,18 @@
 // PM, the only owner besides members) and done is the day the PM ticked it. Speed counts tasks done
 // in the last 3 full weeks (weeks -1 to -3), so the numbers below give the same health on any day:
 // - acme-store: 6 done in 3 weeks, 10 left, deadline Wednesday of week 3: 12 to 18 days late.
-// - internal-tool: 7 done (with "Leave form validation"), 11 left, deadline Friday of week 4:
+// - internal-tool: 7 done (with "Leave form validation"), 12 left, deadline Monday of week 5:
 //   1 to 7 days late.
 // - iwilltillimwell: 9 done (with "Contact page"), 5 left, deadline Friday of week 3: 7 to 13 days
 //   early.
 // projectPlanRows.js checks this with the real forecast before anything is written.
 //
 // New tasks are never for Vishal or for anyone on the project, so his Today and My projects cards
-// keep the canvas counts. Only acme-store has files and notes (projectDocuments.js).
+// keep the canvas counts. Only acme-store has files and notes (projectDocuments.js). An owner can
+// also be an active Admin who isn't on the project and took the task (CONTRACT 28, The assignee
+// rule): the CEO took "Approve the hosting invoice" on internal-tool (due today, so it is in his My
+// tasks and his badge) and Meera Pillai "HR tries the leave form" (on her Today), while the PM keeps
+// "Get the payment gateway keys from Acme" (overdue in the PM's My tasks).
 import { STORE_DOCUMENTS, STORE_SUMMARY } from './projectDocuments.js';
 
 const t = (title, owner, due, priority, done = null, details = null) => ({
@@ -102,7 +106,7 @@ const INTERNAL = {
   project: 'internal',
   health: 'risk',
   currentPhase: 'development',
-  deadline: '4 Fri',
+  deadline: '5 Mon',
   phases: {
     requirement_gathering: phase('-10 Mon', '-9 Fri', '-10 Mon', '-9 Fri'),
     design: phase('-8 Mon', '-7 Fri', '-9 Fri', '-7 Thu'),
@@ -136,13 +140,14 @@ const INTERNAL = {
       t('Notification settings', 'rohit', '-1 Tue', 'p3', '-1 Tue'),
       t('Search API', 'rohit', '-1 Wed', 'p2', '-1 Thu'),
       t('Timesheet API', 'rohit', '0 Thu', 'p2'),
+      t('Approve the hosting invoice', 'ceo', 'today', 'p2'),
       t('Report export', 'rohit', '1 Wed', 'p2', null, 'Excel, like the other downloads.'),
       t('Dashboard widgets', 'simran', '1 Thu', 'p3'),
       t('Error pages', 'simran', '1 Fri', 'p3'),
     ],
     testing: [
       t('Unit tests for reports', 'rohit', '2 Tue', 'p2'),
-      t('HR tries the leave form', 'pm', '3 Mon', 'p2'),
+      t('HR tries the leave form', 'meera', '3 Mon', 'p2'),
       t('Bug fixes from QA', 'simran', '3 Thu', 'p2'),
     ],
     launch: [t('Release to the whole company', 'pm', '4 Fri', 'p1')],

@@ -1,13 +1,15 @@
-// Files never go to Slack or AI (CONTRACT 27, Who sees and does what): a scan of the source.
-// projectTasks and projectFiles never import Slack; aiAsk and aiSummaries never read the files
-// tables in either spelling (knexfile's wrapIdentifier turns `projectFiles` into `project_files`)
-// nor import the files module; the project summary's prompt and service never import it either.
+// Files never go to Slack or AI (CONTRACT 27, Who sees and does what; CONTRACT 28, Nothing to
+// Slack or AI): a scan of the source. projectTasks and projectFiles never import Slack (their new
+// 1.13 files included); aiAsk and aiSummaries never read the files tables or task_file_links in
+// either spelling (knexfile's wrapIdentifier turns `projectFiles` into `project_files`) nor import
+// the files module; the project summary's prompt and service never import it either.
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const FILES_TABLES = /project_?files|file_?uploads/i;
+const LINKS_TABLE = /task_?file_?links|taskFileLinks/i;
 const IMPORTS_FILES = /['"]@\/modules\/projectFiles(?:\/[^'"]*)?['"]|['"]\.\.\/projectFiles/;
 const IMPORTS_SLACK = /['"]@\/modules\/slack(?:\/[^'"]*)?['"]|['"]\.\.\/slack/;
 
@@ -39,6 +41,20 @@ describe('no file, file name or link goes to Slack', () => {
     );
   });
 
+  it('reads the new files of 1.13 too', () => {
+    const files = folders.flatMap(sourceFiles);
+    for (const file of [
+      'src/modules/projectTasks/assignees.js',
+      'src/modules/projectTasks/bulk.js',
+      'src/modules/projectTasks/bulkMessages.js',
+      'src/modules/projectTasks/mine.js',
+      'src/modules/projectTasks/updates.js',
+      'src/modules/projectFiles/migration020.js',
+    ]) {
+      expect(files, file).toContain(file);
+    }
+  });
+
   it('has no Slack import under projectTasks or projectFiles', () => {
     expect(matching(folders, IMPORTS_SLACK)).toEqual([]);
   });
@@ -64,6 +80,14 @@ describe('the AI never reads files', () => {
 
   it('never names the files tables, in either spelling, under aiAsk or aiSummaries', () => {
     expect(matching(folders, FILES_TABLES)).toEqual([]);
+  });
+
+  it('never reads task_file_links, in either spelling, under aiAsk or aiSummaries', () => {
+    expect(matching(folders, LINKS_TABLE)).toEqual([]);
+    for (const text of ["db('task_file_links')", "trx('taskFileLinks as l')", 'TASK_FILE_LINKS']) {
+      expect(LINKS_TABLE.test(text), text).toBe(true);
+    }
+    expect(LINKS_TABLE.test("db('project_tasks')")).toBe(false);
   });
 
   it('never imports the files module under aiAsk or aiSummaries', () => {

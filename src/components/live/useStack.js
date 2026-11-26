@@ -6,12 +6,12 @@
 // to where it came from (never scrolling the page). The source of truth is a ref (the flush plans
 // against it synchronously); React state mirrors it for rendering.
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { prefersReducedMotion } from '@/lib/motion/reducedMotion';
 import { CARD_MS, QUEUE_MAX_AGE_MS, RESUME_MIN_MS } from './liveRules';
 
+// A leaving card goes on its own animationend (live-out, --dur-toast-out); this is the safety net
+// if that event never comes. With reduced motion the card goes at once (CONTRACT 28, Motion).
 const LEAVE_SAFETY_MS = 250;
-const reducedMotion = () =>
-  typeof window !== 'undefined' &&
-  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
 /**
  * @param {{ now: () => number, bellButton: () => HTMLElement | null,
@@ -119,7 +119,7 @@ export function useStack({ now, bellButton, onIdle }) {
       const focused = hasFocus(key);
       commit(list.current.map((e) => (e.key === key ? { ...e, leaving: true } : e)));
       if (focused && focusNext) moveFocusFrom(key);
-      if (reducedMotion()) remove(key);
+      if (prefersReducedMotion()) remove(key);
       else if (m) m.safety = setTimeout(() => remove(key), LEAVE_SAFETY_MS);
     }
 

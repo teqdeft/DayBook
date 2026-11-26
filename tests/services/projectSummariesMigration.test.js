@@ -43,6 +43,7 @@ beforeAll(async () => {
   pm = await createUser({ name: 'Riya Kapoor', role: 'pm', tracksAttendance: false });
   project = await createProject(pm, { name: 'lyra' });
   requests = geminiAnswers({ overview: 'A short overview.' });
+  await db.migrate.down({ name: '020_task_file_links.js' });
   await db.migrate.down({ name: MIGRATION_019 });
   await db.migrate.down({ name: MIGRATION });
   warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});

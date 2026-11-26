@@ -1,13 +1,18 @@
-// The Board tab against the real modules (CONTRACT 27, Board tab): the manager's board with tasks in
-// phases, a task from before phases and done ones, and the paperclip of a task's file; another PM
-// who isn't on the project gets no file counts in the props or the markup; a member gets only their
-// tasks and Anyone tasks, a band that counts every task, and no other person's name; and the writes
+// The Board tab against the real modules (CONTRACT 27 and 28, Board tab): the manager's board with
+// tasks in phases, a task from before phases and done ones, and each card's per-viewer data (the
+// files and chips the viewer may see, everyone's minutes from timers, the report lines and the
+// newest one, the links to "Only PM and Admins" files) and the viewer's id; another PM who isn't on
+// the project gets no file data in the props or the markup; a member gets only their tasks and
+// Anyone tasks, only their own minutes and lines, no private link counts, a band that counts every
+// task, and no other person's name; the remembered view and rail (cookies, `?view=` first); the
+// board before migration 020 (links read as none); and the writes
 // the board makes: a quick add (Anyone, P2, the column's phase), a move to another phase and its
 // Undo back to No phase yet, an edit that sends only what changed keeps the details, a delete sent
 // twice answers NOT_FOUND (the board treats it as gone), dates that end before they start, and
 // another PM refused every write.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { db } from '@/lib/db';
 import { can } from '@/lib/permissions';
 import { setNowForTests } from '@/lib/time';
 import { projectFiles } from '@/modules/projectFiles';
@@ -17,10 +22,11 @@ import { END_BEFORE_START } from '@/modules/projectPlan/schemas';
 import { projects } from '@/modules/projects';
 import { projectTasks } from '@/modules/projectTasks';
 import { createUser, resetDatabase, setSettings } from '../helpers/db.js';
-import { addMembers, createProject } from './dashboardKit.js';
-import { emptyFilesDir, pdfBytes, taskFile } from './projectFilesKit.js';
+import { addMembers, createProject, createReport } from './dashboardKit.js';
+import { emptyFilesDir, linkFile, pdfBytes, projectFile, taskFile } from './projectFilesKit.js';
 
 let viewer = null;
+let cookieJar = {};
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: () => {} }),
@@ -28,6 +34,11 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock('@/lib/session', () => ({ getSessionUser: async () => viewer }));
+vi.mock('next/headers', () => ({
+  cookies: async () => ({
+    get: (name) => (name in cookieJar ? { value: cookieJar[name] } : undefined),
+  }),
+}));
 vi.mock('@/modules/reports', () => ({
   reports: {
     hasEntriesForProjectRequest: vi.fn(async () => false),
@@ -62,13 +73,43 @@ async function headFor(user) {
     today: TODAY,
     access: manages ? 'manage' : can(user, 'team.view') ? 'team' : 'member',
     filesAccess: filesAccess(ctx),
+    viewerId: user.id,
+    viewerName: user.name,
     forecast: { kind: 'nodata', title: 'Not enough data yet', body: 'Daybook works it out.' },
   };
 }
 
-async function board(user) {
+async function board(user, query) {
   viewer = user;
-  return BoardTab({ head: await headFor(user) });
+  return BoardTab({ head: await headFor(user), query });
+}
+
+const cardOf = (element, id) => element.props.tasks.find((task) => task.id === id);
+
+/** A finished timer of `minutes` on a task, on 20 November. */
+const timer = (user, taskId, minutes) =>
+  db('timeEntries').insert({
+    userId: user.id,
+    workDate: '2026-11-20',
+    projectId: project.id,
+    projectTaskId: taskId,
+    startedAt: new Date('2026-11-20T04:00:00Z'),
+    endedAt: new Date(Date.parse('2026-11-20T04:00:00Z') + minutes * 60000),
+  });
+
+/** A submitted report with one line per task (`status`: in_progress, blocked, done). */
+async function reportLines(user, date, lines) {
+  const entries = [
+    {
+      projectId: project.id,
+      minutes: 60,
+      tasks: lines.map(([, status]) => ({ title: 'Work', status })),
+    },
+  ];
+  const { taskIds } = await createReport(user, date, { entries });
+  for (const [index, [taskId]] of lines.entries()) {
+    await db('reportTasks').where({ id: taskIds[index] }).update({ projectTaskId: taskId });
+  }
 }
 
 beforeAll(async () => {
@@ -109,44 +150,110 @@ beforeAll(async () => {
     name: 'checkout-error-steps.pdf',
     bytes: pdfBytes(),
   });
+  // A contract only for PM and Admins, linked to Vishal's task.
+  ids.contract = (
+    await projectFile({
+      user: pm,
+      projectId: project.id,
+      name: 'contract.pdf',
+      bytes: pdfBytes(),
+      visibility: 'managers',
+    })
+  ).id;
+  const login = await db('projectTasks').where({ id: ids.login }).first();
+  await linkFile({
+    user: pm,
+    project,
+    task: login,
+    fileIds: ids.contract,
+    shareConfirmed: true,
+    shareWith: vishal.id,
+  });
+  // Time and report lines: Vishal on his task and the Anyone task, Simran on hers and on it later.
+  await timer(vishal, ids.login, 45);
+  await timer(vishal, ids.zoom, 30);
+  await timer(simran, ids.zoom, 90);
+  await timer(simran, ids.checkout, 340);
+  await reportLines(vishal, '2026-11-19', [
+    [ids.login, 'blocked'],
+    [ids.zoom, 'in_progress'],
+  ]);
+  await reportLines(simran, '2026-11-20', [
+    [ids.zoom, 'done'],
+    [ids.checkout, 'in_progress'],
+  ]);
 });
 
 describe("the manager's board", () => {
-  it('shows the phases, the cards in order, No phase yet and the paperclip', async () => {
+  it('shows the phases, the cards in order, No phase yet and the files line', async () => {
     const element = await board(pm);
-    expect(element.props.access).toBe('manage');
+    expect(element.props).toMatchObject({ access: 'manage', viewerId: pm.id, pmId: pm.id });
     const text = noTags(renderToStaticMarkup(element));
-    expect(text).toContain('Development Current');
+    expect(text).toContain('Development 2 open Current');
     expect(text).toContain('Design'); // past, with an open card: still a column
     expect(text.indexOf('Checkout fix before client demo')).toBeLessThan(
       text.indexOf('Product image zoom'),
     );
-    expect(text).toContain('No phase yet Tasks from before phases. Move each one to its phase.');
-    expect(text).toContain('All open (4)');
-    expect(text).toContain('With files (1)');
-    const checkout = element.props.tasks.find((task) => task.id === ids.checkout);
-    expect(checkout).toMatchObject({ fileCount: 1, createdBy: { id: pm.id, name: 'Riya Kapoor' } });
-    expect(renderToStaticMarkup(element)).toContain('aria-label="1 file"');
+    expect(text).toContain(
+      'No phase yet 1 open Tasks from before phases. Move each one to its phase.',
+    );
+    expect(text).toContain('Mine (0)');
+    const checkout = cardOf(element, ids.checkout);
+    expect(checkout).toMatchObject({ createdBy: { id: pm.id, name: 'Riya Kapoor' } });
+    expect(checkout.assignee).toMatchObject({ id: simran.id, role: 'employee', isViewer: false });
+  });
+
+  it('gives each card its files and chips, own and linked, and private links to managers', async () => {
+    const element = await board(pm);
+    const checkout = cardOf(element, ids.checkout);
+    expect(checkout.files.count).toBe(1);
+    expect(checkout.files.chips.map((chip) => chip.name)).toEqual(['checkout-error-steps.pdf']);
+    const login = cardOf(element, ids.login);
+    expect(login.files.count).toBe(1);
+    expect(login.files.chips[0]).toMatchObject({ id: ids.contract, name: 'contract.pdf' });
+    expect(login.privateLinkCount).toBe(1);
+    expect(checkout.privateLinkCount).toBe(0);
+  });
+
+  it("gives everyone's minutes and lines, the newest line as the status chip", async () => {
+    const element = await board(pm);
+    expect(cardOf(element, ids.checkout)).toMatchObject({
+      minutes: 340,
+      updateCount: 1,
+      statusChip: { status: 'in_progress', workDate: '2026-11-20' },
+    });
+    expect(cardOf(element, ids.zoom)).toMatchObject({
+      minutes: 120,
+      updateCount: 2,
+      statusChip: { status: 'done', workDate: '2026-11-20' },
+    });
+    expect(cardOf(element, ids.login).statusChip).toEqual({
+      status: 'blocked',
+      workDate: '2026-11-19',
+    });
   });
 });
 
 describe('another PM who is not on the project', () => {
-  it('gets no file counts in the props or the markup, and no ticks or menus', async () => {
+  it('gets no file data in the props or the markup, and no ticks or menus', async () => {
     const element = await board(otherPm);
     expect(element.props).toMatchObject({ access: 'team', filesAccess: 'none' });
-    expect(element.props.tasks.every((task) => task.fileCount === 0)).toBe(true);
+    expect(element.props.tasks.every((task) => task.files.count === 0)).toBe(true);
+    expect(element.props.tasks.every((task) => task.privateLinkCount === 0)).toBe(true);
     const html = renderToStaticMarkup(element);
-    expect(html).not.toContain('file"');
-    expect(noTags(html)).not.toContain('With files');
+    expect(html).not.toContain('contract.pdf');
+    expect(html).not.toContain('checkout-error-steps.pdf');
     expect(html).not.toContain('type="checkbox"');
     expect(noTags(html)).toContain('Only Riya Kapoor and Admins can change tasks and phases.');
+    // team.view: everyone's minutes and lines
+    expect(cardOf(element, ids.zoom)).toMatchObject({ minutes: 120, updateCount: 2 });
   });
 });
 
 describe("a member's board", () => {
   it('has only their tasks and Anyone tasks, and a band that counts every task', async () => {
     const element = await board(vishal);
-    expect(element.props.access).toBe('member');
+    expect(element.props).toMatchObject({ access: 'member', viewerId: vishal.id });
     const titles = element.props.tasks.map((task) => task.title).sort();
     expect(titles).toEqual(
       ['Fix the login page', 'Product image zoom', 'Wireframes', 'Old login timeout'].sort(),
@@ -158,6 +265,59 @@ describe("a member's board", () => {
     expect(text).toContain('1 of 5 tasks done');
     expect(text).toContain('Progress counts all 5 tasks.');
     expect(text).not.toContain('Not enough data yet');
+  });
+
+  it('gets only their own minutes and lines, even on an Anyone task someone else reported on', async () => {
+    const element = await board(vishal);
+    expect(cardOf(element, ids.zoom)).toMatchObject({
+      minutes: 30,
+      updateCount: 1,
+      statusChip: { status: 'in_progress', workDate: '2026-11-19' },
+    });
+    expect(cardOf(element, ids.login).assignee.isViewer).toBe(true);
+    expect(element.props.tasks.every((task) => task.privateLinkCount === 0)).toBe(true);
+  });
+
+  it('sees the contract through their own task only', async () => {
+    const element = await board(vishal);
+    expect(cardOf(element, ids.login).files.chips.map((chip) => chip.name)).toEqual([
+      'contract.pdf',
+    ]);
+    expect(cardOf(element, ids.zoom).files.count).toBe(0);
+  });
+});
+
+describe('the remembered view and rail', () => {
+  it('opens the Table from a table cookie, and the rail open from an open cookie', async () => {
+    cookieJar = { 'daybook.board.view': 'table', 'daybook.board.rail': 'open' };
+    const element = await board(pm);
+    expect(element.props).toMatchObject({ view: 'table', railOpen: true });
+    expect(renderToStaticMarkup(element)).toContain('data-view="table"');
+    cookieJar = {};
+    expect((await board(pm)).props).toMatchObject({ view: 'board', railOpen: false });
+  });
+
+  it('lets ?view=table win over a board cookie', async () => {
+    cookieJar = { 'daybook.board.view': 'board' };
+    expect((await board(pm, { view: 'table' })).props.view).toBe('table');
+    cookieJar = { 'daybook.board.view': 'table' };
+    expect((await board(pm, { view: 'board' })).props.view).toBe('board');
+    cookieJar = {};
+  });
+});
+
+describe('before migration 020', () => {
+  it('loads the board as 1.12: links read as none, own files still counted', async () => {
+    await db.migrate.down({ name: '020_task_file_links.js' });
+    try {
+      const element = await board(pm);
+      expect(cardOf(element, ids.login)).toMatchObject({ privateLinkCount: 0 });
+      expect(cardOf(element, ids.login).files.count).toBe(0);
+      expect(cardOf(element, ids.checkout).files.count).toBe(1);
+      expect(noTags(renderToStaticMarkup(element))).toContain('Checkout fix before client demo');
+    } finally {
+      await db.migrate.latest();
+    }
   });
 });
 

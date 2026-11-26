@@ -1,8 +1,12 @@
 // Who sees and does what (CONTRACT 27): the permission table as data, every viewer row against every
 // kind of file and document, plus the edges (a deleted file, a task file without its task, an
-// inactive viewer, a ctx for one project never seeing another project's file or document).
+// inactive viewer, a ctx for one project never seeing another project's file or document). Then
+// CONTRACT 28's table of linked files as data: every viewer row against an Everyone and an "Only PM
+// and Admins" project file linked to the person's task, to an Anyone task, to no task, and after the
+// unlink; a link whose task is on another project never counts.
 import { describe, expect, it } from 'vitest';
 import {
+  accessShape,
   canManageFiles,
   canReadDocument,
   canSeeFile,
@@ -203,5 +207,75 @@ describe('canManageFiles and filesAccess', () => {
     expect(filesAccess(ctxOf({ member: true }))).toBe('member');
     expect(filesAccess(ctxOf({ manages: true, member: true }))).toBe('manage');
     expect(filesAccess(null)).toBe('none');
+  });
+});
+
+// ---------- CONTRACT 28: files linked to tasks ----------
+
+const LINKS = {
+  person: [{ taskId: 88, assigneeId: PERSON, projectId: PROJECT }],
+  anyone: [{ taskId: 89, assigneeId: null, projectId: PROJECT }],
+  none: undefined, // a 1.12 shape: no links read at all
+  unlinked: [],
+};
+const linked = (visibility, links) => file({ scope: 'project', visibility, links });
+
+// [viewer, ctx, Everyone file linked to: the person's task, an Anyone task, no task, after the
+//  unlink; then the same for an "Only PM and Admins" file]
+const LINK_TABLE = [
+  ['the project PM', { manages: true }, Y, Y, Y, Y, Y, Y, Y, Y],
+  ['an Admin who is a member', { manages: true, member: true }, Y, Y, Y, Y, Y, Y, Y, Y],
+  ['an Admin who is not a member', { manages: true }, Y, Y, Y, Y, Y, Y, Y, Y],
+  ['a member, the task person', { userId: PERSON, member: true }, Y, Y, Y, Y, Y, Y, N, N],
+  ['a member, not the task person', { member: true }, Y, Y, Y, Y, N, Y, N, N],
+  ['HR on the project (a member)', { member: true }, Y, Y, Y, Y, N, Y, N, N],
+  ['HR not on the project', {}, N, N, N, N, N, N, N, N],
+  ['another PM, not a member', {}, N, N, N, N, N, N, N, N],
+  ['another PM who is a member', { member: true }, Y, Y, Y, Y, N, Y, N, N],
+  ['someone taken off the project', { userId: PERSON }, N, N, N, N, N, N, N, N],
+  [
+    'the earlier person (the task is now PERSON)',
+    { userId: EARLIER, member: true },
+    Y,
+    Y,
+    Y,
+    Y,
+    N,
+    Y,
+    N,
+    N,
+  ],
+  ['a deactivated member', { userId: PERSON, member: true, active: false }, N, N, N, N, N, N, N, N],
+];
+
+describe('linked files (CONTRACT 28, Links: who sees a linked file)', () => {
+  const cases = ['everyone', 'managers'].flatMap((visibility) =>
+    Object.entries(LINKS).map(([on, links]) => [`${visibility}:${on}`, linked(visibility, links)]),
+  );
+  for (const [viewer, ctx, ...expected] of LINK_TABLE) {
+    it(`${viewer}: an Everyone and an Only PM and Admins file, linked or not`, () => {
+      const viewerCtx = ctxOf(ctx);
+      const actual = Object.fromEntries(
+        cases.map(([key, one]) => [key, canSeeFile(viewerCtx, one)]),
+      );
+      expect(actual).toEqual(Object.fromEntries(cases.map(([key], i) => [key, expected[i]])));
+    });
+  }
+
+  it('never counts a link whose task is on another project', () => {
+    const member = ctxOf({ userId: PERSON, member: true });
+    const elsewhere = [{ taskId: 90, assigneeId: PERSON, projectId: 13 }];
+    expect(canSeeFile(member, linked('managers', elsewhere))).toBe(false);
+    const anyoneElsewhere = [{ taskId: 91, assigneeId: null, projectId: '13' }];
+    expect(canSeeFile(member, linked('managers', anyoneElsewhere))).toBe(false);
+    expect(canSeeFile(member, linked('managers', [...elsewhere, ...LINKS.person]))).toBe(true);
+  });
+
+  it('accessShape carries the links of the database, [] by default', () => {
+    const row = { projectId: PROJECT, scope: 'project', status: 'active', visibility: 'managers' };
+    expect(accessShape(row)).toEqual({ ...row, task: null, links: [] });
+    expect(accessShape(row, LINKS.person).links).toEqual(LINKS.person);
+    const taskRow = { ...row, scope: 'task', taskRowId: 88, taskAssigneeId: null };
+    expect(accessShape(taskRow).task).toEqual({ assigneeId: null });
   });
 });

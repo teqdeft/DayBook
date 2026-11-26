@@ -1,7 +1,8 @@
+/* --toast-offset: set on <html> by the Table's bulk bar while it shows, so toasts sit above it. */
 .region {
   position: fixed;
   right: 24px;
-  bottom: 24px;
+  bottom: calc(24px + var(--toast-offset, 0px));
   z-index: 70;
   pointer-events: none;
 }
@@ -28,7 +29,7 @@
   background: var(--surface);
   box-shadow: 0 12px 32px color-mix(in srgb, var(--navy) 14%, transparent);
   pointer-events: auto;
-  animation: toast-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: toast-in var(--dur-toast-in) var(--ease-out);
 }
 
 .icon {
@@ -92,9 +93,21 @@
   margin-top: 10px;
 }
 
+/* Going (CONTRACT 28, Motion): a fade, then ToastProvider removes it on this animationend. */
+.toast[data-leaving] {
+  pointer-events: none;
+  animation: toast-out var(--dur-toast-out) var(--ease-accelerate) forwards;
+}
+
 @keyframes toast-in {
   from {
-    transform: translateY(12px);
+    transform: translateY(var(--shift-toast));
+    opacity: 0;
+  }
+}
+
+@keyframes toast-out {
+  to {
     opacity: 0;
   }
 }
@@ -102,7 +115,7 @@
 @media (max-width: 640px) {
   .region {
     right: 16px;
-    bottom: 16px;
+    bottom: calc(16px + var(--toast-offset, 0px));
     left: 16px;
   }
 

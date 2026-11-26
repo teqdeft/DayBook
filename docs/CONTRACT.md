@@ -67,7 +67,10 @@ copy match. Data-driven numbers may differ from the artboard; layout and styling
   except `@/modules/slack/format`). Shared pure helpers: `@/lib/time`, `@/lib/text`,
   `@/lib/permissions`, `@/lib/apiClient`.
 - Client components may also import the pure files of `@/modules/projectFiles` (`access`, `names`,
-  `kinds`, `fileMessages`) (CONTRACT 27).
+  `kinds`, `fileMessages`) (CONTRACT 27). `src/lib/motion/` is client code (Pointer Events, the Web
+  Animations API); its pure files `tokens`, `settle` and `commitMotion` may be imported anywhere.
+  The pure `projectFiles/access.js` gains `canSeeLinkedOnTask`, `needsShareConfirm` and
+  `isProjectManager` (CONTRACT 28).
 
 ## 3. Code conventions
 
@@ -161,6 +164,8 @@ numFmt? }], rows }] })` → a download `Response` (return it from a `withRoute` 
 - Client IP in a Server Component: `clientIp({ headers: await headers() })` (`clientIp` from
   `@/lib/route` only reads `request.headers`).
 - `@/config/navigation` → `navigationFor(user, badges)`, `homePathFor(user)`.
+- `src/lib/motion/` (CONTRACT 28, owner orchestrator after 1.13): `tokens`, `reducedMotion`,
+  `animate`, `flip`, `clone`, `settle`, `commitMotion`, `useMotion`, `presence`.
 - The session user object (from `getSessionUser`/`requirePage`/`withRoute`):
   `{ id, name, email, role, roleLabel, designation, departmentId, departmentName, reportsToId,
 avatarUrl, slackUserId, tracksAttendance, shiftStart, shiftEnd, joinedOn, status, initials,
@@ -286,11 +291,20 @@ memberCount }]`; `getPickerFor(userId)` → `{ urgent, mine, others, requests }`
   `countActive()` → `{ active, urgent }`.
 - `isMember({ projectId, userId })` → boolean (an active member row) (CONTRACT 27).
 
+### projectTasks (owner: projects)
+
+- Section 13 has the module; CONTRACT 22 and 27 extend it.
+- `listAssigneeOptions` → `AssigneeOption[]` with `kind` and `openHere`; `listOpenForUser(user)`
+  (the CONTRACT 28 Today rule, with `phase` and `dueDate`); `listMine({ viewer, today, limit })`,
+  `countMineDue({ viewer, today })`, `updateCountsFor`, `latestLinesFor`, `bulkUpdate({ user,
+projectId, changes, shareConfirmed, ip })`; create, update and `attachFiles` take link fields;
+  answers carry `toldEarlierName` (CONTRACT 28).
+
 ### dashboard (owner: dashboards)
 
 - `getNavBadges(user)` → `{ requests, corrections }` (requests: pending report edits this user may
   approve + pending project requests; corrections: pending attendance corrections, only for people
-  with `attendance.correct`).
+  with `attendance.correct`). `getNavBadges` adds `myTasks` (CONTRACT 28).
 - `buildCalendar({ month, attendance, profile, ctx, range?, toneOf? })` (CONTRACT 25).
 
 ### timers (owner: timers)
@@ -300,6 +314,7 @@ memberCount }]`; `getPickerFor(userId)` → `{ urgent, mine, others, requests }`
   `listEntriesFor(userId, workDate)`, `putBackAway({ user, breakId })`, and the `getState` (`away`
   for every one of today's timer entries, `removed`) and `resolveAway` (`decision: 'left'`,
   `answer`) additions.
+- `minutesByTask({ taskIds, userId? })` (CONTRACT 28).
 
 ### activity (owner: activity)
 
@@ -331,6 +346,8 @@ uploadKeys }, trx)` → `ProjectFile[]`; `removeTaskFiles({ user, taskId, fileId
 - Worker and scripts: `cleanUp({ limit, budgetMs })` → count; `wipeStorageForReset()` →
   `{ removed }`; server-only `storeFile({ user, projectId, target, taskId, phase, visibility, name,
 bytes })` → a `ProjectFile` or a held `{ key }` (`db/demo` and tests, never a route).
+- `chipsForTasks`, `pickerFiles`, `privateLinkCounts`, `countActiveLinks`, `linkFiles`,
+  `unlinkFiles`, `unlinkFile`; every read follows links (CONTRACT 28).
 
 Until a module's owner finishes, `src/modules/<name>/` holds a stub with these signatures that
 returns empty data, so every page renders. Owners replace the stub completely.
@@ -356,7 +373,9 @@ projects → `projects/[id]/phase`, `deadline`, `phases/[phase]/dates`, `documen
 `attendance/[id]/breaks/**`, `attendance/me/missing-checkouts/**`,
 `attendance/missing-checkouts/fix`, `attendance/reminders`, `attendance/month/**`,
 `attendance/people/**`, `attendance/needs-look`, `holidays/**`, `leave/**` (25), projects →
-`uploads/**`, `project-files/**`, `project-tasks/[id]/files` and `GET project-tasks/[id]` (27).
+`uploads/**`, `project-files/**`, `project-tasks/[id]/files` and `GET project-tasks/[id]` (27),
+projects → `GET projects/[id]/files` (the picker), `POST projects/[id]/tasks/bulk`,
+`DELETE project-tasks/[id]/links/[fileId]` (28).
 
 Downloads ("Download Excel" buttons) — each screen uses an endpoint its viewers are allowed to call:
 Team dashboard and Employee detail → `GET /api/exports/hours?from=&to=&userId=` (`export.hours`,
@@ -494,6 +513,10 @@ faded?, title? }], height }` (Today's "This week" and Overview's stacked "Attend
 **task** (client, `src/components/task/`, CONTRACT 27): `TaskWindow`, `TaskWindowProvider` /
 `useTaskWindow`, `useTaskDetails` (props in CONTRACT 27, Modules).
 
+**files** gains `FilesPicker`, `ShareConfirm`, `LinkChip` and colours by kind in `FileTile`; `Menu`
+items may be checkboxes (`checked`, `keepOpen`); `Dialog`, `Drawer` and toasts play an exit
+(`usePresence`) (CONTRACT 28).
+
 ## 9. Pages and ownership
 
 | Owner                                                    | Files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -547,6 +570,20 @@ faded?, title? }], height }` (Today's "This week" and Overview's stacked "Attend
 | projects, attendance, shell                              | `(app)/projects/[id]/{page,projectHead,loading}.js`, `ProjectView.jsx`, `MemberProjectView.jsx` (new), `ProjectTabs.jsx` (+ css), `SummaryTab.jsx` (new, from `OverviewTab`), `HealthBox.jsx`, `CriticalTasksCard.jsx`, `SummaryCard.jsx` (+ css; the AI phase line), `Overview.module.css` (keeps `.deadlineAction`, used by `DeadlineButton`), `TimelineTab.jsx`, `TabSkeletons.jsx`, `ProjectLoading.jsx`, `page.module.css`; deletes `OverviewTab`, `ProgressCard`, `DeadlineCard`, `PhaseCard`; `src/components/task/**` (new); `(app)/today/{PriorityCard.jsx,todayData.js}` (+ css); `(app)/projects/{ProjectCard.jsx,MyProjectsView.jsx}` (+ css); `tests/unit/{projectTabs,projectSummaryTab,memberProjectView,taskWindow}.test.js`, `tests/unit/projectOverview.test.js` (replaced), `tests/unit/todoCardActions.test.js` and `todoCardRender.test.js` (the Priority card rows), `tests/services/projectMemberPage.test.js` (new) and `tests/services/todayTaskFiles.test.js` (new) (CONTRACT 27)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | projects                                                 | `(app)/projects/[id]/FilesTab.jsx` (new), `(app)/projects/[id]/_files/**` (new); `src/components/files/**` (new, `TaskAttachProvider` included); `(app)/projects/[id]/{documentsView,useDocumentBody,readDocumentFile,readDocx,docxText}.js`; deletes `PhaseDocuments`, `AddFileButton`, `DocumentRow`, `NoteForm`, `DocumentText` (+ css; moved into `_files/`); `src/modules/projectSummaries/{documents,schemas,repo,shared,service}.js` and new `fileDocuments.js`; `src/app/api/projects/[id]/documents/route.js`, `api/project-documents/[id]/route.js`; tests: `tests/unit/{filesTabView,uploadClient,uploadQueue,filesTab}.test.js` (new; `filesTab` replaces `phaseDocuments.test.js`), `tests/services/{projectSummariesDocuments,projectSummariesRoutes,projectSummariesMigration,projectPlanMigration}.test.js` (the two migration tests roll back 019 first with `db.migrate.down({ name: '019_project_files.js' })`, then 015, and `latest` restores both; the routes test keeps its member-404 note, now made without `visibility`, and adds a member-200 case for an Everyone note) (CONTRACT 27)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | orchestrator                                             | `tests/e2e/{project-board,task-files,project-files}.spec.js` (new), `tests/e2e/project-plan.spec.js` (the new tabs), `tests/e2e/{smoke,todo}.spec.js` (as needed), `tests/e2e/support/files.js` (new), `tests/e2e/support/projectPlan.js`, `tests/fixtures/files/*` (new, all plain and harmless, since the deploy branch copies `tests/` to the host, where a malware scanner could quarantine anything that looks like an attack: `logo.png`, `photo.jpg`, `wrong-bytes.png` (a text file named .png), `drawing.svg` (a plain `<rect>`), `page.html` (`<!doctype html><title>Test</title><p>Test page</p>`; neither has script, event attributes or links), `setup.exe` (16 bytes of plain text), `notes.txt`, `empty.txt`, plus the existing PDF and DOCX fixtures; the tests check headers only), `playwright.config.js` (at the top, next to `DB_NAME` in CI mode: `process.env.FILES_DIR ??= path.join(os.tmpdir(), 'daybook-e2e-files'); process.env.FILES_PIECE_BYTES = '65536';`, both passed in `webServer.env`, so the setup's `seed:demo`, the teardown, `support/files.js` and the server share one folder) (CONTRACT 27)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| orchestrator (O first)                                   | `docs/design/project-tasks-prototype.html` (new, from `option-b.html`, Design); `db/migrations/020_task_file_links.js` (new) and `tests/services/migration020.test.js` (new); `.github/workflows/migration-check.yml` (020 down before 019's down, then `latest`; then 020 down, up and `migration020.test.js`; then, on the same MySQL 8.4 database, `npx vitest run tests/services/projectFileLinks.test.js tests/services/projectFilesPicker.test.js tests/services/projectTasksMine.test.js tests/services/projectTasksBulk.test.js tests/services/projectTaskTake.test.js tests/services/taskMinutes.test.js tests/services/projectBoardTab.test.js` (one file at a time, `fileParallelism: false`), so each new grouped and locking read meets MySQL 8.4's `ONLY_FULL_GROUP_BY` before live; the file kit already uses a temp folder); the line `await db.migrate.down({ name: '020_task_file_links.js' });` before 019's down in `tests/services/{migration019,projectFilesManage,projectFilesMigration,projectPlanMigration,projectSummariesDocuments,projectSummariesMigration,projectTaskFiles,todayTaskFiles}.test.js` (map.md 10.4); `src/modules/projectFiles/migration020.js` (complete); `src/config/version.js` ('1.13'); `src/app/globals.css` (motion tokens, `--shadow-lift` and its `@supports not` fallback, the reduce block, the 0.01 ms rule removed), `src/lib/motion/tokens.js`, `tests/unit/{themeFallback,motionTokens}.test.js`; every CSS module with an animation or transition moved to the tokens (motion.md 4.2's 39 files) before anyone starts (CONTRACT 28)                                                                                                                                                                                                                                                                                                                     |
+| orchestrator (O first)                                   | `src/config/navigation.js`, `src/components/{NavIcon,Sidebar}.jsx`, `src/modules/dashboard/service.js` (`getNavBadges.myTasks`), `tests/unit/navigation.test.js`, `tests/services/dashboardNavBadges.test.js` (new or the existing badge test), `tests/services/{dashboard,attendance.wfhCheckIn}.test.js` (their exact `getNavBadges` objects become `{ requests, corrections, myTasks: 0 }` for HR and employees and include the count for PMs and Admins); `tests/unit/boardCodeSize.test.js` (recursive in `_board/**`, `src/components/task/**`, `src/lib/motion` and `(app)/my-tasks`; the same list as Tests); five test files split with their assertions unchanged, so each part has one owner: `tests/unit/boardLook.test.js` into `boardLook.test.js` (cards and board, C3) and `taskWindowLook.test.js` (task window and windows, D), `tests/unit/phasesBoard.test.js` into `phasesView.test.js` (`phasesView` and the undo queue, C1) and `taskFormModel.test.js` (D), `tests/unit/boardView.test.js` into `boardView.test.js` (C1) and `boardMoves.test.js` (move targets, `landingIndex`, optimistic moves and Undo, C2), `tests/unit/boardFocus.test.js` into `boardActions.test.js` (useBoard's `cardActions`, `openTaskFrom`, the pill pressed first, which becomes the `?show=` first item, and `FileDropGuard`; C1) and `boardFocus.test.js` ("a focused card drawn again", `useCardFocus`; C3), `tests/unit/keyboardFocus.test.js` into `menuFocus.test.js` (the Menu, C1) and `taskFormFocus.test.js` (the task form's Save with a paused file, D) (CONTRACT 28)                                                                                                                                                                                                                                                                                                                               |
+| orchestrator (O first)                                   | **stubs** with the exact signatures of Modules, so every builder starts green: `projectFiles` (`chipsForTasks` → `{}`, `pickerFiles` → `{ files: [], places: [], taskPhase: null, linksReady: false }`, `privateLinkCounts` → `{}`, `countActiveLinks` → 0, `linkFiles` and `unlinkFiles` → `[]` for empty lists else `UPDATE_NEEDED`, `unlinkFile` → `UPDATE_NEEDED`; `access.js` `needsShareConfirm`, `isProjectManager`, `canSeeLinkedOnTask` written for real, they are three lines each), `projectTasks` (`listMine` → `{ tasks: [], more: false }`, `countMineDue` → 0, `updateCountsFor` and `latestLinesFor` → `{}`, `bulkUpdate` → FORBIDDEN), `timers.minutesByTask` → `{}`, `src/lib/motion/{reducedMotion,animate,flip,settle,commitMotion,useMotion,presence,clone}.js` (no-op versions that change state without motion), `_board/{useDesktopPointer,usePointerDrag,boardMotion,phaseMotion,useTickLeave,moveWords}.js` with the Modules signatures (`usePointerDrag` → `{ relayout() {}, destroy() {}, gripProps: () => ({ 'data-grip': '', 'aria-describedby': 'move-help' }) }`; each `boardMotion` function calls `change()` and resolves; `playPhaseMove` calls `commit`, `toast` and `refresh`, then returns a no-op cleanup; `useTickLeave` → `{ apply: (tasks) => tasks, tick: (task, next, saved) => saved }`), so C1 and C3 can start before C2 lands, `_board/{MoveLive.jsx, TaskActionsProvider.jsx, PeopleWindow.jsx}`, `_board/table/TaskTable.jsx` (renders nothing), `src/components/files/{FilesPicker,ShareConfirm}.jsx`, `(app)/my-tasks/page.js` (the TopBar and the empty state) and `MyTasksCard.jsx` (renders nothing) (CONTRACT 28)                                                                                                                                                                                                                                            |
+| orchestrator (O last)                                    | `README.md` (below) and `tests/unit/hostScripts.test.js`; `db/demo/*` (links: `acme-brand-guide.pdf` on "Checkout fix before client demo"; the managers-only contract left unlinked for the e2e; timer minutes on three acme-store tasks (a new `db/demo/taskTimers.js`; `hrTimers.js` and `demoHrTools.test.js` stay as they are); the CEO takes "Approve the hosting invoice" on internal-tool (not a member) and the PM keeps "Get the payment gateway keys from Acme"; Meera takes one task); `tests/unit/demoProjectPlans.test.js` if the demo builders change; `scripts/doctor.js` only if its 020 line needs words (it shouldn't: `migrate.list()` names 020); `docs/CONTRACT.md` (this section and Other section edits); leftovers reported by builders; the full unit, service and e2e runs and `next build` (CONTRACT 28)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| projects (files, A)                                      | `src/modules/projectFiles/{access,reads,repo,fileView,attach,service,index}.js` and new `{links,linkReads,linkRepo}.js`; `src/app/api/projects/[id]/files/route.js` (new), `src/app/api/project-tasks/[id]/links/[fileId]/route.js` (new); `(app)/projects/[id]/FilesTab.jsx`, `[id]/_files/{filesTabView,fileRowView,FileListRow,FilesList,FileRowMenu,FileEditDialog,useFilesTab,FilesView}.js(x)` and their css; tests: `tests/unit/{fileAccess,filesTabView,filesTab,fileLinkRules,filesLook,filesKeyboard}.test.js` (`filesLook` and `filesKeyboard` render A's `_files` code) (`fileLinkRules` new: `canSeeLinkedOnTask`, `needsShareConfirm`, `isProjectManager`), `tests/services/{projectFileLinks (new),projectFilesDownload,projectFilesManage,projectFilesMigration,projectFilesPicker (new)}.test.js`, `tests/services/projectFilesKit.js` (+ `linkFile(...)`) (CONTRACT 28)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| projects (tasks, B)                                      | `src/modules/projectTasks/{writes,schemas,messages,service,repo,shared,taskDetails,taskFiles}.js` and new `{bulk,mine,assignees,updates}.js`; `src/modules/timers/taskMinutes.js` (new) and `src/modules/timers/service.js` (one export); `src/modules/notifications/alerts.js`; `src/app/api/projects/[id]/tasks/route.js`, `api/projects/[id]/tasks/bulk/route.js` (new), `api/project-tasks/[id]/route.js`, `api/project-tasks/[id]/files/route.js`; tests: `tests/unit/{notificationAlerts,taskFileMessages,noSlackNoAi,assigneeRule (new),taskReassignMessages (new)}.test.js`, `tests/services/{projectTasks,projectTasks.reads,projectTaskFiles,projectTasksPlan,projectTasksRoutes,projectTaskTake (new),projectTasksBulk (new),projectTasksMine (new),taskMinutes (new)}.test.js` (CONTRACT 28)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| projects (board, C1)                                     | `(app)/projects/[id]/{BoardTab.jsx,phasesView.js,ProjectView.jsx,projectHead.js,ProjectHeader.jsx,NewTaskButton.jsx,MemberProjectView.jsx,MovePhaseButton.jsx,page.module.css,TabSkeletons.jsx,loading.module.css}` (the board skeleton gains the toolbar and the 248 px columns); `_board/{Board.jsx,useBoard.js,useBoardParts.js,boardView.js,bandView.js,PhaseColumn.jsx,QuickAdd.jsx,QuickAdd.module.css,PhoneSwitcher.jsx,ProgressBand.jsx,ProgressBand.module.css,ForecastLine.jsx,useBoardScroll.js,Board.module.css}` and new `{boardFilters,useBoardFilters,useBoardView,BoardToolbar,AddTaskButton,ViewSwitch,BoardSearch,FilterMenu,FacesFilter,FilterLine,CompletedNote,ReopenProject,DoneRail}.js(x)`, `Toolbar.module.css`, `Columns.module.css`, `DoneRail.module.css` (new, from `DonePhasesColumn.module.css`); deletes `DonePhasesColumn.jsx`, `BoardFilters.jsx` (+ css) and `_board/useBoardDrag.js` (once `useBoard.js` no longer imports it); `src/components/Menu.jsx` (+ `Menu.module.css`); tests: `tests/unit/{boardView,phasesView,projectBoard,boardFilters (new),boardOverflow (new: the CSS values of The sideways scroll),memberProjectView,projectLayout,projectTabs,boardActions,menuFocus}.test.js` (`projectTabs`: the Board tab's header has no button, other tabs keep "+ New task", a Completed project shows "Reopen project" for managers, `_board/TaskActionsProvider` mocked; `boardActions` and `menuFocus` are O's splits), `tests/services/{projectBoardTab,projectMemberPage}.test.js` (CONTRACT 28)                                                                                                                                                                                                                                                                                                                                                                   |
+| projects (motion, C2)                                    | `src/lib/motion/{reducedMotion,animate,flip,settle,commitMotion,useMotion,presence,clone}.js`; `_board/{useDesktopPointer,usePointerDrag,dragSession,dragTargets,dragPreview,sortedGap,autoScroll,moveWords,boardMotion,phaseMotion,useTickLeave,useCardMoves,useCardFileDrop,boardMoves}.js`, `_board/MoveLive.jsx`, `_board/{BoardDrag,TaskTick}.module.css` (never `useBoardDrag.js`, which C1 deletes; `useCardMoves.js` keeps its 1.12 return beside `show` and `send`); `[id]/TaskCheck.jsx` (+ css), `[id]/UndoToast.jsx` (+ css); `src/components/{Dialog,Drawer,ToastProvider}.jsx` (+ their css), `src/components/live/useStack.js` (the import); `tests/visual/shot.mjs`; tests: `tests/helpers/motionFakes.js` (new), `tests/unit/{settle,autoScroll,sortedGap,moveWords,flip,animate,commitMotion,presence,dragSession,boardMotion,phaseMotion,tickLeave}.test.js` (new), `tests/unit/boardMoves.test.js` (O's split), `tests/unit/liveStack.test.js` (covers `useStack.js`, whose reduce check C2 replaces) (CONTRACT 28)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| projects (cards, C3)                                     | `_board/{TaskCard.jsx,TaskCard.module.css,CardMenu.jsx,MoveTaskDialog.jsx,MoveTaskDialog.module.css,useCardFocus.js}` and new `{CardTop,CardFiles,CardFace,CardFooter,PeopleWindow,TaskActionsProvider}.jsx`, `{peopleView,assignView,useAssign}.js`, `PeopleWindow.module.css`; tests: `tests/unit/{boardLook,boardFocus,taskCard (new),peopleWindow (new),assignView (new)}.test.js` (CONTRACT 28)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| projects (table, T)                                      | `_board/table/**` (new: `TaskTable.jsx`, `TableHead.jsx`, `TableGroup.jsx`, `TableRow.jsx`, `StackList.jsx`, `BulkBar.jsx`, `tableView.js`, `bulkView.js`, `useTableSort.js`, `useSelection.js`, `useBulkActions.js`, `TaskTable.module.css`, `BulkBar.module.css`); tests: `tests/unit/{tableView,bulkView,taskTable}.test.js` (new) (CONTRACT 28)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| projects, files (D)                                      | `src/components/task/**`; `_board/{TaskEditorProvider.jsx,TaskFormDialog.jsx,TaskFormDialog.module.css,TaskFormFields.jsx,taskFormModel.js,useTaskForm.js}` and new `{AssignField,FilesField}.jsx`; `src/components/files/{FileTile.jsx,FileRows.jsx,FileThumbs.jsx,UploadField.jsx,UploadChip.jsx,useFileRemoval.js,Files.module.css}` and new `{FilesPicker,ShareConfirm,LinkChip}.jsx`, `{filesPickerView,shareConfirmView,usePickerFiles}.js`, `FilesPicker.module.css`; tests: `tests/unit/{taskWindow,taskWindowFocus,taskWindowLook,taskFormModel,taskFormFocus,filesPicker (new),shareConfirm (new)}.test.js` (`taskFormModel.test.js` and `taskFormFocus.test.js` are O's splits of `phasesBoard.test.js` and `keyboardFocus.test.js`) (CONTRACT 28)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| shell, today (M)                                         | `src/app/(app)/my-tasks/**` (new, replacing O's stub); `(app)/team/{page.js,page.module.css}`, `(app)/overview/{page.js,page.module.css}`; `(app)/today/{PriorityCard.jsx,PriorityCard.module.css,todayData.js}`; tests: `tests/unit/{myTasksView,myTasksCard,todoCardRender,todoCardActions}.test.js` (`myTasks*` new), `tests/services/{myTasksPage (new),todayTaskFiles,todayTakenTasks (new)}.test.js` (CONTRACT 28)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| owner requests (R)                                       | `src/modules/preferences/schemas.js`, `src/components/UserPrefs.jsx`, `src/components/live/LiveNotifications.jsx` (the `sound` fallback only), `src/app/(app)/my-settings/{sections.js,MySettingsSections.jsx}`, `src/app/(app)/report/{SlackPreview.jsx,SlackPreview.module.css}`, `src/lib/copyText.js` (new); tests: `tests/services/{preferences,preferencesRoute}.test.js`, `tests/unit/{mySettings,liveRules,liveLeader,liveRecovery,copyText (new)}.test.js`, `tests/helpers/liveFakes.js` (only where the default choice matters) (CONTRACT 28)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| orchestrator (F)                                         | `tests/e2e/{live-notifications,my-settings,checkin-report}.spec.js` (Two more owner requests: the default Sound is All, the Copy button); `tests/e2e/{project-board,task-files,project-plan,board-focus,smoke,todo,project-files}.spec.js` (changed: "Add task" in the toolbar, the "Assign to" radio chips, the Filter menu in place of "Highlight cards", pointer drag in place of `dragTo`, the nav lists with My tasks, the Files tab's "· On 1 task" for the demo-linked brand guide), new `tests/e2e/{task-links,assign-to-me,board-motion,board-table,completed-project,no-sideways-scroll,board-perf}.spec.js`, `tests/e2e/support/board.js` (new: `pointerDrag`, `expectNoSidewaysScroll`, `runningAnimations`, which waits at most 2 s until `document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().iterations !== Infinity)` is empty), `tests/e2e/support/{fixtures,demoData,files}.js` (`demoData.js` gains `addTasks` and `removeTasks` for board-perf), `playwright.config.js` (`chrome` gets `testIgnore: ['**/no-sideways-scroll.spec.js', '**/board-perf.spec.js']`; a `scrollbars` project with `testMatch: '**/no-sideways-scroll.spec.js'` and `use: { ...devices['Desktop Chrome'], channel: 'chrome', viewport: { width: 1440, height: 1000 }, launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } }`; a `perf` project with `testMatch: '**/board-perf.spec.js'` added only when `process.env.PERF === '1'`; so no spec runs twice against the one demo database) (CONTRACT 28)                                                                                                                                                                                                                                                                                                                                                          |
 
 Every page starts with `const user = await requirePage('<permission>')`, renders `<TopBar ... />`
 then its blocks, has a loading skeleton (`loading.js`) and empty states. Page permissions:
@@ -557,7 +594,7 @@ see the PM view, active members the member view, anyone else 404; CONTRACT 27), 
 /attendance/holidays `attendance.view_all`, /attendance/month, /attendance/people/[userId] and
 /attendance/leave `attendance.correct` (CONTRACT 25), /people `people.manage`, /overview
 `overview.view`, /settings `settings.manage`, /settings/roles `roles.manage`, /my-settings any
-signed-in person (`requireUser()`).
+signed-in person (`requireUser()`), /my-tasks `project.manage` (PMs and Admins; CONTRACT 28).
 
 ## 10. Tests
 
@@ -573,6 +610,8 @@ signed-in person (`requireUser()`).
 - File tests always use the test folder under the system temp folder, per `DB_NAME` (`FILES_DIR` is
   ignored under `NODE_ENV=test`); never the dev folder. Service tests make files through
   `tests/services/projectFilesKit.js` (CONTRACT 27).
+- Unit tests never use jsdom: browser APIs are hand fakes (`tests/helpers/motionFakes.js`). The e2e
+  `scrollbars` project runs Chrome with real scrollbars for the sideways scroll check (CONTRACT 28).
 
 ## 11. Screen time (added after the build guide, at the company's request)
 
@@ -646,10 +685,11 @@ lastReportedOn, daysReported, minutesOnDays }], entries: [{ workDate, user, minu
 The project's PM (or Admin) lists a project's important tasks and marks each **P1** (highest),
 **P2** or **P3**, optionally for one person (`assignee_id`; null = anyone on the project). Members
 see their open priority tasks on Today (P1 first) and can link a daily-report task line to one.
-Tasks can carry files (CONTRACT 27).
+Tasks can carry files (CONTRACT 27). Tasks can carry links to project files (CONTRACT 28).
 
 - Table `project_tasks` (migration 008): `project_id`, `title` (2–200), `details` (≤1000, optional),
-  `priority` p1 | p2 | p3, `assignee_id` (active member of the project, or null), `status` open |
+  `priority` p1 | p2 | p3, `assignee_id` (null, an active member, the project's PM, or an active
+  Admin who takes it themself; CONTRACT 28), `status` open |
   done, `done_at`, `done_by`, `created_by`, `updated_by`. `report_tasks.project_task_id` (nullable,
   ON DELETE SET NULL) links a report line to the priority task it worked on; carry-over keeps it.
 - Who: create, edit (title, details, priority, assignee), mark done / reopen and delete need
@@ -661,8 +701,9 @@ Tasks can carry files (CONTRACT 27).
   `project_task.changed` when priority or assignee changes (to the new assignee / members);
   `project.member_added` to people newly added to a project ("You were added to acme-store").
   Links open the task on the project page (`/projects/[id]?task=<id>`); `project_task.files_added`
-  when files are added later (CONTRACT 27). Audit: `project_task.create`, `project_task.update`,
-  `project_task.done`, `project_task.reopen`, `project_task.delete`.
+  when files are added later (CONTRACT 27). `project_task.reassigned` tells the earlier person when
+  the person of an open task changes (CONTRACT 28). Audit: `project_task.create`,
+  `project_task.update`, `project_task.done`, `project_task.reopen`, `project_task.delete`.
 - `projectTasks` module (`@/modules/projectTasks`):
   - `listForProject({ viewer, projectId, status? })` → `[{ id, projectId, title, details, priority,
 status, assignee: { id, name, initials, role, status } | null, createdBy, createdAt, doneAt,
@@ -1240,7 +1281,7 @@ onToolCall? })` → `{ text, data }`: checks availability (`AI_OFF`), the compan
 
 ### Version label
 
-- `APP_VERSION` in `src/config/version.js` (now '1.12'; raised with each release). Shown as small
+- `APP_VERSION` in `src/config/version.js` (now '1.13'; raised with each release). Shown as small
   muted "Daybook v1.05" at the bottom of the sidebar and under the sign-in card.
 
 ### Notification center
@@ -1257,7 +1298,8 @@ onToolCall? })` → `{ text, data }`: checks availability (`AI_OFF`), the compan
   `prefers-reduced-motion`.
 - Live (CONTRACT 26): while Daybook is open the bell learns about new notifications by itself
   (`GET /api/notifications?after=`), a preview card shows each new one (a summary for 3 or more),
-  and a short chime plays for important ones by default (My settings → Sound).
+  and a short chime plays for every new one by default (My settings → Sound; the default is All
+  since CONTRACT 28).
 
 ### Decisions made while building (phase 1)
 
@@ -1324,20 +1366,20 @@ themselves only. Company rules stay in Settings (Admin).
   created on the first change.
 - Keys, values and defaults (`PREFERENCE_DEFAULTS`, frozen):
 
-  | Key                 | Values                              | Default         | Used by                            |
-  | ------------------- | ----------------------------------- | --------------- | ---------------------------------- |
-  | `submitButtons`     | `'both'` `'checkout'` `'submit'`    | `'both'`        | report top bar                     |
-  | `newTaskStatus`     | `'in_progress'` `'done'`            | `'in_progress'` | report editor                      |
-  | `carryOver`         | boolean                             | `true`          | suggestions (CONTRACT 24)          |
-  | `slackPreview`      | boolean                             | `true`          | report page                        |
-  | `polishButton`      | boolean                             | `true`          | report top bar                     |
-  | `polishLines`       | boolean                             | `true`          | report task lines                  |
-  | `polishAfterTimers` | boolean                             | `true`          | Fill report from timers            |
-  | `bellRing`          | boolean                             | `true`          | notification bell                  |
-  | `bellSound`         | `'important'` `'all'` `'off'`       | `'important'`   | when the sound plays (CONTRACT 26) |
-  | `bellTone`          | `'chime'` `'bell'` `'ding'` `'pop'` | `'chime'`       | which sound (CONTRACT 26)          |
-  | `bellPreview`       | boolean                             | `true`          | preview cards (CONTRACT 26)        |
-  | `theme`             | `'system'` `'light'` `'dark'`       | `'system'`      | whole app                          |
+  | Key                 | Values                              | Default         | Used by                                                               |
+  | ------------------- | ----------------------------------- | --------------- | --------------------------------------------------------------------- |
+  | `submitButtons`     | `'both'` `'checkout'` `'submit'`    | `'both'`        | report top bar                                                        |
+  | `newTaskStatus`     | `'in_progress'` `'done'`            | `'in_progress'` | report editor                                                         |
+  | `carryOver`         | boolean                             | `true`          | suggestions (CONTRACT 24)                                             |
+  | `slackPreview`      | boolean                             | `true`          | report page                                                           |
+  | `polishButton`      | boolean                             | `true`          | report top bar                                                        |
+  | `polishLines`       | boolean                             | `true`          | report task lines                                                     |
+  | `polishAfterTimers` | boolean                             | `true`          | Fill report from timers                                               |
+  | `bellRing`          | boolean                             | `true`          | notification bell                                                     |
+  | `bellSound`         | `'all'` `'important'` `'off'`       | `'all'`         | when the sound plays (CONTRACT 26; default `'all'` since CONTRACT 28) |
+  | `bellTone`          | `'chime'` `'bell'` `'ding'` `'pop'` | `'chime'`       | which sound (CONTRACT 26)                                             |
+  | `bellPreview`       | boolean                             | `true`          | preview cards (CONTRACT 26)                                           |
+  | `theme`             | `'system'` `'light'` `'dark'`       | `'system'`      | whole app                                                             |
 
 - `preferences.getFor(userId)` → every key (stored values over the defaults; an unknown key or a
   stored value that is no longer valid is ignored). A missing table (MySQL errno 1146, a deploy
@@ -1389,13 +1431,13 @@ themselves only. Company rules stay in Settings (Admin).
      - "Suggest wording after Fill report from timers" (Toggle).
      - Under them, muted: "When you use these, your task lines are sent to Google Gemini."
   3. **Notifications** (everyone): "Ring the bell for unread notifications" (Toggle). Help: "A
-     small swing every few seconds while you have unread ones." "Sound" (Segmented: Important only
-     · All · Off). "Choose a sound" (Segmented: Chime · Soft bell · Ding · Pop; picking one plays
-     it) with "Play sound" (CONTRACT 26). "Show a preview" (Toggle). Then the existing desktop
-     switch (`PushSwitch` "Show on this computer"), only while desktop notifications are on for the
-     company, with the note "When this is on and Daybook is in the background, Daybook doesn't
-     chime. Your computer's settings decide if the desktop notification makes a sound, whatever you
-     chose for Sound."
+     small swing every few seconds while you have unread ones." "Sound" (Segmented: All ·
+     Important only · Off; All is the default, CONTRACT 28). "Choose a sound" (Segmented: Chime ·
+     Soft bell · Ding · Pop; picking one plays it) with "Play sound" (CONTRACT 26). "Show a
+     preview" (Toggle). Then the existing desktop switch (`PushSwitch` "Show on this computer"),
+     only while desktop notifications are on for the company, with the note "When this is on and
+     Daybook is in the background, Daybook doesn't chime. Your computer's settings decide if the
+     desktop notification makes a sound, whatever you chose for Sound."
      Reminders from HR and from Daybook, and for HR the morning summary and the evening wrap-up
      (CONTRACT 25), come to the bell and, where Show on this computer is on, as desktop
      notifications. There is no per-type mute; the Sound choice is the only difference by type
@@ -1417,13 +1459,14 @@ themselves only. Company rules stay in Settings (Admin).
   copies): no new draft starts with carried lines whatever the setting. While it is on, picking a
   project on Today or in the report suggests its tasks still open from past reports; off, there
   are no suggestions, no reminder line and no "still open" hints. Existing drafts are not changed.
-- **Slack preview off**: the side panel isn't rendered and the cards take the full width.
+- **Slack preview off**: the side panel isn't rendered and the cards take the full width. When it
+  shows, its header has a Copy button that copies the exact message (CONTRACT 28).
 - **Polish**: `polishButton` off hides the top-bar button; `polishLines` off hides the line
   sparkles; `polishAfterTimers` off skips the "Suggested wording" offer after Fill report from
   timers. All three still need the company's AI (`data.aiPolish`) and an editable report.
 - **Bell**: `bellRing` off stops the swing; the red dot and the count stay.
-- **Sound**: Important only chimes for the types marked important in `ALERT_TYPES`, All for every
-  new notification, Off never (CONTRACT 26).
+- **Sound**: All (the default since CONTRACT 28) chimes for every new notification, Important only
+  for the types marked important in `ALERT_TYPES`, Off never (CONTRACT 26).
 - **Choose a sound**: which of the four sounds plays (CONTRACT 26).
 - **Show a preview** off: no preview cards and no announcement; the bell's dot and count still
   change.
@@ -1534,7 +1577,7 @@ added the original note again as a new line. Fill twice with a polish in between
 
 ## 22. Project management: phases, plan, tasks and AI summary (company request, Daybook 1.07)
 
-**Design:** `docs/design/project-management-prototype.dc.html`, the clickable prototype the owner approved. Its look, layout and copy bind every screen below (its numbers are sample data, and its "speed is 4" is a demo shortcut). Open it in a text editor: the markup and the `renderVals()` logic are readable. Where real data needs a state the prototype doesn't draw, this section says what to show. Build with Daybook's real components and tokens (`Card`, `TopBar`, `Button`, `Dialog`, `Segmented`, `FilterPills`, `DataTable`, `PriorityTag`, `Toast`), never raw hex in CSS modules. **The UI says "AI", never "Gemini"** (Settings → AI excepted). No consent checkbox, no phase history screen, no note on a phase move. The project page is redrawn by CONTRACT 27 (Board, Summary, Files, Timeline, Hours); its prototype replaces this one for the project page.
+**Design:** `docs/design/project-management-prototype.dc.html`, the clickable prototype the owner approved. Its look, layout and copy bind every screen below (its numbers are sample data, and its "speed is 4" is a demo shortcut). Open it in a text editor: the markup and the `renderVals()` logic are readable. Where real data needs a state the prototype doesn't draw, this section says what to show. Build with Daybook's real components and tokens (`Card`, `TopBar`, `Button`, `Dialog`, `Segmented`, `FilterPills`, `DataTable`, `PriorityTag`, `Toast`), never raw hex in CSS modules. **The UI says "AI", never "Gemini"** (Settings → AI excepted). No consent checkbox, no phase history screen, no note on a phase move. The project page is redrawn by CONTRACT 27 (Board, Summary, Files, Timeline, Hours); its prototype replaces this one for the project page. The Board tab is redrawn again by CONTRACT 28 (toolbar, Table, fuller cards, motion).
 
 ### Words
 
@@ -1744,7 +1787,7 @@ Two asks from the owner, approved with the answers at the end of this section (1
 - **Play** shows only when the person is checked in, not on a break and not checked out, timers aren't off, the group is an active project (not a project request), the line isn't Done and no timer runs on it. It calls `POST /api/me/todo/lines/[id]/timer`: `timers.start` with the project, the line's `projectTaskId` (left out when that priority task is closed) and `note` = the first 200 characters of the title; then, in the same request, the line's `timer_note` = that note, so Fill report from timers merges into this line (`reportTimers.lineFor` matches by `timerNote`) even if the title is reworded later. A set note is part of the report's version, so a report tab opened before Play gets "This report changed somewhere else" on its next save instead of saving the line without its note, and re-reads when it becomes visible. Refusals from `timers.start` are toasted as they come. Once it runs, Play goes (the line is "Now"); if Play had focus, focus moves to the line's title.
 - **"Now"** = the person's running entry has the group's `project_id` and its normalised note equals the line's `timer_note` or its title.
 - **TimerStartForm** (the Today timer form): after a project is picked, the note field offers that project's not-done to-do lines (same listbox as `matchSuggestions`, heading "Your to-do on Studio Ubique"). Picking one starts the timer through the same `.../lines/[id]/timer` route.
-- **Priority tasks card**: each row gets a 32 px Plus icon button "Add to to-do: {title}" (44 px at 640 px and below). It adds a line to the to-do with the task's title and `projectTaskId` (creating the group). When a to-do line already links that task, the button is replaced by a muted check and "In to-do". Rows show a paperclip and count and open the task window (CONTRACT 27).
+- **Priority tasks card**: each row gets a 32 px Plus icon button "Add to to-do: {title}" (44 px at 640 px and below). It adds a line to the to-do with the task's title and `projectTaskId` (creating the group). When a to-do line already links that task, the button is replaced by a muted check and "In to-do". Rows show a paperclip and count and open the task window (CONTRACT 27). Rows show the due date and include tasks a tracked Admin took (CONTRACT 28).
 - **Add project**: a dashed full-width "Add project" button under the groups opens the report's `ProjectPicker` (no "Ask for a missing project" here; projects already in the list are greyed "In your to-do"; "2 still open" beside projects with suggestions, prop `showOpenCounts`, off in the timer form). Picking one adds the group with the input focused and its suggestion box.
 - **Reminder line** (only while suggestions exist for projects not in the list): muted "Still open from past reports:" then each project as a text button with its count, "Acme booking app (2)". Clicking opens the **Still open dialog** (Request 4); it never adds a project by itself.
 - **Slack button.** "Post to Slack" (primary, compact; only while Slack is on with a bot token, a to-do channel is set in Settings, and the list has a line: `slack.canPostTodo`). After the click: disabled "Posting…". Sent: muted check "Posted at 9:41 AM". Failed: red "Couldn't post to Slack." and "Try again" (secondary). After the list changes (not after a tick): "Update post" (secondary) beside "Posted at …", then "Updating…". Hidden when the list is empty. While a post is sending, the card asks `GET /api/me/todo` every 5 seconds for up to a minute.
@@ -4587,11 +4630,12 @@ new npm dependency**:
    one summary card ("3 new notifications"). On a phone it comes from the top.
 3. **Sound.** A short soft sound Daybook makes itself (synthesized, not copied from any app). Once
    per batch, never several in a row, and only one open Daybook tab plays it. Default: sound for
-   important notifications only. Each person can change it in My settings, and **picks which sound**
-   they hear: Chime (the default), Soft bell, Ding or Pop (owner, 23 Nov 2026).
-4. **My settings.** A Sound choice (Important only, the default; All; Off), a "Choose a sound" choice
-   (Chime, Soft bell, Ding, Pop; picking one plays it) with a "Play sound" button, and a "Show a
-   preview" switch (default on).
+   every notification (CONTRACT 28; 1.11 shipped important only). Each person can change it in My
+   settings, and **picks which sound** they hear: Chime (the default), Soft bell, Ding or Pop
+   (owner, 23 Nov 2026).
+4. **My settings.** A Sound choice (All, the default; Important only; Off), a "Choose a sound"
+   choice (Chime, Soft bell, Ding, Pop; picking one plays it) with a "Play sound" button, and a
+   "Show a preview" switch (default on).
 5. **No double alert.** While a Daybook window is in front, Daybook shows its own preview instead
    of the system pop-up, where the browser's rules allow skipping it; when Daybook is closed or in
    the background, desktop notifications work as in 1.10.
@@ -4703,7 +4747,7 @@ at], ...], shown: [[id, at], ...] }` (each list keeps the last 50 ids; entries o
 ### Important notifications (`src/modules/notifications/alerts.js`, new, pure, browser-safe)
 
 `ALERT_TYPES` is the one list: a frozen object `{ [type]: 'important' | 'normal' }` with **every**
-type Daybook creates (44: 19 important, 25 normal). Group and icon come from the type's prefix
+type Daybook creates (45: 19 important, 26 normal). Group and icon come from the type's prefix
 (`ALERT_GROUPS`). The table is the contract; the test pins it.
 
 | #   | Type                                 | Important | Group      | Why                                                                                          |
@@ -4752,6 +4796,7 @@ type Daybook creates (44: 19 important, 25 normal). Group and icon come from the
 | 42  | `ai.pm_summary`                      | no        | ai         | An evening read.                                                                             |
 | 43  | `ai.hr_notes`                        | no        | ai         | A weekly read.                                                                               |
 | 44  | `project_task.files_added`           | no        | task       | New files on your task; like the other task types.                                           |
+| 45  | `project_task.reassigned`            | no        | task       | Your task went to someone else; like the other task types.                                   |
 
 - `ALERT_GROUPS` (prefix → group): `attendance.`, `attendance_correction.` → `attendance`;
   `leave.`, `holiday.`, `wfh_request.` → `calendar`; `project.`, `project_request.` → `project`;
@@ -5127,10 +5172,10 @@ transform: translateY(-8px)` (from the bell); phone `translateY(-16px)` (from th
   ease-in to `opacity: 0; transform: translateY(-4px)`, then removed: on an `animationend` that
   comes while the card is leaving and from the card itself (`event.target ===
 event.currentTarget`, so the end of the enter animation or of a child's never counts), with a
-  250 ms safety timeout. Reduced motion: no rule in the module; the global rule in `globals.css`
-  cuts both animations to 0.01 ms, so `animationend` still fires and a card appears and goes at
-  once. When `matchMedia('(prefers-reduced-motion: reduce)').matches`, a leaving card is also
-  removed without waiting for `animationend`.
+  250 ms safety timeout. Reduced motion: the motion tokens make both animations 120 ms fades
+  (CONTRACT 28), so `animationend` still fires. When
+  `matchMedia('(prefers-reduced-motion: reduce)').matches`, a leaving card is also removed without
+  waiting for `animationend`.
 
 #### Keyboard and screen readers
 
@@ -5390,8 +5435,8 @@ ids, readAt }`, `{ kind: 'read-all', readAt }`, `{ kind: 'openBell' }`. **new** 
 
 - `BELL_SOUNDS = Object.freeze(['important', 'all', 'off'])` and `BELL_TONES =
 Object.freeze(['chime', 'bell', 'ding', 'pop'])` (both exported).
-- `PREFERENCE_DEFAULTS` gains `bellSound: 'important'`, `bellTone: 'chime'` and `bellPreview: true`
-  (after `bellRing`, in that order).
+- `PREFERENCE_DEFAULTS` gains `bellSound: 'all'` (CONTRACT 28; 1.11 shipped `'important'`),
+  `bellTone: 'chime'` and `bellPreview: true` (after `bellRing`, in that order).
 - `PREFERENCE_FIELDS` gains `bellSound: z.enum(BELL_SOUNDS, { error: 'Sound must be Important only,
 All or Off.' })`, `bellTone: z.enum(BELL_TONES, { error: 'The sound must be Chime, Soft bell, Ding
 or Pop.' })` and `bellPreview: onOff('Show a preview')` ("Show a preview must be on or off.").
@@ -5399,9 +5444,10 @@ or Pop.' })` and `bellPreview: onOff('Show a preview')` ("Show a preview must be
   `update`, the `JSON_MERGE_PATCH` save, the 2,048-character body limit (the keys fit easily) and
   the route's 60 a minute stay. **No migration** (map.md §6: a JSON column; only changed keys are
   stored).
-- `src/components/UserPrefs.jsx` (A): `useBellSound()` → `'all'` or `'off'` when the stored value is
-  one of those, else `'important'`; `useBellTone()` → `'bell'`, `'ding'` or `'pop'` when the stored
-  value is one of those, else `'chime'`; `useBellPreview()` → `bellPreview !== false`. (No import of
+- `src/components/UserPrefs.jsx` (A): `useBellSound()` → `'important'` or `'off'` when the stored
+  value is one of those, else `'all'` (the default, also outside the app; CONTRACT 28);
+  `useBellTone()` → `'bell'`, `'ding'` or `'pop'` when the stored value is one of those, else
+  `'chime'`; `useBellPreview()` → `bellPreview !== false`. (No import of
   the schemas file: it would bring zod into every page.)
 - The provider reads them through these hooks; after My settings saves, `router.refresh()` brings
   the new values to this tab (CONTRACT 21), and the `prefs` channel message to the others.
@@ -5411,11 +5457,12 @@ or Pop.' })` and `bellPreview: onOff('Show a preview')` ("Show a preview must be
 In this order:
 
 1. "Ring the bell for unread notifications" (unchanged).
-2. **"Sound"**, a `ChoiceRow` (`name="bellSound"`, `choices={SOUND_CHOICES}`): `Segmented` "Important
-   only" · "All" · "Off" (`SOUND_CHOICES` in `sections.js`: `[{ value: 'important', label:
-'Important only' }, { value: 'all', label: 'All' }, { value: 'off', label: 'Off' }]`). Help: "A
-   short sound for new notifications while Daybook is open. Important ones ask you to act, like a
-   reminder to check in or a request to approve." No button in this row.
+2. **"Sound"**, a `ChoiceRow` (`name="bellSound"`, `choices={SOUND_CHOICES}`): `Segmented` "All" ·
+   "Important only" · "Off", All first because it is the default (CONTRACT 28) (`SOUND_CHOICES` in
+   `sections.js`: `[{ value: 'all', label: 'All' }, { value: 'important', label: 'Important only'
+}, { value: 'off', label: 'Off' }]`). Help: "A short sound for every new notification while
+   Daybook is open. Important only plays it just for reminders and requests that ask you to act."
+   (CONTRACT 28). No button in this row.
 3. **"Choose a sound"** (owner, 23 Nov 2026), a `ChoiceRow` (`name="bellTone"`,
    `choices={TONE_CHOICES}`): `Segmented` "Chime" · "Soft bell" · "Ding" · "Pop" (`TONE_CHOICES` in
    `sections.js`: `[{ value: 'chime', label: 'Chime' }, { value: 'bell', label: 'Soft bell' }, {
@@ -5637,7 +5684,7 @@ migrate line this time."
 ### Tests and version
 
 - **Unit** (node only, no DOM; fakes for every browser API):
-  - `tests/unit/notificationAlerts.test.js` (A): `ALERT_TYPES` has exactly the 44 types of the
+  - `tests/unit/notificationAlerts.test.js` (A): `ALERT_TYPES` has exactly the 45 types of the
     table (the list is written out in the test) with their levels, 19 important; every type's prefix
     has a group; `alertLevel`/`alertGroup` for an unknown type; `assertClassified('made.up')` throws
     and names CONTRACT 26. **Source scan**: every `.js`/`.jsx` file under `src/`, `scripts/` and
@@ -5744,9 +5791,10 @@ migrate line this time."
     from focus.
   - `tests/unit/appFrameLive.test.js` (B): AppFrame keys `LiveNotifications` by the person, with
     their own `latestId`.
-  - `tests/unit/mySettings.test.js` (C): `SOUND_CHOICES` values equal `BELL_SOUNDS`, labels
-    "Important only", "All", "Off"; `TONE_CHOICES` values equal `BELL_TONES` and `TONE_NAMES`,
-    labels "Chime", "Soft bell", "Ding", "Pop".
+  - `tests/unit/mySettings.test.js` (C): `SOUND_CHOICES` values are the three of `BELL_SOUNDS` in
+    the order `'all'`, `'important'`, `'off'`, labels "All", "Important only", "Off" (CONTRACT 28);
+    `TONE_CHOICES` values equal `BELL_TONES` and `TONE_NAMES`, labels "Chime", "Soft bell", "Ding",
+    "Pop".
 - **Services** (A; `DB_NAME=daybook_test_<n>`, `resetDatabase()`, `createUser`, `setNowForTests`):
   - `tests/services/notificationsLive.test.js` (new): `?after` returns only the person's rows above
     it, newest first by id, read ones included with `readAt`, at most 20 with `more` (25 rows),
@@ -5766,11 +5814,11 @@ migrate line this time."
   - `tests/services/push.test.js`: `sendPending` gives an Apple endpoint `mustShow: true` and others
     none, every payload has `userId`.
   - `tests/services/preferences.test.js`, `preferencesRoute.test.js`: `DEFAULTS` gain `bellSound:
-'important'`, `bellTone: 'chime'` and `bellPreview: true`; `bellSound: 'loud'` → "Sound must be
-    Important only, All or Off."; `bellTone: 'siren'` → "The sound must be Chime, Soft bell, Ding or
-    Pop."; `bellPreview: 'yes'` → "Show a preview must be on or off."; `'all'` and `'off'` are
-    stored, `'important'` removes the key; `'ding'` is stored, `'chime'` removes the key; a stored
-    stale value reads the default.
+'all'` (CONTRACT 28), `bellTone: 'chime'` and `bellPreview: true`; `bellSound: 'loud'` →
+    "Sound must be Important only, All or Off."; `bellTone: 'siren'` → "The sound must be Chime,
+    Soft bell, Ding or Pop."; `bellPreview: 'yes'` → "Show a preview must be on or off.";
+    `'important'` and `'off'` are stored, `'all'` removes the key; `'ding'` is stored, `'chime'`
+    removes the key; a stored stale value reads the default.
 - **E2E** (C): `tests/e2e/live-notifications.spec.js`, as Vishal Saini, against the e2e server and
   database only (never localhost:3000 or the "daybook" database). `page.addInitScript` defines
   `window.__daybookChimes = []` and `window.__daybookChime = (info) => window.__daybookChimes.push(info)`;
@@ -5786,8 +5834,9 @@ name: 'New notifications' })`) and `waitChimeGap(page)` (waits until 10 s after 
      Mark as read and Dismiss; the status region says "New notification: Neha Kapoor reminded you to
      check in"; `chimes` is 1 (`reason: 'batch'`); the bell's name says one more unread.
   3. **Mark as read**: the card goes, the bell count goes down by 1, the API shows it read.
-  4. **Normal and Dismiss**: add `leave.marked`: a card, `chimes` still 1 (Important only); Dismiss:
-     it goes and stays unread.
+  4. **Normal and Dismiss**: add `leave.marked`: a card; under All, the default since CONTRACT 28,
+     the test expects the extra chime (after `waitChimeGap`), or it sets Important only first and
+     `chimes` stays 1; Dismiss: it goes and stays unread.
   5. **Summary**: add three at once (one important): one card "3 new notifications", "and 2 more",
      `chimes` +1; See them opens the bell list with the three on top and no card left.
   6. **Open**: add one with link `/log`; Open → on `/log`, the item is read. Add another: its card's
@@ -5798,10 +5847,10 @@ name: 'New notifications' })`) and `waitChimeGap(page)` (waits until 10 s after 
      region says "New notification: …".
   9. **Two tabs**: a second page in the same context; add one important: cards in both, the sum of
      both pages' `chimes` grows by exactly 1.
-  10. **My settings**: Notifications shows Sound with "Important only" pressed, Choose a sound with
-      "Chime" pressed, Play sound (click → `chimes` +1, `reason: 'test'`, `tone: 'chime'`) and Show
-      a preview on; pick "Ding": `chimes` +1 with `reason: 'test'` and `tone: 'ding'`, "Ding" stays
-      pressed after a reload, and after `waitChimeGap` an important one added and `checkNow`
+  10. **My settings**: Notifications shows Sound with "All" pressed (CONTRACT 28), Choose a sound
+      with "Chime" pressed, Play sound (click → `chimes` +1, `reason: 'test'`, `tone: 'chime'`) and
+      Show a preview on; pick "Ding": `chimes` +1 with `reason: 'test'` and `tone: 'ding'`, "Ding"
+      stays pressed after a reload, and after `waitChimeGap` an important one added and `checkNow`
       chimes with `tone: 'ding'`; add a normal one, then switch "Ring the
       bell" off and on (each save refreshes the page, so AppFrame renders a higher `latestId`), then
       `checkNow`: its card shows. Choose Off, add an important one: a card, no chime; choose All and
@@ -5929,28 +5978,28 @@ mustShow? }`. It also handles `notificationclick` (focus a Daybook window and op
   open a new one); ..." (the rest unchanged).
 - **§20, Notification center** (add a bullet at the end): "- Live (CONTRACT 26): while Daybook is
   open the bell learns about new notifications by itself (`GET /api/notifications?after=`), a
-  preview card shows each new one (a summary for 3 or more), and a short chime plays for important
-  ones by default (My settings → Sound)."
+  preview card shows each new one (a summary for 3 or more), and a short chime plays for every new
+  one by default (My settings → Sound; the default is All since CONTRACT 28)."
 - **§21, preferences table** (add after `bellRing`):
-  "| `bellSound` | `'important'` `'all'` `'off'` | `'important'` | when the sound plays (CONTRACT 26) |", "| `bellTone` | `'chime'` `'bell'` `'ding'` `'pop'` | `'chime'` | which sound (CONTRACT 26)
+  "| `bellSound` | `'all'` `'important'` `'off'` | `'all'` | when the sound plays (CONTRACT 26; default `'all'` since CONTRACT 28) |", "| `bellTone` | `'chime'` `'bell'` `'ding'` `'pop'` | `'chime'` | which sound (CONTRACT 26)
   |" and "| `bellPreview` | boolean | `true` | preview cards (CONTRACT 26) |".
 - **§21, "3. Notifications"** (replace the item): "3. **Notifications** (everyone): "Ring the bell
   for unread notifications" (Toggle). Help: "A small swing every few seconds while you have unread
-  ones." "Sound" (Segmented: Important only · All · Off). "Choose a sound" (Segmented: Chime · Soft
-  bell · Ding · Pop; picking one plays it) with "Play sound" (CONTRACT 26). "Show a preview"
-  (Toggle). Then the existing desktop switch (`PushSwitch` "Show on this computer"), only
-  while desktop notifications are on for the company, with the note "When this is on and Daybook
-  is in the background, Daybook doesn't chime. Your computer's settings decide if the desktop
-  notification makes a sound, whatever you chose for Sound." Reminders from HR and from
-  Daybook, and for HR the morning summary and the evening wrap-up (CONTRACT 25), come to the bell
-  and, where Show on this computer is on, as desktop notifications. There is no per-type mute; the
-  Sound choice is the only difference by type (CONTRACT 26). Slack DMs follow the company's
-  switches in Settings → Slack."
-- **§21, "What the preferences change"** (add after the Bell bullet): "- **Sound**: Important only
-  chimes for the types marked important in `ALERT_TYPES`, All for every new notification, Off
-  never (CONTRACT 26). - **Choose a sound**: which of the four sounds plays (CONTRACT 26). - **Show
-  a preview** off: no preview cards and no announcement; the bell's
-  dot and count still change."
+  ones." "Sound" (Segmented: All · Important only · Off; All is the default, CONTRACT 28). "Choose
+  a sound" (Segmented: Chime · Soft bell · Ding · Pop; picking one plays it) with "Play sound"
+  (CONTRACT 26). "Show a preview" (Toggle). Then the existing desktop switch (`PushSwitch` "Show on
+  this computer"), only while desktop notifications are on for the company, with the note "When
+  this is on and Daybook is in the background, Daybook doesn't chime. Your computer's settings
+  decide if the desktop notification makes a sound, whatever you chose for Sound." Reminders from
+  HR and from Daybook, and for HR the morning summary and the evening wrap-up (CONTRACT 25), come to
+  the bell and, where Show on this computer is on, as desktop notifications. There is no per-type
+  mute; the Sound choice is the only difference by type (CONTRACT 26). Slack DMs follow the
+  company's switches in Settings → Slack."
+- **§21, "What the preferences change"** (add after the Bell bullet): "- **Sound**: All (the
+  default since CONTRACT 28) chimes for every new notification, Important only for the types marked
+  important in `ALERT_TYPES`, Off never (CONTRACT 26). - **Choose a sound**: which of the four
+  sounds plays (CONTRACT 26). - **Show a preview** off: no preview cards and no announcement; the
+  bell's dot and count still change."
 - **§20, Version label**: "`APP_VERSION` in `src/config/version.js` (now '1.11'; raised with each
   release)."
 
@@ -6154,6 +6203,8 @@ export function canReadDocument(ctx, doc) {
   read `project_tasks` and must never read `project_files` or `file_uploads` (a test scans every
   file of both modules for either spelling, see Tests). **Never to Slack**: no file name, file or
   link goes to the Slack outbox.
+- Links to project files: CONTRACT 28 (a member may open an Only PM and Admins file linked to their
+  task, through that task only).
 
 ### Data (migration `019_project_files.js`, portable to MySQL 8.4 and MariaDB 10.4; every length is also checked in zod)
 
@@ -7032,16 +7083,7 @@ drops follow `head.filesAccess` (paperclips and the pill for `'manage'` and `'me
   the current speed (2 tasks a week) the work ends around 28 Dec. To finish by 16 Dec, the team needs
   about 3 tasks a week."). Never for members.
 
-**Filter pills** (PM view only; `role="group"`, `aria-label="Highlight cards"`, `aria-pressed`): "All open (10)",
-"Critical (4)", "With files (4)" (open tasks; "With files" only when `head.filesAccess` isn't
-`'none'`, counted from the files the viewer may see). Critical and With files **dim** (40% opacity)
-every other card and every done card; nothing hides; a faded card returns to full opacity on
-`:hover` and `:focus-within`. A visible muted 13 px `role="status"` line under the pills says what
-changed: "4 critical tasks highlighted." / "4 tasks with files highlighted.", or "No critical tasks
-open." / "No tasks with files." `?show=critical` or `?show=files` presses that pill first (the
-Summary tab's "See all tasks"; `chosenTab` ignores it); `?show=files` without a "With files" pill
-(`filesAccess` `'none'`) presses All open, so nothing is dimmed. Right of the pills, when the board scrolls
-sideways, two 44 px buttons "Scroll the board left" / "Scroll the board right".
+**Filter pills**: replaced by CONTRACT 28 (Board toolbar, filters, faces, Mine and search).
 
 **Columns** (`<section aria-label="Development">`, `<h3>`):
 
@@ -7052,11 +7094,8 @@ sideways, two 44 px buttons "Scroll the board left" / "Scroll the board right".
   late") and its open cards on top (done cards folded); it folds once its last open task is
   done or moved. So an open card, a P1 included, is never hidden inside a tile, and the pill counts
   always match cards that can be seen.
-- Look: `--surface-muted`, 1 px `--line`, radius 16, padding 12 px, 12 px between cards. Widths:
-  Done phases 196 px; an empty phase after the current one ("slim") 140 px; the others share the
-  rest, the current one 1.25 times; at least 236 px (272 px for the current one), so a card's
-  avatar, due tag, P tag and paperclip fit on one line. When they don't fit, **the board scrolls
-  sideways inside its own area** (scroll snapping to columns); the page never does.
+- Look: `--surface-muted`, 1 px `--line`, radius 16, padding 12 px, 12 px between cards. Widths,
+  the rail and the board's own scroll: CONTRACT 28, The sideways scroll.
 - **Header**: phase name (Schibsted 15 semibold), "Current" (primary), "Done" (green) or "Skipped"
   (neutral; a skipped phase never shows "Done" or a check, and its dates line reads "Skipped") tag,
   and for `'manage'` a "⋯" ("More for Development"): "Files for Development" (to
@@ -7095,8 +7134,8 @@ sideways, two 44 px buttons "Scroll the board left" / "Scroll the board right".
   text "Not on the project" or "Deactivated", so the PM sees whom to reassign; member view: "For
   you" or the dashed "Anyone" circle and "Anyone"), the `DueTag` (sm), the `PriorityTag`, and at the
   right the paperclip and count (14 px icon, 13 px muted, `aria-label="2 files"`; never at 0).
-- A click anywhere else on the card opens the task window. Done cards are muted. A card just added,
-  edited or moved is highlighted (`--primary-soft`, fading over 1.5 s; none with reduced motion).
+- A click anywhere else on the card opens the task window. Done cards are muted. The highlight of a
+  card just added, edited or moved: replaced by CONTRACT 28 (Motion, Moments: a 700 ms flash).
 
 **Quick add** (`QuickAdd.jsx`): "+ Add task" turns into an input (label "Task title for
 Development", placeholder "Task title, then press Enter"), help "Anyone, P2, no date. More options
@@ -7110,13 +7149,8 @@ column's phase.
 
 **Moving a card to another phase** (`useBoardDrag.js`, `boardMoves.js`):
 
-- **Drag** (desktop pointer, `'manage'`, open cards only, never on a phone or while the card's files
-  upload): native HTML5 drag and drop. The lifted card gets `--shadow-menu`; the column under it
-  shows a dashed `--line-dashed` gap where the card will land (its sorted place); the target column
-  is outlined. Dropping on another phase column (an opened done phase included) sends `PATCH
-/api/project-tasks/[id] { phase }` (existing; audited, no notification). Dropping on its own
-  column, Done phases, No phase yet or outside does nothing. No reordering inside a column (order is
-  always P1, P2, P3, due, title).
+- **Drag**: replaced by CONTRACT 28 (Motion, Pointer drag; files from the computer keep the
+  browser's file drag).
 - **Keyboard, screen readers and phones**: card "⋯" → **"Move to phase…"** opens a small `Dialog`
   (`MoveTaskDialog.jsx`, 400 px; a bottom sheet on a phone) titled "Move Fix the login page". It
   lists the six phases in order as 44 px buttons, each with its name and "6 of 12"; the task's own
@@ -7208,8 +7242,7 @@ to Fix the login page"`). **A batch** is every file added to one task while one 
 the muted line above the board "Only Riya Kapoor and Admins can change tasks and phases."; cards
 open the task window read-only. Paperclips, "With files" and the window's Files follow
 `head.filesAccess`: none for a PM who isn't on the project; a PM who is a member sees them for their
-own and Anyone tasks. **Completed project**: no "+ New task" and no "+ Add task"; the rest as for
-an active one.
+own and Anyone tasks. **Completed project**: replaced by CONTRACT 28 (Completed note and Reopen).
 
 **Phone** (640 px and below): the band keeps its six parts, each a 44 px tall button with every name
 hidden (the switcher names the phase); "Move to Testing" and the "⋯" share a full-width row under
@@ -7222,9 +7255,9 @@ don't show. No dragging: "⋯" → Move to phase…. Band parts, tick, menu and 
 
 #### Task window (D: `src/components/task/TaskWindow.jsx`, new)
 
-A centred `Dialog` 640 px, at most 90% high, own scroll, over `--overlay`; a full-screen sheet on a
-phone. It loads `GET /api/project-tasks/[id]` when it opens (a 3-line skeleton meanwhile; the
-board's card data shows the title at once).
+A centred `Dialog` 720 px, two columns (CONTRACT 28), at most 90% high, own scroll, over
+`--overlay`; a full-screen sheet on a phone. It loads `GET /api/project-tasks/[id]` when it opens
+(a 3-line skeleton meanwhile; the board's card data shows the title at once).
 
 1. **Header**: `ProjectLabel` (acme-store) and the phase ("Development" with a "Current" tag when it
    is), the title (20 px semibold Schibsted, `tabIndex={-1}`, focused on open), X ("Close").
@@ -7543,7 +7576,7 @@ Unchanged (§22 table; the name links to `/projects/[id]`, which now opens the B
 - Repeated buttons carry the thing they act on in their accessible name ("Show Design tasks",
   "Retry brief.pdf", "Download brief.pdf", "Remove brief.pdf"); the band's "Change" reads "Change
   deadline".
-- `prefers-reduced-motion`: no smooth scrolling, no highlight fade, no sliding.
+- Reduced motion: CONTRACT 28, Motion.
 
 ### Modules
 
@@ -8025,11 +8058,11 @@ Promise((r) => setTimeout(r, 150)); await route.continue(); })` (removed after),
     server's Status says cancelled); `page.html` and `drawing.svg` download with
     `Content-Disposition: attachment` and `application/octet-stream` and their `/view` is 404; the
     PNG shows as a thumbnail.
-  - `project-board.spec.js`: drag a card from Development to Testing (`dragTo`), the toast "Moved to
-    Testing.", Undo puts it back; the keyboard path (menu → Move to phase… → Launch in the dialog);
-    quick add; the employee's read-only page has no health tag, no forecast line and no Hours tab;
-    another PM who isn't on the project sees no paperclips and the Files tab's lock line, and a file
-    URL answers 404.
+  - `project-board.spec.js`: drag a card from Development to Testing with a pointer drag
+    (CONTRACT 28), the toast "Moved to Testing.", Undo puts it back; the keyboard path (menu → Move
+    to phase… → Launch in the dialog); quick add; the employee's read-only page has no health tag,
+    no forecast line and no Hours tab; another PM who isn't on the project sees no paperclips and
+    the Files tab's lock line, and a file URL answers 404.
   - `project-plan.spec.js` (changed): the tabs Board, Summary, Files, Timeline, Hours; the deadline
     and Move from the band; the real PDF and `.docx` read for the AI from the Files tab; another PM's
     view.
@@ -8276,3 +8309,3402 @@ message, { scope })` (over `holdLeaveGuard(message, scope)` → release), `start
 - **§26**, Important notifications: "43 today: 19 important, 24 normal" → "44: 19 important, 25
   normal"; add the row "| 44 | `project_task.files_added` | no | task | New files on your task; like
   the other task types. |"; Tests: "exactly the 43 types" → "exactly the 44 types".
+
+## 28. Task board and table, files from the project, Assign to me and My tasks (company request, Daybook 1.13)
+
+The owner looked at the 1.12 board on their live site and asked, on 24 Nov 2026, for five things:
+
+1. **A clear place to add a task and give it to an employee.** Their "Test" project was Completed,
+   so 1.12 hid every add button without saying why.
+2. **Files already in the project, and new files, on a task.** Attach a document that is already in
+   the project's Files tab, or upload a new one.
+3. **PMs and Admins take a task for themselves** and see every task they took on their home page.
+4. **Smooth, calm drag and drop and phase moves** ("i need some smooth animation as well").
+5. **Proper task management, a bit like the picture they shared**: search, filters, faces, task
+   numbers, fuller cards, a table.
+
+They looked at three clickable options and wrote "lets go with option b for all". Option B,
+"Board and table", ships as version **'1.13'** with **one** new migration,
+`db/migrations/020_task_file_links.js` (001 to 019 are never edited), and **no new npm dependency**
+(`package.json` and `package-lock.json` don't change; motion is Pointer Events, the Web Animations
+API and CSS).
+
+Owner decisions of 24 Nov 2026 (fixed, not reopened):
+
+1. **Design**: everything option B shows is in 1.13 (Design below).
+2. **Motion is required**: the motion set of this section in full (Motion), plus option B's extras
+   (Board and Table crossfade, sorting rows slide, the bulk bar rises, the Done phases rail widens).
+3. **Table view**: yes.
+4. **An Admin (the CEO is one) may take a task on any project**, even one they aren't on, without
+   being added as a member (so they don't get that project's messages). A PM still can't give a
+   task to an Admin who isn't on the project, nor to another PM who isn't a member.
+5. **Files that can be attached from the project**: the files of the project's Files tab (Whole
+   project and each phase); never files that belong to another task.
+6. **A file marked "Only PM and Admins" may be attached to an employee's task**, only after Daybook
+   asks the manager to confirm; the server refuses without the confirm. The task's person (everyone
+   on the project for an Anyone task) can then open it **through that task only**; the file's own
+   setting stays "Only PM and Admins". A link is not a copy: one row per link; unlinking or giving
+   the task to someone else takes the access away at once.
+7. **When the person of an open task changes** (a PM or Admin taking it included), the earlier
+   person gets a notification, unless they made the change themselves.
+8. **Not in 1.13**: start dates, checklists or progress %, comments, labels, several people on one
+   task.
+9. **Completed projects**: the board says "This project is completed, so new tasks can't be added."
+   and PMs and Admins get **Reopen project** where Add task sits (status back to Active through the
+   existing route); members see the sentence without the button.
+10. **No sideways page scroll** on any page from 390 to 2560 px; the board's own sideways scroll stays
+    inside the board with its scrollbar on screen.
+11. **Every 1.12 capability stays reachable** (`scratch/design-1.13/now.md` section D; brief 2.5).
+12. **Earlier privacy rules stay**: HR never sees report content or screen-time detail; PMs never
+    see leave type, pay, leave note or "WFH approved"; leave details never go to Slack or AI;
+    members never see other people's hours, report text, attendance, leave or screen time; files
+    and file names never go to Slack or AI; a file is served only through the permission-checked
+    routes; every new notification type is in `ALERT_TYPES`.
+
+Written against the code at `2d1c069` (1.12), with the groundwork in `scratch/design-1.13/map.md`
+(the code as it is, checked), `now.md` (the 1.12 app, the sideways scroll's causes, the capability
+checklist), `plan.md` (links, Assign to me, My tasks, migration 020), `motion.md` (how the motion is
+built), `brief.md` (sections 0 to 8) and `research.md` (sources). Where this section and those
+files differ, this section wins. Names marked **new** don't exist yet; every other name is in the
+code.
+
+**Design:** `docs/design/project-tasks-prototype.html` (standalone, the real tokens, as §23 to
+§27), made by the orchestrator first from the reviewed `scratch/design-1.13/option-b.html` with
+these changes: only option B (no a or c anywhere; the control bar says "Daybook 1.13 · Project
+tasks"); the copy of this section where it differs (Choices made lists each); the people window's
+share confirm (`board { step: 'share' }`), the Filter menu open (`board { step: 'filter' }`), the
+bulk "Give to…" confirm (`table { select: [9, 41], step: 'give' }`) and the picker's empty and
+before-020 states (`new-task { step: 'picker-empty' | 'picker-update' }`). Screen keys
+(`window.proto.go(key, options)`, as brief 6.3): `board` (`launchReady`, `step: 'dragging' | 'menu'
+| 'people' | 'share' | 'filter'`), `table` (`sort: 'due' | 'person' | 'priority'`, `select`, `step:
+'give'`), `new-task` (`step: 'filled' | 'picker' | 'share' | 'picker-empty' | 'picker-update'`),
+`task` (`id`, `step: 'add-menu' | 'picker' | 'people'`), `completed` (`step: 'confirm'`), `my-tasks`
+(`full`), `emp-today` (`task`), `phone` (`screen: 'board' | 'table' | 'task' | 'my-tasks'`). It
+**replaces** these screens of `docs/design/project-board-prototype.html` (1.12): the Board tab for
+the PM, the Admin, another PM and the member, at 1440 and 390 px, light and dark; the band on a
+Completed project; the task window; the New task and Edit task windows; the card menu; the Move
+dialog (gains the many-tasks title). These **stay binding** from the 1.12 prototype, changed only
+by the text of this section: the Files tab (every place, the upload window, the Uploads card, the
+note windows, Edit details, empty states, the phone select), the picture viewer, the Summary,
+Timeline and Hours tabs, Settings → Files, My projects cards and Today's Priority tasks card (which
+gains the Due column of the 1.13 prototype's `emp-today`). Its look, layout and copy bind every
+builder's screens; where it and this section differ, this section wins and the prototype is fixed.
+The My tasks home card is the reviewed prototype's: one list of the first 6 rows by date with
+their group headings and "See all my tasks (8)" (what the owner clicked, and what the owner summary
+describes); the brief's five count tabs were never drawn and aren't built.
+Build with Daybook's components and tokens only (`TopBar`, `Card`, `Button`, `IconButton`,
+`Dialog`, `Menu`, `Segmented`, `Field`, `Input`, `Select`, `Textarea`, `Tag`, `PriorityTag`,
+`Avatar`, `ProjectLabel`, `EmptyState`, `Skeleton`, `useToast`, `useToastSlot`, `DueTag`,
+`TaskCheck`, `BusyButton`), lucide icons at `strokeWidth={1.8}`, never raw colours in CSS modules
+(the one exception: `black` and `transparent` inside a `mask-image`, which only uses alpha).
+
+**What it replaces in §27:** the board's toolbar ("+ New task" in the header on the Board tab, the
+filter pills, the scroll arrows beside them), the column widths and the slim and current-column
+rules, the Done phases column (now the rail), the card's anatomy, native HTML5 card drag (now
+pointer drag; files still use the browser's file drag), the 1.5 s highlight (now a 700 ms flash),
+the task window's size and layout (640 px, one column → 720 px, two columns), the task form's field
+order and its native "Assign to" select, "Completed project: no + New task and no + Add task" (now a
+note and Reopen project), the global "every animation 0.01 ms" rule. **What stays:** everything else
+in §27: access, file storage, uploads, downloads, task files, the Files tab, Summary, Timeline,
+Hours, the member's page, Today's card, My projects, the attach store, the quick add, Undo rules,
+`MovePhaseButton`'s confirm, the phone switcher, the access rule's 404s.
+
+**Copy:** as §27 (short, plain, sentence case, no dashes; `formatDayMonthShort` "21 Nov" in rows,
+chips and tags, `formatDayShort` "Mon, 23 Nov" in sentences and report lines, "16 Dec 2026" for a
+deadline; sizes through `formatSize`; durations "5h 40m", "45m", "2h"). Example people: Riya Kapoor
+(PM), Vishal Saini, Simran Kaur and Sneha Patil (employees), Neha Kapoor (HR), Arvind Menon (the
+prototype's CEO, an Admin who doesn't track attendance; tests use the demo CEO's own name), Meera
+Pillai (an Admin who does). These are sample names; e2e tests take names from the demo data. Server messages
+never hold a file name (the §27 rule; the one exception stays `fields.uploadKeys`). Task numbers are
+written "#88".
+
+> **Company rule (overrides §27 "Who sees and does what", project file "Only PM and Admins" for
+> members):** a member may open an "Only PM and Admins" project file when it is linked to a task of
+> theirs or an Anyone task of the project, through that task only; the file's own setting doesn't
+> change (Links, below).
+>
+> **Company rule (overrides §13 "`assignee_id` (active member of the project, or null)"):** a task's
+> person is anyone on the project or an active member, the project's PM, or an active Admin who
+> takes it themself (The assignee rule, below).
+>
+> **Company rule (overrides §27 "Completed project: no + New task and no + Add task"):** a Completed
+> project says so above the board, and its PM and Admins get Reopen project there.
+>
+> **Company rule (overrides §27 Look "`prefers-reduced-motion`: no smooth scrolling, no highlight
+> fade, no sliding" and `globals.css`'s 0.01 ms rule):** reduce motion keeps colour changes and
+> short fades and drops every movement, scale and tilt (Motion, Reduce motion).
+
+### Words
+
+- **Link** = a project file attached to a task: one `task_file_links` row (`task_id`, `file_id`).
+  The file stays in its Files place, with its own name and setting; the task shows it with the muted
+  "From Files: Design". Unlinking deletes the row, never the file. A **private link** is a link to
+  an "Only PM and Admins" file.
+- **Own file** = a task file as in §27 (`project_files.scope 'task'`). "Files on a task" = its own
+  files plus its links.
+- **Task number** = the task's id written "#88" (`project_tasks.id`, global, the same number on
+  every screen; no per-project numbers).
+- **Status chip** = the small tag on a card or row saying where the work stands, from the newest
+  daily-report line about the task that the viewer may see: "In progress", "Blocked", "Done";
+  nothing on a card without a line; "To do" (muted text) in the Table.
+- **Mine** = the toolbar toggle that keeps the viewer's own tasks in view ("Mine (3)").
+- **Faces** = the row of round avatars in the toolbar, one per person with open tasks on the board,
+  plus the dashed "Anyone" circle; pressing one keeps that person's tasks in view.
+- **Done phases rail** = the 72 px column at the board's left that holds the finished phases; it
+  opens to 220 px with one tile per phase.
+- **Board** and **Table** = the two views of the same tasks on the Board tab (`Board | Table`).
+- **Bulk bar** = the bar that rises at the bottom of the Table when rows are selected: "Assign to
+  me", "Give to…", "Move to phase…", "Clear".
+- **People window** = the list of people a task can be given to (a popover on a computer, a sheet on
+  a phone), titled "Assign to".
+- **Take** (UI: **Assign to me**) = a PM or Admin making a task theirs in one click.
+- **The earlier person** = the task's person just before a change of person.
+- **My tasks** = the open tasks whose person is the viewer, on Active and On hold projects the
+  viewer is a member of or manages; a page (`/my-tasks`) and a card on the PM and Admin home pages,
+  for PMs and Admins.
+- **Share confirm** = the line Daybook shows before a save would let someone who isn't a manager
+  open an "Only PM and Admins" file through a task ("Attach and share", "Add task and share", "Save
+  and share", "Give and share").
+- **Manager of a project** (§27) = its PM or an Admin. **Member** (§27) = an active person with a
+  `project_members` row.
+- **Lift**, **preview**, **outline**, **gap**, **settle**, **flash**, **glide** = the motion words
+  of Motion below.
+
+### Who sees and does what
+
+Tasks (B's rules, C's, T's, D's and M's screens follow them):
+
+| Viewer                                     | Board and Table                                                         | Assign to me (take)                | Give a task to someone                                                              | Tick, edit, move, delete, bulk | Time on tasks            | Updates, status chip, latest report | My tasks                                   | Reopen project |
+| ------------------------------------------ | ----------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------ | ------------------------ | ----------------------------------- | ------------------------------------------ | -------------- |
+| The project's PM                           | every task, managers' board and table (select, bulk)                    | yes                                | Anyone, an active member, themself; never an Admin or another PM who isn't a member | yes                            | everyone's               | everyone's lines                    | yes (sidebar, `/team` card)                | yes            |
+| Admin who is a member                      | every task, managers' view                                              | yes                                | Anyone, an active member, the PM, themself                                          | yes                            | everyone's               | everyone's                          | yes (sidebar, `/overview` card)            | yes            |
+| Admin who isn't a member (the CEO usually) | every task, managers' view                                              | yes, **without becoming a member** | Anyone, an active member, the PM, themself; never another Admin who isn't a member  | yes                            | everyone's               | everyone's                          | yes                                        | yes            |
+| The CEO                                    | as an Admin; no Today (untracked), so taken tasks show only in My tasks | yes                                | as an Admin                                                                         | yes                            | everyone's               | everyone's                          | yes                                        | yes            |
+| Member, the task's person                  | own and Anyone tasks, read only (no select)                             | no                                 | no                                                                                  | no ("Add to to-do")            | own minutes only         | own lines only                      | no (Today)                                 | no             |
+| Member, not the task's person              | never sees the task (own and Anyone only)                               | no                                 | no                                                                                  | no                             | no                       | no                                  | no                                         | no             |
+| Anyone task, any member                    | sees it                                                                 | no                                 | no                                                                                  | no                             | own minutes only         | own lines only                      | no (Today)                                 | no             |
+| HR on the project (a member)               | as a member                                                             | no                                 | no                                                                                  | no                             | own minutes only         | own lines only                      | no (Today)                                 | no             |
+| HR not on the project                      | 404                                                                     | no                                 | no                                                                                  | no                             | no                       | no                                  | no                                         | no             |
+| Another PM, not a member                   | read-only PM view: every task, Table without select                     | no                                 | no                                                                                  | no                             | everyone's (`team.view`) | everyone's                          | their own projects only                    | no             |
+| Another PM who is a member                 | read-only PM view                                                       | no                                 | no                                                                                  | no                             | everyone's               | everyone's                          | lists tasks given to them here, no tick    | no             |
+| Someone taken off the project              | 404; their old tasks show "Not on the project"                          | no                                 | no                                                                                  | no                             | no                       | no                                  | those tasks leave their My tasks and Today | no             |
+| Deactivated                                | signed out                                                              | no                                 | no                                                                                  | no                             | no                       | no                                  | no                                         | no             |
+
+Files and links (A's rule, every read):
+
+| Viewer                                          | Linked "Everyone" file                                                              | Linked "Only PM and Admins" file (after the share confirm)                                                                                                          | Link and unlink | Picker ("From project files") | Sees "On 2 tasks" |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ----------------------------- | ----------------- |
+| The project's PM, any Admin                     | yes                                                                                 | yes                                                                                                                                                                 | yes             | yes                           | yes               |
+| Member, the task's person                       | yes                                                                                 | **yes, through that task only** (task window, Today's paperclip, Files tab "On tasks" under that task and "All files" with "Shared with you on …"; never its place) | no              | no                            | no                |
+| Member, not the task's person                   | yes in its place (it is an Everyone file), never listed under another person's task | no (404)                                                                                                                                                            | no              | no                            | no                |
+| Anyone task, every member                       | yes                                                                                 | yes, through that task only                                                                                                                                         | no              | no                            | no                |
+| HR on the project                               | as a member                                                                         | as a member                                                                                                                                                         | no              | no                            | no                |
+| HR not on the project                           | no (404)                                                                            | no (404)                                                                                                                                                            | no              | no                            | no                |
+| Another PM, not a member                        | no (404)                                                                            | no (404)                                                                                                                                                            | no              | no                            | no                |
+| Another PM who is a member                      | as a member                                                                         | as a member (the share confirm asks first: they aren't a manager)                                                                                                   | no              | no                            | no                |
+| The earlier person (task given to someone else) | as a member                                                                         | **no, at once** (404 on the next request)                                                                                                                           | no              | no                            | no                |
+| Someone taken off                               | no (404)                                                                            | no (404)                                                                                                                                                            | no              | no                            | no                |
+| Deactivated                                     | no (signed out)                                                                     | no                                                                                                                                                                  | no              | no                            | no                |
+
+- "No" on a read is always 404 "We couldn't find that file." (§27). Nothing is cached per person:
+  unlink, a new person, taking someone off or deactivating them works on the next request.
+- An Admin who takes a task on a project they aren't on is **not** added as a member: no Anyone
+  notifications, no team list, no My projects card, no member rights. They reach the project as a
+  manager (the PM view), as today.
+- The share confirm isn't needed when the task's person manages the project (its PM or an Admin,
+  the viewer included).
+
+### Data (migration `020_task_file_links.js`, portable to MySQL 8.4 and MariaDB 10.4)
+
+One file, owner orchestrator, in the style of `018_hr_tools.js` and `019_project_files.js`: `export
+const config = { transaction: false }`; **one raw SQL statement** with inline `PRIMARY KEY`, `KEY`
+and `CONSTRAINT ... FOREIGN KEY` clauses and `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci`; every identifier backtick-quoted; names as knex names them; guarded by
+`hasTable('task_file_links')`; errno 1050 counts as "already there" when the check then says so; run
+on one pinned connection after `SET SESSION lock_wait_timeout = 30` (019's `onPinnedConnection` and
+`runUnlessThere`, copied, not imported). No generated columns. `created_at` is UTC, written by the
+app (`nowDate()`).
+
+```sql
+CREATE TABLE `task_file_links` (
+  `task_id` BIGINT UNSIGNED NOT NULL,
+  `file_id` BIGINT UNSIGNED NOT NULL,
+  `created_by` BIGINT UNSIGNED NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`task_id`, `file_id`),
+  KEY `task_file_links_file_id_index` (`file_id`),
+  CONSTRAINT `task_file_links_task_id_foreign` FOREIGN KEY (`task_id`) REFERENCES `project_tasks` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `task_file_links_file_id_foreign` FOREIGN KEY (`file_id`) REFERENCES `project_files` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `task_file_links_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+```
+
+- `task_id`, `file_id`, `created_by` match `project_tasks.id`, `project_files.id` and `users.id`
+  (all BIGINT UNSIGNED). Every name is under 64 characters (the longest,
+  `task_file_links_created_by_foreign`, has 34). The primary key's first column serves the
+  `task_id` foreign key; `file_id` has its own key; InnoDB adds the `created_by` key itself, as 019.
+- `task_id` **CASCADE**: deleting a task removes its links; the files stay in Files. `file_id`
+  **CASCADE**: the nightly purge of a deleted file row (§27 cleanup, step 4) removes its links.
+  `created_by` RESTRICT (users are never deleted).
+- A file is linked to a task at most once (the primary key). Only `scope 'project'` files are ever
+  linked (the service checks; there is no CHECK constraint).
+- No change to any existing table, no new setting, no new permission key. `seed:demo` and
+  `npm run reset` empty the new table with every other one (they list the tables from
+  `information_schema`, map.md 4.1); nothing to add there.
+- `down`: `DROP TABLE IF EXISTS task_file_links` (links are lost; files and tasks stay). Its
+  comment says: roll 020 back before 019, since 019's `down` can't drop `project_files` while
+  `task_file_links` points at it.
+- **Audit actions** (new, `entityType 'project_file'`, `entityId` the file): `project_file.link`
+  (after: `{ projectId, taskId, shared }`, `shared` = the file is "Only PM and Admins" and the
+  task's person isn't a manager), `project_file.unlink` (before: `{ projectId, taskId }`). Never
+  the file name. A link removed by a CASCADE isn't audited.
+- **Notification type** (new): `project_task.reassigned` (Notifications).
+- **Portable reads**: every new grouped query selects only its `GROUP BY` columns and aggregates.
+  MySQL 8.4's default `ONLY_FULL_GROUP_BY` refuses anything else and MariaDB 10.4 doesn't check it,
+  so local runs can't catch a slip (the MySQL 8.4 workflow runs the new service tests, Files and
+  owners). Locking reads use knex `.forShare()` / `.forUpdate()`, never a raw `FOR SHARE` (MariaDB
+  10.4 doesn't know it; knex writes `LOCK IN SHARE MODE` there).
+
+### Deploy before migrate (errno 1146)
+
+The code ships before the migrate line runs (README). **New** `src/modules/projectFiles/migration020.js`
+(O, the 019 pattern, complete, not a stub): `isMissing020(error)` (errno 1146),
+`guard020Read(area, read, fallback)`, `guard020Write(area, write)` (throws the 1.10 `UPDATE_NEEDED`,
+503, "This needs the latest database update. Ask an Admin."), one warning per area per process
+("The 1.13 database update is missing (run the migrate line); <area> is off", area `links`), and
+`linksReady()` → boolean (`SELECT 1 FROM task_file_links LIMIT 0` through `guard020Read`, false on
+1146; never cached). Reads inside a transaction stay safe (both servers roll back only the failed
+statement).
+
+| Feature                                                                                                                                                                        | Before 020                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Board, Table, cards, Today, My projects, My tasks, task window                                                                                                                 | work; links read as none, so counts, chips and file lists are 1.12's; `privateLinkCount` 0                                                                                                    |
+| "From project files" picker                                                                                                                                                    | opens and shows "This needs the latest database update. Ask an Admin." in place of the list (`linksReady: false`)                                                                             |
+| A save naming `linkFileIds`, `addLinkFileIds` or `removeLinkFileIds`; `POST /api/project-tasks/[id]/files` with `linkFileIds`; `DELETE /api/project-tasks/[id]/links/[fileId]` | `UPDATE_NEEDED` 503; the same save without them works                                                                                                                                         |
+| The 20-file limit                                                                                                                                                              | counts own files only (links read as 0)                                                                                                                                                       |
+| Delete a task, delete or rename a file                                                                                                                                         | work as 1.12                                                                                                                                                                                  |
+| Files tab                                                                                                                                                                      | as 1.12 (no "On 2 tasks", no shared lines)                                                                                                                                                    |
+| Assign to me, the people window, the earlier-person notice, My tasks, the badge, the Table, bulk actions, Reopen project, motion, the sideways scroll fix                      | work (no database change)                                                                                                                                                                     |
+| Checking                                                                                                                                                                       | the doctor's database line shows "✗ 1 database update not run: 020_task_file_links.js. Run the migrate line in README Updating." (the existing `migrate.list()` check; no doctor code change) |
+
+A 1.12 process still running after the migration never reads or writes links, so it can't leak a
+file; a 1.12 tab after the Restart sends no link fields.
+
+### Rules
+
+#### The assignee rule (B: `projectTasks/writes.js`, `shared.js`, `repo.js`, `messages.js`, `service.js`)
+
+**`assertAssignee(assigneeId, team, { actor, before })`** (was `(assigneeId, { members, manager })`)
+accepts, and nothing else (`validationError({ assigneeId: ASSIGNEE_MESSAGE })`, "Pick someone who
+is on this project, or anyone on the project.", unchanged words):
+
+1. `null` (Anyone on the project);
+2. an active member (any role, tracked or not);
+3. the project's PM while active;
+4. **an active Admin setting themself** (`assigneeId === actor.id && actor.role === 'admin'`), on any
+   project, member or not;
+5. the task's current person, unchanged (`before?.assigneeId === assigneeId`; as 1.12 `editChanges`
+   only checks a changed person, so keeping an away person or an Admin who took it stays allowed).
+
+So a PM giving a task to an Admin who isn't a member, to another PM who isn't a member, or an Admin
+giving one to another Admin who isn't a member, is refused with that message. `team` =
+**`teamOf(project, trx, { alsoIds = [] })`** → `{ members, manager, others }`: `members` and `manager`
+as 1.12; `others` = the rows (`id, name, role, status`) of active Admins among `alsoIds` who are
+neither members nor the PM (B passes the actor, the task's current and new person). `others` makes
+such an Admin reachable for notifications (rule 4 checks the actor itself; rule 5 needs no row).
+
+Knock-on changes, all B:
+
+- **`listAssigneeOptions({ viewer, projectId })`** → `AssigneeOption[]` = `{ id, name, initials,
+avatarUrl, designation, role, status: 'active', kind: 'me' | 'pm' | 'member', openHere }` (only
+  active people are options; `status` lets the browser run `isProjectManager`), in this order: the viewer
+  as `kind 'me'` first when they manage the project (PM or Admin, member or not); then the project's
+  PM (`'pm'`) when it isn't the viewer and is active; then every **active** member (`'member'`, any
+  role, tracked or not; 1.12 left untracked members out), A to Z by name, the viewer and the PM not
+  repeated. `openHere` = open tasks on this project whose person they are (one grouped query,
+  `repo.countOpenByAssignee(projectId)`). The task's current person when they aren't in the list
+  (away, or an Admin who took it and isn't on the project) and "Anyone" are added by the browser
+  (D's and C3's views, from the task's own `assignee`). Loaded in `loadProjectHead` for managers
+  (`head.options`).
+- **`repo.ASSIGNEE_IS_MEMBER`**: 1 for NULL, a `project_members` row, the project's `pm_id`, **or an
+  assignee whose `users.role` is `'admin'`**; so a card never says "Not on the project" for an Admin
+  who took the task. A deactivated Admin still shows "Deactivated" (status).
+- **`messages.recipients({ task, members, manager, others, actorId })`**: a person is found among
+  `members`, `manager` and `others`; Anyone still goes to active members only. So the PM's later
+  change to a task the CEO took tells the CEO.
+- **Edit order** (`update`): `lockForManage` (the task row) → parse → `teamOf` → `editChanges`
+  (assignee checked **first**) → remove own files → unlink → attach uploads → link files (judged
+  against the **new** person) → the reassign share check (Links) → update the row → audit → tell.
+  1.12 changed files before the assignee check (map.md 0.5); the share confirm needs the new person.
+- **Assign to me** is `PATCH /api/project-tasks/[id] { assigneeId: <viewer's id> }` (no new route);
+  "Me" in New task is `assigneeId: <viewer's id>`.
+
+#### Links: who sees a linked file (A: `projectFiles/access.js`, pure, browser-safe)
+
+`file` gains `links: Array<{ taskId, assigneeId }>`: the file's links whose task is **on the file's
+project**, read from the task rows by A's own repo (never a caller's copy). `accessShape(row, links
+= [])` builds it, used by every read:
+
+```js
+export function canSeeFile(ctx, file) {
+  if (!ctx?.active || !file) return false;
+  if (Number(file.projectId) !== Number(ctx.projectId)) return false;
+  if (file.status !== 'active') return false;
+  if (file.scope === 'task' && !file.task) return false;
+  if (ctx.manages) return true;
+  if (!ctx.member) return false;
+  if (file.scope === 'project') {
+    if (file.visibility === 'everyone') return true;
+    return (file.links ?? []).some((link) => isFor(link.assigneeId, ctx.userId)); // new in 1.13
+  }
+  if (file.scope !== 'task') return false;
+  return isFor(file.task.assigneeId, ctx.userId);
+}
+/**
+ * "Through that task only": may this viewer see this file listed on this task? A non-manager sees
+ * a link only on a task that is theirs or for anyone, whatever the file's setting (as 1.12's own
+ * task files), so no list ever names another person's task to them.
+ */
+export function canSeeLinkedOnTask(ctx, file, task) {
+  if (!canSeeFile(ctx, file)) return false;
+  return ctx.manages || isFor(task.assigneeId, ctx.userId);
+}
+/** True when linking `file` to a task for `assignee` (null = Anyone) needs the share confirm. */
+export function needsShareConfirm(file, assignee, project) {
+  return file.visibility === 'managers' && !isProjectManager(assignee, project);
+}
+/**
+ * The project's PM or an active Admin (the browser and the server use the same rule), as
+ * canManageProject: whoever still holds pm_id after a move to employee or HR is only a member.
+ */
+export function isProjectManager(person, project) {
+  if (!person || person.status !== 'active') return false; // users.status: 'active' | 'deactivated'
+  if (!can(person, 'project.manage')) return false; // @/lib/permissions (pure)
+  return person.role === 'admin' || Number(person.id) === Number(project.pmId);
+}
+const isFor = (assigneeId, userId) =>
+  assigneeId === null || assigneeId === undefined || Number(assigneeId) === Number(userId);
+```
+
+- A manager, or an "Everyone" file, never needs the links query (the short cut: links are read only
+  for a member and a managers-only project file).
+- `canSeeLinkedOnTask` is what every **task-scoped** list and count uses (task window, card chips,
+  paperclips, Today, My tasks, the Files tab's "On tasks", `linkCount` and `linkedTasks`): for a
+  non-manager any linked file, Everyone or managers-only, shows on a task only when that task is the
+  viewer's or an Anyone task, even when another link already lets them open the file. So a member's
+  data never holds another person's task title, id, phase or person. `canSeeFile` alone decides the
+  file routes (download, view, thumb).
+- **In the browser** (the share confirm of the people window, New and Edit task and the picker)
+  `needsShareConfirm` and `isProjectManager` get `project = { id, pmId }` (from `head`, the Board
+  props or `TaskDetails.project`) and a person `{ id, role, status }` built from `AssigneeOption`,
+  `BoardTask.assignee` or `TaskDetails.assignee` (all three carry `role` and `status`, Modules). A
+  deactivated person has `status: 'deactivated'`, so the confirm shows for them.
+- A link follows its task: give the task to Simran and Simran sees the file and Vishal no longer
+  does; take Vishal off the project and he loses it (not a member); unlink and it's gone; done tasks
+  keep their links.
+
+#### Every read with links (A; each builds `links` the same way)
+
+| Read                                                   | Used by                                                           | With links                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------ | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getForDownload({ viewer, id })`                       | `GET /api/project-files/[id]`, `/view`, `/thumb`                  | `canSeeFile` with the file's links (only read for a member and a managers-only project file); still first, still 404 for every "no"                                                                                                                                                                                                                                                                                                                                                                                              |
+| `listForTask({ viewer, task })`                        | task window (`TaskDetails.files`), Edit task's chips              | own files (oldest first), then linked files (oldest link first) passing `canSeeLinkedOnTask`; a linked entry is a `ProjectFile` with `linked: true` and its place (`phase`, null = Whole project)                                                                                                                                                                                                                                                                                                                                |
+| `listForProject({ viewer, projectId })`                | Files tab                                                         | as 1.12 plus each project file's `linkCount` and `linkedTasks` (managers: every task, each with its person; a non-manager: only links whose task `isFor` them, whatever the file's setting, and `linkCount` = `linkedTasks.length`) and `sharedByLink` (members: a managers-only file they see only through a link); a member gets a managers-only file only when `canSeeFile` says yes                                                                                                                                          |
+| `countsForTasks({ viewer, tasks })`                    | Today, My tasks, the board's "With files"                         | own files plus linked active files passing `canSeeLinkedOnTask`, per task; one query for links (`repo.countLinkedByTask(taskIds)` → rows `{ taskId, projectId, assigneeId, fileId, visibility }`), one ctx per project                                                                                                                                                                                                                                                                                                           |
+| `chipsForTasks({ viewer, tasks })` (**new**)           | board cards (files line), Table "Files" column counts             | `{ [taskId]: { count, chips } }`: `count` as `countsForTasks`; `chips` = the first 2 files the viewer may see on that task, pictures with a thumbnail first, then by age (own and linked mixed); `FileChip = { id, name, ext, kind, typeLabel, isPicture, thumbUrl, viewUrl, downloadUrl, sizeBytes }` (`downloadUrl` the permission-checked `/api/project-files/<id>`, for the picture viewer's Download); two queries for any number of tasks                                                                                  |
+| `countTaskFilesForMember({ userId, projectIds })`      | My projects "3 files"                                             | adds the linked files on their own and Anyone tasks (each link once)                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `pickerFiles({ viewer, projectId, taskId })` (**new**) | the picker route                                                  | managers only; project files only, active, newest first, at most 500; each `ProjectFile` plus `onThisTask` and `linkCount`; plus `places` with counts; `linksReady`                                                                                                                                                                                                                                                                                                                                                              |
+| `privateLinkCounts(taskIds, trx?)` (**new**)           | B's reassign check, the board (`privateLinkCount`), `TaskDetails` | `{ [taskId]: n }` = links to active "Only PM and Admins" files; inside `trx` a shared locking read (knex `.forShare()`)                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `countActiveLinks(taskId, trx)` (**new**)              | the 20-file limit                                                 | the task's link rows only, `SELECT file_id FROM task_file_links WHERE task_id = ? FOR UPDATE` (knex `.forUpdate()`, after the file rows, as the lock order says), then a plain count of those ids among `project_files` with `status = 'active'`. Never `FOR UPDATE` on a join with `project_files`: that would lock file rows another link save holds shared (deadlock 1213). The task row lock already keeps other saves of this task out; a file deleted meanwhile only lowers the count (plan.md 1.5's join SQL is replaced) |
+| `fileForDocument`, `finishUpload`                      | E's text read, uploads                                            | unchanged (project files and uploads only)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+
+`ProjectFile` (§27) gains `linked: boolean` (an entry shown on a task through a link), `linkCount:
+number`, `linkedTasks: Array<{ id, title }>` (as above, oldest link first; for managers each also
+carries `assigneeId`, `assigneeName` (null for anyone on the project) and `assigneeManages`, for
+Edit details' line) and `sharedByLink: boolean`. Members never get another person's task in
+`linkedTasks` or `linkCount` and never see "On 2 tasks".
+
+#### Linking, unlinking, the 20-file limit and the share confirm (A writes, B calls)
+
+- **Link** (A, `projectFiles.linkFiles({ user, project, task, fileIds, shareConfirmed, ip }, trx)` →
+  `ProjectFile[]`, the newly linked files): inside the caller's transaction (the task row is already
+  locked by B). Through `guard020Write('links', ...)`. Empty list → `[]` without a query. Reads the
+  picked files with a shared lock (`.forShare()`): each must be active, `scope 'project'`, same
+  project, else 400 `VALIDATION_FAILED` `fields.linkFileIds` "That file isn't in this project's
+  files any more." A file already on the task is skipped (as asked). If any picked file
+  `needsShareConfirm(file, person, project)` (person = the task's person after this save, null for
+  Anyone) and `shareConfirmed !== true` → 400 `fields.shareConfirmed` "A file you picked is only for
+  PM and Admins. Confirm to share it with this task." Then the 20-file check, then one multi-row
+  `INSERT` (`created_by` the user, `created_at` `nowDate()`) of only the ids not already in the
+  locked link read. Ids are made unique first (`linkFileIds`, `addLinkFileIds` and
+  `removeLinkFileIds` in the schemas: `.transform((ids) => [...new Set(ids)])`, so `[5, 5]` links
+  once and counts once). Under the task row lock no other save links to this task, so an errno 1062
+  is a bug and is **not** caught (a multi-row INSERT that hits it writes no row at all). Audit
+  `project_file.link` per new link.
+- **Unlink in a save** (A, `unlinkFiles({ user, task, fileIds, ip }, trx)` → removed ids): deletes
+  those link rows (`FOR UPDATE` first); a file not linked is skipped. Audit `project_file.unlink`.
+- **Unlink one** (A, `unlinkFile({ user, taskId, fileId, ip })` → `{ removed: true }`, own
+  transaction: locks the task row `FOR UPDATE` through A's repo (read-only lock, no write to the
+  task), then the link): `project.manage` and `canManage` on the task's project, else 403 "You
+  can't change files on this project." (404 when the viewer can't see the task). Already gone → 200
+  `{ removed: true }`. No notification. The browser sends it only after its 6 s Undo toast ends (the
+  §22 `useUndoDelete` pattern); Undo never reaches the server.
+- **The reassign share check** (B, in `update` and `bulkUpdate`): when the person changes and
+  `privateLinkCounts([taskId], trx)` (after this save's unlinks and links) is above 0 and the new
+  person isn't a manager (`isProjectManager`; null = Anyone) and `shareConfirmed !== true` → 400
+  `fields.shareConfirmed` "This task has a file only for PM and Admins. Confirm to share it with the
+  new person." (bulk: "A task you picked has a file only for PM and Admins. Confirm to share it
+  with the new person."). Nothing is written. Taking a task (the viewer manages) never needs it.
+- **The confirm names its person** (`shareWith`): a request that sends `shareConfirmed: true` also
+  sends `shareWith`, the id of the person the confirm named, or `''` for anyone on the project
+  (create, `PATCH /api/project-tasks/[id]` and `POST /api/project-tasks/[id]/files`; the bulk route
+  already names the person in each change). `linkFiles` and the reassign share check count the
+  confirm only when `shareWith` matches the task's person after the save. Otherwise (missing, or the
+  task went to someone else meanwhile) they answer 400 `fields.shareConfirmed` "This task is now for
+  someone else. Check who it is for and confirm again." and nothing is written. The browser then
+  reloads the task (`GET /api/project-tasks/[id]`) and shows the confirm again with the current
+  person.
+- **Undo of a person change** (Assign to me, the people window, Give to…) gives each task back to
+  the person who held it a moment ago, who could already open its files: it always sends
+  `shareConfirmed: true` (and `shareWith: <before>` on the single PATCH), so it never asks the
+  confirm and never fails on it.
+- **20 files per task** = own active files + links to active files, counted with locking reads after
+  the task row lock (own file rows `FOR UPDATE` as 1.12, plus `countActiveLinks`). A's
+  `attachUploads` and `linkFiles` both check the sum: over 20 → 409 `TOO_MANY_FILES` "A task can
+  have up to 20 files. Remove one to add more." (unchanged words). The browser's early check counts
+  both kinds of chips.
+- **Lock order** stays: the task row, then upload rows, then file rows (own files and the picked
+  files, shared), then link rows. A Files tab delete locks only its file row, so it waits for a
+  link save holding a shared lock; no deadlock (it never takes a task lock).
+- **Never**: linking a task file, a file of another project, a deleted file, a note or a text-only
+  document; linking across projects (400 as above, never naming the file).
+
+#### The original file: delete, rename, move (A)
+
+- **Delete in Files** (soft delete, 1.12): from that moment the file is gone from every task it is on
+  (`canSeeFile` says no to a deleted file, counts skip it). The 6 s toast reads "File deleted." with
+  the body "It was on 2 tasks." ("It was on 1 task."; no body at 0) and Undo. The nightly purge
+  removes the row and, by the CASCADE, its links. No notification.
+- **Rename, move to another place, change who sees it**: one row, so every task shows the new name
+  and place at once; links don't change. Changing an "Everyone" file to "Only PM and Admins" keeps
+  it open to the people of the tasks it is on, and to everyone on the project through an Anyone
+  task (Edit details says so as soon as that setting is picked: Files tab).
+- **Task deleted**: its links go (CASCADE); the files stay in Files; its own files are deleted as
+  1.12.
+- **Task moved to another phase or given to another person**: the links follow (above).
+
+#### Notifications (B: `projectTasks/messages.js`, `alerts.js`)
+
+| Type                                  | When                                                                   | To                                                                                                                                                                                                                     | Title                                                                                                                                                    | Body                                                                                                                                       | Link                                                             | Important |
+| ------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- | --------- |
+| `project_task.added` (existing)       | a task is created                                                      | as 1.12 (the person, or every active member for Anyone; never the actor)                                                                                                                                               | as 1.12                                                                                                                                                  | as 1.12; the files line names uploads **and** links together ("3 files attached: brief.pdf, logo.png, contract.pdf.")                      | `/projects/12?task=88`                                           | no        |
+| `project_task.changed` (existing)     | priority or person changes on an open task                             | as 1.12, plus an Admin who took the task (`others`)                                                                                                                                                                    | as 1.12                                                                                                                                                  | as 1.12 (files line with links too)                                                                                                        | `/projects/12?task=88`                                           | no        |
+| `project_task.files_added` (existing) | files (uploads or links) added to an open task without a `changed`     | as 1.12                                                                                                                                                                                                                | as 1.12 ("Riya Kapoor added 2 files to Fix the login page")                                                                                              | as 1.12, names of uploads and links                                                                                                        | `/projects/12?task=88`                                           | no        |
+| `project_task.reassigned` (**new**)   | the person of an open task changes and the earlier person was a person | **the earlier person**: only when active and reachable (a member, the PM, or an Admin among `others`), not the actor, and not already reached by this save's `changed` (an active member when the task went to Anyone) | to a person: "Fix the login page on acme-store is now for Riya Kapoor"; to Anyone: "Fix the login page on acme-store is now open to anyone" (cut to 200) | the actor took it: "Riya Kapoor took it."; else "Riya Kapoor gave it to Vishal Saini." / "Riya Kapoor opened it to anyone on the project." | `/projects/12` (the board: a member can no longer open the task) | no        |
+
+- **Bulk sends** (one save of `POST /api/projects/[id]/tasks/bulk`): one notification per person per
+  kind, never one per task. With one task in the batch, the single texts above. With n ≥ 2 for one
+  recipient: `project_task.changed` to the new person "3 tasks on acme-store assigned to you" ·
+  "Riya Kapoor assigned them to you: Fix the login page, Payment settings page and 1 more."; to
+  members for Anyone "3 tasks on acme-store are open to anyone" · "Riya Kapoor opened them to anyone
+  on the project: …"; `project_task.reassigned` to an earlier person "2 of your tasks on acme-store
+  are now for Vishal Saini" (or "… are now open to anyone") · "Riya Kapoor took them: Fix the login
+  page and Payment settings page." / "Riya Kapoor gave them to Vishal Saini: …" / "Riya Kapoor
+  opened them to anyone on the project: …". At most 3 titles, then "and 2 more" (the files line's
+  pattern, `fit` after placing). Links: `/projects/12` for every grouped one. Bulk moves send
+  nothing (moves never notify).
+- Nothing for: a done task, moves, ticks, deletes, unlinks, phase moves, Reopen project, Files tab
+  uploads (as 1.12); an Admin taking a task on a PM's project tells the PM only when the task was the
+  PM's (the earlier person).
+- **`told`, `toldName` and `toldEarlierName`**: `PATCH /api/project-tasks/[id]` and `POST
+/api/projects/[id]/tasks` answer `{ data: { ...task, told, toldName, toldEarlierName } }`
+  (`toldEarlierName` = the earlier person's name when `reassigned` reached them, else null). Toast
+  bodies come from them only (Screens, Every message).
+- **`ALERT_TYPES`** gains `'project_task.reassigned': 'normal'` (group `task` from its prefix): **45
+  types, 19 important, 26 normal**. `tests/unit/notificationAlerts.test.js` pins 45. §26's table
+  gains row 45 (Other section edits).
+
+#### Task number, status chip, time and updates per viewer (B reads, C, T, D, M show)
+
+- **Task number**: `id`, written "#88" (12 px, `--muted`, Schibsted tabular) on cards, rows, the
+  task window header and My tasks. Search matches a title that contains the text
+  (case-insensitive, after `normalize('NFC')`); "#88" also matches task #88, and digits only ("88")
+  match task #88 as well as titles containing 88 (as option B), so "404" still finds "Fix the 404
+  page".
+- **Status chip**: from the newest report line on the task that the viewer may see (the §13 rule
+  `ownOnlyFor`: viewers without `team.view` see only their own lines): `in_progress` → "In progress"
+  (`--primary-soft` / `--primary-text`), `blocked` → "Blocked" (`--red-soft` / `--red-text`),
+  `done` → "Done" (`--green-soft` / `--green-text`); the line's date in the chip's `title`
+  ("Mon, 23 Nov") and in visually hidden text (", Mon, 23 Nov"). A done task (`status 'done'`): no
+  chip on its card (it is folded and ticked), "Done" in the Table. An open task without a line: no
+  chip on its card, muted "To do" in the Table.
+- **Report lines** ("Updates"): `report_tasks` rows linked to the task (`project_task_id`), of
+  **submitted** reports, on an entry with `minutes > 0` (the §24 rule, as `listReportLines`). The
+  newest line the viewer may see is **one rule** for the status chip, the Table's line under the
+  title, Updates and Latest report: take those lines; when `ownOnlyFor` is set, keep only that
+  person's lines **before** picking the newest (not 1.12's last-reported-day rule, which could pick
+  someone else's line and then hide it); order newest first by `work_date`, `submitted_at`, id.
+  `latestLinesFor` and `listUpdates` share this read, and `TaskDetails.latestReport` = `updates[0]`
+  (null when there are none), so a member on an Anyone task that someone else reported on last sees
+  their own newest line in all four places. `withLatestReports` stays only for its 1.12 callers that
+  keep it (Today's rows). **New**
+  `repo.countReportLines(taskIds, { ownOnlyFor })` (one grouped query) for the board and Table, and
+  `repo.listUpdates(taskId, { ownOnlyFor, limit: 10 })` → `[{ userId, userName, avatarUrl, initials,
+workDate, status, title }]` for the task window. To-do lines (drafts) never count.
+- **Time from timers** (**new** `timers.minutesByTask({ taskIds, userId? })` → `{ [taskId]: minutes
+}`, B's file `src/modules/timers/taskMinutes.js`): the sum of **finished** `time_entries` on each
+  task (`project_task_id IN (...) AND ended_at IS NOT NULL`, `SUM(TIMESTAMPDIFF(SECOND, started_at,
+ended_at))` rounded down to whole minutes; portable), with `user_id = userId` when given. Viewers
+  with `team.view` (PMs, Admins) get everyone's; anyone else only their own (`userId` = the viewer),
+  on tasks they can see. PMs never have timer time of their own (they don't track). Shown "5h 40m",
+  "45m", "2h"; nothing at 0 on cards and rows, "None yet" in the task window.
+- **Counts on cards** ("2" updates, "5h 40m"): the same per-viewer numbers. The Table's "Time" column
+  shows only in the PM view (`'manage'` and `'team'`).
+
+#### My tasks and the badge (B reads, M and O show)
+
+- **`projectTasks.listMine({ viewer, today, limit = 200 })`** → `{ tasks: MineTask[], more: boolean }`:
+  open tasks with `assignee_id = viewer.id` on projects whose status is `'active'` or `'on_hold'`
+  (Completed left out), where the viewer is a member **or** manages the project (its `pm_id`, or an
+  Admin); through `withPlanColumns` (its pre-015 fallback reads no dates). Order: due date (none
+  last), then priority P1 to P3, then oldest first (`created_at`, `id`). `MineTask = { id, title,
+priority, status, phase, dueDate, project: { id, name, color, status }, canManage }` (`canManage`
+  = `projects.canManage(viewer, project)`). Uses the index `(assignee_id, status)`. `more` when there
+  were over `limit`.
+- **`projectTasks.countMineDue({ viewer, today })`** → number: the same rows with `due_date <=
+today` (overdue plus due today). One indexed count.
+- **Groups** (pure, M's `myTasksView.whenOf(dueDate, today)`, company date): `'overdue'` (before
+  today), `'today'`, `'week'` (after today up to `weekRange(today).to`, `lib/time`, the company's
+  Monday-to-Sunday week; on a Sunday nothing is `'week'` and Monday's tasks are `'later'`), `'later'`,
+  `'none'` (no date). Labels "Overdue", "Today", "This week", "Later", "No date". A
+  group with nothing is left out.
+- **Who**: PMs and Admins (`project.manage`). Employees and HR keep Today's Priority tasks card.
+
+#### Today (B reads, M shows)
+
+- **`repo.openForUser`** (Today's Priority tasks): open tasks on **active** projects where `(the
+viewer has a project_members row AND (assignee = viewer OR assignee IS NULL)) OR (assignee =
+viewer AND (the project's pm_id = viewer OR the viewer is an Admin))`. So a tracked Admin (Meera)
+  sees the tasks they took on Today; a person taken off still doesn't; PMs and the CEO have no Today
+  page (nav, unchanged).
+- `listOpenForUser(user)` takes the user (an id still works: the role is read) and now selects
+  `phase` and `dueDate` through `withPlanColumns` (1.12 had neither), for Today's Due column.
+
+#### Completed projects and Reopen (C1 shows; existing route)
+
+- `projectTasks.create` still refuses a Completed project (`PROJECT_NOT_ACTIVE`, unchanged words);
+  edits, ticks, moves, drags, links, uploads and deletes stay allowed (1.12). On hold projects take
+  new tasks (1.12).
+- **Reopen project** = the existing `PATCH /api/projects/[id] { status: 'active' }` (`project.manage`
+  and `assertCanManage`: the project's PM and every Admin; another PM 403). It clears `completedAt`
+  (1.12 `fieldChanges`), writes `project.update` to the audit log, sends no notification. Undo sends
+  `{ status: 'completed' }` (a new `completedAt`).
+- The board never shows the forecast line, "Move to …", "Start …" or the band's "⋯" on a Completed
+  project (the note says it once).
+
+#### Nothing to Slack or AI
+
+- Links and file names never go to Slack (no `slack` import in `projectTasks` or `projectFiles`; the
+  scan test covers the new files).
+- **Never to AI**: linking never makes a document; the AI summary reads only `project_documents`;
+  `aiAsk` and `aiSummaries` must never read `task_file_links` (`tests/unit/noSlackNoAi.test.js` adds
+  `/task_?file_?links|taskFileLinks/i` to the spellings it scans for).
+- Report line text in "Updates" follows the §13 rule (members see only their own); HR never sees
+  others' report content (HR has no `team.view`).
+
+### Bulk actions in the Table (B: route and service; T: bar and requests)
+
+**One new route, one transaction, all or nothing.** N single PATCHes would leave half-done changes on
+a failure, send one notification per task to the same person and make Undo N requests; the route
+avoids all three.
+
+- **`POST /api/projects/[id]/tasks/bulk`** (**new**, `withRoute({ permission: 'project.manage' })`,
+  Origin checked, 30 a minute per person, body cap 16 KB): the route reads its own body like
+  `api/attendance/missing-checkouts/fix/route.js` (`readCappedJson`): first the per-person rate
+  limit, then over 16 KB → 413 `PAYLOAD_TOO_LARGE` "That request is too large.", then
+  `parseInput(projectTaskBulkSchema, …)`. `projectTaskBulkSchema` = `{ changes: Array<{ id,
+assigneeId } | { id, phase }> (1 to 100, unique ids, every item the same kind), shareConfirmed?:
+boolean }` (the zod below). `assigneeId` as the task schema (`''` → null); `phase` one of
+  `PHASE_KEYS`, or null (back to No phase yet: only an Undo sends it, as the single PATCH allows;
+  "Move to phase…" never offers it). Messages: "Pick at least one task." (empty), "Pick up to 100
+  tasks." (over 100), "Change one thing at a time." (mixed kinds or both keys), "A task is in the
+  list twice.", "Pick a phase from the list." (an unknown phase).
+- **`projectTasks.bulkUpdate({ user, projectId, changes, shareConfirmed, ip })`** (B, new `bulk.js`):
+  `manageableProject` (403 as today); one transaction: lock the task rows `FOR UPDATE` **in ascending
+  id order, by the primary key alone** (`FROM project_tasks FORCE INDEX (PRIMARY) WHERE id IN (...)
+ORDER BY id`, then each row's `project_id` is checked); any id missing or on another
+  project → 404 `NOT_FOUND` "A task you picked was deleted or isn't on this project. Nothing was
+  changed."; `teamOf` once (with `alsoIds` = the actor, every current and new person); for each
+  change the single PATCH's rules (`editChanges`: `assertAssignee` for a changed person; a phase any
+  of `PHASE_KEYS` or null; done tasks allowed as 1.12); the reassign share check over all changed tasks (one
+  `privateLinkCounts` read); then the updates (each row by its id, As built), one
+  `project_task.update` audit row per task (before and after, as the single PATCH); then the
+  grouped notifications (Notifications). An item that changes nothing (same person or phase) is
+  skipped silently. Any refusal rolls everything back and answers the first refusal's code and
+  message (field errors as `fields.assigneeId`, `fields.phase`, `fields.shareConfirmed`). Deadlocks
+  (1213) retry up to 3 times, then 409 `CONFLICT` "Something else changed at the same moment. Try
+  again." (the `attendance/repo.js` pattern, which retries 1213 only; the single edit, tick and
+  delete do the same). A lock wait (1205) is not retried: it has already waited
+  `innodb_lock_wait_timeout`, and three of them would hold the request, a pool connection and the
+  busy button for minutes.
+- **Answer** 200 `{ data: { tasks: [{ id, assigneeId, phase }], changed: number, told: { people:
+string[], members: boolean } } }`: `tasks` = only the tasks this save changed; `told` = who the
+  sends reached (the bulk toast has no body, the answer is for tests and later use).
+- **Undo** (6 s, the toast slot): the same route with each **changed** task's earlier value
+  (`changes: [{ id, assigneeId: <before> }]` or `[{ id, phase: <before> }]`, from T's copy of the
+  rows before the action, kept only for the ids in the answer's `tasks`). It always sends
+  `shareConfirmed: true` (each task goes back to the person who held it, who could already open its
+  files). The toast offers Undo only when every earlier person can be picked now: Anyone, or a row
+  of `head.options` (the viewer is one). When any earlier person is away ("Not on the project",
+  "Deactivated") or is an Admin who isn't on the project and isn't the viewer, the toast has no
+  Undo (the assignee rule would refuse it). A person taken off during the 6 s still refuses it with
+  the assignee message ("Couldn't undo" error toast). Undo is an ordinary change and notifies as one
+  (Choices 4).
+- **Permissions**: the project's PM and Admins (`'manage'`); the Table shows no select boxes to
+  anyone else. Members, HR and other PMs get 403 from the route.
+- Bulk actions are **not optimistic**: the pressed button turns busy (`BusyButton`, "Assign to me"
+  keeps its label), the other bulk buttons are `aria-disabled`, and after the answer the page
+  refreshes once (`router.refresh()` in a transition) and the changed rows play their motion (Table,
+  below).
+
+### Motion (C2 builds the engine; C1, C3, T, D and M use it)
+
+The owner asked for smooth, calm motion. Every rule here is binding; `scratch/design-1.13/motion.md`
+explains the how in more depth (where it and this section differ, this section wins).
+
+#### Tokens (O: `src/app/globals.css` and `src/lib/motion/tokens.js`)
+
+Added to `:root` after the layout tokens (they don't depend on the theme; `--shadow-lift` follows it
+through `--navy`):
+
+```css
+:root {
+  /* motion (CONTRACT 28) */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1); /* lift, make room, glide */
+  --ease-decelerate: cubic-bezier(
+    0.05,
+    0.7,
+    0.1,
+    1
+  ); /* arriving: windows, sheets, the band's fill */
+  --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15); /* leaving: windows, toasts out */
+  --ease-settle: cubic-bezier(0.2, 1, 0.1, 1); /* drop and fly back */
+  --ease-press: cubic-bezier(0.4, 1, 0.6, 1); /* hover and press colours */
+  --ease-tint: cubic-bezier(0.15, 1, 0.3, 1); /* the column under a dragged card */
+  --ease-flash: cubic-bezier(0.25, 0.1, 0.25, 1); /* just added, moved, assigned */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1); /* 1.12's curve: menus, toasts in */
+  --dur-press: 110ms;
+  --dur-fade: 120ms;
+  --dur-lift: 150ms;
+  --dur-room: 200ms;
+  --dur-tint: 200ms;
+  --dur-tag: 200ms;
+  --dur-tick: 250ms;
+  --dur-drop-min: 250ms;
+  --dur-drop-max: 400ms;
+  --dur-fold: 300ms;
+  --dur-glide: 350ms;
+  --dur-fill: 500ms;
+  --dur-flash: 700ms;
+  --dur-in: 220ms;
+  --dur-out: 160ms;
+  --dur-toast-in: 200ms;
+  --dur-toast-out: 150ms;
+  --lift-scale: 1.02;
+  --lift-tilt: 2deg;
+  --lift-rise: -2px;
+  --shadow-lift:
+    0 14px 32px color-mix(in srgb, var(--navy) 18%, transparent),
+    0 2px 6px color-mix(in srgb, var(--navy) 10%, transparent);
+  --shift-pop: 8px;
+  --scale-pop: 0.98;
+  --shift-menu: -4px;
+  --shift-toast: 12px;
+  --shift-in: 8px;
+  --shift-bar: 12px;
+  --shift-sheet: 16px;
+  --shift-drawer: 32px;
+  --shift-live: -8px;
+  --scale-fold: 0.96;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lift-scale: 1;
+    --lift-tilt: 0deg;
+    --lift-rise: 0px;
+    --dur-lift: 0ms;
+    --dur-room: 0ms;
+    --dur-tint: 0ms;
+    --dur-tick: 0ms;
+    --dur-drop-min: 0ms;
+    --dur-drop-max: 0ms;
+    --dur-fold: 0ms;
+    --dur-glide: 0ms;
+    --dur-fill: 0ms;
+    --dur-tag: var(--dur-fade);
+    --dur-in: var(--dur-fade);
+    --dur-out: var(--dur-fade);
+    --dur-toast-in: var(--dur-fade);
+    --dur-toast-out: var(--dur-fade);
+    --shift-pop: 0px;
+    --scale-pop: 1;
+    --shift-menu: 0px;
+    --shift-toast: 0px;
+    --shift-in: 0px;
+    --shift-bar: 0px;
+    --shift-sheet: 0px;
+    --shift-drawer: 0px;
+    --shift-live: 0px;
+    --scale-fold: 1;
+  }
+}
+```
+
+- The `@supports not (color: light-dark(red, red))` fallback list gains `--shadow-lift: 0 14px 32px
+rgba(21, 24, 51, 0.18), 0 2px 6px rgba(21, 24, 51, 0.1);` (`themeFallback.test.js` pins it).
+- **Delete** 1.12's rule `*, *::before, *::after { animation-duration: 0.01ms !important;
+transition-duration: 0.01ms !important }` (`globals.css:304-311`): with `!important` on every
+  element it would also kill the fades reduce motion keeps.
+- `src/lib/motion/tokens.js` holds the same numbers for JavaScript (no style read per call; works in
+  node tests); a unit test keeps the two equal:
+
+```js
+export const DUR = {
+  press: 110,
+  fade: 120,
+  lift: 150,
+  room: 200,
+  tint: 200,
+  tag: 200,
+  tick: 250,
+  dropMin: 250,
+  dropMax: 400,
+  fold: 300,
+  glide: 350,
+  fill: 500,
+  flash: 700,
+  in: 220,
+  out: 160,
+  toastIn: 200,
+  toastOut: 150,
+};
+export const EASE = {
+  standard: 'cubic-bezier(0.2, 0, 0, 1)',
+  decelerate: 'cubic-bezier(0.05, 0.7, 0.1, 1)',
+  accelerate: 'cubic-bezier(0.3, 0, 0.8, 0.15)',
+  settle: 'cubic-bezier(0.2, 1, 0.1, 1)',
+  press: 'cubic-bezier(0.4, 1, 0.6, 1)',
+  tint: 'cubic-bezier(0.15, 1, 0.3, 1)',
+  flash: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
+  out: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+};
+export const LIFT = { scale: 1.02, tiltDeg: 2, risePx: -2 };
+export const LIMITS = {
+  flipCards: 150,
+  dragThreshold: 6,
+  settleLock: 400,
+  autoScrollDelay: 300,
+  edgeMax: 160,
+  edgeShare: 0.25,
+  edgeSpeed: 20,
+  tickWait: 600,
+  announceDebounce: 100,
+  newCardWait: 2000,
+};
+const MOVING = new Set([
+  'lift',
+  'room',
+  'tint',
+  'tick',
+  'dropMin',
+  'dropMax',
+  'fold',
+  'glide',
+  'fill',
+]);
+const FADED = new Set(['tag', 'in', 'out', 'toastIn', 'toastOut']);
+/** ms for this moment; with reduce motion movement is 0 and entrances and exits are the fade. */
+export function duration(name, reduced = prefersReducedMotion()) {
+  if (!reduced) return DUR[name];
+  if (MOVING.has(name)) return 0;
+  return FADED.has(name) ? DUR.fade : DUR[name]; // press, fade, flash stay
+}
+```
+
+- **Every CSS module with an animation or transition moves to the tokens** (O, before the builders
+  start; the 39 files of motion.md 4.2): colour transitions `var(--dur-press) var(--ease-press)`;
+  entrances `var(--dur-in) var(--ease-decelerate)` (toasts `--dur-toast-in --ease-out`, menus
+  `--dur-fade --ease-out`); exits `var(--dur-out) var(--ease-accelerate)`; `@keyframes` move only by
+  `var(--shift-*)`, `var(--scale-*)` or `var(--lift-*)`, so with reduce they become pure fades.
+  Infinite animations (the spinners of `Button`, `BusyButton`, `LinePolish`, `PolishProvider`; the
+  `Skeleton` shimmer; the bell swing; the timer's live dot; `AskChat`'s pulse; `LaunchSplash`, which
+  `launchScript.js` already skips) keep their times and get a local `@media
+(prefers-reduced-motion: reduce)` block: spinners become a slow opacity pulse (work is still going
+  on), the rest `animation: none`. `PreviewStack`'s `live-in` and `live-out` become 120 ms fades with
+  reduce and still end (`useStack.js` keeps removing a leaving card at once with reduce).
+- **`tests/unit/motionTokens.test.js`** (O, new) reads every `src/**/*.css` and fails when: an
+  `animation`, `transition` or `*-duration` holds a literal time (`\d+m?s`) outside the infinite
+  allow-list; an allow-listed file has no `prefers-reduced-motion` block; a `@keyframes` with
+  `transform` uses a literal length or scale (only `var(--shift-*)`, `calc(var(--shift-*) * n)`,
+  `var(--scale-*)`, `var(--lift-*)`, `none`, `rotate` in a spinner, or `scaleX(var(--share))`;
+  files on the infinite allow-list, `LaunchSplash` and the bell swing included, are exempt from this
+  rule, and their local reduce block sets `animation: none` or, for spinners, the opacity pulse;
+  `PreviewStack`'s `live-in-phone` becomes `translateY(calc(var(--shift-live) * 2))` and `live-out`
+  `translateY(calc(var(--shift-live) * 0.5))`, so no new token is needed); a `transition` names
+  `width`, `height`, `top`, `left`, `margin`, `padding` or `flex-basis`; the global 0.01 ms rule is
+  back; `tokens.js` differs from `globals.css`; the reduce block doesn't zero exactly the names
+  above.
+
+#### The rules
+
+1. **Only `transform` and `opacity` move.** Three small colour or stroke exceptions: the flash
+   (`background-color`), the column tint (`background-color`, `border-color`), the tick and band
+   checks (`stroke-dashoffset` on a 20 px SVG). Never `width`, `height`, `top`, `left`, `margin`,
+   `flex-basis`, `box-shadow` (the lift shadow fades a `::after`), `filter` or blur. The band's fill
+   and the upload bars move from `width` to `transform: scaleX()`; the rail widens by FLIP.
+2. **Nothing animates on page load**: no mount animation on anything that exists at load (cards,
+   rows, band, columns, rail, toolbar), no counting numbers on arrival. Only things an action
+   mounts animate (toasts, a window opened by a click, the bulk bar, the drag preview). `?show=`,
+   `?view=table`, the remembered view and a window opened by `?task=` (a deep link, `data-instant`)
+   never animate. A server refresh never animates by itself.
+3. **Nothing people do often lasts over 400 ms** (drops cap at 400; the phase move, rare, stays
+   under 1 s; the tick's 600 ms is a pause, not a movement).
+4. **Animations never block clicks**: no overlay catches pointer events; clones are `inert`,
+   `aria-hidden` and `pointer-events: none`; a window that is closing is `inert` with
+   `pointer-events: none` while its picture fades; a new drag can start once the last drop settled
+   (at most 400 ms).
+5. **At most two things change at once in one place.** No bounce, overshoot, spin, parallax, zoom,
+   confetti or flashing (never more than 3 times a second).
+6. **No FLIP past 150 cards** on screen (or rows in the Table), in a hidden tab, or with reduce
+   motion: glides, close-ups, column slides and sorts become instant changes plus the flash. The
+   drag itself still lifts, makes room in one column and settles.
+7. **Reduce motion** (the computer's setting, `prefers-reduced-motion: reduce`, read at call time
+   and followed live: when it turns on, running movement finishes at once): no translate, scale,
+   tilt, slide, fold, count-up or drawing; fades of `--dur-fade`, colour changes, the flash and the
+   lift shadow stay; scrolling is instant; everything works by keyboard. Auto-scroll during a drag
+   stays (the person drives it).
+8. **React owns structure, motion owns short-lived `transform` and `opacity`.** Every animation
+   starts in an event handler, an animation or timer callback, or a layout effect that plays a
+   request an action queued; never in render, never in an effect without a queued request. Only
+   clones and the drag preview keep `fill: 'forwards'` past their end (they are removed at the end).
+   A fade-out on a React node (the Board and Table crossfade, the face swap's old face, the tick's
+   fade) may hold `forwards` only until the change that follows it, and is cancelled in the same
+   task as that change; every other animation on a React node is `fill: 'none'` and ends on its
+   layout state.
+9. **Clones never duplicate ids**: `cloneForMotion(el)` removes `id`, `for`, `name`, `tabindex`,
+   `aria-describedby`, `aria-labelledby`, `aria-controls` inside the clone and sets `inert` and
+   `aria-hidden="true"`. For the drag preview it also removes the dimmed state (a filter's 40%),
+   `data-ticking`, the file-drop overlay and `data-outline`, so the picture under the pointer is the
+   card at full strength.
+10. **No `<ViewTransition>`** (it only runs in transitions, the board refreshes in a transition after
+    every save, and its overlay takes clicks; `node_modules/next/dist/docs/01-app/02-guides/view-transitions.md`).
+11. **Touch never drags** (mouse and pen only); phones and touch use "Move to phase…".
+12. **Hydration**: no markup depends on `useReducedMotion()` or `useDesktopPointer()` (their server
+    snapshot is false); the grip is always rendered for managers and hidden on phones and touch
+    screens by CSS. The remembered view (Board or Table) and rail (open or closed) come from cookies
+    the server reads (Board props), never from browser storage during render, so the first paint is
+    already right and nothing switches after hydration.
+
+#### Moments
+
+| Moment                                                                                        | What moves                                                                                                                                                                                                                                                                                                                                         | Duration                                        | Easing                                                               | Reduce motion                                      |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------- |
+| Hover, press                                                                                  | border, background and text colour; no scale                                                                                                                                                                                                                                                                                                       | `--dur-press`                                   | `--ease-press`                                                       | same                                               |
+| Lift                                                                                          | the drag preview: `translateY(var(--lift-rise)) rotate(var(--lift-tilt)) scale(var(--lift-scale))`, its `::after` shadow (`--shadow-lift`) fades in; the card left behind becomes the dashed outline (same size, 1.5 px dashed `--line-dashed`, `--surface-muted`, children at opacity 0 and `pointer-events: none`)                               | `--dur-lift`                                    | `--ease-standard`                                                    | shadow only; the preview still follows the pointer |
+| Column under the card                                                                         | background `color-mix(in srgb, var(--primary-soft) 60%, var(--surface-muted))`, border `--primary`; only valid columns react; "No tasks yet" fades                                                                                                                                                                                                 | `--dur-tint`                                    | `--ease-tint`                                                        | at once                                            |
+| Make room                                                                                     | cards at and below the sorted place, and everything after the list in that column (`[data-follow]`: the "› 6 done" fold, its done cards and, without `data-fill`, the foot), slide down by the card's height plus the list's row gap (12 px); they slide back when the card leaves                                                                 | `--dur-room`                                    | `--ease-standard`                                                    | at once                                            |
+| Drop                                                                                          | the preview glides into the gap, scale 1, tilt 0, the card's own shadow; the real card replaces it; the old column closes its hole; the card flashes                                                                                                                                                                                               | `min(400, 250 + distance / 1500 × 150)` ms      | `--ease-settle`; the hole `--dur-room` `--ease-standard`             | at once, then the flash                            |
+| Cancel (Escape, an invalid drop, a lost pointer)                                              | the preview flies back to the outline; the gap closes                                                                                                                                                                                                                                                                                              | 0.6 × the drop time                             | `--ease-settle`                                                      | at once                                            |
+| Just added, moved, assigned                                                                   | background `--primary-soft` fading to `--surface` (`flash()`, a second flash restarts it)                                                                                                                                                                                                                                                          | `--dur-flash` (700 ms; was 1.5 s)               | `--ease-flash`                                                       | same                                               |
+| Moved by "Move to phase…", the task window or Undo                                            | the card glides from its old place to the new column (a fixed clone), the old column closes up and the new one makes room; then the flash; when the start or end is out of the board's view, no glide: the board scrolls to the column and the card flashes                                                                                        | `--dur-glide`, others `--dur-room`              | `--ease-standard`                                                    | flash only                                         |
+| Tick done                                                                                     | the check draws (`stroke-dashoffset` 1 → 0), the card turns `opacity: 0.6` with a muted title; after 600 ms (unticking cancels) it fades out, the cards below slide up, it joins "› 6 done" and the count changes; the card stays in the open list, ticked, until this has played, even when the refresh already says done (`useTickLeave`'s hold) | `--dur-tick`; then `--dur-out` and `--dur-room` | `--ease-standard`, out `--ease-accelerate`                           | check at once, the card leaves at once             |
+| Person changes (Assign to me, the people window, Give to…)                                    | the old face fades out, the new one fades in from `scale(0.92)`, then the card flashes; Table rows only flash                                                                                                                                                                                                                                      | `--dur-fade` out, `--dur-tag` in                | `--ease-decelerate`                                                  | fade only                                          |
+| Band progress                                                                                 | the part's fill grows with `scaleX()`; the % counts up (only after the viewer's own tick, move or delete) on an `aria-hidden` copy while a hidden twin holds the final number                                                                                                                                                                      | `--dur-fill`                                    | `--ease-decelerate`                                                  | at once                                            |
+| Phase move                                                                                    | the sequence below                                                                                                                                                                                                                                                                                                                                 | under 1 s                                       |                                                                      | fades only                                         |
+| Window or sheet in and out (Dialog, the task window, the people window, the picker, New task) | in: the overlay fades, the panel comes from `translateY(var(--shift-pop)) scale(var(--scale-pop))`; out: fade to `scale(var(--scale-pop))`; a sheet comes from `translateY(var(--shift-sheet))`; Drawer from `translateX(var(--shift-drawer))`                                                                                                     | `--dur-in` / `--dur-out`                        | `--ease-decelerate` / `--ease-accelerate`                            | fade                                               |
+| Menu, popover                                                                                 | from `translateY(var(--shift-menu))` with a fade; closes at once                                                                                                                                                                                                                                                                                   | `--dur-fade`                                    | `--ease-out`                                                         | fade                                               |
+| Toast, Undo toast                                                                             | in from `translateY(var(--shift-toast))` with a fade; out: fade                                                                                                                                                                                                                                                                                    | `--dur-toast-in` / `--dur-toast-out`            | `--ease-out` / `--ease-accelerate`                                   | fade                                               |
+| Upload progress                                                                               | the bar's fill with `scaleX()` (cards, chips, the Uploads card)                                                                                                                                                                                                                                                                                    | 120 ms a step (`--dur-fade`)                    | `--ease-out`                                                         | same                                               |
+| New card appears (quick add, New task)                                                        | the column's other cards make room, the card fades in from 8 px below (delay `--dur-room`), then the flash; if the refresh takes over 2 s, it simply shows with the flash                                                                                                                                                                          | `--dur-room`, `--dur-tag`                       | `--ease-decelerate`                                                  | fade and flash                                     |
+| Board and Table switch                                                                        | the old view fades out, the new fades in; no movement; the old view stays clickable while it fades; a second click finishes the first fade at once and only the latest switch commits (`crossfade`, Modules)                                                                                                                                       | `--dur-out`, `--dur-in`                         | `--ease-accelerate`, `--ease-decelerate`                             | both `--dur-fade`                                  |
+| Table sort                                                                                    | rows slide to their new places (FLIP); a group header that appears fades in                                                                                                                                                                                                                                                                        | `--dur-room`                                    | `--ease-standard`                                                    | at once                                            |
+| Bulk bar                                                                                      | rises `translateY(var(--shift-bar))` with a fade when the selection goes from none to some; fades out when it empties                                                                                                                                                                                                                              | `--dur-in`, `--dur-out`                         | `--ease-decelerate`, `--ease-accelerate`                             | fade                                               |
+| Done phases rail opens or folds                                                               | the rail's box scales from its old width (`scaleX`, `transform-origin: left`), the columns slide (FLIP), the tiles fade in (delay 60 ms)                                                                                                                                                                                                           | `--dur-room`, tiles `--dur-in`                  | `--ease-standard`; the tiles' fade `--ease-decelerate` (an entrance) | at once                                            |
+| Reopen project                                                                                | after the PATCH answers, the note and the "Completed" tag fade out, then the change (a local `shownStatus`, so they never come back before the refresh); "Add task" is there and focused                                                                                                                                                           | `--dur-out`                                     | `--ease-accelerate`                                                  | fade                                               |
+| My tasks tick                                                                                 | as the card tick, on the row                                                                                                                                                                                                                                                                                                                       | as above                                        |                                                                      | as above                                           |
+
+#### Pointer drag (C2: replaces 1.12's native card drag)
+
+- **Who and where** (all checked at `pointerdown`, else the press is left alone and stays a click):
+  the viewer manages the project (`'manage'`); the Board view (not Table); `useDesktopPointer()`
+  (`(pointer: fine) and (min-width: 641px)`) and the board's own `clientWidth > 640`;
+  `event.isPrimary`, `event.button === 0`, `pointerType` `mouse` or `pen` (never `touch`), no Ctrl,
+  Meta, Alt or Shift; the target inside an open card of a phase column or of No phase yet
+  (`[data-flip^="card:"][data-open]`; No phase yet is never a target, as 1.12, so every phase column
+  is valid for its cards), not uploading (1.12 rule), no session lifted or settling (pointer or
+  keyboard), no window open; the target not inside `button, a, input, textarea, select, label,
+summary, [role="menuitem"], [contenteditable], [data-no-drag]`, except the grip (`[data-grip]`)
+  and the card's title button (`[data-card-title]`): a press on the title that moves under 6 px
+  stays a click and opens the task; past 6 px it lifts like the card, and the click after the drag
+  is stopped. Never `preventDefault()` on `pointerdown`.
+- **Start**: after **6 px** of movement (`LIMITS.dragThreshold`); a press and release without moving
+  (or moving under 6 px) is a click and opens the task. Then, in this order: read the card's rect,
+  the list's row gap (one `getComputedStyle`), the board's rect and every column `{ key, accepts:
+canDropOn(task, key), rect, list, body, follow }` (`follow` = its `[data-follow]` items); write
+  the preview at the card's exact rect, `data-outline` on the card, `data-dragging` on `<html>` and
+  the board, `--drag-room: <card height + row gap>px` on the board, `board.setPointerCapture(pointerId)`
+  (in try/catch), clear the text selection; **two frames later** (a `requestAnimationFrame` inside a
+  `requestAnimationFrame`, so the preview has been styled once unlifted) `data-lifted` on the
+  preview's card, which then transitions in; announce; start one `requestAnimationFrame` loop.
+  Nothing inside a column moves at the lift. Capture goes on the **board** (it never remounts), not
+  the card.
+- **Preview** (`dragPreview.js`): a `position: fixed; top: 0; left: 0; z-index: 90` wrapper
+  (`pointer-events: none`, `will-change: transform`, the only `will-change` in Daybook) holding
+  `cloneForMotion(card)`, moved by `translate3d(x, y, 0)` from where it was grabbed (no offset);
+  thumbnails reuse the loaded picture; the clone's hover buttons hidden (`[data-card-actions] {
+opacity: 0 }`). z-index 90: above menus (80), below the skip link (100).
+- **Every frame**: reads first (column rects only when `dirty`), then writes. One `scroll` listener
+  on `window` in the capture phase (`{ capture: true, passive: true }`) hears the page, the board
+  and every column body; it and `resize` each set `dirty` (a mouse-wheel page scroll mid-drag
+  included); the lift sets it too, so the first frame reads the columns as `data-dragging` has
+  stretched them (without `data-fill`). **Target** = the column under the card: across, the
+  **preview's centre** decides; up and down, the **preview's centre or the pointer** is inside the
+  column's clipped rect (a tall card held by its top, let go with the pointer over "+ Add task" and
+  its centre below the column, lands). Valid: any phase column other than the card's own (an opened
+  done phase included; for a card in No phase yet, every phase column). Not valid (they don't
+  react): its own column, the Done phases rail, No phase yet, the band, the toolbar, above or below
+  the columns, anything else. The keyboard move doesn't use it.
+- **Gap at the sorted place**: `landingIndex(column.open, task)` (P1, P2, P3, then due date, then
+  title; `boardMoves.js`), never where the pointer is; there is no hand ordering. The target list
+  gets `data-room`; its cards at index ≥ gap, and every later item in that column (`[data-follow]`:
+  the fold button, its done list and, without `data-fill`, the column foot), get `transform:
+translateY(<card height + row gap>px)`; leaving a column clears them (they slide back). Every
+  phase column renders its list even when empty (`<ul data-cards="testing">`, `position:
+relative`), and an empty column's line (`data-empty-text`) is drawn **after** its empty list,
+  never above it, so the empty list's top is where the first card lands.
+- **Auto-scroll** (`autoScroll.js`): not in the first 300 ms of a drag; then when the pointer is
+  within `edge = min(160 px, 25% of the box)` of the board's left or right edge, the board scrolls
+  by `20 × ((edge - distance) / edge)²` px a frame (scaled by the frame time / 16.7, clamped to the
+  range); the same for the column body under the pointer (top and bottom; only with `data-fill`,
+  the only time a body scrolls) and for the page near the window's top and bottom when it can
+  scroll.
+- **Drop** (`pointerup`): a last synchronous hit test with the up event's point (Playwright's
+  `dragTo` and a fast flick send the last move and the up together; it re-measures first when
+  `dirty`); no valid target → cancel. Else
+  `settling` (new drags wait, at most 400 ms): the column body scrolls instantly if the gap is out of
+  sight; the preview settles (`--ease-settle`, the drop time); then one `flushSync` commits the move
+  (1.12's `cardActions.move(task, to, 'drag')`: on screen at once, then `PATCH /api/project-tasks/[id]
+{ phase }`, then the toast "Moved to Testing." with Undo, then the refresh), the room and outline
+  are cleared together, `flipFrom` runs over both columns' `[data-flip^="card:"], [data-follow]`
+  (the moved card's first rect is the preview's last rect, so it is not skipped and any leftover
+  difference glides; the old column's hole closes and its fold and foot follow), the preview is
+  removed in the same frame, the card flashes, the move is announced. `tickLeave`, `glideMove` and
+  `expectNewCard` use the same scope (cards plus `[data-follow]`). A failed save glides the card
+  back with "Couldn't move the task" and the API's message (1.12 words). Focus after a pointer drop:
+  the moved card's title (1.12). `destroy()` during `settling` (the Board unmounts, a tab or nav
+  link clicked within 400 ms) commits the drop without motion: it calls `onDrop(task, key)` once and
+  never discards it. `visibilitychange` to hidden during `settling` finishes the settle at once
+  (`finish()`), so the commit and the PATCH run.
+- **Click after a drag**: one capture-phase `click` listener on `window` stops the click the browser
+  sends after a drag's `pointerup` (removed with `setTimeout(0)`), so the task window doesn't open.
+  A cancel while the button is still down (Escape, `blur`, `lostpointercapture`) keeps listening
+  for that pointer: its `pointerup` and the `click` after it are swallowed by the same one-time
+  capture listener, so releasing anywhere, the card included, opens nothing.
+- **Cancel and lost pointers**: Escape (a capture-phase `keydown` on `document` while lifted;
+  `preventDefault` and `stopPropagation`, so no window or menu reacts), a drop where it can't go,
+  `pointercancel`, `lostpointercapture`, the window's `blur` → fly back (0.6 × the drop time);
+  `visibilitychange` to hidden → back at once; `contextmenu` while lifted → prevented; the dragged
+  task gone or moved by someone else (seen after a refresh) → back at once, "Move cancelled."; the
+  Board unmounts → everything removed, no announcement. `dragstart` inside a card is prevented and
+  thumbnails get `draggable={false}` (a native image drag would cancel the pointer).
+- **Around the drag**: managers' cards get `user-select: none`; `html[data-dragging], html[data-dragging] *
+{ user-select: none; cursor: grabbing !important }`; the card keeps `cursor: pointer`, the grip
+  shows `grab`; the grip gets `touch-action: none` (pen); cards keep normal touch scrolling. 1.12's
+  `scroll-snap-type: x proximity` is removed from the board (it fights auto-scroll and FLIP).
+- **Files from the computer keep the browser's file drag** (`dataTransfer.types` has `Files`): "Drop
+  to attach" and the upload as 1.12 (`useCardFileDrop.js`, unchanged but for its import). Cards are
+  no longer `draggable`, so the two drags never mix.
+- **A refresh while lifted**: `relayout()` (from the Board's every-commit layout effect) finds the
+  card again by `data-flip`, puts `data-outline` back on a new node, re-measures and re-applies the
+  room.
+
+#### Phase move sequence (C2's `phaseMotion.js`; C1's band and columns carry the data attributes)
+
+`MovePhaseButton` saves (`PUT /api/projects/[id]/phase`) and calls its new `onMoved(to)` in place
+of its own toast and refresh; the Board plays this, then toasts and refreshes. Its confirm keeps its
+title and early/late sentence and gains one muted line when the finished phase still has open
+tasks: "5 open tasks stay in Testing." / "1 open task stays in Testing." (nothing at 0; the count
+comes from the board's columns, brief 3.1, as option B). The timeline starts when the confirm
+window's exit has ended (`duration('out')` after the save answers; the toast and the refresh move
+with it), so the window's fade and the band never change in one place at once (rule 5).
+The band's fill is drawn by `transform: scaleX(var(--share))` (`style={{ '--share': share / 100 }}`,
+`transform-origin: left center`, the bar a rounded box with `overflow: hidden`), and the 2 px current
+ring is **one** absolutely placed element over the six parts (`data-ring`,
+`transform: translateX(calc(var(--i) * (100% + 4px)))`, one part wide), replacing 1.12's
+`.current .bar { box-shadow }`.
+
+**Every band part always renders its fill and its green layer**, so each 0 ms row below ends
+exactly on React's state after the commit: `--share` is the current phase's done share, 1 for a done
+phase, 0 for later and skipped ones (1.12's `share: 0` for a done part and its "no fill at 0" go);
+`data-done-layer` is opacity 1 on a done part and 0 otherwise; the bar's background is the track for
+every status (1.12's `.done .bar` green goes; the look is unchanged, the green layer covers it). A
+done part's check is an inline SVG path with `pathLength="1"` (lucide's `Check` can't draw with
+`stroke-dashoffset`). "Go back" plays fill 1 → the new share and layer 1 → 0. C1's tests pin it
+(`boardView.test.js` for the band parts, `boardOverflow.test.js` for the CSS).
+
+**With no current phase** (a new project has no plan row): no ring and no "Current" tag; the split
+menu reads "Quick add to Requirement gathering"; "Start Requirement gathering" plays only the ring
+fading in and the new "Current" tag (opacity, `--dur-tag`), with no fill, check or fold.
+
+| Start  | Element                                                                                                                                                    | Keyframes                                                               | Time, curve               | Fill             |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------- | ---------------- |
+| 0 ms   | the finished phase's band fill                                                                                                                             | `scaleX(old)` → `scaleX(1)`                                             | `--dur-fill`, decelerate  | none             |
+| 0 ms   | its green layer (a second span over the fill, `data-done-layer`)                                                                                           | opacity 0 → 1                                                           | `--dur-fill`, decelerate  | none             |
+| 200 ms | the ring                                                                                                                                                   | `translateX(old - new px)` → `none` (FLIP)                              | 300 ms, standard          | backwards        |
+| 250 ms | the finished phase's check beside its name                                                                                                                 | `stroke-dashoffset` 1 → 0                                               | `--dur-tick`, standard    | backwards        |
+| 350 ms | the old "Current" tag (a clone placed absolutely inside the band, which is `position: relative`)                                                           | opacity 1 → 0, then removed                                             | `--dur-tag`, `--ease-out` | forwards (clone) |
+| 350 ms | the new "Current" tag                                                                                                                                      | opacity 0 → 1                                                           | `--dur-tag`, `--ease-out` | backwards        |
+| 350 ms | the new current column                                                                                                                                     | the flash (`--primary-soft` 80% into `--surface-muted`)                 | `--dur-flash`, flash      | none             |
+| 400 ms | only when the finished phase has no open tasks: its column (a clone placed absolutely inside `.boardWrap`, so a page scroll moves it with the board) folds | `scale(1)`, 1 → `scale(var(--scale-fold))`, 0, then removed             | `--dur-fold`, standard    | forwards (clone) |
+| 400 ms | the rail's count: the old number fades out, the new fades in from 8 px below; its check draws                                                              |                                                                         | `--dur-tag`; `--dur-tick` | backwards        |
+| 480 ms | the columns to its right                                                                                                                                   | FLIP `translateX` from their first rects                                | `--dur-fold`, standard    | backwards        |
+| 700 ms | the board, when the new current column is out of view                                                                                                      | `scrollTo({ behavior: scrollBehavior() })`                              |                           |                  |
+| 760 ms |                                                                                                                                                            | the toast "Phase changed to Launch." and `startRefresh(router.refresh)` |                           |                  |
+
+- "Go back to Testing" (the band's "⋯") plays it in reverse; a column that comes back fades in
+  (opacity, `--dur-in`, delay 300 ms, backwards).
+- **A rail that is new at the commit** (a project's first fold, Requirement gathering → Design) fades
+  in (opacity, `--dur-in`, delay 400 ms, backwards) while the columns FLIP from their first rects.
+- **With the rail open**, the folded phase becomes a new tile, which rises in (`--shift-in`,
+  `--dur-tag`, delay 400 ms, backwards) in place of the count's change.
+- **Over several phases** ("Make this the current phase" in a column's "⋯", or Go back past more than
+  one): every phase that folds gets its own clone at 400 ms, the ring slides the whole way in the
+  same 300 ms, and only the phase being left gets the fill and the check. `playPhaseMove` takes
+  `folds: PhaseKey[]`.
+- A tick of the last open task of a past phase plays the 400 ms row on its own (the fold).
+- The hook keeps every animation, clone and timer and ends them on unmount. The refresh confirms the
+  shown phase (`shownPhase`, dropped once the page's plan agrees, the `pendingMoves` pattern); if
+  the refresh brings another phase (someone else moved it), that shows without motion.
+- Reduce: band, ring, check and fold change at once; the two tags crossfade in `--dur-fade`; the
+  flash stays; the scroll is instant; the toast comes at once. Clicks are never blocked: the clones
+  are inert, the real controls are live from the commit on.
+
+#### Keyboard move and the live region (C2: `MoveLive.jsx`, `moveWords.js`; C3 renders the grip)
+
+- **The grip**: on every open card of a manager, a 28 px icon button (GripVertical 16), after the
+  title (and after Assign to me when it shows) in the tab order, shown on hover and focus inside the
+  card, hidden at 640 px and below and on touch screens by CSS (`@media (max-width: 640px),
+(pointer: coarse) { [data-grip] { display: none } }`, hydration-safe; touch uses "Move to
+  phase…"): `<button data-grip aria-label="Move Checkout fix before client demo"
+aria-describedby="move-help">`. Its `click` opens "Move to phase…" for that card: this covers a
+  mouse click without moving, a screen reader's browse-mode activation (NVDA, JAWS, VoiceOver send a
+  click, not a keydown) and voice control. The click that a lifting or dropping key would cause is
+  swallowed: the Space or Enter keydown that lifts or drops sets a one-time flag, cleared in a
+  `setTimeout(0)` from that key's keyup, and a click while the flag is set does nothing; the click
+  after a pointer drag is stopped by the capture listener (Pointer drag).
+- **Space or Enter** keydown on the grip, without `event.repeat`, lifts the card (same look as a
+  pointer lift, the same two-frame wait before `data-lifted`; no pointer capture, no frame loop).
+  Keydowns with `event.repeat` are ignored, on the grip and while lifted (holding Space never drops
+  the card on its own column).
+- While lifted, a capture-phase `keydown` on `document` takes the keys (`stopPropagation`):
+  **Left / Right** go to the previous or next phase column on the board (the card's own column
+  included, as "back where it was"; the Done phases rail and No phase yet skipped): the board scrolls
+  that column into view (instant), its body scrolls if the gap is out of sight, the preview glides to
+  the gap plus (10 px, -6 px) (`--dur-room`, `--ease-standard`; reduce: it jumps), tint and room as
+  for the pointer. **Up / Down**: nothing moves; it says once the sorted line. **Space or Enter**:
+  drop (on its own column it is a quiet cancel). **Escape or Tab**: cancel (`preventDefault` on Tab).
+- **A card in No phase yet**: its walk is the phase columns, then No phase yet (its own column, last
+  on the board, never tinted). It starts over No phase yet with nothing tinted; Left goes to the
+  last phase column, Right stays; Right from the last phase column says "Back in No phase yet.";
+  Space or Enter there is the quiet cancel ("Checkout fix before client demo stays in No phase
+  yet.").
+- **What else ends a keyboard move** (with the cancel line): a `focusout` from the grip to anything
+  outside it, any `pointerdown` (cancel at once; that press never starts a drag), the window's
+  `blur` and `visibilitychange`. The outline's hidden controls can't be clicked
+  (`[data-outline] > * { pointer-events: none }`). A `scroll` (the window capture listener) or
+  `relayout()` puts the preview back on the gap at once.
+- Focus stays on the real grip (inside the outline) all along; the preview's copy of the grip draws
+  `--focus-ring` (`data-focus-ring`) so the ring travels with the picture. After a drop: the grip of
+  the moved card in its new column (`useCardFocus.js` maps a focused `[data-grip]` to the new copy's
+  grip, so a keyboard drop moves focus once and a screen reader announces it once). After "Move to
+  phase…" (the dialog stays the way for screen
+  readers, voice and phones): the card glides and focus goes to its "⋯" (1.12).
+- **One live region** for every move, rendered by the Board from its first render: `<p
+id="move-live" role="status" aria-live="polite" class="visually-hidden">` and `<p id="move-help"
+class="visually-hidden">Press Space to pick up. Use the Left and Right arrow keys to choose a
+phase. Press Space to drop or Escape to cancel.</p>`. `useAnnouncer().say(text)` debounces 100
+  ms, clears the text and sets the new one on the next frame (the same sentence twice is read twice);
+  only `MoveLive` re-renders. Never `assertive`.
+- **Words** (`moveWords.js`, pure; positions count from 1; phases by name; a card with no phase is
+  "No phase yet"):
+
+| When                        | Keyboard                                                                                                                                           | Pointer                            |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Lift                        | "Picked up Checkout fix before client demo, in Development. Use the Left and Right arrow keys to choose a phase, Space to drop, Escape to cancel." | "Picked up Payment settings page." |
+| Over a column               | "Over Testing. It goes in at 2 of 6."                                                                                                              | "Over Testing."                    |
+| Back over its own column    | "Back in Development." ("Back in No phase yet.")                                                                                                   | (nothing)                          |
+| Drop                        | "Moved Checkout fix before client demo to Testing from Development."                                                                               | the same                           |
+| Drop on its own column      | "Checkout fix before client demo stays in Development."                                                                                            | (the cancel line)                  |
+| Cancel                      | "Move cancelled. Checkout fix before client demo is back in Development."                                                                          | the same                           |
+| A task moved away meanwhile | "Move cancelled."                                                                                                                                  | the same                           |
+| Up or Down                  | "Cards are sorted by priority, so it goes in its place."                                                                                           | (none)                             |
+
+("It goes in at 2 of 6": the gap's index + 1 of the target's open cards + 1.) The Undo toast still
+says "Moved to Testing."; that shorter second line is expected. No single-letter shortcuts anywhere.
+
+#### Performance limits
+
+- One `requestAnimationFrame` loop only while a pointer drag is lifted; pointer handlers only store
+  the point; no layout read inside `pointermove`; `getComputedStyle` once per lift and once per
+  `flash()` call (never per element: a bulk action flashes up to 100 rows in one call).
+- No React render while dragging; one board render at the drop, inside `flushSync`, after the
+  settle. Measure scopes are the smallest that can move (two columns for a move, one for a tick, the
+  column wrappers for the rail and the fold, the table body for a sort; the whole board only for
+  the phase move).
+- Budget on a slow office laptop (Chrome, CPU 4× slower, 150 cards): drag frames at 60 fps (p95 ≤ 20
+  ms), the lift under one frame of script, the drop commit under 50 ms, a FLIP's measure-and-start
+  under 16 ms (the opt-in perf spec, Tests).
+
+#### Modules and signatures (C2 unless marked)
+
+`src/lib/motion/` (shared, no page knowledge; client only, except the pure ones):
+
+- `tokens.js` (O): `DUR`, `EASE`, `LIFT`, `LIMITS`, `duration(name, reduced?)`.
+- `reducedMotion.js`: `REDUCE_QUERY = '(prefers-reduced-motion: reduce)'`, `prefersReducedMotion()`
+  (fresh read, false on the server), `subscribeReducedMotion(onChange)` → unsubscribe,
+  `useReducedMotion()` (`useSyncExternalStore`, server false), `scrollBehavior()` → `'instant' |
+'smooth'`. Replaces the local copies in `useBoardScroll.js` and `live/useStack.js`.
+- `animate.js`: `play(el, keyframes, { duration, easing = EASE.standard, delay = 0, fill = 'none', id
+= 'motion' })` → `Animation | null`. With reduced motion it removes `transform`, `translate`,
+  `scale`, `rotate` and `strokeDashoffset` from every keyframe and plays what is left (opacity,
+  colours), so a mixed fade-and-move (`riseIn`, the face swap, the rail count, a new tile) keeps its
+  fade by itself; it returns null when nothing is left, without `el.animate`, or at 0 ms.
+  `done(animation)` → `Promise<boolean>` (true when finished, false when cancelled, never rejects);
+  `cancelById(el, id)`; `finishAll()` (on the reduce setting turning on); `flash(elOrList)` (colour
+  only, `id: 'flash'`, `--dur-flash`, `--ease-flash`; reads `--primary-soft` once per call from
+  `document.documentElement` and plays `[{ backgroundColor: soft, offset: 0 }]` with the end
+  keyframe left implicit, so each element ends on its own background, a selected or hovered row
+  included; a second flash restarts it); `countUp(el, from, to, ms)` → cancel (writes `textContent`
+  only, ends on `to`); `crossfade(el, change)` → `Promise<void>` (the Board and Table switch): `out =
+play(el, [{ opacity: 1 }, { opacity: 0 }], { duration: duration('out'), easing: EASE.accelerate,
+fill: 'forwards' })`; `await done(out)`; if a newer switch has started, stop; `flushSync(change)`;
+  play the fade-in (`duration('in')`, decelerate, fill none) and `out.cancel()` in the same task. A
+  click while one runs calls `finish()` on it, and only the latest switch commits (a counter). The
+  face swap's old-face fade-out and the tick's fade-out follow the same pattern (rule 8).
+- `flip.js`: `measure(elements, { keyOf = (el) => el.dataset.flip, relative = false })` →
+  `Map<key, { left, top, width, height }>`; `flipFrom(first, elements, { duration = DUR.room, easing
+= EASE.standard, keyOf, skip = new Set(), moved = null, onEnter = null, flyMs = DUR.glide })` →
+  `Animation[]` (cancels running `'flip'` animations, reads all, then writes; under 0.5 px nothing;
+  a new key calls `onEnter(el)`; `moved` flies); `flyClone(el, from, to, { duration })` →
+  `Promise<void>`; `tooManyToFlip(root)` → boolean (more than 150 `[data-flip^="card:"]` or
+  `[data-flip^="row:"]`, a hidden tab, or reduce).
+- `clone.js`: `cloneForMotion(el)` → element (rule 9).
+- `settle.js` (pure): `dropDuration(distancePx, reduced = false)` → ms (0 → 250, 750 → 325, 1,500
+  and more → 400; reduce 0); `cancelDuration(distancePx, reduced)` = `round(0.6 × drop)`;
+  `distanceBetween(a, b)`.
+- `commitMotion.js` (pure-ish): `runReady(queue, root, now)` → the requests still waiting (plays the
+  ready ones once, drops those older than `maxAgeMs`, 2,000).
+- `useMotion.js`: `flipSync(root, change, { selector = '[data-flip]', ...flipOptions })` →
+  `Animation[]` (measure, `flushSync(change)`, play; only from handlers, animation callbacks or
+  timers); `useCommitMotion(rootRef)` → `{ expect({ id, ready(root), play(root), maxAgeMs? }) }` (a
+  layout effect with no deps runs the queue after every commit).
+- `presence.js`: `usePresence(open, exitMs)` → `{ rendered, closing }` (stays rendered `exitMs`
+  after `open` turns false; removal on `animationend` from the element itself with a timeout of
+  `exitMs + 50`).
+
+`src/app/(app)/projects/[id]/_board/` (C2):
+
+- `useDesktopPointer.js` (moved out of `useBoardDrag.js`): `useDesktopPointer()` → boolean.
+- `usePointerDrag.js`: `usePointerDrag({ boardRef, enabled, findTask(id), columnsOf(), onDrop(task,
+toKey), say })` → `{ relayout(), destroy(), gripProps(task) }` (`gripProps` = the grip's
+  `onKeyDown`, `onClick`, `data-grip`, `aria-describedby`).
+- `dragSession.js`: `createDragSession({ board, card, task, mode: 'pointer' | 'keyboard', start,
+pointerId, point, columns, onDrop, say, env })` → `{ move(point), key(event), drop(), cancel({
+instant, say }), relayout(), destroy(), state }`; `env = { now, frame, cancelFrame, reduced, doc }`
+  injected for tests. States `idle` → `pressed` → `lifted` → `settling` → `idle`.
+- `dragTargets.js`: `measureColumns(board, task)`, `applyTarget(prev, next, room)`, `clearRoom(list,
+{ instant })`, `gapRect(target)`.
+- `dragPreview.js`: `createPreview(card, rect, { className })` → `{ wrap, inner, moveTo(x, y), lift(),
+settle(toRect, ms) → Animation, remove() }`.
+- `sortedGap.js` (pure): `hitColumn(columns, centre, point = null)` (`point`: the pointer),
+  `gapIndex(openCards, task)` (uses `landingIndex`), `gapTop(listRect, cards, index, rowGap)`,
+  `roomShift(index, gap, height, rowGap)`, `positionText(index, count)`.
+- `autoScroll.js` (pure plus one step): `edgeSpeed(pos, start, end, { edgeMax = 160, share = 0.25,
+max = 20 })`, `autoScrollStep({ point, board, body, page, elapsed, frameMs })` → `{ x, y, page, any }`.
+- `moveWords.js` (pure): `liftText(title, from, mode)`, `overText(phase, index, count, mode)`,
+  `backText(from)`, `dropText(title, to, from)`, `stayText(title, from)`, `cancelText(title, from)`,
+  `sortedText()`, `goneText()`, `MOVE_HELP`.
+- `MoveLive.jsx`: `<MoveLive />` (both paragraphs) and `useAnnouncer()` → `{ say(text) }` (context
+  from `MoveLiveProvider`).
+- `boardMotion.js`: `glideMove(root, taskId, change, { scroll })`, `tickLeave(card, { onLeave,
+undoRef })` → cancel, `swapFace(card, change)` → `Promise<void>`, `expectNewCard(motion, root,
+columnKey, taskId)`, `railFlip(board, change)`, `riseIn(el)`.
+- `phaseMotion.js`: `playPhaseMove({ board, band, from, to, folds, railIsNew, commit, toast,
+refresh })` → cleanup.
+- `useTickLeave.js`: `useTickLeave({ rootRef })` → `{ apply(tasks), tick(task, next, saved, { el }) }`
+  (the optimistic done set `withDone`, the 600 ms wait, the fold when it was the last open card of a
+  past phase). **The hold**: `apply(tasks)` keeps every task in its `leaving` set in its column's
+  open list until its leave has played, even when a refresh already says done. It is drawn with
+  `data-ticking` and its real status, so `TaskCheck` stays ticked; `boardColumns` reads a `holdOpen`
+  flag for this and never changes the status. A task leaves the set when its FLIP into the fold has
+  run, or when the tick is undone. Unticking or a failed save during the fade cancels the fade (no
+  card is ever left invisible in the open list). `TaskCheck`'s refresh still runs at once; only where
+  the card is drawn waits.
+- `useCardMoves.js` (changed): `show(step)` (sync, sets the optimistic map) and `send(step)` (the
+  PATCH, then `startRefresh(router.refresh)`) **added beside** 1.12's `move()`; a failure reverts
+  through `glideMove`; same toasts. Its 1.12 return (`{ tasks, move, undo, pending, endUndo }`) stays
+  until C1's `useBoard.js` no longer uses `move`, so the 1.12 board keeps working between steps 2
+  and 3 (Order of work).
+- `boardMoves.js` (kept): `canDropOn`, `moveTargets`, `landingIndex`, `withMoves`, `pendingMoves`.
+- `useCardFileDrop.js` (import only), `BoardDrag.module.css` (preview, outline, tint, room, grip,
+  `html[data-dragging]`), `TaskTick.module.css` (the drawn check). `useBoardDrag.js` stays untouched
+  by C2 (the 1.12 board imports it); **C1 deletes it** in its own change, once `useBoard.js` uses
+  `usePointerDrag`.
+
+Outside the board (C2): `[id]/TaskCheck.jsx` (an inline SVG check, `pathLength="1"`, that draws on
+`input:checked` together with the card's `[data-ticking]`, so it never draws on load for done tasks;
+new optional `onChange(next, saved)` so the board, the Table and My tasks run the tick motion; the
+Summary tab's `TasksCard` keeps working without it); `[id]/UndoToast.jsx` and
+`src/components/ToastProvider.jsx` (a leaving state: removed on `animationend` from the toast itself,
+safety timeout); `src/components/Dialog.jsx` and `Drawer.jsx` (`usePresence(open, DUR.out)`: focus
+returns and the scroll lock ends when `open` turns false; only the picture lingers, `inert`,
+`pointer-events: none`, `data-closing` picks the out keyframes; a window open on the first render gets
+`data-instant` and no entrance); `tests/visual/shot.mjs` (takes `page.screenshot({ …, animations:
+'disabled' })`: Playwright jumps finite animations and transitions to their end and resets infinite
+ones (the bell swing, the timer's live dot, spinners, the Skeleton shimmer), so a shot never hangs
+and never catches a half-played fade; the mid-drag shot still shows the lift, which is finite).
+`src/components/ToastProvider.jsx` also adds `var(--toast-offset, 0px)` to its bottom (the bulk bar
+sets it, Table).
+
+#### Data attributes (the contract between the markup and the motion)
+
+React renders these; the motion code only reads them, or adds the ones marked "motion" and always
+removes them on every way out.
+
+| Attribute                                                                                                                                                             | On                                                                                                                                                             | By          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `data-board`                                                                                                                                                          | the board's scroll element (also `data-flip-scroll`)                                                                                                           | C1          |
+| `data-view="board" \| "table"`                                                                                                                                        | the view wrapper the crossfade fades                                                                                                                           | C1          |
+| `data-flip="col:<key>"`, `data-column="<key>"`                                                                                                                        | each phase column `<section>` (No phase yet: `col:none`, `data-column="none"`)                                                                                 | C1          |
+| `data-cards="<key>"`                                                                                                                                                  | each column's open-card list `<ul>`, always rendered, `position: relative`                                                                                     | C1          |
+| `data-empty-text`                                                                                                                                                     | a column's empty line, drawn after its empty `<ul data-cards>`                                                                                                 | C1          |
+| `data-follow`                                                                                                                                                         | the items after a column's open list that move with the room and the FLIP: the "› 6 done" fold button, its done list and, without `data-fill`, the column foot | C1          |
+| `data-flip="rail"`, `data-rail-box`                                                                                                                                   | the Done phases rail and its drawn box (background and border live on the box)                                                                                 | C1          |
+| `data-ring`, `data-fill="<key>"`, `data-done-layer="<key>"`, `data-check="<key>"`, `data-current-tag`, `data-pct`, `data-pct-final`                                   | the band's ring, each part's fill, green layer, check and the "Current" tags (band and column headers), its percent's two copies                               | C1          |
+| `data-flip="card:<id>"`, `data-open` (open cards), `data-card-title` (the title button), `data-card-actions`, `data-face`, `data-grip`                                | cards (C3)                                                                                                                                                     | C3          |
+| `data-flip="row:<id>"`, `data-flip="group:<key>"`                                                                                                                     | Table rows and group rows, stacked cards on a phone                                                                                                            | T           |
+| `data-flip="mine:<id>"`                                                                                                                                               | My tasks rows                                                                                                                                                  | M           |
+| `data-outline`, `data-lifted`, `data-drop="on"`, `data-room`, `data-ticking`, `data-focus-ring`, `data-dragging`, `data-drag-preview`, `data-closing`, `data-instant` |                                                                                                                                                                | motion (C2) |
+
+### The sideways scroll (C1; checked by F)
+
+1.12 never made the page itself scroll sideways (now.md C1, measured from 1,000 to 3,840 px), but two
+things read as "cut off" on the owner's screens (now.md C3): one empty column stretched across a
+wide window while the next phases shrank to 140 px slivers (`Board.module.css:62-79`, no upper
+width, `boardView.js:55` slim phases), and on a laptop the board's own scrollbar sat under the
+tallest column, below the fold. 1.13 fixes both, and the page must never scroll sideways on **any**
+page from 390 to 2560 px.
+
+Exact rules (C1's `Board.module.css`, split as needed; class names are C1's choice, the values are
+binding):
+
+```css
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--block-gap);
+  min-width: 0;
+}
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.view[data-fill] {
+  height: calc(100dvh - 24px);
+  min-height: 560px;
+} /* toolbar + board fill the window */
+.boardWrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.board {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  padding-bottom: 2px; /* no scroll-snap any more */
+}
+.view[data-fill] .board {
+  align-items: stretch;
+  height: 100%;
+}
+.view:not([data-fill]) .board[data-dragging] {
+  align-items: stretch;
+  padding-bottom: calc(2px + var(--drag-room, 0px));
+}
+.column {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 248px;
+  min-width: 248px;
+  max-width: 320px;
+  min-height: 0;
+}
+.view:not([data-fill]) .column {
+  min-height: 220px;
+}
+.columnHead {
+  flex: none;
+} /* stays put: only the body scrolls */
+.columnBody {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.view[data-fill] .columnBody {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+.view:not([data-fill]) .columnBody {
+  flex: none;
+}
+.columnFoot {
+  flex: none;
+} /* "+ Add task" */
+.rail {
+  flex: 0 0 72px;
+}
+.rail[data-open] {
+  flex-basis: 220px;
+}
+.boardWrap[data-more~='right'] .board {
+  mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+}
+.boardWrap[data-more~='left'] .board {
+  mask-image: linear-gradient(to left, black calc(100% - 24px), transparent);
+}
+.boardWrap[data-more='left right'] .board {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 24px,
+    black calc(100% - 24px),
+    transparent
+  );
+}
+@media (max-width: 640px) {
+  /* a phone: the page scrolls, one full-width column */
+  .view[data-fill] {
+    height: auto;
+    min-height: 0;
+  }
+  .boardWrap {
+    flex: none;
+  }
+  .board,
+  .view[data-fill] .board {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .column {
+    max-width: none;
+    min-width: 0;
+  }
+  .view[data-fill] .columnBody {
+    overflow: visible;
+  }
+}
+```
+
+- **While a card is lifted**: without `data-fill`, the board stretches its columns and grows by
+  `--drag-room` (one card and its gap, written at the lift), so every column's background reaches
+  one card below the tallest column and shifted cards, the fold and the foot stay inside it (nothing
+  is clipped, no body scrollbar appears, nothing re-wraps). With `data-fill`, the bodies keep their
+  scrollbar's room (`scrollbar-gutter: stable`), so a card that overflows a body that just fits
+  never narrows the cards. Column bodies don't set `overscroll-behavior` (at a column's end the wheel
+  passes to the page); the board keeps `overscroll-behavior-x: contain` (a sideways swipe never goes
+  Back). Drag auto-scroll scrolls by script, so it is unaffected.
+
+- **One width for every phase column**: 248 to 320 px, the current phase too (no 1.25 growth, no
+  `.slim`, no `.current` min width, no member-only max). Free space stays at the right on a wide
+  screen. Empty later phases are normal columns with "No tasks yet" and "+ Add task".
+- **Finished phases fold into the 72 px rail**, so at 1440 px (board area 1,121 px with a Windows
+  scrollbar) the rail and four columns fit: 72 + 4 × 248 + 4 × 12 = 1,112 px.
+- **`data-fill`** is set when any column shows 4 or more cards (open, plus done cards of an opened
+  fold): the toolbar and board then take the window's height (at least 560 px), each column's body
+  scrolls inside, the column headers stay, and the board's own sideways scrollbar is on screen once
+  the page is scrolled to the board. Without it the board is as tall as its tallest column (at
+  least 220 px) and its scrollbar sits right under it. Once on, `data-fill` stays on for the visit:
+  it is worked out again on a page load or a switch to the Table and back, and never turns off
+  because of the viewer's own drop, move, tick or delete (the page would jump under the running
+  motion). On a phone it never applies (the phone block above).
+- **When the columns don't fit**, the board scrolls sideways inside its own area: a 24 px fade on
+  each side that has more (`data-more` on the wrapper, set by `useBoardScroll` from a
+  `ResizeObserver` and the board's `scroll` event), and two 44 px round buttons "Scroll the board
+  left" / "Scroll the board right" (`--shadow-menu`, vertically centred on the wrapper's edges,
+  shown only on a side with more; 1.12 words; they scroll one column width plus 12 px with
+  `scrollBehavior()`).
+- **The `min-width: 0` chain**: `AppShell` `.main` (1.12), the project `.page` (1.12), `.tab`, `.view`,
+  `.boardWrap`, `.board`; the toolbar wraps (`flex-wrap: wrap`), its search is `width: 260px;
+max-width: 100%`, the faces group is `min-width: 0` and never wider than its row (on a phone it
+  scrolls inside itself, `overflow-x: auto`); the band keeps its `repeat(6, minmax(0, 1fr))` grid.
+  The Table's wrapper scrolls sideways itself below a 1,280 px window (`@media (max-width: 1279px)`;
+  `overflow-x: auto`, the table `min-width: 880px`, its header not sticky then). At 1440 the
+  Table's area is 1,136 px and its header stays sticky.
+- The drag preview is `position: fixed`, so a drag never widens the page.
+- **Checked** (F, `tests/e2e/no-sideways-scroll.spec.js`, Chrome with real scrollbars,
+  `ignoreDefaultArgs: ['--hide-scrollbars']`) at **390, 1024, 1280, 1366, 1440, 1536, 1920 and
+  2560 px**: `document.documentElement.scrollWidth <= document.documentElement.clientWidth` on the
+  board (PM, Admin, member, another PM; a Completed project; long titles), the Table, the task
+  window, `/my-tasks`, `/team`, `/overview`, `/today`, `/projects` and the Files tab, light and dark;
+  on the board, every column header is either inside the board's box or reachable by its own scroll
+  (`board.scrollWidth > board.clientWidth` and, with `data-fill`, the board's bottom ≤
+  `innerHeight` once scrolled into view); during and after a drag at 1280 and 1440.
+
+### Screens
+
+Every screen matches the prototype (Design). Light and dark from the tokens; widths 1440, 1024 and
+390 px; a 16 px phone gutter; 44 px tap targets at 640 px and below; the board and the Table follow
+`head.access` for tasks and `head.filesAccess` for files (§27).
+
+#### The project page frame (C1: `ProjectView.jsx`, `projectHead.js`, `ProjectHeader.jsx`, `NewTaskButton.jsx`, `MemberProjectView.jsx`)
+
+- `head` gains `viewerId` and `viewerName` (the board's Mine, "Me" and "(you)") and keeps `options`
+  (now B's new `AssigneeOption[]`). `ProjectView` mounts, for managers, around the tab: 1.12's
+  `TaskUndoProvider`, `TaskEditorProvider` (D), `TaskAttachProvider`, `FileDropGuard`, and **new**
+  `TaskActionsProvider` (C3: the people window, Assign to me, the move dialog for the task window);
+  `TaskWindowProvider` (D) for everyone.
+- **Header actions**: on the **Board tab** the header has no button (the toolbar's "Add task" is the
+  board's one add). On the other tabs, for managers: "+ New task" (1.12) on an open project, and
+  **"Reopen project"** (secondary, RotateCcw 16) on a Completed one (Completed note and Reopen).
+  Members and another PM: none.
+
+#### Board toolbar, filters, faces, Mine and search (C1)
+
+A white bar under the band (or under the Completed note): 1 px `--line`, radius 12, padding 9 px 12
+px, at least 60 px tall, `role="group"` `aria-label="Task tools"`, wrapping. Left to right:
+
+1. **Add task** (managers, open project): a primary split button, 40 px. The main part ("Add task",
+   Plus 18) opens New task in the current phase (Requirement gathering when not set). The 32 px arrow
+   part (ChevronDown 16, `aria-label="More ways to add a task"`, `aria-haspopup="menu"`) opens a Menu:
+   "New task" and "Quick add to Testing" (the current phase's name, Requirement gathering when not
+   set; it opens that column's quick add,
+   scrolls the board to it and focuses the field; on a phone it first switches to that column). On a
+   Completed project this place holds **Reopen project** (managers) instead.
+2. **Board | Table**: `role="group"` `aria-label="View"`, two buttons with `aria-pressed` (Kanban 16
+   "Board", Table 16 "Table"), a segmented look (the pressed one `--surface`, 600). Remembered per
+   person on that computer in the cookie `daybook.board.view` (`'board' | 'table'`; path `/`, one
+   year, `SameSite=Lax`, written with `document.cookie` in try/catch; no localStorage), which
+   `BoardTab` reads with `await cookies()` and passes as the Board's `view`, so the first paint is
+   already the remembered view; mirrored in the URL as `?view=table` with
+   `window.history.replaceState` (no server trip; Next 16 keeps `useSearchParams` in step);
+   `?view=table` wins on load; the switch crossfades (Motion).
+3. **Search** (`<input type="search">`, 40 px, 260 px wide, Search 16 inside, visually hidden label
+   and placeholder "Search tasks or #number"): as you type, a title that contains the text
+   (case-insensitive); "#88" also matches task #88, and digits only ("88") match task #88 too (Task
+   number, above). On a phone: a 44 px icon button "Search tasks" (`aria-expanded`) that opens the
+   field as its own full-width row.
+4. **Filter** (secondary compact, 40 px like the rest of the row, ListFilter 16, "Filter"; with a count badge when any item is on: a
+   20 px `--primary` pill, at least 20 px wide, with the number in 12 px 700 `--on-primary`, and
+   visually hidden ", 2 on"; "Show done tasks" counts in it): a Menu of checkbox items
+   (`role="menuitemcheckbox"`, `aria-checked`, a check icon; the menu stays open while you tick):
+   "Critical (4)" (P1), "With files (4)" (only when `filesAccess` isn't `'none'`), "Overdue (2)" (due
+   before today), "Blocked (1)" (the status chip says Blocked), "Show done tasks". Counts are open
+   tasks the viewer sees. `?show=critical` or `?show=files` (the Summary tab's link) ticks that item
+   first (1.12).
+5. **Mine (3)** (managers): a toggle pill (`aria-pressed`), the viewer's open tasks.
+6. **Faces** (managers and another PM; pushed to the right): `role="group"` `aria-label="Show one
+person's tasks"`; up to 5 avatars of 28 px overlapping by 4 px (a 24 px step, so each face keeps
+   a 24 × 28 px target of its own; no extra hit area) with a 2 px `--surface` ring, each a toggle
+   (`aria-pressed`, `aria-label="Show only Simran Kaur's tasks (4)"`, `title="Simran Kaur (4)"`);
+   pressed: a 2 px `--ink` ring; then "+2" (`aria-label="2 more people"`) opening a Menu of
+   checkbox items "Sneha Patil (1)"; then the dashed "Anyone" circle ("Show only tasks for anyone on
+   the project (2)"), 8 px apart. At 640 px and below the faces don't overlap: 44 px buttons with a
+   32 px avatar, 2 px apart, the pressed ring drawn on the avatar, the row scrolling inside itself.
+   One face at a time (pressing another switches; pressing the pressed one clears). Order: the
+   project's PM, then the others A to Z by name. People with open tasks on this board only.
+
+**How filters work**: search, the Filter items, Mine and a face combine (all must match). "Show
+done tasks" isn't a match rule: it opens every "› 6 done" fold (Board) and adds done rows (Table);
+it counts in the Filter badge, but on its own it dims nothing and shows no filter line (as option
+B). With search, another Filter item, Mine or a face on: on the **Board** the open cards that don't
+match are dimmed to 40% (restored on hover and `:focus-within`), never hidden; done cards keep their
+own muted look and are never dimmed further; in the **Table** rows that don't match are hidden (done
+rows too). A muted 13 px line under the toolbar says what changed, counting open tasks only: "3
+tasks match. The others are faded." (Board) / "3 tasks match." (Table) / "1 task matches." / "No
+tasks match.", with a text button "Clear all" ("Show everyone" when only a face is on). The line's
+`role="status"` element is rendered from the first render (empty while nothing is filtered); only
+its text changes, so the first change is announced. Filters last for the visit only (not
+remembered).
+
+#### Done phases rail and columns (C1: `DoneRail.jsx` from `DonePhasesColumn.jsx`, `PhaseColumn.jsx`, `boardView.js`)
+
+- **Which columns**: the six phases in order, except past phases (before the current one) with no
+  open tasks, which fold into the rail (the 1.12 rule; for a member only their own tasks count).
+  With no current phase nothing is past, so all six show and none fold. A done phase opened from the
+  rail shows as a column in its phase order (header X "Hide Design tasks"); **No phase yet** last,
+  only while some task has no phase, never a drop target (1.12), with no "+", no "+ Add task" and no
+  quick add (New task can't pick it). Members: the same with their own and Anyone tasks; later
+  phases with nothing for them show "Nothing for you yet".
+- **A band part click** (1.12 kept): on the Board it opens a folded done phase as a column (the rail
+  stays as it is), scrolls the board to that column (`scrollBehavior()`) and focuses its first
+  card's title, else its "+ Add task"; in the Table it scrolls to that phase's group row and focuses
+  its first row's title (a phase with no group shown does nothing); on a phone it selects that step
+  of the switcher (1.12).
+- **Done phases rail** (when any phase folds; `<section aria-label="Done phases">`, `data-flip="rail"`):
+  closed, 72 px: a button (`aria-expanded="false"`) with a green check (20 px), "Done" and "phases" on
+  two lines (13 px 600) and the count (18 px 700, Schibsted), visually hidden ": Requirement
+  gathering, Design. Show them."; open, 220 px: heading "Done phases" (15 px 600) with a 32 px
+  "Fold the done phases" (ChevronLeft) button and one tile per phase (1.12 tiles: green check and
+  name, "6 of 6 tasks" (member "4 of yours, done"), the late note in red, text button "Show tasks" /
+  "Hide tasks" with the hidden phase name, `aria-expanded`). Open or closed is remembered per person
+  on that computer in the cookie `daybook.board.rail` (`'open' | 'closed'`, default closed; as the
+  view's cookie), read by `BoardTab` and passed as `railOpen`, so an open rail is open from the
+  first paint; the change plays `railFlip`. Not shown on a phone (done phases are steps of the
+  switcher, 1.12).
+- **Column look**: `--surface-muted`, 1 px `--line`, radius 16, padding 10 px 10 px 6 px; the tint
+  under a dragged card (Motion).
+- **Header**: name (h3, Schibsted 15 600, one line; the count and the tag wrap under it before it is
+  cut, and the ellipsis is only for a name wider than the row), the **count** of open cards (a 22 px
+  `--track` pill, 12 px 600 `--ink-2`, tabular, visually hidden " open", `title="5 open"`), the tag
+  "Current" (primary) / "Done" (green, an opened done phase) / "Skipped" (neutral), then in the top
+  right corner, beside the first line, for managers: **"+"** (32 px icon button, Plus 18, `aria-label` and `title` "New task in
+  Testing", opens New task with that phase; not on a Completed project, not on a done phase) and "⋯"
+  ("More for Testing": "Files for Testing", "Edit dates", "Make this the current phase", 1.12; no "+"
+  and no "⋯" on No phase yet), and X
+  "Hide Design tasks" on an opened done phase. Second line 13 px muted: dates and note ("30 Nov to 11
+  Dec · Started 7 days early"): 1.12's `lateNote` in its tone, and **new** muted early notes for the
+  board only ("Ended 4 days early" for a done phase that ended early, "Started 7 days early" for the
+  current phase started early; `boardView.phaseNote`, `planFormat` unchanged).
+- **Body** (scrolls inside with `data-fill`): the open cards (`<ul data-cards>`, 12 px apart; P1, P2,
+  P3, then due date, then title), then the fold "› 6 done" (`aria-expanded`; open by default in a
+  done phase and while "Show done tasks" is on) with the done cards, muted (both `data-follow`).
+  Empty: "No tasks yet" (managers), "Nothing for you yet" (member), "No tasks here. This project is
+  completed." (Completed), drawn after the empty list.
+- **Foot** (managers, open project, not on a done phase, not on No phase yet): "+ Add task" (quick
+  add, 1.12), its accessible name "Add task to Testing" (visible "Add task" plus a visually hidden
+  " to Testing"); `data-follow` without `data-fill`.
+
+#### Quick add (C1, 1.12 kept)
+
+"+ Add task" opens the field (label "Task title for Testing", placeholder "Task title, then press
+Enter", help "Anyone, P2, no date. More options for a person, a date or files."), Add, More options,
+X; Enter or Add sends `POST /api/projects/[id]/tasks { title, phase, priority: 'p2', assigneeId:
+null }`; the field stays open; toast "Task added to Testing." · "Everyone on the project gets a
+notification."; the new card plays `expectNewCard`. "More options" opens New task with the title and
+phase. Escape or X closes and returns focus to "+ Add task".
+
+#### Cards and the card menu (C3: `TaskCard.jsx` and its parts, `CardMenu.jsx`)
+
+`<li>` white `--surface`, 1 px `--line` (hover `--line-strong`), radius 12, padding 12, 10 px between
+its rows, about 130 to 170 px tall; `data-flip="card:<id>"`, `data-open` while open; a click on the
+card (not on a control) opens the task window. Rows:
+
+1. **Top line** (22 px): "#34" (12 px 500 `--muted`, Schibsted tabular), the `PriorityTag`, the
+   status chip (when there is one). At the top right, on hover and focus inside the card (always on a
+   touch screen, `@media (hover: none)`), a group `data-card-actions` on `--surface`: **Assign to me**
+   (28 px icon button, UserPlus 16, `aria-label="Assign Checkout fix before client demo to me"`,
+   `title="Assign to me"`; managers, open tasks that aren't the viewer's), the **grip** (managers,
+   open tasks; hidden at 640 px and below and on touch screens), "⋯" ("More for Checkout fix before
+   client demo"). Where the actions are always shown (`@media (hover: none)` and every phone), the
+   top line keeps room for them (`padding-right` = the shown buttons' width; 84 px for two 44 px
+   buttons on a phone, as option B's `.tc-top`), so they never cover the number, P tag or status
+   chip.
+2. **Tick and title**: the round tick (`TaskCheck`, managers; label "Done: …", 20 px circle in a 36
+   px hit area, 44 px on a phone) or the 10 px status dot (`role="img"` "Open" / "Done") for others;
+   the title, a button (`data-card-title`; 15 px 500, 20 px line, up to 3 lines, opens the task
+   window; a manager can also start a drag from it past 6 px, Pointer drag).
+3. **Files line** (only when the task has files the viewer may see; `chipsForTasks`): up to 2 chips
+   (32 px tall, radius 8, 1 px `--line`): a picture with a thumbnail is a 42 px button showing a 40 ×
+   30 thumbnail (`object-fit: cover`, `loading="lazy"`, `draggable={false}`, `aria-label="Open
+picture card-payment-error.png"`; opens the picture viewer with the card's picture chips); any
+   other file a chip with a 24 px `FileTile` and its name cut with "…" (not a button: a click opens
+   the task); then "+1" (Schibsted, muted, `title="3 files"`) when there are more. No paperclip on
+   cards (Today and My tasks keep theirs).
+4. **Footer** (above a 1 px `--track` rule): the **face** and the `DueTag`; at the right, only when
+   above zero: time from timers (Clock 14, "5h 40m", visually hidden " from timers"; for a viewer
+   without `team.view`, whose number is only their own, " of your time from timers") and updates
+   (MessageSquare 14, "2", visually hidden " updates", " update" for 1). The face for managers is a button
+   (`aria-haspopup="dialog"`, `aria-label="Assigned to Simran Kaur. Change person"` / "Assigned to
+   anyone on the project. Change person") with the 24 px avatar (`data-face`, keyed by the person),
+   the first name ("Simran", 13 px 500) and a 12 px ChevronDown on hover; it opens the people window.
+   An away person: faded avatar, first name and the muted 12 px "Not on the project" / "Deactivated"
+   (1.12). Another PM: the avatar and first name, not a button. Members: "For you" or the dashed
+   circle and "Anyone".
+
+- Other states: "Adding 2 files…" with its 3 px bar (1.12, now `scaleX`); "Drop to attach" while
+  files from the computer are over it (managers, desktop); dimmed by a filter; done cards muted under
+  the fold; the outline while dragged.
+- **DOM order**: the top line, then the tick and title, then the actions group (Assign to me, grip,
+  "⋯") placed at the top right with `position: absolute`, then the file chips, then the footer. So
+  Tab goes tick, title, Assign to me, grip, "⋯" (as option B).
+- **Card menu** (managers; `CardMenu.jsx`, "More for …"): **Assign to me** (first; hidden when the
+  task is the viewer's or done), **Assign to…** (opens the people window as a window, the keyboard
+  and phone path), Open, Edit, Move to phase…, Delete (danger; 1.12 Undo "Task deleted.").
+- **Assign to me** (button, menu, task window, bulk): the face swaps (Motion), the card flashes, then
+  `PATCH /api/project-tasks/[id] { assigneeId: me }`; toast "Checkout fix before client demo is now
+  yours." with the body from the answer ("Simran Kaur gets a notification.") and Undo (puts the
+  earlier person back with `PATCH { assigneeId: <before>, shareConfirmed: true, shareWith: <before>
+}`, silently, no toast: it gives the files back to the person who could open them a moment ago).
+  Undo is offered only when the earlier person can be picked now: Anyone, or a row of
+  `head.options` (the viewer is one); for an away earlier person, or an Admin who isn't on the
+  project and isn't the viewer, the toast has no Undo. An Undo that fails shows the error toast
+  "Couldn't undo" with the API's message, and the new person stays. A failure of the take itself
+  puts the face back: error toast "Couldn't change the person" and the API's message.
+
+#### The people window (C3: `PeopleWindow.jsx`, `peopleView.js`, `TaskActionsProvider.jsx`)
+
+- From a card's face or the task window's "Assigned to": a popover (`role="dialog"`,
+  `aria-label="Assign to"`, 300 px, `--shadow-menu`, radius 12) anchored to the button. From "Assign
+  to…" in a menu, the Table's "Give to…", and always at 640 px and below: a `Dialog` (400 px; a
+  bottom sheet on a phone) titled "Assign Checkout fix before client demo" (one task) or "Give 2
+  tasks to" (bulk), with Cancel.
+- Top: heading "Assign to" (popover), a search field "Find a person" (visually hidden label,
+  focused on open) that filters by name; "No one matches." when nothing does.
+- Rows, each a real `<button>` (40 px, 44 px on a phone; avatar 28, name 15 500, a 13 px muted
+  second line), `aria-pressed="true"` and a check on the current person (one task):
+  1. "Me (Riya Kapoor)" · "Project manager · 3 open here" (the viewer, always first for managers; an
+     Admin not on the project sees "Me (Arvind Menon)" · "Admin · 0 open here");
+  2. "Anyone on the project" (dashed circle) · "Everyone on the project sees it";
+  3. the project's PM when the viewer isn't (an Admin's view): "Riya Kapoor" · "Project manager · 3
+     open here";
+  4. the active members A to Z: "Simran Kaur" · "Full stack developer · 4 open here" (the
+     designation, else the role's name);
+  5. the task's current person when they aren't in the list above, last: away, "Vishal Saini" ·
+     "Not on the project" (or "Deactivated"), checked, `aria-disabled` (keeping is fine; picking
+     again isn't); or an Admin who took it and isn't on the project, "Arvind Menon" · "Admin",
+     checked (picking it again changes nothing). So the PM opening the CEO's task always sees the
+     CEO checked, never no row at all.
+- Picking saves at once and closes: one task through `assign()`; bulk through the Table's callback.
+  When the pick would share a private link (`privateLinkCount > 0` and the picked person isn't a
+  manager; null = Anyone), the window's foot turns into the **share confirm** (Lock 18 in a
+  `--marigold-soft` box, 14 px `--marigold-text`): "This task has a file only for PM and Admins.
+  Simran Kaur will be able to open it from this task." ("This task has 2 files only for PM and
+  Admins. Simran Kaur will be able to open them from this task."; Anyone: "This task has a file only
+  for PM and Admins. Everyone on the project will be able to open it from this task." / "This task
+  has 2 files only for PM and Admins. Everyone on the project will be able to open them from this
+  task."; bulk, one task: "1 of these tasks has a file only for PM and Admins. Sneha Patil will be
+  able to open it from that task." ("1 of these tasks has 2 files only for PM and Admins. Sneha
+  Patil will be able to open them from that task."); bulk, 2 or more tasks: "2 of these tasks have
+  files only for PM and Admins. Sneha Patil will be able to open them from those tasks."; bulk to
+  Anyone: "… Everyone on the project will be able to open it from that task." / "… open them from
+  those tasks.") with "Back" (secondary) and **"Give and share"** (primary, focused); the request
+  then sends `shareConfirmed: true` (and `shareWith`, one task). Back returns to the list.
+- A server answer `fields.shareConfirmed` (the board's `privateLinkCount` was stale: a private file
+  linked in another tab, an unlink still waiting for its 6 s toast, or the person changed meanwhile)
+  turns the window's foot, or the bulk bar's people window, into the same confirm with the current
+  data (the task is read again), and "Give and share" sends the request again with `shareConfirmed:
+true`. The window stays open until it succeeds or is cancelled.
+- Toasts: given to someone "Checkout fix before client demo is now for Vishal Saini." · "Vishal Saini
+  and Simran Kaur get a notification."; to Anyone "… is now for anyone on the project." · "Everyone on
+  the project gets a notification."; with Undo on the same terms as Assign to me (offered only when
+  the earlier person can be picked now; `shareConfirmed: true`). Bodies come only from the answer
+  (Every message).
+- `useTaskActions()` → `{ assign(task, assigneeId, { origin, shareConfirmed, shareWith }), take(task,
+{ origin }), openPeople({ tasks, anchor, title, onPick }), openMove({ tasks, origin }),
+apply(tasks), registerBoard({ move, expectNew(taskId, phase), flash(taskId) }) → unregister,
+board: { move, expectNew, flash } | null } | null` (null outside a project page for managers).
+  `apply(tasks)` lays the optimistic person over the tasks (the Board and the Table read tasks
+  through it). `openMove` uses the Board's registered mover (so the card glides), else a plain
+  PATCH and a refresh. D's New and Edit task windows, which live outside the board, call
+  `useTaskActions()?.board?.expectNew(task.id, task.phase)` after a create and `.flash(task.id)`
+  after an edit; with no board registered (another tab) they do nothing.
+- `<TaskActionsProvider projectId project={{ id, pmId }} status options={head.options} viewerId
+viewerName>` (C1 mounts it in `ProjectView`, C3 writes it).
+- **Move to phase…** (`MoveTaskDialog.jsx`, C3): 1.12's dialog, now `MoveTaskDialog({ tasks:
+BoardTask[] | null, counts, onMove(to), onClose })`, rendered only by `TaskActionsProvider`
+  (`board.askMove(task)` calls `useTaskActions().openMove({ tasks: [task], origin })`; C1's
+  `Board.jsx` stops rendering it; until then the dialog still accepts 1.12's `task` prop as
+  `tasks: [task]`, so neither side breaks between the two changes); with several tasks its title is
+  "Move 2 tasks" and no phase is "(here now)" unless all of them are in it.
+
+#### New task and Edit task (D: `TaskFormDialog.jsx`, `TaskFormFields.jsx`, new `AssignField.jsx`, `FilesField.jsx`, `taskFormModel.js`, `useTaskForm.js`)
+
+`Dialog` 560 px (a full-screen sheet on a phone), title "New task" / "Edit task". Fields in this
+order:
+
+1. **Task title** (focused; placeholder "For example: Fix the login page"; "Write a title of at
+   least 2 characters.").
+2. **Assign to**: a `<fieldset>` with the legend "Assign to" and wrapping radio chips (38 px, 44 px
+   on a phone, radius 999, 1 px `--line-strong`; checked: `--primary-soft` fill, `--primary` border, `--primary-text`;
+   each a `<label>` with a 28 px avatar and the name): "Anyone on the project" (dashed circle,
+   default), "Me (Riya Kapoor)" (managers), then the project's PM when the viewer isn't (Admin),
+   then the active members A to Z; on Edit the current person always stays, checked, when they
+   aren't in the list: "Vishal Saini (not on the project)" / "(deactivated)", or "Arvind Menon
+   (Admin)" for an Admin who took it and isn't on the project (so no Edit ever opens with no chip
+   checked and saves the task as Anyone by mistake). With more than 8 people a "Find a person" field shows above the
+   chips and filters them. Help under it when Anyone: "Everyone on the project sees it on their Today
+   page."
+3. **Due date** "(optional)" (native date) and **Priority** (segmented radios "P1 critical", "P2",
+   "P3"; P2 preset) side by side (stacked on a phone).
+4. **Phase** (full-width select, the six phases; preset to the column or the current phase; "No
+   phase yet" only when editing such a task).
+5. **Note** "(optional)" (3 rows; "Instructions or details for the person doing it"; counter "812 of
+   1,000" past 800).
+6. **Files**: the label "Files"; two secondary small buttons side by side (`role="group"`):
+   **"Upload files"** (Upload 16; the hidden `<input type="file" multiple>`) and **"From project
+   files"** (Folder 16; opens the picker); under them on a computer the 1.12 drop box with
+   Paperclip and "Or drag files from your computer here" (the whole window still takes the drop);
+   help "Up to 20 files, each up to 500 MB. Any type of file. Files from the project stay in Files."
+   (numbers from `limits`); then one list of chips, two a line (one on a phone): Edit's own files
+   (1.12 chips, X marks "Removed when you save"), upload chips (1.12 states), and **linked chips**
+   (`LinkChip`: a 36 px tile with the Link icon, the name, "From Files · Word · 340 KB" plus a 12 px
+   Lock for an "Only PM and Admins" file; X `aria-label="Remove checkout-flow.docx from this task"`:
+   on New it goes at once; on Edit it marks "Removed when you save", struck through, with Undo2
+   "Keep checkout-flow.docx").
+
+- **Footer**: New: Cancel, **Add task**; Edit: Delete (danger, left), Cancel, **Save changes**;
+  "Uploading 2 files…" while uploads run (1.12, `aria-disabled`).
+- **The share confirm** (in place of the footer, `role="status"`, focus to its main button): when the
+  save would let someone who isn't a manager open an "Only PM and Admins" file through this task
+  (new links, or Edit changing the person while private links stay): Lock 18 in a `--marigold-soft`
+  box with "acme-store-contract-signed.pdf is only for PM and Admins. Vishal Saini will be able to
+  open it from this task." (several: "2 files are only for PM and Admins. Vishal Saini will be able
+  to open them from this task."; Anyone: "Everyone on the project will be able to open it from this
+  task." / "… open them from this task.") and "Back" / **"Add task and share"** (New) or **"Save and
+  share"** (Edit); the save then sends `shareConfirmed: true` and `shareWith` (the person the
+  confirm named). Back returns focus to Add task / Save changes. A server answer
+  `fields.shareConfirmed` (the browser's data was stale, or the task went to someone else
+  meanwhile) reads the task again and shows the same confirm with the current person.
+- **Closing with unsaved files** (1.12): links count too: "3 files aren't saved yet. Close anyway?"
+  with "Keep editing" / "Discard and close".
+- **Save**: New `{ title, details, assigneeId, phase, dueDate, priority, uploadKeys, linkFileIds,
+shareConfirmed, shareWith }`; Edit the changed fields plus `addUploadKeys`, `removeFileIds`,
+  `addLinkFileIds`, `removeLinkFileIds`, `shareConfirmed`, `shareWith` (`assigneeId` only when the
+  checked chip differs from the task's person). Then 1.12's close, refresh and focus; the new card
+  plays `expectNewCard`, an edited card flashes (through `useTaskActions()?.board`). On a
+  `fields.linkFileIds` answer (a picked project file was deleted in Files before the save) the form
+  reads the picker list again (`GET /api/projects/[id]/files`), strikes the linked chips whose file
+  is gone as "No longer in Files", drops them from the next save, and shows the message; the person
+  saves again. Toasts: Every message.
+
+#### "From project files" picker and the share confirm (D: `src/components/files/FilesPicker.jsx`, `filesPickerView.js`, `usePickerFiles.js`)
+
+A `Dialog` 720 px (a full-screen sheet on a phone) stacked over the New / Edit window or the task
+window; Escape closes the innermost. Data: `GET /api/projects/[id]/files?taskId=<id>` (no `taskId` for
+a task not saved yet; then `onThisTask` is the form's own linked chips).
+
+- **Header**: "Attach from project files", under it "Files stay in Files. The task gets a link to
+  them." (14 px muted), X "Close".
+- **Left pane** (200 px, 1 px `--line` on its right, `<nav aria-label="Places">`): buttons with
+  `aria-pressed` (38 px rows, radius 8; the pressed one `--primary-soft`, 600): "All files" 6, "Whole
+  project" 2, then the six phases with counts (0 muted). Preset: the task's phase when that phase has
+  files, else All files. Below a 720 px container the pane becomes a "Show" select at the top of the
+  list ("All files (6)").
+- **Right**: a search field "Search files" (filters names as you type), then the list (`role="group"`
+  `aria-label="Project files"`, scrolls inside): rows of at least 64 px, 1 px `--track` between them,
+  each a `<label>` with a checkbox (44 px hit), a 48 px thumbnail (radius 8, `thumbUrl`,
+  `loading="lazy"`, `decoding="async"`, `draggable={false}`, as `FileTile`; thumbnails share the
+  person's 600-a-minute file bucket, so a project with 300 pictures must not ask for all of them at
+  once) or a 48 px
+  `FileTile`, the name (15 px 500, middle ellipsis), the meta "PDF · 2.4 MB · Whole project" (13 px
+  muted), and when needed a third 13 px line: Lock 12 and "Only PM and Admins" (`--marigold-text`)
+  for every managers-only file; "On 1 task" (muted; linked to other tasks); a file already on this
+  task is ticked, disabled and says "Already on this task".
+- **Footer**: "2 picked" (14 px muted, left; nothing at 0), Cancel, **"Attach 2 files"** (primary;
+  "Attach 1 file"; "Attach files" `aria-disabled` at 0).
+- **The share confirm** in place of the footer when a picked file is "Only PM and Admins" and the
+  task's person (the form's choice, or the task's) isn't a manager: the same box and words as New
+  task, with "Back" and **"Attach and share"**. No confirm when the person is the viewer, the PM or
+  an Admin.
+- **What Attach does**: from New / Edit it adds linked chips to the form (saved with the task, and
+  the form asks again only if the person changes); from the task window it sends `POST
+/api/project-tasks/[id]/files { linkFileIds, shareConfirmed, shareWith }` at once (a
+  `fields.shareConfirmed` answer reads the task again and asks again with its current person): toast "2 files attached."
+  (body from the answer: "Vishal Saini gets a notification." / "Everyone on the project gets a
+  notification."), the task window reloads its files, the card's count and chips update after the
+  refresh.
+- **States**: loading (three 64 px `Skeleton` rows); empty project: "No files in this project yet.
+  Upload them in Files first." with the text link "Open Files" (`?tab=files`; closes the windows,
+  the unsaved-files question first); no match: "No files match “zip”."; a place with none: "Nothing
+  in Design yet."; before 020: "This needs the latest database update. Ask an Admin." (no list, no
+  Attach); an error: "Couldn't load the project's files." with "Try again".
+
+#### Task window (D: `src/components/task/**`)
+
+A centred panel 720 px wide (`--dialog-w: 720px`), at most 90% high, own scroll, over `--overlay`; a
+full-screen sheet at 640 px and below (1.12 phone rules). It opens from a card, a Table row, My tasks,
+Today and `?task=`.
+
+1. **Header**: "#8" (Schibsted 13 muted), the `ProjectLabel`, the phase ("Development") and a
+   "Current" tag when it is; the title (20 px 600, `tabIndex={-1}`, focused); X "Close".
+2. **Body**, two columns (`minmax(0, 1fr) 220px`, 24 px apart, a 1 px `--line` before the rail; one
+   column below a 720 px container, the rail's facts first):
+   - **Left**: the **note** ("No note."); **Files (3)** with, in manage mode, **"Add files"**
+     (secondary small, Paperclip 16, ChevronDown 14, `aria-haspopup="menu"`) opening a Menu "Upload
+     files" (the 1.12 file input and attach store) / "From project files" (the picker); thumbnails
+     (120 × 90) then rows (1.12), a linked file's meta adds " · From Files: Design" ("From Files:
+     Whole project"); in manage mode an X on each: own file "Remove brief.pdf" (1.12 soft delete,
+     "File removed." with Undo), linked file "Remove checkout-flow.docx from this task" ("Removed
+     from this task. It stays in Files." with Undo; `DELETE /api/project-tasks/[id]/links/[fileId]`
+     after the toast); "No files on this task."; **Updates (2)**: the newest 10 report lines (28 px
+     avatar; "Simran Kaur · Mon, 23 Nov · In progress" 13 px with the status in its tone; the line's
+     text 15 px), "No updates yet. They come from the daily reports." when none, and "Showing the
+     newest 10." when there are more; **Latest report** (`updates[0]`, the same line as the status
+     chip): "In progress · Mon, 23 Nov." (600, in its tone) then "Simran Kaur: Found the cause: the
+     bank's reply times out on the last step.", or "No report on this task yet."
+   - **Right rail** (a `<dl>`, label 13 px muted, value 15 px, 14 px apart): **Assigned to** (manage
+     mode: the face button with the full name, opening the people window; under it, on an open task
+     that isn't the viewer's, a text button "Assign to me" with UserPlus 15; other modes: the avatar
+     and name, "(you)" after the viewer's own, the away label); **Due** (`DueTag`); **Priority**
+     (`PriorityTag` and "critical" after P1); **Phase** (the name; manage mode on an open task a text
+     button "Move to phase…"); **Time spent** ("5h 40m from timers", the number Schibsted; "None yet"
+     muted; for a viewer without `team.view`, whose number is only their own minutes, the label is
+     **Your time**, so a member on an Anyone task never reads their 30m as the team's total);
+     **Added by** ("Riya Kapoor on Mon, 23 Nov").
+3. **Footer**: manage: Delete (danger, left), Edit (secondary, Pencil), **Mark done** (primary) or the
+   green "Done" tag and "Reopen"; `today`: "Open project" (text, left) and "Add to to-do" / "In
+   to-do"; `member`: "Add to to-do" while `todoOpen`; **new `mine`**: "Open project" (text, left) and,
+   when `canManage`, Mark done or Reopen (My tasks' `TaskUndoProvider`); `team`: none.
+
+- Mode `mine` never shows Edit, Delete, file X, Add files, Assign to me or Move to phase (they live
+  on the project page).
+- The error state, loading skeleton, focus return and Escape order stay 1.12's.
+
+#### Table and bulk bar (T: `_board/table/**`)
+
+- **Layout** (`data-view="table"`): a white card (1 px `--line`, radius 16) holding one table
+  (`aria-label="Tasks of acme-store"`, 14 px). Header row 40 px, `--surface-muted`, 13 px 600 muted,
+  sticky (not below a 1,280 px window, `@media (max-width: 1279px)`). Rows 54 px, 1 px `--track` between them; hover
+  `--surface-muted`; selected `color-mix(in srgb, var(--primary-soft) 55%, var(--surface))`; a row
+  click (not on a control) opens the task window.
+- **Columns** (manage): select (a 18 px checkbox in a 44 px hit area, "Select Payment settings
+  page"; the header's "Select all shown tasks"; done rows disabled), tick (`TaskCheck`; visually
+  hidden header "Done"), **#**, **Task** (the title button, 15 px 500; under it in 13 px the report
+  line "Blocked · Thu, 19 Nov" in red or "In progress · Mon, 23 Nov" in `--primary-text`, open tasks
+  only), **Phase** (only while sorted), **Person** (the face button with the full name, opening the
+  people window; "Anyone on the project"), **Priority**, **Due** (`DueTag`), **Status** (the chip,
+  "Done" for a done task, muted "To do"), **Files** (Paperclip 14 and the count, nothing at 0),
+  **Time** ("5h 40m"). Another PM: no select or tick; the face isn't a button; Time shows. Members: #,
+  Task, Person ("For you" / "Anyone"), Priority, Due, Status, Files.
+- **Grouped by phase** (default): a 44 px group row per phase (`--surface-muted`, `data-flip="group:<key>"`):
+  the name (15 px 600), "Current" tag, "5 open" (13 px muted), and for managers on an open project,
+  except on a done phase and on No phase yet, "+ Add task" (text button, Plus 14; accessible name
+  "Add task to Testing": the visible words plus a visually hidden " to Testing") at the right
+  (opens New task in that phase). Groups: as the board's columns (a past phase with no open tasks is
+  left out unless "Show done tasks" brings rows; No phase yet last when needed; while filtering,
+  groups with no rows are left out).
+  Rows inside: open first (P1, P2, P3, due, title), then done ones when shown.
+- **Sorting**: each header (but select and tick) is a button; the first click sorts in the order
+  below, the second reverses it; the sorted header has `aria-sort` with the real direction
+  (`"ascending"` for #, Task, Phase, Person, Priority, Due and Status first; Files and Time start
+  `"descending"`, most first) and a ChevronUp or ChevronDown 14. On the second click no date (Due),
+  Anyone (Person) and No phase yet (Phase) stay last both ways; ties fall back to the board order.
+  Sorting lists the rows flat (no groups; the Phase column appears) and the status
+  line under the toolbar gains the text button "Group by phase again". Orders: # (number), Task (A to
+  Z), Phase (phase order, then the board order), Person (A to Z, Anyone last), Priority (P1 first,
+  then due), Due (soonest first, none last, then P1 first), Status (Blocked, In progress, To do, a
+  Done line, done), Files (most first), Time (most first). Rows slide to their places (Motion). The
+  sort lasts for the visit.
+- **Bulk bar** (managers; when one or more rows are selected; `role="region"` `aria-label="Selected
+tasks"`): sticky 16 px above the bottom of the window, centred, `fit-content` up to the full width,
+  at least 56 px, radius 12, 1 px `--line`, `--surface`, `--shadow-menu`, padding 8 px 10 px 8 px
+  18 px: "2 selected" (600), **Assign to me** (UserPlus 16), **Give to…** (Users 16, opens the people
+  window "Give 2 tasks to"), **Move to phase…** (ArrowRight 16, opens "Move 2 tasks"), **Clear**
+  (text). Buttons 38 px (44 px on a phone, wrapping). At most 100 selected ("You can pick up to 100
+  tasks at a time." as an error toast when "Select all" would pass it; the first 100 are kept). The
+  selection is cleared after an action, on switching to the Board, and for rows that leave. While
+  the bar shows, toasts sit above it: the bar sets `--toast-offset` (its height plus 12 px) on
+  `<html>` and removes it when it goes; `ToastProvider` (C2) adds it to its bottom, so on a phone a
+  toast never covers the bar's buttons.
+- **Each bulk action**: `POST /api/projects/[id]/tasks/bulk` (Bulk actions); the pressed button busy;
+  then one toast that counts the answer's `changed` (tasks already in that state are skipped), with
+  Undo for the changed tasks only: "2 tasks are now yours." / "1 task is now yours." / "2 tasks are
+  now for Sneha Patil." / "2 tasks are now for anyone on the project." / "Moved 2 tasks to
+  Testing." / "Moved 1 task to Testing."; with `changed: 0` the toast reads "Nothing to change." and
+  has no Undo. Undo is offered on the terms of Bulk actions (every earlier person can be picked
+  now). After the refresh the changed rows flash (one `flash()` call for all of them, and FLIP to
+  their new group after a move). Failure: error toast "Couldn't change the tasks" with the API's
+  message; the selection stays (a `fields.shareConfirmed` answer opens the share confirm in the
+  people window instead, with the selected tasks read again, The people window). Undo failure:
+  "Couldn't undo" with the message.
+- **Phone** (640 px and below): no table; a stacked list grouped by phase (the same group headers),
+  each task a small card (`data-flip="row:<id>"`): the select box (managers, 44 px), "#9", the P tag
+  and the status chip on one line; the title button; the face, the due tag and the paperclip on the
+  next. The bulk bar spans the width.
+- Empty: one row "No tasks match." (or "No tasks yet." with no tasks at all; members "Nothing for you
+  on this project yet.").
+
+#### Completed note and Reopen (C1: `CompletedNote.jsx`, `ReopenProject.jsx`)
+
+- On a Completed project, between the band and the toolbar: a note strip (Info 16, `--surface-muted`,
+  1 px `--line`, radius 12, 14 px, padding 12 px 16 px): "This project is completed, so new tasks
+  can't be added." plus, for managers, " Use Reopen project to add tasks again." The header's tag is
+  the health pill "Completed" (neutral, 1.12 forecast). The band shows no forecast line, no "Move to
+  …" and no "⋯". Columns: no "+", no "+ Add task"; empty columns "No tasks here. This project is
+  completed." Ticks, menus, drags, the people window and the Table's bulk bar still work.
+- **Reopen project** (managers; the toolbar's first item on the Board tab, the header elsewhere):
+  confirm `Dialog` 480 "Reopen Proposals?" · "It goes back to Active, and tasks can be added again."
+  with Cancel and **Reopen project** (primary, `BusyButton`) → `PATCH /api/projects/[id] { status:
+'active' }` → after the PATCH answers, the note and tag fade out (`--dur-out`), then
+  `flushSync(() => setShownStatus('active'))`, an override that `ProjectView` gives the board and
+  `ProjectHeader` and drops when the page's status agrees (the `shownPhase` pattern); "Add task"
+  renders and takes the focus from that commit (on another tab: the header's "+ New task"); then
+  `router.refresh()`. Toast "Project reopened." with Undo (`PATCH { status: 'completed' }`, through
+  the same override set to `'completed'`). Error: "Couldn't reopen the project" and the API's message.
+  Members and another PM see the sentence only.
+
+#### The member's board and table (C1, C3, T)
+
+The band (read only, "Your hours this month"), then the toolbar without Add task, Mine or faces
+(Board | Table, search, Filter), the line "Only your tasks and tasks for anyone on the project are
+shown. Progress counts all 33 tasks.", then the rail (their folded phases) and columns of their own
+and Anyone tasks. Cards: "#8", P tag, their own status chip, status dot, title, the files they may
+see, "For you" / "Anyone", due, their own time and updates; no tick, actions, grip, face button,
+drag or drops. The Table as above for members. The task window in `member` mode. No Completed
+"Reopen" line.
+
+#### Another PM (C1)
+
+The PM view, read only: 1.12's muted line "Only Riya Kapoor and Admins can change tasks and phases."
+above the toolbar; the toolbar with Board | Table, search, Filter (no "With files" when `filesAccess`
+is `'none'`) and faces; no Add task, no Mine; cards without tick, actions, grip, face button or drag;
+the Table without select, tick or bulk bar; everyone's time and updates (`team.view`).
+
+#### My tasks: sidebar, page and home cards (O: navigation; M: page and cards)
+
+- **Sidebar** (O): a new item **My tasks** (`/my-tasks`, icon `ListChecks`, `permission:
+'project.manage'`, `badge: 'myTasks'`, `badgeRoles: ['pm', 'admin']`, `badgeLabel: 'due now'`): PM
+  after Team; Admin after Overview. The marigold badge is `countMineDue` (overdue plus due today; 99+
+  cap; visually hidden " due now"; nothing at 0). Other items keep " waiting".
+- **Page** `/my-tasks` (M; `requirePage('project.manage')`, `AutoRefresh` every minute while
+  visible, `TaskUndoProvider` and `TaskWindowProvider mode="mine"`): `TopBar` "My tasks" with the
+  subtitle "Tasks you took or were given, on all your projects". A toolbar: "Group by" (muted label)
+  with a `role="group"` of two `aria-pressed` buttons "When" | "Project"; a project select (visually
+  hidden label "Project"; "All projects", then the projects of my tasks); a search "Search my tasks"
+  (title or #number). Then one table (`aria-label="My tasks"`, the Table's look): group rows "Overdue
+  1" (the word in `--red-text`), "Today 1", "This week 1", "Later 4", "No date 1" (or one per project,
+  A to Z, by Project); columns tick (managers of that task's project; visually hidden header "Done"),
+  #, Task (title button, opens the task window `mine`), Project (`ProjectLabel` sm, plus a neutral
+  "On hold" tag), Phase, Due, Priority, Files (paperclip and count). Phone: the same groups as h3
+  headings and a card list of rows (title on line 1; label, phase, due, P, paperclip on line 2). "No
+  tasks match."; empty "No tasks for you. Use Assign to me on any task to see it here."; `more`:
+  "Showing the first 200 tasks." under the table.
+- **Home card** (M; on `/team` for PMs between the KPI tiles and the three-card row, full width; on
+  `/overview` for Admins right under the KPI tiles): `Card` with "My tasks" (18 px 600) and the muted
+  "8 open"; sub "Tasks you took or were given, on all your projects"; one list of the **first 6 rows**
+  by date, with group headings as on the page ("Overdue 1" red, "Today 1", …) for the groups that have
+  shown rows; each row 52 px (`data-flip="mine:<id>"`): tick (or an empty 36 px cell), the title
+  button (opens the task window `mine`), and at the right the project label, the phase (13 px muted),
+  the due tag, the P tag, the paperclip. Footer (1 px `--track` above): "2 more" (muted; nothing when
+  all show) and the text link **"See all my tasks (8)"** (`/my-tasks`). Empty: "No tasks for you. Use
+  Assign to me on any task to see it here." (no footer). Phone: rows stack as on the page.
+- **Tick** (page and card): `tickLeave` on the row, `POST /api/project-tasks/[id]/status { status:
+'done' }`, toast "Marked done." with Undo (1.12 `TaskUndoProvider`); the group count changes. A task
+  the viewer took on another page simply shows on the next load (`/team` refreshes every minute;
+  `/overview` and `/my-tasks` on load and on their own refresh), with no motion.
+
+#### Today (M: `today/PriorityCard.jsx`, `todayData.js`)
+
+The 1.12 card, plus a **Due** column after "For" (a `DueTag`, its one size, in a
+`PriorityCard.module.css` cell; nothing for no date; stacked rows add
+"Due" under 1024 px). Rows now include tasks a tracked Admin took (`listOpenForUser`, Today rule),
+"For you". Paperclips count linked files (`countsForTasks`). The task window's `today` mode shows
+linked files with "From Files: Design" and Download.
+
+#### Files tab (A: `[id]/_files/**`, `FilesTab.jsx`)
+
+- **Managers**: a project file's second line adds " · On 2 tasks" ("On 1 task"), a text button
+  (`aria-haspopup="menu"`) opening a Menu of those tasks' titles; each opens the task window. **"On
+  tasks"** lists, under each task's title, its own files then its linked files (meta "Word · 340 KB
+  · From Design" / "From Whole project", a Link 14 icon before the meta); a linked row's menu:
+  "Download", "Open task", "Remove from this task" (unlink with Undo: "Removed from this task. It
+  stays in Files."). A phase's "On tasks in Design (n)" keeps only own task files (no double listing).
+  Counts: "All files" each file once; "On tasks" each file once even when on 2 tasks.
+- **Edit details**, when "Only PM and Admins" is chosen in the dialog (as soon as the radio is
+  picked, not only after saving) for a file on tasks of people who aren't managers: a muted 13 px
+  line under "Who can see it" (from `linkedTasks`' person fields): "Vishal Saini can still open it
+  from Fix the login page." / "People on the 2 tasks it is on can still open it from those tasks.";
+  when any of those tasks is for anyone on the project: "Everyone on the project can still open it
+  from Fix the login page, a task for anyone. Remove it from that task to keep it for PM and Admins
+  only." ("… from 2 tasks for anyone. Remove it from those tasks to keep it for PM and Admins
+  only."). No line when every such task is a manager's.
+- **Delete**: toast "File deleted." with the body "It was on 2 tasks." ("It was on 1 task.") and
+  Undo.
+- **Members**: an Everyone file shows in its place (1.12) and also under their task in "On tasks"
+  when linked to it (meta "From Design"). A managers-only file they reach through a link shows only
+  in "On tasks" under that task (meta "From Files") and in "All files" with "· Shared with you on Fix
+  the login page" ("… and 1 more" when on two of theirs); never in its place, never with the Lock
+  line, never "On 2 tasks". Counts follow the same per-viewer rule.
+
+#### Phone (390 px)
+
+Toolbar: "Add task" full width (the arrow part beside it); then Board | Table, the search icon
+button, Filter and Mine, wrapping (at 390 px they don't fit one row, so Mine starts the next row);
+then the faces scrolling inside their row. Board: the 1.12 switcher
+(Previous / Next phase, "Testing · 1 of 6") and one column; no rail (done phases are steps); no drag
+or grip; card actions always visible as 44 px targets. Table: the stacked list. Task window, picker,
+New / Edit task, people window, Move dialog: full-screen or bottom sheets. My tasks: stacked rows.
+Every target 44 px; no sideways scroll.
+
+#### Look and accessibility (everyone)
+
+- Focus: the global ring on every control; windows trap focus, label themselves by their title and
+  return focus to the opener (the card's title, the face, the "⋯", the bulk button, or the target
+  below when the bar has gone); Escape closes the innermost thing (a menu, the picker, the people
+  window, the task window; a lifted card first).
+- **Focus after a control goes away** (never to the page): Assign to me on a card → that card's
+  face button; in the task window → the "Assigned to" face button; in the Table → that row's face
+  button. A bulk action, its Undo, or Clear → "Select all shown tasks" (phone: the first changed
+  row's select box, else the first row's). A Table or My tasks row (page or home card) that leaves
+  after a tick → the next row's title, else the previous row's, else the table (`tabIndex={-1}`).
+  Reopen project from the header → "+ New task"; on the Board → "Add task".
+- `aria-pressed` on Board | Table, Mine, the faces, the picker's places, the people window's current
+  person; `aria-expanded` and `aria-haspopup` on every menu button; `role="menuitemcheckbox"` with
+  `aria-checked` in Filter; `aria-sort` on the sorted header; `aria-describedby="move-help"` on grips.
+- Live regions: the move region (polite, one); the filter line (`role="status"`); toasts polite;
+  upload milestones (1.12); the share confirm `role="status"`.
+- Repeated buttons name their task ("Assign Checkout fix before client demo to me", "Move …", "More
+  for …", "Select …", "Done: …", "Remove checkout-flow.docx from this task").
+- Contrast 4.5:1 for text in both themes (muted text on `--surface-muted`, chips, tags, the marigold
+  confirm box). Dimmed cards keep 1.12's 40%. The outline left by a dragged card carries no text.
+- Drag is never the only way: "Move to phase…" in the card menu, the task window and the bulk bar.
+
+#### Every message (exact copy)
+
+| Where                                                    | Words                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Toolbar                                                  | "Add task", "More ways to add a task", "New task", "Quick add to Testing", "Board", "Table", "Search tasks or #number", "Search tasks", "Filter", "Critical (4)", "With files (4)", "Overdue (2)", "Blocked (1)", "Show done tasks", "Mine (3)", "Show only Simran Kaur's tasks (4)", "2 more people", "Show only tasks for anyone on the project (2)"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Filter line                                              | "3 tasks match. The others are faded." / "3 tasks match." / "1 task matches." / "No tasks match." · "Clear all" / "Show everyone" · "Group by phase again"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Column                                                   | "New task in Testing", "More for Testing", "5 open", "No tasks yet", "Nothing for you yet", "No tasks here. This project is completed.", "Add task" (+ hidden " to Testing"), "Ended 4 days early", "Started 7 days early"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Rail                                                     | "Done phases", "Fold the done phases", "Show tasks" / "Hide tasks" (+ hidden phase), "6 of 6 tasks", "4 of yours, done"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Phase move confirm                                       | "Move to Launch?" · "Testing ends today, 17 days early. Launch starts today, 20 days early." · "5 open tasks stay in Testing." / "1 open task stays in Testing." (nothing at 0) · "Cancel" · "Move to Launch"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Card                                                     | "Assign Checkout fix before client demo to me", "Assign to me" (title), "Move Checkout fix before client demo", "More for …", "Open picture card-payment-error.png", "3 files" (title), " from timers", " of your time from timers" (no `team.view`), " updates", " update", "Assigned to Simran Kaur. Change person", "Assigned to anyone on the project. Change person", "For you", "Anyone", "Not on the project", "Deactivated"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Card menu                                                | "Assign to me", "Assign to…", "Open", "Edit", "Move to phase…", "Delete"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| People window                                            | "Assign to", "Assign Checkout fix before client demo", "Give 2 tasks to", "Find a person", "No one matches.", "Me (Riya Kapoor)", "Anyone on the project", "Everyone on the project sees it", "Project manager · 3 open here", "Full stack developer · 4 open here", "Admin · 0 open here", "Not on the project", "Deactivated", "Admin" (an Admin who took it and isn't on the project), "Cancel"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Share confirm (people window)                            | "This task has a file only for PM and Admins. Simran Kaur will be able to open it from this task." / "This task has 2 files only for PM and Admins. Simran Kaur will be able to open them from this task." / "This task has a file only for PM and Admins. Everyone on the project will be able to open it from this task." / "This task has 2 files only for PM and Admins. Everyone on the project will be able to open them from this task." / "1 of these tasks has a file only for PM and Admins. Sneha Patil will be able to open it from that task." / "1 of these tasks has 2 files only for PM and Admins. Sneha Patil will be able to open them from that task." / "2 of these tasks have files only for PM and Admins. Sneha Patil will be able to open them from those tasks." / "2 of these tasks have files only for PM and Admins. Everyone on the project will be able to open them from those tasks." · "Back" · "Give and share"                                                                                                                                                                                  |
+| Share confirm (form, picker)                             | "acme-store-contract-signed.pdf is only for PM and Admins. Vishal Saini will be able to open it from this task." / "2 files are only for PM and Admins. Vishal Saini will be able to open them from this task." / "Everyone on the project will be able to open it from this task." · "Back" · "Attach and share" / "Add task and share" / "Save and share"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| New / Edit task                                          | "Assign to", "Find a person", "Anyone on the project", "Me (Riya Kapoor)", "Vishal Saini (not on the project)", "Vishal Saini (deactivated)", "Arvind Menon (Admin)", "No longer in Files", "Everyone on the project sees it on their Today page.", "Due date (optional)", "Note (optional)", "Upload files", "From project files", "Or drag files from your computer here", "Up to 20 files, each up to 500 MB. Any type of file. Files from the project stay in Files.", "From Files · Word · 340 KB", "Remove checkout-flow.docx from this task", "Removed when you save", "Keep checkout-flow.docx", "3 files aren't saved yet. Close anyway?"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Picker                                                   | "Attach from project files", "Files stay in Files. The task gets a link to them.", "Places", "Show", "All files (6)", "Whole project", "Search files", "Project files", "PDF · 2.4 MB · Whole project", "Only PM and Admins", "On 1 task", "Already on this task", "2 picked", "Attach 2 files", "Attach 1 file", "Attach files", "No files in this project yet. Upload them in Files first.", "Open Files", "No files match “zip”.", "Nothing in Design yet.", "Couldn't load the project's files.", "Try again", "This needs the latest database update. Ask an Admin."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Task window                                              | "#8", "Files (3)", "Add files", "Upload files", "From project files", " · From Files: Design", "Remove brief.pdf", "No files on this task.", "Updates (2)", "No updates yet. They come from the daily reports.", "Showing the newest 10.", "Latest report", "No report on this task yet.", "Assigned to", "Assign to me", "Due", "Priority", "critical", "Phase", "Move to phase…", "Time spent", "Your time" (no `team.view`), "5h 40m from timers", "None yet", "Added by", "Riya Kapoor on Mon, 23 Nov", "Open project", "Mark done", "Reopen", "Edit", "Delete"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Table                                                    | "#", "Task", "Phase", "Person", "Priority", "Due", "Status", "Files", "Time", "Done" (hidden), "Select all shown tasks", "Select Payment settings page", "To do", "5 open", "Add task" (+ hidden " to Testing"), "No tasks match.", "No tasks yet.", "Nothing for you on this project yet.", "Tasks of acme-store"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Bulk bar                                                 | "Selected tasks", "2 selected", "Assign to me", "Give to…", "Move to phase…", "Clear", "Move 2 tasks", "You can pick up to 100 tasks at a time."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Completed                                                | "This project is completed, so new tasks can't be added." + " Use Reopen project to add tasks again." · "Reopen project" · "Reopen Proposals?" · "It goes back to Active, and tasks can be added again." · "Cancel" · "Couldn't reopen the project"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| My tasks                                                 | "My tasks", "8 open", "Tasks you took or were given, on all your projects", "Group by", "When", "Project", "All projects", "Search my tasks", "Overdue", "Today", "This week", "Later", "No date", "On hold", "2 more", "See all my tasks (8)", "No tasks match.", "No tasks for you. Use Assign to me on any task to see it here.", "Showing the first 200 tasks.", " due now" (badge)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Files tab                                                | " · On 2 tasks", "On 1 task", "From Design", "From Whole project", "From Files", "Remove from this task", "Shared with you on Fix the login page", "… and 1 more", "Vishal Saini can still open it from Fix the login page.", "People on the 2 tasks it is on can still open it from those tasks.", "Everyone on the project can still open it from Fix the login page, a task for anyone. Remove it from that task to keep it for PM and Admins only.", "Everyone on the project can still open it from 2 tasks for anyone. Remove it from those tasks to keep it for PM and Admins only.", "It was on 2 tasks."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Toasts                                                   | "Task added to Testing." · "Vishal Saini gets a notification." (1.12, with files: "Vishal Saini gets a notification with the 2 file names."; Anyone: "Everyone on the project gets a notification."; yourself: no body) · "Changes saved." (1.12 bodies; a person change: "Vishal Saini and Simran Kaur get a notification.", files then person: "2 files added. Vishal Saini and Simran Kaur get a notification.") · "Checkout fix before client demo is now yours." / "… is now for Vishal Saini." / "… is now for anyone on the project." · "2 files attached." · "Removed from this task. It stays in Files." · "File removed." · "File deleted." · "Moved to Testing." · "Marked done." · "Reopened." · "2 tasks are now yours." · "2 tasks are now for Sneha Patil." · "2 tasks are now for anyone on the project." · "Moved 2 tasks to Testing." · "Nothing to change." (a bulk action that changed nothing; no Undo) · "Phase changed to Launch." · "Project reopened." · errors "Couldn't move the task", "Couldn't change the person", "Couldn't change the tasks", "Couldn't undo" (each with the API's message as body) |
+| Told bodies (from `told`, `toldName`, `toldEarlierName`) | person and earlier: "Vishal Saini and Simran Kaur get a notification."; person: "Vishal Saini gets a notification."; earlier only: "Simran Kaur gets a notification."; members: "Everyone on the project gets a notification." (with an earlier non-member: "Everyone on the project and Riya Kapoor get a notification."); nobody: no body                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Move region                                              | the Keyboard move table above, and `move-help`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Server (never a file name)                               | "Pick someone who is on this project, or anyone on the project." · "A file you picked is only for PM and Admins. Confirm to share it with this task." · "This task is now for someone else. Check who it is for and confirm again." · "Pick a phase from the list." · "That request is too large." · "Something else changed at the same moment. Try again." · "This task has a file only for PM and Admins. Confirm to share it with the new person." · "A task you picked has a file only for PM and Admins. Confirm to share it with the new person." · "That file isn't in this project's files any more." · "A task can have up to 20 files. Remove one to add more." · "A task you picked was deleted or isn't on this project. Nothing was changed." · "Pick at least one task." · "Pick up to 100 tasks." · "Change one thing at a time." · "A task is in the list twice." · "Add files or pick project files." · "This needs the latest database update. Ask an Admin." · "You can't change files on this project." · "We couldn't find that file." · "We couldn't find that task."                                        |
+| Notifications                                            | the Notifications table above                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+
+### Modules
+
+- **`@/modules/projectFiles`** (A; files under ~300 lines; new files split out as needed: `links.js`,
+  `linkReads.js`, `linkRepo.js`):
+  - Pure (browser-safe): `access.js` gains `canSeeLinkedOnTask(ctx, file, task)`,
+    `needsShareConfirm(file, assignee, project)`, `isProjectManager(person, project)`; `canSeeFile`
+    reads `file.links` (Links). `project` here is `{ id, pmId }`; `person` `{ id, role, status } | null`.
+  - `accessShape(row, links = [])` (internal) → `{ projectId, scope, status, visibility, task, links }`.
+  - Reads: `getForDownload({ viewer, id })` (with links); `listForTask({ viewer, task })` →
+    `ProjectFile[]` (own, then linked with `linked: true`); `listForProject({ viewer, projectId })` →
+    `{ files, links, canSee, canManage }` (`links: Array<{ fileId, taskId, taskTitle, taskPhase,
+taskAssigneeId }>` the viewer may see, for "On tasks"); `countsForTasks({ viewer, tasks })` →
+    `{ [taskId]: n }`; **new** `chipsForTasks({ viewer, tasks })` → `{ [taskId]: { count, chips:
+FileChip[] } }`; `countTaskFilesForMember({ userId, projectIds })` → `{ [projectId]: n }`; **new**
+    `pickerFiles({ viewer, projectId, taskId = null })` → `{ files: PickerFile[], places: Array<{ key:
+'all' | 'project' | PhaseKey, label, count }>, taskPhase: PhaseKey | null, linksReady: boolean }`
+    (NOT_FOUND "We couldn't find that task." for a `taskId` not on the project; FORBIDDEN "You can't
+    change files on this project." for a viewer who can't manage); **new**
+    `privateLinkCounts(taskIds, trx?)` → `{ [taskId]: n }`; **new** `countActiveLinks(taskId, trx)` →
+    number.
+  - Writes (inside the caller's transaction unless noted): **new** `linkFiles({ user, project, task: {
+id, assigneeId, assignee }, fileIds, shareConfirmed = false, shareWith = undefined, ip }, trx)` →
+    `ProjectFile[]` (`assignee` = `{ id, role, status } | null`, the person after the save;
+    `shareWith` as Linking); **new** `unlinkFiles({
+user, task, fileIds, ip }, trx)` → `number[]`; **new** `unlinkFile({ user, taskId, fileId, ip })` →
+    `{ removed: true }` (own transaction); `attachUploads` counts links in the 20 (`countActiveLinks`);
+    `removeFile` unchanged (links stay until the purge).
+  - `ProjectFile` gains `linked`, `linkCount`, `linkedTasks`, `sharedByLink` (Every read).
+    `PickerFile = ProjectFile & { onThisTask: boolean }`. `FileChip = { id, name, ext, kind,
+typeLabel, isPicture, thumbUrl, viewUrl, downloadUrl, sizeBytes }`.
+  - `migration020.js` (O): `isMissing020`, `guard020Read`, `guard020Write`, `linksReady()`.
+  - Repo (A's names, A may refine them in As built): `linksForFiles(fileIds, projectId)` →
+    `Map<fileId, Array<{ taskId, assigneeId }>>`; `linksForProject(projectId)`;
+    `listLinkedForTasks(taskIds)` (file columns + `link_task_id`, `link_created_at`, the task's
+    `assignee_id` and `project_id`, joined to active project files of the same project);
+    `countLinkedByTask(taskIds)`; `linkRows(taskId, fileIds, trx)` (`FOR UPDATE`); `insertLinks(rows,
+trx)`; `deleteLinks(taskId, fileIds, trx)`; `lockTaskRow(taskId, trx)` (read-only `SELECT id,
+project_id, assignee_id FROM project_tasks … FOR UPDATE`); `findPerson(id)` (`id, role, status`).
+- **`@/modules/projectTasks`** (B):
+  - `create({ user, projectId, input, ip })`: the body gains `linkFileIds`, `shareConfirmed`,
+    `shareWith`; the
+    assignee rule; after `attachToNewTask`, `projectFiles.linkFiles(...)`; the `added` files line
+    holds uploads and links; answers `{ ...task, told, toldName, toldEarlierName: null }`.
+  - `update({ user, id, input, ip })`: gains `addLinkFileIds`, `removeLinkFileIds`, `shareConfirmed`,
+    `shareWith`;
+    the new order (The assignee rule); answers `{ ...task, told, toldName, toldEarlierName }`.
+  - `attachFiles({ user, id, uploadKeys = [], linkFileIds = [], shareConfirmed = false, shareWith,
+ip })` →
+    `{ files, told, toldName }` (one transaction, one `files_added` for the batch).
+  - **new** `bulkUpdate({ user, projectId, changes, shareConfirmed = false, ip })` → `{ tasks,
+changed, told }` (Bulk actions; new file `bulk.js`).
+  - `listAssigneeOptions({ viewer, projectId })` → `AssigneeOption[]` (The assignee rule).
+  - `listOpenForUser(user)` (the Today rule; gains `phase`, `dueDate`).
+  - **new** `listMine({ viewer, today, limit = 200 })` → `{ tasks: MineTask[], more }`; **new**
+    `countMineDue({ viewer, today })` → number (new file `mine.js`).
+  - **new** `updateCountsFor({ viewer, taskIds })` → `{ [taskId]: n }`; **new** `latestLinesFor({
+viewer, taskIds })` → `{ [taskId]: { status, workDate, userId, userName } }` (the status chip;
+    `withLatestReports` keeps working for 1.12 callers) (new file `updates.js`).
+  - `getForViewer({ viewer, id })` → `TaskDetails` gains `updates: Update[]` (newest 10), `updateCount`,
+    `minutes: number` (per viewer; 0 = none), `privateLinkCount` (managers, else 0), `latestReport`
+    = `updates[0]` or null (with its `title`; the one rule of Report lines); `assignee` gains
+    `role` (it has `status`; from `toTask`'s `assigneeRole`); `project` gains `pmId`; `files` and
+    `fileCount` include links (A's `listForTask`). `Update = { userId, userName, initials,
+avatarUrl, workDate, status: 'in_progress' | 'blocked' | 'done', title }`.
+  - `writes.assertAssignee(assigneeId, team, { actor, before })`; `shared.teamOf(project, trx, {
+alsoIds })`; `messages.sendReassigned({ before, task, project, team, actor }, trx)`,
+    `sendBulkChanged(...)`, `sendBulkReassigned(...)`; `toldText` lives in the browser (C3's
+    `assignView.js`).
+  - Schemas (`schemas.js`): `linkFileIds` = `z.array(idValue("That file isn't in this project's
+files any more.")).max(20, TASK_FILES_MESSAGE).transform((ids) => [...new Set(ids)])` (the same
+    for `addLinkFileIds` and `removeLinkFileIds`); create gains `linkFileIds: ….default([])`,
+    `shareConfirmed: z.boolean().optional().default(false)`, `shareWith: assigneeId.optional()`;
+    update gains `addLinkFileIds`, `removeLinkFileIds` (each `.optional()`), `shareConfirmed:
+z.boolean().optional()`, `shareWith: assigneeId.optional()`, and "Nothing to change." ignores
+    `shareConfirmed` and `shareWith`; `projectTaskFilesSchema` becomes `{ uploadKeys: [0..20],
+linkFileIds: [0..20], shareConfirmed?, shareWith? }` refined "Add files or pick project files."
+    when both are empty and `TASK_FILES_MESSAGE` when together over 20; **new**
+    `projectTaskBulkSchema` (Bulk actions, the zod under API).
+- **`@/modules/timers`** (B): **new** `minutesByTask({ taskIds, userId = null })` →
+  `{ [taskId]: minutes }` (`taskMinutes.js`, exported through `timers/service.js`).
+- **`@/modules/notifications`** (B): `ALERT_TYPES` gains `project_task.reassigned` (normal).
+- **`@/modules/dashboard`** (O): `getNavBadges(user)` → `{ requests, corrections, myTasks }`;
+  `myTasks` = `projectTasks.countMineDue({ viewer: user, today })` for `pm` and `admin` (today from
+  the cached settings' timezone), 0 for others; computed even when the early return for
+  approve/handle/correct rights applies.
+- **`@/config/navigation`** (O): `NAV_ITEMS.myTasks = { label: 'My tasks', href: '/my-tasks', icon:
+'ListChecks', permission: 'project.manage', badge: 'myTasks', badgeRoles: ['pm', 'admin'],
+badgeLabel: 'due now' }`; `NAVIGATION.pm` = `projects, team, myTasks, screenTime, attendance,
+requests, ask, summaries, mySettings`; `NAVIGATION.admin` = `overview, myTasks, today, log, team,
+screenTime, projects, attendance, ask, summaries, people, roles, settings, mySettings`;
+  `navigationFor` passes `badgeLabel` (default `'waiting'`); `Sidebar` writes it visually hidden;
+  `NavIcon` gains a hand-traced `ListChecks` shape.
+- **Client pieces** (all `'use client'` unless marked pure):
+  - **C1**, `[id]/`: `BoardTab.jsx` (server: loads `listForProject`, member `countsByPhase`,
+    `chipsForTasks` unless `filesAccess` is `'none'`, `timers.minutesByTask` (`userId` = the viewer
+    without `team.view`), `updateCountsFor`, `latestLinesFor`, `privateLinkCounts` (managers); each
+    through `safe(…, {})`); `phasesView.toBoardTask(task, today, extras)` →
+    `BoardTask = { id, title, details, priority, status, phase, dueDate, assignee: { id, name,
+avatarUrl, initials, role, status, away, isViewer } | null, statusChip: { status, workDate } |
+null, latest, files: { count, chips }, fileCount, minutes, updateCount, privateLinkCount,
+createdBy }` (`role` and `status` from `toTask`'s `assigneeRole` and `assigneeStatus`);
+    `BoardTab` also reads the cookies `daybook.board.view` and `daybook.board.rail` (`await
+cookies()`); `_board/Board.jsx` (`{ projectId, projectName, access, filesAccess, tasks, counts,
+plan, today, status, pmId, pmName, viewerId, viewerName, hoursThisMonth, forecast, show, view,
+railOpen }`), `useBoard.js` (split as
+    needed: `useBoardData.js`, `useBoardActions.js`), `useBoardParts.js` (`useHighlight` → `flash`),
+    `boardView.js` (widths gone; `phaseNote`; columns per the 1.13 rule), **new** `boardFilters.js`
+    (pure: `matches(task, filters, viewerId)`, `filterCounts`, `filterLine`, `searchMatches`,
+    `facesOf(tasks)`), **new** `useBoardFilters.js`, **new** `useBoardView.js` (Board | Table, the
+    URL mirror, the view and rail cookies, `crossfade`), **new** `BoardToolbar.jsx`, `AddTaskButton.jsx`,
+    `ViewSwitch.jsx`, `BoardSearch.jsx`, `FilterMenu.jsx`, `FacesFilter.jsx`, `FilterLine.jsx`,
+    `CompletedNote.jsx`, `ReopenProject.jsx`, `DoneRail.jsx` (from `DonePhasesColumn.jsx`),
+    `PhaseColumn.jsx` (the frame; renders C3's `TaskCard`), `QuickAdd.jsx`, `PhoneSwitcher.jsx`,
+    `ProgressBand.jsx` (`scaleX` fill, one ring, `data-*`, `onMoved`), `bandView.js`,
+    `ForecastLine.jsx`, `useBoardScroll.js` (`data-more`, arrows, `scrollBehavior()`); deletes
+    `BoardFilters.jsx` (+ css) and `useBoardDrag.js` (once `useBoard.js` uses `usePointerDrag`).
+    **The `board` object** (what `useBoard` returns; C3, T and D code against it):
+    `board = { projectId, projectName, status, access, filesAccess, today, viewerId, viewerName,
+project: { id, pmId }, plan, currentPhase, tasks: BoardTask[] (moves, the done set and persons
+applied, unfiltered), columns: Array<{ key, label, current, finished, skipped, open:
+BoardTask[], done: BoardTask[] }>, filters: { matches(task): boolean, showDone: boolean, any:
+boolean, clear(): void }, view: 'board' | 'table', setView(view), tableSort: { key: string |
+null, dir: 'ascending' | 'descending', set(key), clear() }, cardProps(task) → { dimmed,
+highlighted, fileDrop, gripProps, onTick }, tick(task, next, saved, { el }), move(task, to,
+how), openTask(task, origin), editTask(task), askMove(task), deleteTask(task), addTask(phase),
+batchFor(taskId), showFiles(task) }` (1.12's `openTask`, `editTask`, `askMove`, `deleteTask`,
+    `access`, `batchFor`, `today` and `showFiles` keep their meaning). `FilterLine` shows "Group by
+    phase again" while `tableSort.key` is set. `src/components/Menu.jsx` gains `MenuItem.checked?: boolean` (renders
+    `role="menuitemcheckbox"` with `aria-checked` and a Check 16) and `MenuItem.keepOpen?: boolean`
+    (selecting doesn't close the menu); every 1.12 use keeps working.
+  - **C2**: `src/lib/motion/**` (but `tokens.js`) and the `_board/` motion files (Motion, Modules and
+    signatures); `[id]/TaskCheck.jsx` (`onChange(next, saved)`), `[id]/UndoToast.jsx`,
+    `src/components/{Dialog,Drawer,ToastProvider}.jsx` (exits; `ToastProvider`'s `--toast-offset`).
+  - **C3**, `_board/`: `TaskCard.jsx` (`{ task, board }`; split into `CardTop.jsx`, `CardFiles.jsx`,
+    `CardFace.jsx`, `CardFooter.jsx` as needed; `board.cardProps(task)` →
+    `{ dimmed, highlighted, fileDrop, gripProps, onTick }`), `CardMenu.jsx`, **new**
+    `PeopleWindow.jsx` (`{ tasks, anchor, title, options, viewerId, onPick(assigneeId, {
+shareConfirmed }), onClose }`), **new** `peopleView.js` (pure: `peopleRows(options, task,
+viewerId)`, `shareNeeded(tasks, assignee, project)`, `peopleShareText(tasks, name)`), **new**
+    `TaskActionsProvider.jsx` + `useTaskActions()` (The people window), **new** `useAssign.js`,
+    **new** `assignView.js` (pure: `assignToast(task, assignee, viewerId)`, `toldText({ told,
+toldName, toldEarlierName })`), `MoveTaskDialog.jsx` (`{ tasks, ... }`), `useCardFocus.js`.
+  - **T**, `_board/table/` (new): `TaskTable.jsx` (`{ board }`), `TableHead.jsx`, `TableGroup.jsx`,
+    `TableRow.jsx`, `StackList.jsx`, `BulkBar.jsx`, `tableView.js` (pure: `columnsFor(access,
+filesAccess)`, `SORTS`, `sortRows`, `groupRows`, `statusText`), `useTableSort.js`
+    (`flipSync`), `useSelection.js` (max 100), `useBulkActions.js` (`{ takeAll, giveAll, moveAll,
+undo, busy }`), `bulkView.js` (pure: toasts, undo changes), `TaskTable.module.css`,
+    `BulkBar.module.css`.
+  - **D**: `src/components/task/` (`TaskWindow.jsx` 720 two columns, **new** `TaskWindowRail.jsx`,
+    **new** `TaskUpdates.jsx`, `TaskWindowParts.jsx`, `TaskWindowFiles.jsx` (Add files menu, linked
+    rows, unlink with Undo), `TaskWindowFooter.jsx` (mode `mine`), `TaskWindowProvider.jsx` (`mode`
+    `'manage' | 'team' | 'member' | 'today' | 'mine'`), `taskWindowView.js` (`MODES` gains `mine`;
+    `footerFor`, `railFacts`, `updateLine`), `useTaskDetails.js`, `TaskWindow.module.css` (split as
+    needed)); `_board/`: `TaskEditorProvider.jsx` (`useTaskEditor()` gains `options` and
+    `viewerId`), `TaskFormDialog.jsx`, `TaskFormFields.jsx`, **new** `AssignField.jsx`, **new**
+    `FilesField.jsx`, `taskFormModel.js` (`assignChoices(options, task, viewerId)` replaces
+    `ownerOptions`; `createBody` and `editBody` gain the link fields; `addedToast`, `savedToast` with
+    `toldEarlierName`), `useTaskForm.js` (links state, `shareConfirmed`, the share confirm step);
+    `src/components/files/`: **new** `FilesPicker.jsx` (`{ projectId, taskId, assignee, project,
+existing, open, onAttach(files, { shareConfirmed }), onClose }`), **new** `filesPickerView.js`
+    (pure: places, search, rows, `pickerShareText(files, name)`), **new** `usePickerFiles.js`, **new**
+    `ShareConfirm.jsx` (`{ text, confirmLabel, onBack, onConfirm, busy }`), **new** `shareConfirmView.js`
+    (pure: `shareText({ files, personName, anyone })` for the form and the picker), **new**
+    `LinkChip.jsx`, `FileTile.jsx` (colour by kind), `FileRows.jsx` (linked meta, remove labels),
+    `FileThumbs.jsx`, `UploadField.jsx` (the two buttons, "Or drag files from your computer here",
+    linked chips), `useFileRemoval.js` (`unlink(file, task)` with Undo), `Files.module.css`.
+  - **M**: `src/app/(app)/my-tasks/` (`page.js`, `loading.js`, `MyTasksView.jsx`, `MyTasksTable.jsx`,
+    `MyTasksToolbar.jsx`, `MyTasksCard.jsx`, `MyTaskRow.jsx`, `useMineTick.js`, pure
+    `myTasksView.js` (`whenOf`, `groupByWhen`, `groupByProject`, `filterMine`, `cardRows(tasks, 6)`),
+    css); `(app)/team/page.js` (+ css), `(app)/overview/page.js` (+ css); `(app)/today/{PriorityCard.jsx,
+PriorityCard.module.css, todayData.js}`.
+  - Unchanged and reused: `DueTag`, `PriorityTag`, `TaskUndoProvider`, `BusyButton`, `undoQueue.js`,
+    `useUndoDelete.js`, `TaskAttachProvider`, `attachStore`, `PictureViewer`, `FileName`,
+    `useUploads`, `DataTable` (the Table is its own), `Segmented`, `FilterPills` (no longer on the
+    board).
+
+### API
+
+| Route                                                        | Permission                                           | Body / returns                                                                                                                                                                                 | Errors and limits                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/projects/[id]/files?taskId=88` (**new**, A)        | `project.manage`, a manager of the project (service) | → 200 `{ data: { files: PickerFile[], places, taskPhase, linksReady } }`, `Cache-Control: no-store`                                                                                            | 400 bad id, 403 "You can't change files on this project.", 404 project or task; 503 `UPDATE_NEEDED` before 019; 120 a min per person                                                                                                                                                                                    |
+| `DELETE /api/project-tasks/[id]/links/[fileId]` (**new**, A) | `project.manage`, own project                        | → 200 `{ data: { removed: true } }` (also when already gone)                                                                                                                                   | 403, 404 "We couldn't find that task.", 503 `UPDATE_NEEDED` before 020; 120 a min                                                                                                                                                                                                                                       |
+| `POST /api/projects/[id]/tasks` (B)                          | `project.manage`, own project                        | gains `linkFileIds` (0..20), `shareConfirmed`, `shareWith`; → 201 `{ data: { ...task, told, toldName, toldEarlierName } }`                                                                     | 400 `fields.assigneeId`, `fields.linkFileIds`, `fields.shareConfirmed`, `fields.uploadKeys`; 409 `TOO_MANY_FILES`, `PROJECT_NOT_ACTIVE`; 503 `UPDATE_NEEDED` (links before 020)                                                                                                                                         |
+| `PATCH /api/project-tasks/[id]` (B)                          | `project.manage`, own project                        | gains `addLinkFileIds`, `removeLinkFileIds` (0..20 each), `shareConfirmed`, `shareWith`; Assign to me = `{ assigneeId: <me> }`; → 200 `{ data: { ...task, told, toldName, toldEarlierName } }` | as above; "Nothing to change."                                                                                                                                                                                                                                                                                          |
+| `POST /api/project-tasks/[id]/files` (B)                     | `project.manage`, own project                        | `{ uploadKeys?: [0..20], linkFileIds?: [0..20], shareConfirmed?, shareWith? }` (one list at least) → 201 `{ data: { files, told, toldName } }`                                                 | 400 "Add files or pick project files.", `fields.*`; 409; 503; 60 a min (1.12)                                                                                                                                                                                                                                           |
+| `POST /api/projects/[id]/tasks/bulk` (**new**, B)            | `project.manage`, own project                        | `projectTaskBulkSchema` → 200 `{ data: { tasks: [{ id, assigneeId, phase }], changed, told: { people, members } } }`                                                                           | 400 (schema, `fields.assigneeId`, `fields.phase`, `fields.shareConfirmed`), 403, 404 "A task you picked was deleted or isn't on this project. Nothing was changed.", 409 `CONFLICT` (deadlock after 3 tries), 413 `PAYLOAD_TOO_LARGE` "That request is too large." (over 16 KB, checked after the rate limit); 30 a min |
+| `GET /api/project-tasks/[id]` (B)                            | `signed_in` (service)                                | → `TaskDetails` (gains `updates`, `updateCount`, `minutes`, `privateLinkCount`; files with links)                                                                                              | 404                                                                                                                                                                                                                                                                                                                     |
+| `GET /api/project-files/[id]`, `/view`, `/thumb` (A)         | `signed_in` (`canSeeFile` with links)                | unchanged                                                                                                                                                                                      | 404 for every "no" (unchanged)                                                                                                                                                                                                                                                                                          |
+| `POST /api/project-tasks/[id]/status`                        | unchanged                                            | used by My tasks' tick                                                                                                                                                                         | unchanged                                                                                                                                                                                                                                                                                                               |
+| `PATCH /api/projects/[id]`                                   | unchanged                                            | Reopen project = `{ status: 'active' }`                                                                                                                                                        | 403 for another PM (unchanged)                                                                                                                                                                                                                                                                                          |
+
+Zod (B, `projectTasks/schemas.js`):
+
+```js
+const linkFileIds = z
+  .array(idValue("That file isn't in this project's files any more."), {
+    error: 'Send the files as a list.',
+  })
+  .max(MAX_TASK_FILES, { error: TASK_FILES_MESSAGE })
+  .transform((ids) => [...new Set(ids)]); // [5, 5] links once and counts once
+const shareConfirmed = z.boolean({ error: 'Send true or false.' });
+// One strict shape with both keys optional, then "exactly one of them": a union of two strict
+// objects answers zod's generic "Invalid input" for both keys or a bad phase (checked on zod 4.6.5).
+const kindOf = (change) => (Object.hasOwn(change, 'phase') ? 'phase' : 'assigneeId');
+const bulkChange = z
+  .strictObject(
+    {
+      id: idValue("We couldn't find that task."),
+      assigneeId: assigneeId.optional(),
+      phase: taskPhase.optional(),
+    },
+    { error: 'Change one thing at a time.' },
+  )
+  .refine((change) => Object.hasOwn(change, 'assigneeId') !== Object.hasOwn(change, 'phase'), {
+    error: 'Change one thing at a time.',
+  });
+export const projectTaskBulkSchema = z.object(
+  {
+    changes: z
+      .array(bulkChange, { error: 'Pick at least one task.' })
+      .min(1, { error: 'Pick at least one task.' })
+      .max(100, { error: 'Pick up to 100 tasks.' })
+      .refine((list) => new Set(list.map(kindOf)).size === 1, {
+        error: 'Change one thing at a time.',
+      })
+      .refine((list) => new Set(list.map((change) => change.id)).size === list.length, {
+        error: 'A task is in the list twice.',
+      }),
+    shareConfirmed: shareConfirmed.optional().default(false),
+  },
+  { error: BODY_MESSAGE },
+);
+```
+
+(`assigneeId` is the existing task field: `''` → null, "Pick someone on the project, or anyone.";
+`taskPhase` is the nullable one from `projectPlan/schemas`, "Pick a phase from the list.", so an
+Undo can put a task back to No phase yet.) Error codes: none new (`VALIDATION_FAILED` 400,
+`FORBIDDEN` 403, `NOT_FOUND` 404, `TOO_MANY_FILES` 409, `PROJECT_NOT_ACTIVE` 409, `CONFLICT` 409,
+`PAYLOAD_TOO_LARGE` 413 (as the missing check-outs fix route), `UPDATE_NEEDED` 503, `RATE_LIMITED`
+429). Messages never name a file.
+
+### Limits
+
+- 20 files a task (own plus links); 20 link ids per request; a file linked to a task once.
+- The picker lists at most 500 project files (newest first; "Search files" covers the rest of what
+  is shown); 120 picker reads and 120 unlinks a minute per person. Thumbnails on cards and in the
+  picker load lazily (they share the 600-a-minute file bucket with downloads and views).
+- Bulk: 1 to 100 tasks per request, 30 requests a minute per person, 16 KB body; selection capped at 100.
+- My tasks: 200 rows (`more` beyond); the home card 6 rows; the badge counts every row.
+- Card chips: 2 per card; Updates: the newest 10 in the task window.
+- Notifications: grouped bulk texts list at most 3 titles; titles 200, bodies 500 (1.12 `fit`).
+- Motion: drops 250 to 400 ms, cancels 150 to 240 ms, the tick pause 600 ms, the phase move under 1
+  s, a new card waits 2 s for its refresh; FLIP off past 150 cards or rows; 6 px to start a drag; 300
+  ms before auto-scroll; 20 px a frame at most.
+
+### Hosting and cost
+
+- **No new npm dependency, process, cron line or setting.** One small table; links never copy or
+  touch disk files, so the host's 1 MB/s disk and the storage limit are unaffected.
+- **Database**: the board gains four indexed reads per load (chips, minutes, update counts, private
+  link counts; each one query for every task of the board); the nav badge one indexed count per page
+  load for PMs and Admins (`(assignee_id, status)`); My tasks one read. `task_file_links` is tiny
+  (at most 20 rows a task). `time_entries.project_task_id` has its foreign key's index.
+- **Migration 020**: one `CREATE TABLE` on a pinned connection; run with the lean migrate line
+  (README). Deploy before migrate is guarded.
+- **Browser**: motion runs in the person's browser (transform and opacity only, one frame loop during
+  a drag); nothing new on the server. Slow office laptops: no FLIP past 150 cards; reduce motion
+  turns movement off.
+- **Memory and the process limit**: unchanged (no long requests; the bulk route locks at most 100
+  rows for milliseconds).
+
+### Two more owner requests (24 Nov 2026, builder R)
+
+The owner added these two while 1.13 was being planned. They are small, have nothing to do with the board, and are built by their own builder R so no file has two owners.
+
+#### Sound for every notification (owner request, 24 Nov 2026)
+
+The owner (24 Nov, ~16:30 IST): "whenever any notification happen rings the bell". Employees heard
+nothing because the default Sound, "Important only", skips the normal types (a new task, a changed
+task, files added, leave, WFH and correction answers and the rest of the 25 normal types). The owner
+chose "a" (a new task rings by default) and asked for every notification to ring. One change covers
+both: **the default Sound becomes All.** No Admin setting, no migration, no new preference.
+
+**What changes**
+
+1. `PREFERENCE_DEFAULTS.bellSound` becomes `'all'` (`src/modules/preferences/schemas.js`).
+   `BELL_SOUNDS` stays `['important', 'all', 'off']` and the error text stays "Sound must be
+   Important only, All or Off."
+2. No migration is needed. A value equal to the default is never stored (`preferences.update`
+   stores it as null), so no row holds `'important'` today, and everyone who never changed Sound
+   gets All at once. People who chose Off keep Off. A stored `'all'` from before stays valid and
+   reads as All. From 1.13, choosing Important only stores `'important'`, and choosing All removes
+   the key.
+3. Every fallback that gives `'important'` for a missing or unknown value gives `'all'`:
+   `useBellSound()` in `src/components/UserPrefs.jsx` (its comment says "else 'all' (the
+   default, also outside the app)"), the `sound` fallback in
+   `src/components/live/LiveNotifications.jsx`, and any other reader found by
+   `grep -rn "'important'" src`. The only exception is `ALERT_TYPES` and `isImportant`, which stay
+   as they are because Important only still uses them.
+4. In My settings → Notifications → Sound, `SOUND_CHOICES` becomes All · Important only · Off,
+   with All first because it is the default. The values are unchanged. The help text becomes: "A
+   short sound for every new notification while Daybook is open. Important only plays it just for
+   reminders and requests that ask you to act." The desktop notifications note stays as it is.
+5. The rules don't change. `shouldChime` already chimes for every type under `'all'`. The sound
+   still plays only while a Daybook tab is open and after one click on the page since it loaded (a
+   browser rule). In the background, desktop notifications use the computer's own sound, and the
+   one-sound-per-batch claim, the stale gap and the OS-sound skip stay as they are.
+6. Tests:
+   - `tests/services/preferences.test.js` and `preferencesRoute.test.js`: `DEFAULTS.bellSound` is
+     `'all'`. Saving `'important'` stores it, saving `'all'` removes the key, and the
+     back-to-defaults step uses `bellSound: 'all'`.
+   - `tests/unit/mySettingsSections` and the other unit tests that read `SOUND_CHOICES` follow the
+     new order.
+   - Every e2e test that counts chimes under the default and adds a normal type (CONTRACT 26
+     test 4, `leave.marked`: "chimes still 1 (Important only)") either sets Important only first
+     or expects the extra chime.
+   - The My settings e2e test (CONTRACT 26 test 10) expects "All" pressed.
+   - New unit test: with no stored row, `getFor` gives `bellSound: 'all'`, and `shouldChime` with
+     choice `'all'` and one `project_task.added` item gives `'play'`.
+7. CONTRACT edits outside section 28. Each one changes the bellSound default from `'important'`
+   to `'all'` and puts the Sound choices in the order All · Important only · Off:
+   - §11 preferences table: the `bellSound` row.
+   - §21 "What the preferences change", the Sound bullet: All is the default.
+   - §26 "My settings": the line "Important only, the default; All; Off" becomes "All, the
+     default; Important only; Off".
+   - §26 `PREFERENCE_DEFAULTS` and `useBellSound`.
+   - §26 the Sound row's `SOUND_CHOICES` and help text.
+   - §26 tests 4 and 10.
+   - §26 "Other section edits" §11 and §21 lines.
+8. Owner: the builder that owns `src/modules/preferences/**`, `src/components/UserPrefs.jsx`,
+   `src/components/live/LiveNotifications.jsx` and `src/app/(app)/my-settings/**` in the 1.13
+   build (builder M, or O if M doesn't own preferences). It is a small item, done and tested
+   with the rest.
+
+#### Copy button on the Slack preview (owner request, 24 Nov 2026)
+
+At ~18:30 IST on 24 Nov the owner sent a screenshot of the Daily report's Slack preview with the
+words "i need the copy button for the slack message do in same update". People want to paste their
+report into Slack or another chat by hand.
+
+**What it is**
+
+1. **The button.** It sits on the right of the Slack preview card's header, in `CardHeader`
+   `actions`:
+   - `Button variant="secondary" size="small"`, with the lucide `Copy` icon at 16 px and
+     strokeWidth 1.8.
+   - Visible label "Copy". Accessible name "Copy Slack message".
+   - The header keeps its height. The subtitle wraps under the title when the card is narrow, and
+     the button stays top right.
+2. **What it copies.** The exact text the preview shows: the `formatReport()` output that posts to
+   Slack, as plain text with the same line breaks and the "•" bullets. Nothing else is copied: no
+   name line from the card meta and no time. The button works in a draft and after submit, and
+   also when Slack isn't set up for the company (the subtitle then says so).
+3. **How it copies.**
+   - Normally it uses `navigator.clipboard.writeText(text)`.
+   - When that is missing or rejects, it uses a hidden off-screen `textarea`, select, then
+     `document.execCommand('copy')`, and removes the textarea.
+   - Helper: `src/lib/copyText.js`, `copyText(text) → Promise<boolean>`. It never throws. It is
+     shared so 1.13's other copy actions can use it.
+4. **Success.** For 2 s the label becomes "Copied" and the icon becomes `Check`, in the success
+   colour token. The icon crossfades in `--dur-out` with `--ease-standard` (an instant swap under
+   reduced motion). A polite live region says "Slack message copied". There is no toast, so the
+   feedback isn't shown twice. A second click during the 2 s copies again and restarts the 2 s.
+5. **Failure.** An error toast with the title "Couldn't copy the message" and the body "Select the
+   text in the preview and copy it." The text stays selectable as it is today.
+6. **Off and phones.** When "Show the Slack preview" is off in My settings, the card is hidden and
+   so is the button. Nothing changes there. On phones the card is where it is today and the
+   button is the same.
+
+**Files**
+
+- `src/app/(app)/report/SlackPreview.jsx` and `SlackPreview.module.css`.
+- New `src/lib/copyText.js` and `tests/unit/copyText.test.js`. The unit test covers: the clipboard
+  path; the fallback when `navigator.clipboard` is missing; the fallback when `writeText` rejects;
+  false when both fail; and the textarea always removed.
+- e2e: in `tests/e2e/checkin-report.spec.js`, next to its Slack preview check:
+  1. Grant `clipboard-read` and `clipboard-write` for the context.
+  2. Click "Copy Slack message".
+  3. Expect "Copied", then `navigator.clipboard.readText()` to equal the preview's text.
+
+**CONTRACT edits outside 28**
+
+- The Daily report section that describes the Slack preview card gains the Copy button (this
+  text, shortened).
+- The Daily report artboard (`docs/design/1x/02-daily-report.png`) has no button. The design
+  compare for that screen accepts the button region as an owner-requested change, and the note
+  goes into section 28 "As built".
+
+**Owner:** the 1.13 build builder that owns the report page files (builder M, or O when M does
+not).
+
+### Files and owners
+
+Ten builders, so no file has two owners; O is the orchestrator. A file listed for one builder is
+edited only by that builder. Where a builder needs another's piece that isn't there yet, it codes
+against this section and uses O's stub (the §6 stub rule); the owner replaces it. Each builder writes
+the tests of its own files. Files O changes first (the token move, the 020 rollback line, the stubs)
+belong to their builders afterwards.
+
+| Owner             | Builder                                 | Files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| orchestrator      | O (first)                               | `docs/design/project-tasks-prototype.html` (new, from `option-b.html`, Design); `db/migrations/020_task_file_links.js` (new) and `tests/services/migration020.test.js` (new); `.github/workflows/migration-check.yml` (020 down before 019's down, then `latest`; then 020 down, up and `migration020.test.js`; then, on the same MySQL 8.4 database, `npx vitest run tests/services/projectFileLinks.test.js tests/services/projectFilesPicker.test.js tests/services/projectTasksMine.test.js tests/services/projectTasksBulk.test.js tests/services/projectTaskTake.test.js tests/services/taskMinutes.test.js tests/services/projectBoardTab.test.js` (one file at a time, `fileParallelism: false`), so each new grouped and locking read meets MySQL 8.4's `ONLY_FULL_GROUP_BY` before live; the file kit already uses a temp folder); the line `await db.migrate.down({ name: '020_task_file_links.js' });` before 019's down in `tests/services/{migration019,projectFilesManage,projectFilesMigration,projectPlanMigration,projectSummariesDocuments,projectSummariesMigration,projectTaskFiles,todayTaskFiles}.test.js` (map.md 10.4); `src/modules/projectFiles/migration020.js` (complete); `src/config/version.js` ('1.13'); `src/app/globals.css` (motion tokens, `--shadow-lift` and its `@supports not` fallback, the reduce block, the 0.01 ms rule removed), `src/lib/motion/tokens.js`, `tests/unit/{themeFallback,motionTokens}.test.js`; every CSS module with an animation or transition moved to the tokens (motion.md 4.2's 39 files) before anyone starts; `src/config/navigation.js`, `src/components/{NavIcon,Sidebar}.jsx`, `src/modules/dashboard/service.js` (`getNavBadges.myTasks`), `tests/unit/navigation.test.js`, `tests/services/dashboardNavBadges.test.js` (new or the existing badge test), `tests/services/{dashboard,attendance.wfhCheckIn}.test.js` (their exact `getNavBadges` objects become `{ requests, corrections, myTasks: 0 }` for HR and employees and include the count for PMs and Admins); `tests/unit/boardCodeSize.test.js` (recursive in `_board/**`, `src/components/task/**`, `src/lib/motion` and `(app)/my-tasks`; the same list as Tests); five test files split with their assertions unchanged, so each part has one owner: `tests/unit/boardLook.test.js` into `boardLook.test.js` (cards and board, C3) and `taskWindowLook.test.js` (task window and windows, D), `tests/unit/phasesBoard.test.js` into `phasesView.test.js` (`phasesView` and the undo queue, C1) and `taskFormModel.test.js` (D), `tests/unit/boardView.test.js` into `boardView.test.js` (C1) and `boardMoves.test.js` (move targets, `landingIndex`, optimistic moves and Undo, C2), `tests/unit/boardFocus.test.js` into `boardActions.test.js` (useBoard's `cardActions`, `openTaskFrom`, the pill pressed first, which becomes the `?show=` first item, and `FileDropGuard`; C1) and `boardFocus.test.js` ("a focused card drawn again", `useCardFocus`; C3), `tests/unit/keyboardFocus.test.js` into `menuFocus.test.js` (the Menu, C1) and `taskFormFocus.test.js` (the task form's Save with a paused file, D); **stubs** with the exact signatures of Modules, so every builder starts green: `projectFiles` (`chipsForTasks` → `{}`, `pickerFiles` → `{ files: [], places: [], taskPhase: null, linksReady: false }`, `privateLinkCounts` → `{}`, `countActiveLinks` → 0, `linkFiles` and `unlinkFiles` → `[]` for empty lists else `UPDATE_NEEDED`, `unlinkFile` → `UPDATE_NEEDED`; `access.js` `needsShareConfirm`, `isProjectManager`, `canSeeLinkedOnTask` written for real, they are three lines each), `projectTasks` (`listMine` → `{ tasks: [], more: false }`, `countMineDue` → 0, `updateCountsFor` and `latestLinesFor` → `{}`, `bulkUpdate` → FORBIDDEN), `timers.minutesByTask` → `{}`, `src/lib/motion/{reducedMotion,animate,flip,settle,commitMotion,useMotion,presence,clone}.js` (no-op versions that change state without motion), `_board/{useDesktopPointer,usePointerDrag,boardMotion,phaseMotion,useTickLeave,moveWords}.js` with the Modules signatures (`usePointerDrag` → `{ relayout() {}, destroy() {}, gripProps: () => ({ 'data-grip': '', 'aria-describedby': 'move-help' }) }`; each `boardMotion` function calls `change()` and resolves; `playPhaseMove` calls `commit`, `toast` and `refresh`, then returns a no-op cleanup; `useTickLeave` → `{ apply: (tasks) => tasks, tick: (task, next, saved) => saved }`), so C1 and C3 can start before C2 lands, `_board/{MoveLive.jsx, TaskActionsProvider.jsx, PeopleWindow.jsx}`, `_board/table/TaskTable.jsx` (renders nothing), `src/components/files/{FilesPicker,ShareConfirm}.jsx`, `(app)/my-tasks/page.js` (the TopBar and the empty state) and `MyTasksCard.jsx` (renders nothing) |
+| orchestrator      | O (last)                                | `README.md` (below) and `tests/unit/hostScripts.test.js`; `db/demo/*` (links: `acme-brand-guide.pdf` on "Checkout fix before client demo"; the managers-only contract left unlinked for the e2e; timer minutes on three acme-store tasks (a new `db/demo/taskTimers.js`; `hrTimers.js` and `demoHrTools.test.js` stay as they are); the CEO takes "Approve the hosting invoice" on internal-tool (not a member) and the PM keeps "Get the payment gateway keys from Acme"; Meera takes one task); `tests/unit/demoProjectPlans.test.js` if the demo builders change; `scripts/doctor.js` only if its 020 line needs words (it shouldn't: `migrate.list()` names 020); `docs/CONTRACT.md` (this section and Other section edits); leftovers reported by builders; the full unit, service and e2e runs and `next build`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| projects (files)  | A (file links server and the Files tab) | `src/modules/projectFiles/{access,reads,repo,fileView,attach,service,index}.js` and new `{links,linkReads,linkRepo}.js`; `src/app/api/projects/[id]/files/route.js` (new), `src/app/api/project-tasks/[id]/links/[fileId]/route.js` (new); `(app)/projects/[id]/FilesTab.jsx`, `[id]/_files/{filesTabView,fileRowView,FileListRow,FilesList,FileRowMenu,FileEditDialog,useFilesTab,FilesView}.js(x)` and their css; tests: `tests/unit/{fileAccess,filesTabView,filesTab,fileLinkRules,filesLook,filesKeyboard}.test.js` (`filesLook` and `filesKeyboard` render A's `_files` code) (`fileLinkRules` new: `canSeeLinkedOnTask`, `needsShareConfirm`, `isProjectManager`), `tests/services/{projectFileLinks (new),projectFilesDownload,projectFilesManage,projectFilesMigration,projectFilesPicker (new)}.test.js`, `tests/services/projectFilesKit.js` (+ `linkFile(...)`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| projects (tasks)  | B (tasks server)                        | `src/modules/projectTasks/{writes,schemas,messages,service,repo,shared,taskDetails,taskFiles}.js` and new `{bulk,mine,assignees,updates}.js`; `src/modules/timers/taskMinutes.js` (new) and `src/modules/timers/service.js` (one export); `src/modules/notifications/alerts.js`; `src/app/api/projects/[id]/tasks/route.js`, `api/projects/[id]/tasks/bulk/route.js` (new), `api/project-tasks/[id]/route.js`, `api/project-tasks/[id]/files/route.js`; tests: `tests/unit/{notificationAlerts,taskFileMessages,noSlackNoAi,assigneeRule (new),taskReassignMessages (new)}.test.js`, `tests/services/{projectTasks,projectTasks.reads,projectTaskFiles,projectTasksPlan,projectTasksRoutes,projectTaskTake (new),projectTasksBulk (new),projectTasksMine (new),taskMinutes (new)}.test.js`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| projects (board)  | C1 (board frame)                        | `(app)/projects/[id]/{BoardTab.jsx,phasesView.js,ProjectView.jsx,projectHead.js,ProjectHeader.jsx,NewTaskButton.jsx,MemberProjectView.jsx,MovePhaseButton.jsx,page.module.css,TabSkeletons.jsx,loading.module.css}` (the board skeleton gains the toolbar and the 248 px columns); `_board/{Board.jsx,useBoard.js,useBoardParts.js,boardView.js,bandView.js,PhaseColumn.jsx,QuickAdd.jsx,QuickAdd.module.css,PhoneSwitcher.jsx,ProgressBand.jsx,ProgressBand.module.css,ForecastLine.jsx,useBoardScroll.js,Board.module.css}` and new `{boardFilters,useBoardFilters,useBoardView,BoardToolbar,AddTaskButton,ViewSwitch,BoardSearch,FilterMenu,FacesFilter,FilterLine,CompletedNote,ReopenProject,DoneRail}.js(x)`, `Toolbar.module.css`, `Columns.module.css`, `DoneRail.module.css` (new, from `DonePhasesColumn.module.css`); deletes `DonePhasesColumn.jsx`, `BoardFilters.jsx` (+ css) and `_board/useBoardDrag.js` (once `useBoard.js` no longer imports it); `src/components/Menu.jsx` (+ `Menu.module.css`); tests: `tests/unit/{boardView,phasesView,projectBoard,boardFilters (new),boardOverflow (new: the CSS values of The sideways scroll),memberProjectView,projectLayout,projectTabs,boardActions,menuFocus}.test.js` (`projectTabs`: the Board tab's header has no button, other tabs keep "+ New task", a Completed project shows "Reopen project" for managers, `_board/TaskActionsProvider` mocked; `boardActions` and `menuFocus` are O's splits), `tests/services/{projectBoardTab,projectMemberPage}.test.js`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| projects (motion) | C2 (motion engine and drag)             | `src/lib/motion/{reducedMotion,animate,flip,settle,commitMotion,useMotion,presence,clone}.js`; `_board/{useDesktopPointer,usePointerDrag,dragSession,dragTargets,dragPreview,sortedGap,autoScroll,moveWords,boardMotion,phaseMotion,useTickLeave,useCardMoves,useCardFileDrop,boardMoves}.js`, `_board/MoveLive.jsx`, `_board/{BoardDrag,TaskTick}.module.css` (never `useBoardDrag.js`, which C1 deletes; `useCardMoves.js` keeps its 1.12 return beside `show` and `send`); `[id]/TaskCheck.jsx` (+ css), `[id]/UndoToast.jsx` (+ css); `src/components/{Dialog,Drawer,ToastProvider}.jsx` (+ their css), `src/components/live/useStack.js` (the import); `tests/visual/shot.mjs`; tests: `tests/helpers/motionFakes.js` (new), `tests/unit/{settle,autoScroll,sortedGap,moveWords,flip,animate,commitMotion,presence,dragSession,boardMotion,phaseMotion,tickLeave}.test.js` (new), `tests/unit/boardMoves.test.js` (O's split), `tests/unit/liveStack.test.js` (covers `useStack.js`, whose reduce check C2 replaces)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| projects (cards)  | C3 (cards, card menu, people window)    | `_board/{TaskCard.jsx,TaskCard.module.css,CardMenu.jsx,MoveTaskDialog.jsx,MoveTaskDialog.module.css,useCardFocus.js}` and new `{CardTop,CardFiles,CardFace,CardFooter,PeopleWindow,TaskActionsProvider}.jsx`, `{peopleView,assignView,useAssign}.js`, `PeopleWindow.module.css`; tests: `tests/unit/{boardLook,boardFocus,taskCard (new),peopleWindow (new),assignView (new)}.test.js`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| projects (table)  | T (Table and bulk bar)                  | `_board/table/**` (new: `TaskTable.jsx`, `TableHead.jsx`, `TableGroup.jsx`, `TableRow.jsx`, `StackList.jsx`, `BulkBar.jsx`, `tableView.js`, `bulkView.js`, `useTableSort.js`, `useSelection.js`, `useBulkActions.js`, `TaskTable.module.css`, `BulkBar.module.css`); tests: `tests/unit/{tableView,bulkView,taskTable}.test.js` (new)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| projects, files   | D (task window, task form, picker)      | `src/components/task/**`; `_board/{TaskEditorProvider.jsx,TaskFormDialog.jsx,TaskFormDialog.module.css,TaskFormFields.jsx,taskFormModel.js,useTaskForm.js}` and new `{AssignField,FilesField}.jsx`; `src/components/files/{FileTile.jsx,FileRows.jsx,FileThumbs.jsx,UploadField.jsx,UploadChip.jsx,useFileRemoval.js,Files.module.css}` and new `{FilesPicker,ShareConfirm,LinkChip}.jsx`, `{filesPickerView,shareConfirmView,usePickerFiles}.js`, `FilesPicker.module.css`; tests: `tests/unit/{taskWindow,taskWindowFocus,taskWindowLook,taskFormModel,taskFormFocus,filesPicker (new),shareConfirm (new)}.test.js` (`taskFormModel.test.js` and `taskFormFocus.test.js` are O's splits of `phasesBoard.test.js` and `keyboardFocus.test.js`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| shell, today      | M (My tasks, homes, Today)              | `src/app/(app)/my-tasks/**` (new, replacing O's stub); `(app)/team/{page.js,page.module.css}`, `(app)/overview/{page.js,page.module.css}`; `(app)/today/{PriorityCard.jsx,PriorityCard.module.css,todayData.js}`; tests: `tests/unit/{myTasksView,myTasksCard,todoCardRender,todoCardActions}.test.js` (`myTasks*` new), `tests/services/{myTasksPage (new),todayTaskFiles,todayTakenTasks (new)}.test.js`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| owner requests    | R (sound default and Slack copy)        | `src/modules/preferences/schemas.js`, `src/components/UserPrefs.jsx`, `src/components/live/LiveNotifications.jsx` (the `sound` fallback only), `src/app/(app)/my-settings/{sections.js,MySettingsSections.jsx}`, `src/app/(app)/report/{SlackPreview.jsx,SlackPreview.module.css}`, `src/lib/copyText.js` (new); tests: `tests/services/{preferences,preferencesRoute}.test.js`, `tests/unit/{mySettings,liveRules,liveLeader,liveRecovery,copyText (new)}.test.js`, `tests/helpers/liveFakes.js` (only where the default choice matters)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| orchestrator      | F (end to end)                          | `tests/e2e/{live-notifications,my-settings,checkin-report}.spec.js` (Two more owner requests: the default Sound is All, the Copy button); `tests/e2e/{project-board,task-files,project-plan,board-focus,smoke,todo,project-files}.spec.js` (changed: "Add task" in the toolbar, the "Assign to" radio chips, the Filter menu in place of "Highlight cards", pointer drag in place of `dragTo`, the nav lists with My tasks, the Files tab's "· On 1 task" for the demo-linked brand guide), new `tests/e2e/{task-links,assign-to-me,board-motion,board-table,completed-project,no-sideways-scroll,board-perf}.spec.js`, `tests/e2e/support/board.js` (new: `pointerDrag`, `expectNoSidewaysScroll`, `runningAnimations`, which waits at most 2 s until `document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().iterations !== Infinity)` is empty), `tests/e2e/support/{fixtures,demoData,files}.js` (`demoData.js` gains `addTasks` and `removeTasks` for board-perf), `playwright.config.js` (`chrome` gets `testIgnore: ['**/no-sideways-scroll.spec.js', '**/board-perf.spec.js']`; a `scrollbars` project with `testMatch: '**/no-sideways-scroll.spec.js'` and `use: { ...devices['Desktop Chrome'], channel: 'chrome', viewport: { width: 1440, height: 1000 }, launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } }`; a `perf` project with `testMatch: '**/board-perf.spec.js'` added only when `process.env.PERF === '1'`; so no spec runs twice against the one demo database)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+Contracts the others code against: A's `projectFiles` reads and writes and the pure access rules (B,
+C1, C3, D, M); B's task routes with `told`, `toldName`, `toldEarlierName`, `TaskDetails`,
+`AssigneeOption`, `listMine`, `countMineDue`, `updateCountsFor`, `latestLinesFor`, `bulkUpdate`, the
+bulk route (C1, C3, T, D, M, O); C2's `src/lib/motion/**`, the drag hooks, `boardMotion`,
+`phaseMotion`, `useTickLeave`, `useCardMoves`, `MoveLive`, `TaskCheck`'s `onChange` and the data
+attributes (C1, C3, T, D, M); C1's `Board` props, `board` object (`tasks`, `cardProps`, `columns`,
+`filters`, `view`, `tick`, `move`), `head.viewerId`, `head.options` and the toolbar (C3, T, D); C3's
+`TaskCard`, `useTaskActions`, `PeopleWindow`, `MoveTaskDialog` (C1, T, D); D's `TaskWindowProvider`
+modes, `useTaskEditor()` (`openNew`, `openEdit`, `options`, `viewerId`), `FilesPicker`,
+`ShareConfirm`, `shareConfirmView` (C1, C3, M); M's `MyTasksCard` (its own pages); O's tokens,
+`migration020`, the nav badge. No other file changes: `TopBar`, `DataTable`, `FilterPills`,
+`Segmented`, `useUndoDelete`, `undoQueue`, `TaskUndoProvider`, `apiClient`, `route.js`, `errors.js`,
+`session.js` and `permissions.js` stay as they are.
+
+**README** (O last). (a) "Deployment notes" gains: "Daybook 1.13 (task board and table, files from
+the project on tasks, Assign to me, My tasks, calm motion): one database update (migration 020 adds
+one table, `task_file_links`). Nothing new to install and no new setting." (b) "Updating" gains,
+after the 1.12 steps, as numbered copy-paste steps with each command in its own code block:
+
+> For 1.13 (task board and My tasks), step by step:
+>
+> 1. phpMyAdmin → your Daybook database → Export → Go: keep the file as a backup.
+> 2. Wait for the green "Build for cPanel" run on GitHub. Then in Terminal, after the `source`
+>    command (it also goes to `~/daybook`):
+>
+>    ```bash
+>    git pull origin deploy
+>    ```
+>
+>    then the migrate line:
+>
+>    ```bash
+>    NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:latest
+>    ```
+>
+>    It ends with "Batch … run". If it stops with `Aborted` (or says the migration table is already
+>    locked), run this line once:
+>
+>    ```bash
+>    NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:unlock
+>    ```
+>
+>    then the migrate line again; it continues where it stopped:
+>
+>    ```bash
+>    NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:latest
+>    ```
+>
+>    If it says `Lock wait timeout exceeded` instead, the database was busy for 30 seconds and
+>    nothing was changed. Wait a minute, then run the migrate line again (no unlock line needed).
+>
+> 3. Press Restart in Setup Node.js App.
+> 4. Check, in Terminal after the `source` command:
+>
+>    ```bash
+>    NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 --import ./src/worker/alias.js scripts/doctor.js
+>    ```
+>
+>    It shows "✓ Database is up to date" (no "020_task_file_links.js" left to run).
+>
+> 5. Test: as the PM, open a project → Board → Add task → pick a person under Assign to → From
+>    project files → tick a file → Attach → Add task; the card shows the file. As an Admin, on any
+>    card press Assign to me; Overview shows it under My tasks.
+>
+> To go back to 1.12, step by step:
+>
+> 1. On your computer, in the Daybook folder:
+>
+>    ```bash
+>    git revert --no-commit <the 1.13 commit>
+>    ```
+>
+> 2. Put the database update file back. The live database has run it; without it, the doctor line
+>    and the migrate line stop with "The migration directory is corrupt" (1.12 never reads the new
+>    table):
+>
+>    ```bash
+>    git checkout <the 1.13 commit> -- db/migrations/020_task_file_links.js
+>    ```
+>
+> 3. Save the change:
+>
+>    ```bash
+>    git commit -m "Back to 1.12"
+>    ```
+>
+> 4. Send it to GitHub:
+>
+>    ```bash
+>    git push
+>    ```
+>
+>    GitHub's "Migration check" turns red for this commit (1.12's check undoes 019 while 020 is
+>    still there). That is expected. Only "Build for cPanel" must be green.
+>
+> 5. Wait for the green "Build for cPanel" run. Then in Terminal, after the `source` command:
+>
+>    ```bash
+>    git pull origin deploy
+>    ```
+>
+> 6. Press Restart in Setup Node.js App. Leave the database as it is: files linked to tasks stay in
+>    Files; the tasks just stop showing them.
+
+(c) **Every host command in README uses the lean lines** (npm commands abort on the host): the 1.12
+step 7 code block `NODE_ENV=production npm run doctor` becomes the lean doctor line above; the 1.11
+rollback paragraph's "`npm run doctor` and the migrate line stop with" becomes "the doctor line and
+the migrate line stop with"; **Checking** becomes "the doctor line (after the `source` command, in
+`~/daybook`)" with its own code block (the lean doctor line), and its notify example its own code
+block `NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2
+--import ./src/worker/alias.js scripts/doctor.js --notify=person@company.com`; **Fresh start**'s two
+commands become code blocks `NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler
+--v8-pool-size=2 --import ./src/worker/alias.js scripts/reset.js` and the same with
+`--confirm=<DB_NAME>`. The Deployment notes' first bullet "Deploy after 7 PM: `npm run migrate`, …"
+becomes "Deploy after 7 PM: the migrate line (Updating), …", and its "`npm run migrate`" mentions for
+1.07 to 1.09 become "the migrate line (Updating)". Local development lines (Getting started,
+Scripts) keep `npm run`. The 1.13 block goes after the "To go back to 1.11" paragraph and before
+**Checking**. `tests/unit/hostScripts.test.js`: `stepsFor(version)` now ends at the first of the
+next `\nFor 1.`, `\nTo go back to` or `\n**Checking**` (otherwise the 1.13 slice, the last one, runs
+into the rollback, Checking and Fresh start blocks this section adds; the 1.10, 1.11 and 1.12 pins
+still pass). It adds: the README contains "For 1.13 (task board and My tasks), step by step:" and
+its code blocks are exactly `git pull origin deploy`, the lean `migrate:latest`, the lean
+`migrate:unlock`, the lean `migrate:latest`, the lean doctor line; the 1.12 pin's last block becomes
+the lean doctor line; no code block in the "Deploying on cPanel" section contains `npm run`; the
+only `npm ci` blocks are `npm ci --omit=dev` in step 6, the Updating paragraph and the 1.10 steps
+(all left as they are); the slice from "To go back to 1.12, step by step:" to `\n**Checking**` has
+exactly the five blocks of the 1.13 rollback in order, and the `020_task_file_links.js` checkout
+comes before `git push`.
+
+### Tests and version
+
+- **Unit** (node only; no jsdom: hand-made fakes for `animate`, pointer capture, `matchMedia`,
+  `ResizeObserver` and frames, `tests/helpers/motionFakes.js` (C2); rendering through
+  `react-dom/server` as 1.12):
+  - `tests/unit/fileAccess.test.js` (A, changed): the two tables of Who sees as data: every viewer
+    row (the project's PM; an Admin who is a member; one who isn't; the task's person; another
+    member; an Anyone task's member; HR on and off the project; another PM on and off; someone taken
+    off (`member: false`); the earlier person after a reassign (the link's `assigneeId` is the new
+    person); deactivated (`active: false`)) × an Everyone and an "Only PM and Admins" project file,
+    linked to (a) Vishal's task, (b) an Anyone task, (c) no task, and after unlink (`links: []`); a
+    link whose task is on another project never counts.
+  - `tests/unit/fileLinkRules.test.js` (A, new): `canSeeLinkedOnTask` (a managers-only file linked to
+    Vishal's task and to Simran's: Vishal sees it on his task, not on Simran's; managers on both;
+    an Everyone file on both: Vishal sees it on his task, not on Simran's, and still opens it through
+    `canSeeFile`); `needsShareConfirm` (managers-only + Vishal → true, + null → true, +
+    the PM → false, + an Admin → false, + a deactivated Admin → true, + another PM who is a member →
+    true, + someone in HR or an employee who still holds `pm_id` → true; Everyone → false);
+    `isProjectManager` (agrees with `canManageProject` for every role, status and project).
+  - `tests/unit/filesTabView.test.js` and `filesTab.test.js` (A, changed): "On tasks" lists linked
+    files under their tasks, each counted once; a phase doesn't list a linked file twice; managers'
+    " · On 2 tasks" button and its menu; a member's shared file only in On tasks and All files with
+    "Shared with you on Fix the login page" ("… and 1 more"), never in its place, no Lock line, no
+    "On 2 tasks"; an Everyone file linked to Simran's task never puts her task (title, id, phase) in
+    Vishal's Files tab data, and his `linkCount` for it is 0; Edit details' line as soon as "Only PM
+    and Admins" is picked (one person's task, 2 tasks, an Anyone task, 2 Anyone tasks, only
+    managers' tasks: no line); the delete toast body.
+  - `tests/unit/assigneeRule.test.js` (B, new): `assertAssignee` for null, an active member, a
+    deactivated member (refused), an untracked member (accepted), the PM, an Admin setting themself on
+    a project they aren't on, an Admin giving to another Admin who isn't a member (refused), a PM
+    giving to an Admin who isn't a member (refused) and to another PM who isn't (refused), keeping
+    the current away person; `teamOf`'s `others`; `recipients` reaching an Admin in `others`.
+  - `tests/unit/taskReassignMessages.test.js` (B, new): `project_task.reassigned` titles and bodies
+    ("took it", "gave it to", "opened it to anyone"), its link `/projects/12`; not sent when the
+    earlier person is the actor, deactivated, not reachable, already reached by the members' `changed`,
+    or the task is done; the grouped bulk texts for 1, 2 and 5 tasks ("and 2 more"), cut to 200 and
+    500 after placing the titles.
+  - `tests/unit/notificationAlerts.test.js` (B): 45 types, 19 important, 26 normal;
+    `project_task.reassigned` normal, group `task`. `tests/unit/taskFileMessages.test.js` (B): the
+    files line names uploads and links together. `tests/unit/noSlackNoAi.test.js` (B): adds
+    `/task_?file_?links|taskFileLinks/i` for `aiAsk` and `aiSummaries`; scans the new files of
+    `projectTasks` and `projectFiles` for `@/modules/slack`.
+  - `tests/unit/boardView.test.js` and `phasesView.test.js` (C1): the six phases with past phases
+    without open tasks in the rail (member: their own); `currentPhase` null (all six, none fold, no
+    ring) and a project with no tasks; later empty phases as normal columns; No phase yet last,
+    with no "+", "+ Add task" or quick add; no width classes; early notes; the band parts (every
+    part has a fill and a green layer, `--share` 1 for a done part); `toBoardTask` with
+    `statusChip`, `files`, `minutes`, `updateCount`, `privateLinkCount`, `isViewer`, the person's
+    `role` and `status`.
+  - `tests/unit/boardFilters.test.js` (C1, new): search ("#9", "9", "pay", "404" in a title, case
+    and accents), Critical, With files, Overdue (company today), Blocked, Show done (no dimming and
+    no line on its own; counts in the badge), Mine, a face, Anyone; their combination; counts (open
+    tasks only); the filter line's words; faces order (PM first, then A to Z, Anyone last, 5 then
+    "+n"); open cards dimmed on the Board, done cards never dimmed; rows hidden in the Table.
+  - `tests/unit/projectBoard.test.js` (C1, changed): the rendered board for a manager (the toolbar's
+    split Add task, Board | Table, search, Filter, Mine, faces), another PM (no Add task or Mine;
+    faces; no "With files" when `filesAccess` is `'none'`), a member (no Add task, Mine or faces; the
+    member line), a Completed project (the note, Reopen for managers only, no "+", no quick add, no
+    forecast, no Move, empty columns' sentence), `?show=critical` ticks Critical, `?view=table` and
+    `view: 'table'` render the Table, `railOpen` renders the rail open; `data-fill` stays on after
+    the viewer's own move of the 4th card out; the phase confirm's "5 open tasks stay in Testing." /
+    "1 open task stays in Testing." / no line at 0; the filter line's `role="status"` element present
+    while empty.
+  - `tests/unit/boardOverflow.test.js` (C1, new): the CSS values of The sideways scroll (column
+    `flex: 1 1 248px`, `min-width: 248px`, `max-width: 320px`; no `scroll-snap-type`; rail 72 and 220
+    px; `min-width: 0` on the wrappers; the `data-fill` height; the body's `overflow-y: auto` and
+    `scrollbar-gutter: stable` only with `data-fill`, no `overscroll-behavior` on bodies; the
+    `--drag-room` padding while dragging; the phone block; no `.slim` or `.current` widths; the
+    band's track background for every status; the toolbar's faces: 4 px overlap, and 44 px faces
+    with no overlap at 640 px and below).
+  - `tests/unit/{settle,autoScroll,sortedGap,moveWords,flip,animate,commitMotion,presence,dragSession,boardMotion,phaseMotion,tickLeave,boardMoves}.test.js`
+    (C2): `settle` 0 → 250, 750 → 325, 1,500 → 400, 3,000 → 400, negative → 250, cancel 0.6 × (150
+    to 240), reduce → 0; `autoScroll` 0 in the first 300 ms, 0 outside the band, 20 at and past the
+    edge, quadratic between (half way into a 160 px band → 5), `edge = min(160, 25%)` (a 400 px body
+    has a 100 px band), both axes, scaled by frame time, clamped; `sortedGap` (the preview's centre
+    decides across, its centre or the pointer up and down; columns that don't accept are ignored; P1
+    before P2 before P3, then due date, then title; `gapTop` first, middle, after last, empty;
+    `roomShift` only at and after the gap; `positionText` from 1); `moveWords` every sentence of the
+    Keyboard move table exactly; `flip`
+    (measure reads once; animates only what moved over 0.5 px with `translate(dx, dy)` → `none`;
+    cancels a running `'flip'` first; skip; `onEnter`; `moved` flies; `[]` with reduce, a hidden tab
+    or over 150 cards); `animate` (`play` null without `animate` or at 0 ms; with reduce `riseIn`'s
+    keyframes play opacity only and a pure translate returns null; `done` never rejects; `finishAll`
+    on the media change; `flash` restarts, takes a list and reads the colour once per call;
+    `crossfade`: two quick switches commit only the latest and the view never stays at opacity 0); `commitMotion`
+    (plays once when ready, waits, drops after 2 s, a StrictMode-like second effect doesn't replay);
+    `presence` (rendered while closing, removed on its own `animationend` or after `exitMs + 50`);
+    `dragSession` (motion.md 6.2's list: under 6 px no lift and the click goes through; buttons 1 and
+    2, touch, a press on a button, link, field or the tick, a done or uploading card never lift; the
+    grip does; a press on the title lifts after 6 px and its click is stopped, under 6 px it opens
+    the task; a card in No phase yet lifts and every phase column is valid; lift sets outline,
+    `data-dragging`, `--drag-room` and capture (a throwing `setPointerCapture` is fine) and
+    `data-lifted` only two frames later; targets set `data-drop` and room on the right cards and
+    the `[data-follow]` items only; own column, rail and No phase yet never react; a window scroll
+    and the lift mark the rects dirty; a tall card let go low in a column lands, below the board it
+    flies back; the final hit test on `pointerup`; one `onDrop` with the key, then
+    nothing left behind; Escape, `pointercancel`, `lostpointercapture` and `blur` fly back, and the
+    pointer's later `pointerup` and click are swallowed; hidden tab at once; a press while settling
+    or while a keyboard move is lifted ignored; `destroy()` while settling calls `onDrop` once;
+    `destroy()` otherwise; the click after a drag stopped once; keyboard: Space lifts (`repeat`
+    ignored), Left and Right walk the phase columns (own included, rail skipped; a No phase yet card
+    starts over No phase yet, Left to the last phase column), Up and Down speak once, Tab, a
+    `focusout`, a `pointerdown` and `blur` cancel, Space on its own column says "stays in"; the
+    grip's click opens Move to phase…, but not the click from the key that lifted or dropped);
+    `boardMotion` and `phaseMotion` (with a stubbed `flushSync`: reads before the change, the change
+    once, plays after; the phase timeline's starts; reduce = at once with the fades and the flash);
+    `tickLeave` (600 ms, unticking cancels, the fold for the last open card of a past phase, a failed
+    save rises back; the hold keeps a ticked card in the open list, ticked, when the refresh lands
+    at 100 ms, and lets it go after its leave); `phaseMotion` also: a new rail fades in, a move over
+    two phases folds both; `boardMoves` (1.12's move cases).
+  - `tests/unit/{taskCard,peopleWindow,assignView,boardLook,boardFocus}.test.js` (C3): the card's
+    rows for a manager, another PM and a member (number, P tag, chip, actions only for managers,
+    Assign to me hidden on own and done tasks, the grip only on open tasks, 2 chips with pictures
+    first and "+1", stats only above 0 with " update" for 1 and " of your time from timers" for a
+    member, face labels, away labels, "For you" / "Anyone"; the DOM order tick, title, actions);
+    the people window's rows for a PM and for an Admin not on the project (Me first, Anyone, the PM,
+    members A to Z, the away current person disabled; a task the CEO took, opened by the PM: the
+    CEO last and checked), search and "No one matches.", every share confirm text (one task, bulk
+    one task, bulk 2, to Anyone), no confirm when the PM or an Admin is picked on a task with
+    `privateLinkCount` 1, `shareConfirmed: true` on "Give and share", a server
+    `fields.shareConfirmed` answer turning the foot (and the bulk bar's window) into the confirm;
+    Undo offered only when the earlier person can be picked now, "Couldn't undo" on failure, focus
+    to the face after Assign to me; `assignToast` and `toldText` for every combination of `told`,
+    `toldName` and `toldEarlierName`; card CSS pins (the dashed Anyone circle, the top line's room
+    for always-shown actions, 44 px phone targets, the grip hidden for `(pointer: coarse)`).
+  - `tests/unit/{tableView,bulkView,taskTable}.test.js` (T, new): columns per access and
+    `filesAccess`; every sort and its reverse (no date, Anyone and No phase yet last both ways;
+    Files and Time start "descending"); grouping as the board, done rows only with "Show done
+    tasks"; no "+ Add task" on a done phase or No phase yet, and its hidden " to Testing"; "To do";
+    the bulk toasts for 1 and n counting `changed`, "Nothing to change." at 0; Undo's changes for
+    the changed tasks only, with `shareConfirmed: true`; no Undo when an earlier person is away or
+    an Admin not on the project; the 100 cap; focus to "Select all shown tasks" after an action;
+    `--toast-offset` set and removed; the rendered table (`aria-sort` only on the sorted header;
+    select boxes only for managers; done rows disabled; the bulk bar region; "Group by phase
+    again"; the phone list).
+  - `tests/unit/{taskWindow,taskWindowFocus,taskWindowLook,taskFormModel,filesPicker,shareConfirm}.test.js`
+    (D): modes with `mine` (Open project, Mark done only with `canManage`; never Edit, Delete, file X,
+    Add files, Assign to me or Move); the rail's facts ("Assign to me" only in manage mode on an open
+    task not the viewer's; "Move to phase…" only in manage mode on an open task; "None yet"; "Your
+    time" for a viewer without `team.view`); Updates (empty sentence, "Showing the newest 10.");
+    Latest report = the first update; linked rows' "From Files: Design" and the two X labels; the
+    Add files menu only in manage mode; 720 px and the 220 px rail; focus to "Assigned to" after
+    Assign to me; `assignChoices` order (Anyone, Me, the PM for an Admin, members, the current
+    person when not listed: away, or "Arvind Menon (Admin)" on a task the CEO took, opened by the
+    PM, checked); Save without a change sends no `assigneeId`; `createBody` and `editBody` with the
+    link fields, `shareConfirmed` and `shareWith`; a `fields.linkFileIds` answer strikes the gone
+    chip as "No longer in Files" and drops it; the saved toasts with `toldEarlierName`;
+    the picker's places and counts, the preset, search, "Already on this task", "On 1 task", the Lock
+    line, "Attach 2 files", when the confirm shows (person not a manager; Anyone) and when it doesn't
+    (the viewer, the PM, an Admin), the empty, no-match and before-020 states; `shareText` exactly.
+  - `tests/unit/{myTasksView,myTasksCard,todoCardRender,todoCardActions}.test.js` (M): `whenOf` for
+    overdue, today, the rest of the week up to Sunday, later, none, and on a Sunday (nothing is
+    "This week", Monday is "Later"); focus to the next row's title after a tick; groups in order
+    with empty ones left out; by project A to Z; the project select and search ("#61"); the card's
+    first 6 rows with their group headings, "2 more", "See all my tasks (8)", ticks only with
+    `canManage`, the empty sentence; Today's Due column.
+  - `tests/unit/{navigation,themeFallback,motionTokens,hostScripts,boardCodeSize}.test.js` (O): the PM
+    and Admin lists with My tasks; the `myTasks` badge only for PMs and Admins with " due now";
+    `--shadow-lift`'s fallback; the token rules (the allow-list exempt from the keyframes rule,
+    `calc(var(--shift-*) * n)` accepted); the README steps; sizes (functions ≤ 50 lines, files ≤
+    300, recursive in `_board/**`, `src/components/task/**`, `src/lib/motion`, `(app)/my-tasks`).
+- **Services** (`DB_NAME=daybook_test_<n>`, one at a time; files in the test folder; A's kit gains
+  `linkFile(...)`):
+  - `tests/services/migration020.test.js` (O, new): up, down, up on a fresh database; the table's
+    columns, primary key, `task_file_links_file_id_index`, the three foreign keys with their ON DELETE
+    rules (`information_schema`); a second up skips (table there); down then 019's down works; also
+    in the MySQL 8.4 workflow.
+  - `tests/services/projectFileLinks.test.js` (A, new): link an Everyone file (no confirm); a
+    managers-only file to Vishal's task without `shareConfirmed` → 400 `fields.shareConfirmed`,
+    nothing written; with it → linked, audit `project_file.link` with `shared: true` and no name; to
+    the PM's own task → no confirm needed; a confirm for Vishal (`shareWith` Vishal) after the task
+    went to Anyone → 400 `fields.shareConfirmed` "This task is now for someone else. …", no link
+    written; `shareConfirmed` without `shareWith` → the same 400; a task file, another project's
+    file, a deleted file → 400 `fields.linkFileIds`; an already linked file skipped; `[5, 5]` links
+    once and counts once; 19 own files + 2 links → 409 and two saves at once under the row lock;
+    two saves linking crossed files to two tasks at once (A gets F while it has G, B gets G while it
+    has F) both succeed, no 1213; unlink (and already gone → 200); **every read per viewer** (the
+    download, view and thumb routes, `listForTask`, `listForProject`, `countsForTasks`,
+    `chipsForTasks`, `countTaskFilesForMember`) for the PM, an Admin, Vishal (the person), Simran
+    (not), an Anyone task's member, HR on and off the project, another PM on and off, a member taken
+    off, a deactivated person; again after unlink and after the task is given to Simran (Vishal 404,
+    Simran 200); the original deleted (gone from the task; the purge removes the link), renamed
+    (the new name on the task), moved (links unchanged); a task deleted (links gone, the file stays);
+    before 020 (020 rolled back): reads as 1.12, link writes `UPDATE_NEEDED`, the unlink route 503.
+  - `tests/services/projectFilesPicker.test.js` (A, new): managers only (a member and another PM 403,
+    a stranger 404); places and counts; `onThisTask`, `linkCount`; a task of another project 404; the
+    500 cap; `linksReady: false` before 020.
+  - `tests/services/{projectFilesDownload,projectFilesManage,projectFilesMigration}.test.js` (A,
+    changed): the linked rows in the permission matrix; delete of a linked file; the before-020 cases.
+  - `tests/services/projectTaskTake.test.js` (B, new): the CEO takes a task on a project he isn't on
+    (200; no `project_members` row made; the card's `isMember` is true; Simran gets
+    `project_task.reassigned` "Checkout fix before client demo on acme-store is now for <the CEO's
+    name>" · "<the CEO's name> took it."; the answer's `toldEarlierName`); the PM takes a task; the refusals of
+    the assignee rule through the route; nobody told when the earlier person acts, is deactivated or
+    taken off, or the task is done; a change to Anyone (members get `changed`, an earlier member isn't
+    told twice, an earlier PM gets `reassigned`); the PM later changes the CEO's task's priority →
+    the CEO is told; `listAssigneeOptions` per viewer (order, an untracked member listed, a deactivated
+    one not, `openHere`, `avatarUrl`); the reassign share check (a task with a private link given to
+    Simran: 400 without, 200 with `shareConfirmed` and `shareWith` Simran; to an Admin: no confirm);
+    one PATCH that changes the person and adds a private link is judged against the new person; take
+    a task with a private link from Vishal, then Undo (`shareConfirmed: true`, `shareWith` Vishal):
+    200, and Vishal can open the file again.
+  - `tests/services/projectTasksBulk.test.js` (B, new): give 3 tasks to Vishal (one grouped
+    `changed` for Vishal, one grouped `reassigned` per earlier person, 3 audit rows); move 3 (no
+    notification); mixed kinds, both keys in one item ("Change one thing at a time."), an unknown
+    phase ("Pick a phase from the list."), over 100, a duplicate → 400; over 16 KB → 413; another
+    project's task → 404 and nothing changed; one refused assignee rolls everything back; the share
+    confirm; Undo with per-task values; Undo of a take of tasks with a private link → 200; Undo of
+    a move out of No phase yet (`phase: null`) → 200; a selection where one task is already the
+    viewer's: `changed` 2 and `tasks` only those 2; a member and another PM → 403; the rate limit.
+  - `tests/services/projectTasksMine.test.js` (B, new): `listMine` for the PM (own projects; a task
+    on another PM's project where they are a member, `canManage` false), an Admin who took a task on
+    a project they aren't on, the CEO; Completed left out, On hold in; the order; `more` past the
+    limit; `countMineDue` (overdue plus today, not tomorrow).
+  - `tests/services/taskMinutes.test.js` (B, new): finished entries summed per task, a running one
+    left out, `userId` filters, other tasks never counted.
+  - `tests/services/{projectTasks,projectTasks.reads,projectTaskFiles,projectTasksPlan,projectTasksRoutes}.test.js`
+    (B, changed): the Today rule (a tracked Admin's taken task on a project she isn't on; a removed
+    member still gets nothing; `phase` and `dueDate` present); `updateCountsFor` and `latestLinesFor`
+    per viewer (a member only their own lines; on an Anyone task that Simran reported on last,
+    Vishal's chip, Updates and Latest report all show his own newest line); the files route with
+    `linkFileIds` and both lists (one `files_added` naming both); "Nothing to change." ignores
+    `shareConfirmed` and `shareWith`.
+  - `tests/services/{projectBoardTab,projectMemberPage}.test.js` (C1): `BoardTab`'s data per viewer
+    (chips; minutes everyone's for the PM and only own for a member; update counts the same;
+    `privateLinkCount` only for managers; before 020 the board loads as 1.12; a `table` view cookie
+    renders the Table and an `open` rail cookie the open rail; `?view=table` beats a `board`
+    cookie); `head.viewerId`.
+  - `tests/services/{myTasksPage,todayTakenTasks,todayTaskFiles}.test.js` (M): the page's and home
+    card's data per viewer; Meera's Today row "For you" with its due date for a task she took on a
+    project she isn't on; the CEO has no Today; linked files counted on Today.
+  - `tests/services/dashboardNavBadges.test.js` (O): `myTasks` for the PM and an Admin, 0 for an
+    employee and HR; the early return doesn't hide it. `tests/services/{dashboard,attendance.wfhCheckIn}.test.js`
+    (O): their exact badge objects gain `myTasks`, nothing else changes.
+- **E2E** (F, Playwright; `/api/ai/**` stubbed; the demo data of O last). E2E runs only in CI mode
+  (`npm run test:e2e` without `E2E_BASE_URL`: `next dev -p 3100` on `daybook_e2e`), from a copy of
+  the project; never against localhost:3000, whose global setup would run `seed:demo` on the
+  owner's "daybook" database and board-perf would add 150 tasks there.
+  - `task-links.spec.js` (new): the PM on acme-store: toolbar **Add task**, a title, Assign to
+    "Vishal Saini" (radio), **From project files**, tick `acme-brand-guide.pdf` and
+    `acme-store-contract-signed.pdf`, the confirm line's exact words, **Attach and share**, the two
+    linked chips, **Add task**; the card shows in its column with its chips. Vishal: Today's row shows
+    the paperclip 2, the task window lists both with "From Files: Whole project", the contract
+    downloads (200); his Files tab shows the contract only under On tasks and in All files with
+    "Shared with you on …". The PM removes the contract from the task window ("Removed from this
+    task. It stays in Files."), waits for the toast to end; Vishal's download URL now answers 404 and
+    Today's count is 1.
+  - `assign-to-me.spec.js` (new): the CEO (not on acme-store) hovers Simran's card, **Assign to me**:
+    toast "… is now yours." · "Simran Kaur gets a notification."; `/overview` shows it in My tasks and
+    the sidebar badge counts it when due; `/my-tasks` lists it in its group; Simran's bell has
+    "… is now for <the CEO's name>" with "<the CEO's name> took it." (names from `support/fixtures.js`); the PM's people window doesn't offer the
+    CEO on other tasks, and on the CEO's task lists the CEO last and checked; the PM taking a task
+    from the card menu, and Undo.
+  - `board-motion.spec.js` (new, motion.md 6.3): a pointer drag (`pointerDrag` helper: down, 8 px,
+    then 12 steps) from Development to Testing lands at its sorted place, one PATCH, "Moved to
+    Testing." and Undo gliding back; a tall card held by its title and let go over Testing's "+ Add
+    task" lands too; a click without movement (and with 4 px) opens the task, a real
+    drag doesn't; Escape mid-drag → no PATCH, no preview left; releases over its own column, the rail
+    and outside → back, no request; the keyboard move (grip, Space, ArrowRight → `#move-live` "Over
+    Testing. It goes in at 2 of 6.", Space → moved, the moved card's grip focused; ArrowUp's line;
+    Escape and Tab cancel); `reducedMotion: 'reduce'` (the preview's inner card,
+    `[data-drag-preview] > *`, has an identity transform, `none` or `matrix(1, 0, 0, 1, 0, 0)`; no
+    running transform animation after the drop, the card already in Testing, windows fade only);
+    nothing animates after load (`document.getAnimations()` empty inside the board, band and
+    toolbar, both settings); touch through a CDP session (`Input.dispatchTouchEvent`: touchStart,
+    touchMove ×5, touchEnd, Chromium) never makes `[data-drag-preview]` and `board.scrollLeft`
+    changes; auto-scroll at 1280 px near the right edge after 300 ms; files dropped on a card still
+    attach; "Move to Testing" then confirm: the ring sits on Testing, "Current" moved, the toast.
+    Also: right after the 8 px move the preview's card has a running transform transition (default
+    setting); tick a card: at 300 ms it is still in the open list, ticked, with `data-ticking`, and
+    at 1.5 s it is under the fold; a drag over a column with "› 3 done": the fold's top is at or
+    below the last shifted card's bottom, and without `data-fill` the target body has no vertical
+    scrollbar (`scrollHeight <= clientHeight`); `page.mouse.wheel(0, 300)` mid-drag, then release
+    over Testing: it lands in Testing; lift, Escape, move back over the card, release: no task
+    window opens; during a keyboard move, clicking the search field and typing a space cancels the
+    move and drops nothing; a click on the grip opens "Move to phase…" for that card; closing a
+    dialog and clicking a card within 100 ms opens it.
+  - `board-table.spec.js` (new): Board | Table (`?view=table`, remembered after a reload, the Table
+    in the first paint with no switch); sort by
+    Due (`aria-sort`); select two rows, **Give to…** "Sneha Patil" → "2 tasks are now for Sneha
+    Patil." → Undo puts both back; with a private file linked to one of them meanwhile, the window
+    asks "1 of these tasks has a file only for PM and Admins. …" and "Give and share" saves;
+    **Move to phase…** two → "Moved 2 tasks to Testing."; a member's Table has no select boxes; at
+    390 px the stacked list.
+  - `completed-project.spec.js` (new): a Completed demo project as the PM: the note with " Use Reopen
+    project to add tasks again.", no Add task, no column "+", no quick add; **Reopen project** →
+    confirm → "Project reopened." and Add task is there; Undo makes it Completed again; a member sees
+    the sentence only.
+  - `no-sideways-scroll.spec.js` (new, the `scrollbars` project): the check of The sideways scroll at
+    390, 1024, 1280, 1366, 1440, 1536, 1920 and 2560 px for the pages listed there, light and dark,
+    and during a drag at 1280 and 1440.
+  - `board-perf.spec.js` (new, only with `PERF=1`, Chromium): 150 open tasks over four phases (made
+    through new helpers in `tests/e2e/support/demoData.js`, `addTasks` and `removeTasks`, F's file,
+    removed after), CPU 4× slower, a 2 s drag over three columns: p95 frame ≤ 20 ms, no long task
+    over 50 ms except the drop commit; a bulk action on 100 rows has no long task over 50 ms; with
+    151 tasks a menu move plays only the flash.
+  - Changed: `project-board.spec.js` (Add task in the toolbar; `pointerDrag` in place of `dragTo`;
+    quick add's button "Add task to Testing"; the member's page has no "Add task"), `task-files.spec.js`
+    (the "Assign to" radio chips; "Upload files"), `project-plan.spec.js` (the Filter menu's
+    "Critical (4)" in place of the "Highlight cards" pills; New task from the toolbar),
+    `board-focus.spec.js` (the "⋯" path, the grip), `smoke.spec.js` (PM nav `['Projects', 'Team', 'My
+tasks', 'Screen time', 'Attendance', 'Requests', 'My settings']`; Admin nav with My tasks after
+    Overview), `todo.spec.js` (Today's Due column), as needed.
+- `APP_VERSION` '1.13'.
+
+### As built (where the code differs from the text above, for a sound reason)
+
+Each item says what the code does and why; the text above stays as the plan was written. Files named
+here that the Files and owners table doesn't list belong to the builder of their row (they were
+split out to keep files under about 300 lines and functions under about 50).
+
+**Data, links and the server (A, B, O)**
+
+- **Link rows are read without `FOR UPDATE`** (A, `linkRepo.linkRows`): a plain read under the task
+  row's lock. On MariaDB 10.4, two saves linking files to neighbouring new tasks at once deadlocked
+  (errno 1213) in most rounds with `SELECT … FOR UPDATE` (gap locks on the empty gap, then both
+  INSERTs); with the plain read, 40 rounds of 3 concurrent saves gave none (a service test keeps the
+  case). Every link writer locks the task row `FOR UPDATE` as its first statement (B's
+  `lockForManage`, A's `lockTaskRow`, the demo's link), so the read sees every committed link;
+  `unlinkFiles` deletes only the rows it found, each by its whole primary key.
+- **`isProjectManager` also needs the role's `project.manage`** (the code block above was corrected):
+  a role change leaves `pm_id` as it is, so someone in HR or an employee may still hold a project's
+  `pm_id`. `canSeeFile` treats them as a member, so the share confirm (link, reassign, bulk, and the
+  browser's windows) asks for them too, the audit says `shared: true`, and Edit details counts them.
+- **`linkFiles` reads the task's link rows before the picked files** (a plain read, so the lock order
+  stays): before 020 a save naming a private or a deleted file answers `UPDATE_NEEDED` 503, never a
+  400 about a file or a confirm first.
+- **The bulk lock is by the primary key alone** (`bulk.js`). With `project_id = ?` in the lock, MariaDB
+  10.4 read the rows through `(project_id, status, priority)` and locked its entries first; a tick (it
+  holds its row, then moves that entry) then deadlocked, was the victim and answered 500.
+  `FORCE INDEX (PRIMARY)` is the same on MySQL and MariaDB. The bulk save also writes each row by its
+  id: one `UPDATE … WHERE id IN (...)` of many of the table's rows scanned and locked the whole table,
+  so it waited on other projects' saves. `projectTasks/retry.js` (new, B's row) has
+  `withDeadlockRetry`, which `update`, `setStatus` and `remove` use too (409 `CONFLICT` after 3
+  tries); `projectTasksBulk.test.js` keeps the cases.
+- A's new files: `projectFiles/viewer.js` (the viewer's ctx and the id helpers, so `reads.js` and
+  `linkReads.js` don't import each other) and `[id]/_files/filesItems.js` (split from
+  `filesTabView.js`). The picker always lists every place (All files, Whole project and the six
+  phases, a count of 0 included). `shareWith` takes `null` as well as `''` for anyone on the project
+  (what zod's `assigneeId` transform gives). `linkFiles` reads the person by `task.assigneeId` when
+  `task.assignee` isn't given; `shareConfirmFits(shareWith, assigneeId)` is exported for B.
+- B's queries live beside their callers, because `repo.js` was at its size limit:
+  `repo.countReportLines`, `repo.listUpdates` and 1.12's `listReportLines` in `updates.js`;
+  `repo.countOpenByAssignee` in `assignees.js` (with `assertAssignee` and `ASSIGNEE_MESSAGE`,
+  re-exported by `writes.js`); the My tasks reads in `mine.js`; the bulk lock in `bulk.js`.
+  `sendBulkChanged` and `sendBulkReassigned` are in a new `bulkMessages.js`, not `messages.js`.
+- Grouped titles (B): 1 title "A", 2 "A and B", 3 "A, B and C", more "A, B, C and 2 more" (at most 3
+  titles, as the rule says; the 3-task example under Bulk sends, "…, Payment settings page and 1
+  more", shows only 2). A bulk Undo that gives tasks back to several people sends the earlier holder
+  one `project_task.reassigned` per new person (one title names one person).
+- `listMine` and `countMineDue` answer `{ tasks: [], more: false }` and 0, without a query, for
+  anyone who isn't an active PM or Admin. `MineTask` also carries `projectId` and `assigneeId`.
+- Tests outside the rows: `tests/services/projectPlanMigration.test.js` (Today's reader reads the
+  plan columns through the guarded read, so its "no warning" case became "keeps Today's rows
+  working…"), `tests/services/aiAskRoute.test.js` (the PM nav list gained `myTasks`); new helpers
+  `tests/services/migration020Kit.js` (O) and `tests/helpers/hookTree.js` (C3).
+
+**Motion (C2, O)**
+
+- **No `html[data-dragging] *` rule.** On a 150-card board (about 8,000 elements) that rule, and an
+  `:is(...)` alternative, recalculated thousands of styles at the lift and again at the drop (70 to
+  120 ms each way on a fast computer). `BoardDrag.module.css` sets `cursor: grabbing !important` and
+  `user-select: none` on the root and the board only (`.dragging`, `.dragging [data-board]`); the
+  board holds the pointer capture, so the browser keeps showing its cursor everywhere.
+- `playPhaseMove` takes an optional `wait` (default 0) and plays at once: C1's `usePhaseMove`
+  already waits `duration('out')`, and the old 160 ms default doubled the wait.
+- `TaskCheck` calls `onChange(next, saved, { el })` and draws the check only when `onChange` is
+  given (the Summary tab's plain box stays as it was); the row or card needs `data-ticking` for
+  `TaskTick.module.css`'s `tick` class to draw.
+- `presence.js` also exports `useWindowPresence(open, isClient, exitMs)`, `windowMarks(closing,
+instant)` and `useHeldValue(open, value)` (a closing window keeps its last content). Dialog and
+  Drawer play their exit through `data-closing` and `data-instant` in their own CSS.
+- C2's new files: `_board/{dragController,dragEnd,dragKeys,phaseParts}.js` (beside `dragSession`,
+  `dragTargets`, `dragPreview`, `sortedGap` and `autoScroll`). `tests/visual/shot.mjs` waits up to 2
+  s until no finite animation runs, then shoots with `animations: 'disabled'`.
+- **Where a drop counts** was first the preview's centre alone, so a tall card held by its top and
+  let go low in a column (the pointer over "+ Add task") flew back. The rule above is the changed
+  one (`hitColumn(columns, centre, point)`; the prototype's `hitCol` too). The lift also marks the
+  columns `dirty`: they were read before `data-dragging` stretched them, so on a board without
+  `data-fill` the lower part of a short column did not take the card until something scrolled (the
+  prototype read them on its first frame already).
+- **`--drag-room` reaches the columns too.** The CSS block of The sideways scroll gives the room to the
+  board alone, so without `data-fill` the cards, the fold and the foot pushed down in the tallest
+  column stood below its background, and a card let go there flew back. Two more rules make the text
+  under that block true while a card is lifted: every child of the board has a bottom margin of minus
+  `--drag-room`, and every column's bottom padding grows by it (6 px plus the room). The backgrounds
+  reach one card below the tallest column and the board still grows by one card only (the prototype
+  too; `boardOverflow.test.js` keeps both).
+- The people window as a popover on a computer uses the "Menu, popover" row (`--dur-fade` from
+  `--shift-menu`); as a Dialog or a phone sheet, the "Window or sheet" row.
+- **The sticky sidebar paints over the page** (`AppShell.module.css`: `z-index: 10` on the sidebar's
+  sticky box, over the page's own z-index 1 to 6, under everything that floats at 30 and up). Painted
+  before the page it made Chrome give every positioned piece after it a layer of its own ("Overlap"):
+  149 layers on a board of 150 cards, 129 of them card titles, and 14 to 29 ms of Layerize in a frame
+  that moved, at full speed. It is 6 layers now, 12 while a card is lifted: dragging a card in its own
+  column, the p95 frame went from up to 50 ms to 17 ms, and at 4× CPU from 167 to 233 ms to 67 ms.
+  `appShellLayers.test.js` keeps it; `board-perf.spec.js` (opt-in) counts the layers (at most 30) and
+  takes its frames from the drag only (they had included the refresh after the drop).
+- Hover moves nothing but colours: the colour panel's swatch gets a ring (`--line-strong` behind the
+  dot) instead of §23's `scale(1.08)`; the KPI cards' chevron keeps the 2 px of §23's and §25's
+  prototypes, and stays still under reduced motion (`motionTokens.test.js` checks every hover and
+  press rule).
+- `taskEvents.js` also has `sayReopened(taskId)`: the task window's Reopen tells the tick holds as the
+  toast's Undo does (`TASK_REOPENED`), so a card ticked a moment before is open again at once.
+- Upload progress under reduced motion: the bars step without a transition, because
+  `motionTokens.test.js` refuses a transform transition that still moves under reduce (the Moments
+  row says "same").
+- **Band progress** (the Moments row; new `_board/bandMotion.js`, `_board/useBandMotion.js` and
+  `bandValues` in `bandView.js`): the percent is drawn twice, the copy that counts up (`data-pct`,
+  `aria-hidden`) and its hidden twin (`data-pct-final`). A commit whose page tasks are the same list
+  as before shows the viewer's own change (a move, a delete, a ticked card that has left, their
+  Undo) and plays at once; a tick, a Reopen (`TASK_REOPENED`) and a bulk move also ask for it through
+  the commit queue (`board.expectBand()`), because their change mostly comes with the refresh: the
+  first commit that draws a change within 2 s plays it, once. A refresh with no request never
+  plays, and a phase move plays the band itself.
+- **The optimistic done of a tick ends when the page agrees**: `useTickLeave({ rootRef, tasks })`
+  takes the page's own tasks; a task the page shows done needs no optimistic done, so a later "open"
+  from the server (the task window's Reopen, another manager) shows at once. Only a "done" the page
+  has not shown yet is held, for at most 15 s.
+
+**Board, cards and Table (C1, C3, T)**
+
+- A column's count and tag wrap under its name before the name is cut: "Development" with "Current"
+  didn't fit a 248 px column and read "Develo…" (the prototype drew only shorter names as the
+  current phase, and follows now).
+- C1: the view and rail cookies and `?view` are in `viewPrefs.js`; the board object is put together
+  in `boardObject.js`; `useBoardData.js`, `useBoardActions.js` and `usePhaseMove.js` are split from
+  `useBoard.js`; `Faces.module.css`, `FilterLine.module.css` and `ForecastLine.module.css` from the
+  toolbar and band CSS. 1.12's `filterOf`, `FILTERS` and `reportLine` are gone from `boardView.js`
+  (the Table's `rowLine` writes a task's report line). `Menu` also
+  takes `triggerProps` and `childrenName`; `MovePhaseButton` takes `onMoved(to)` and `stayText`;
+  `ReopenProject.jsx` exports `ProjectStatusProvider`, `useProjectStatus(fallback)` and
+  `CompletedTag`. The header shows "+ New task" only on tabs other than the Board.
+- A Completed project keeps "Change deadline" / "Add deadline" on the band (this section hides only
+  the forecast, Move and "⋯"; the prototype hides the deadline button too, and stays so until the
+  owner decides). For the owner to confirm.
+- The Board registers `counts` as well (`registerBoard({ move, expectNew, flash, counts })`), so the
+  Move dialog shows every phase's count as in 1.12.
+- C3's new files: `usePeople.js`, `useMoveDialog.js`, `PeoplePopover.jsx` and `CardParts.module.css`
+  (the files line and the footer); `.anyone` stays in `TaskCard.module.css`. `MoveTaskDialog` is a
+  bottom sheet on a phone.
+- The Undo toast's body line: `UndoToast` draws `pending.body` under the title, in the same
+  paragraph, and `useUndoDelete` passes `item.body`, so the Files tab's "File deleted." shows "It
+  was on 2 tasks."; a change of person passes its told line the same way. `UndoToast` and
+  `useUndoDelete` were to stay as they are; nothing else in `useUndoDelete` changed, and in
+  `UndoToast` only the keyboard (next item).
+- **Focus after a control goes away**, beyond the list in Look and accessibility: the "Marked done."
+  toast often takes the focus after the ticked card or row has left, so the place to go back to is
+  read as the box is ticked (`placeAfterTick`, new `[id]/tickFocus.js`; `TaskCheck` passes it to
+  `TaskUndoProvider`, which is listed above as unchanged) and Tab, Escape and Undo go there: a card →
+  the next card's title, else the previous one's, else the column's "› 6 done", its tile or the rail,
+  "+ Add task"; a Table or My tasks row → the next row's title, else the previous one's, else the
+  table or the list; else the section, else the page's main part. When that place goes as the Undo
+  brings the task back (the fold, a tile or the rail of a column with no other card), the focus goes
+  to the card (`useCardFocus.placeTarget`). In every Undo toast, Tab stays the
+  browser's own when nothing took the focus, and a toast that goes from the keyboard (Escape, Close,
+  Undo) hands the focus back to where it came from. "Group by phase again" → the switch's "Table"
+  button (as the prototype); the Undo of "Project reopened." → "Reopen project" (`id`
+  `project-reopen`), waiting on "Add task" or "+ New task" until the answer.
+- **The card menu**: the card's actions group is a stacking context (z-index 1) and the menu is drawn
+  inside it, so the group takes the menu's layer (80) while its "⋯" is open; otherwise the next card's
+  group covers the menu and takes its clicks. `MenuItem` also has `separator` (a 1 px line above the
+  item, `role="separator"`): the card menu's Delete and, in the Files tab's row menus, Delete and
+  "Remove from this task", as the prototype.
+- **Give to… on stale counts**: the Table's save reads the selected tasks again before it hands the
+  server's `fields.shareConfirmed` to the people window (`readTasks` in `usePeople.js`: `GET
+/api/project-tasks/[id]` for each, 6 at a time, in order), and "Give and share" saves, and Undo puts
+  back, the tasks as read. A task that can't be read stays as it was; when none of them then shows a
+  private file, the confirm shows the server's own sentence.
+- T: the Table and the phone's stacked list are both drawn (hydration-safe; CSS shows one), so each
+  `data-flip` key is on the page twice; T's code, the band click into the Table (`useBoardActions`)
+  and a change of person (`useAssign.placeOf`) use the copy that is shown. Another PM's Table has no
+  Files column (`filesAccess` is `'none'`; the prototype drew it empty and is fixed). The bar's
+  buttons are `Button` with BusyButton's spinner class, because `BusyButton` sets its own
+  `aria-disabled`. The bulk Undo toast belongs to the Table: switching to the Board within the 6 s drops the Undo (the
+  change stays). The table uses `border-collapse: separate` with `overflow: clip` on its card, so
+  the sticky header keeps its border. T's new files: `TableParts.jsx`, `tableDom.js`,
+  `bulkMotion.js`, `useRowFocus.js`, `TableParts.module.css`, `StackList.module.css`.
+
+**Task window, form and picker (D)**
+
+- The confirm sentence uses `--marigold-text` (this section; the prototype drew it in ink and is
+  fixed). The picker's places and the window's two columns switch with a 752 px media query (720 px and the
+  overlay's 16 px sides), not a container query. The neutral `FileTile` is `--surface-muted` /
+  `--muted`. Picking past 20 files shows the 20-file line under Files instead of adding them.
+- The form and picker sentence keeps its lead for anyone on the project:
+  "acme-store-contract-signed.pdf is only for PM and Admins. Everyone on the project will be able to
+  open it from this task." / "2 files are only for PM and Admins. Everyone on the project will be
+  able to open them from this task." The people window's bulk confirm with one sharing task has the
+  Anyone forms too ("1 of these tasks has a file only for PM and Admins. Everyone on the project
+  will be able to open it from that task." and its 2-files form).
+- D's new files: `_board/{taskFormAssign,taskFormToasts,useFormLinks}.js` (`taskFormModel.js`
+  re-exports the first two); `src/components/files/{FilesPickerParts.jsx,ShareConfirm.module.css,useWindowDrop.js}`
+  (`useWindowDrop` moved out of `UploadField`);
+  `src/components/task/{TaskWindowRail.module.css,TaskUpdates.module.css,useWindowActions.js,useLinkAttach.js,shownPerson.js}`.
+  `ProjectView` and `MemberProjectView` pass `viewerId` to `TaskWindowProvider` (for "(you)"), and so
+  do My tasks and the home cards (`loadMyTasks` answers it).
+- The files styles are split by component, so no module is over 300 lines: `Files.module.css` keeps
+  what several share (chips, the small buttons, thumbnails, rows); `FileName`, `FileTile`,
+  `LinkChip`, `UploadChip` (the bar), `UploadField` and `PickerRow` (the picker's rows) have their
+  own. The picker's panes are `PickerBody` in `FilesPickerParts.jsx`; `useFilesTab.js` keeps its
+  removals in `rowRemoval`. `boardCodeSize.test.js` measures these too.
+
+**My tasks and Today (M)**
+
+- `cardRows(tasks, limit, today)`; a card group heading counts its whole group (as the prototype).
+  `/team` shows the card for PMs only (`role === 'pm'`), `/overview` for `can(user,
+'project.manage')`; `loadMyTasksCard` gives null on an error and the dashboard shows without it.
+  `myTasksData.js` is server only. The Phase column says "No phase yet" when there is none.
+- On a phone the search is its own row (the prototype hid it through the board's phone rule) and the
+  rows keep the paperclip on line 2 (the prototype hid it; this section shows it); the prototype is
+  fixed on both. The project select has the prototype's chevron.
+- The tick (`useMineTick`) hears `TASK_REOPENED` as the board does: an Undo within the 600 ms stops
+  the leave, one after it shows the row at once, and a row the refresh has already left out keeps its
+  place, unticked, until the next refresh. Where the focus goes is `tickFocus.js`'s, for the leaving
+  row and for the toast's Tab, Escape and Undo alike.
+- `data-flip` also has `mine-group:<key>` (group rows and headings) and `mine-foot` (the card's
+  foot) for the tick's slide. `team/loading.js` and `overview/loading.js` (in no row) have no My
+  tasks card in their skeletons.
+
+**Owner requests (R)**
+
+- The Daily report artboard (`docs/design/1x/02-daily-report.png`) has no Copy button; the design
+  compare accepts that region. At 1440 px the side column is 340 px wide, so a draft's subtitle
+  "Posts to #daily-reports when you submit" wraps to two lines (the header is 91 px, not 73).
+- The Copy and Check icons crossfade with `var(--dur-out) var(--ease-standard)`, and the transition
+  is `none` under reduced motion, so the swap is instant there as item 4 asks (the tokens alone
+  would keep a 120 ms fade).
+- On Windows the clipboard gives the copied text back with CRLF line breaks; a test that reads it
+  back turns `\r\n` into `\n` first.
+
+**Demo data and README (O last)**
+
+- `db/demo`: the brand guide is linked to "Checkout fix before client demo" through
+  `projectFiles.linkFiles`, the task row locked first (`STORE_LINKS` in `projectFiles.js`); the
+  managers-only contract stays unlinked. `taskTimers.js` adds finished timer entries on past working
+  days: Simran 5h 40m on the checkout task and 1h 50m on "Product image zoom", Vishal 3h 15m on
+  "Payment settings page". On internal-tool the CEO took "Approve the hosting invoice" (P2, due on
+  the demo's day, Development) and Meera Pillai took "HR tries the leave form"; a plan task may now
+  belong to an active Admin who isn't on the project (`projectPlanRows.js`), who is then its last
+  editor. With the extra open task, internal-tool's deadline is Monday of week 5 (was Friday of week
+  4), so it still reads At risk (12 left at 7 done in 3 weeks: 1 to 7 days late on any day). The PM
+  keeps "Get the payment gateway keys from Acme" (overdue). `tests/unit/demoTaskBoard.test.js` pins
+  it all.
+- README: the 1.13 Updating steps and the way back to 1.12; every host command on the lean lines
+  (Checking and Fresh start with their own blocks); the 1.11 deployment note says the Sound default
+  became All in 1.13; the version label in "Changes from the build guide" reads "Daybook v1.13".
+
+**E2e (F)**
+
+- **Undo of a tick after the card has left**: the board's tick hold kept the optimistic "done" for up
+  to 15 s, so the "Marked done." toast's Undo reopened the task on the server while the card stayed
+  under the fold. `TaskUndoProvider` (listed above as unchanged) now says so on `window` after the
+  reopen is saved (`TASK_REOPENED` in the new `[id]/taskEvents.js`, with `detail.taskId`), and
+  `useTickLeave` also returns `reopen(taskId)`, listens for it, cancels a pending leave and forgets
+  what it held.
+- Specs: `board-table.spec.js` gives the tasks to Vishal Saini (Sneha Patil isn't on acme-store in the
+  demo); Today's Due column is checked in `task-links.spec.js` (Vishal has due-dated tasks, the person
+  of `todo.spec.js` has none, so that spec is unchanged); the release outside the board in
+  `board-motion.spec.js` is over the sidebar (with `data-fill` the band is scrolled out of the
+  window); `task-links.spec.js` picks from Whole project, and `no-sideways-scroll.spec.js` adds its
+  task in the current phase, because `project-plan.spec.js` runs first and moves acme-store;
+  `board-focus.spec.js` waits for the page's `h1`; the report's submit and the deadline's save may
+  take up to 60 s (their routes compile on first use in `next dev`).
+- Helpers beyond the plan: `pointOf`, `expectNoSidewaysScroll` and `runningAnimations` beside
+  `pointerDrag` (`support/board.js`), `taskByTitle` and `currentPhaseOf` (`support/demoData.js`),
+  `PEOPLE.simran` (`support/fixtures.js`).
+- **The performance budget was not met on the dev server, for the owner to decide.** First measured
+  with `PERF=1` on `next dev`, 150 cards, CPU 4× slower (25 Nov): the 2 s drag's p95 frame 266.6 ms
+  (budget 20), long tasks of 61 to 270 ms during the drag and up to 8,056 ms after the drop; the bulk
+  action on 100 rows had long tasks of up to 7,826 ms (budget 50). With 151 cards a menu move plays
+  only the flash, as asked. C2's own run: p95 300 ms, about 1.2 s at the lift (a full style
+  recalculation for the grabbing cursor on the root), about 13 ms of Daybook's own script over the
+  drag. After the sidebar's layer (Motion), the drag's own frames: p50 50 ms, p95 367 ms, long tasks
+  of 51 to 405 ms, with two other dev servers running on the computer: painting and style
+  recalculation remain. A production build (`next build`, `next start`; measured once, 25 Nov, the
+  same spec signed in with a session row, as the dev login is off there) is much faster: at full
+  speed the 150-card drag has a p50 frame of 18 ms and a p95 of 35 ms, no long task during it and one
+  of 92 ms after the drop, and the 100-row bulk action has two long tasks (57 and 136 ms); at 4×
+  slower the drag has p50 86 ms and p95 126 ms, long tasks of 50 to 172 ms during it and up to 743 ms
+  after the drop, and the bulk action long tasks of 95 to 892 ms.
+
+### Order of work
+
+1. **O first**: the prototype; migration 020 with its test, run up, down and up on a copy (a
+   `daybook_test_<n>` database, never the live "daybook" database) and once on MySQL 8.4 through the
+   workflow; the 020-first line in the eight service tests and the workflow; `migration020.js`;
+   version '1.13'; the motion tokens, the deleted 0.01 ms rule, every CSS module on the tokens and
+   `motionTokens.test.js`; the nav item and badge (with the two badge tests it changes); the size
+   test; the five test splits; **the stubs** (C2's board hooks included), so no two builders write
+   one file and everyone starts green.
+2. **A, B, C2 and R in parallel** (R: Two more owner requests, on its own files): A the access rule, links, every read, the picker and unlink routes
+   and the Files tab (against O's stubs of B); B the assignee rule, take, the earlier-person notice,
+   `ALERT_TYPES`, `listMine`, `countMineDue`, updates, minutes, the Today rule, `TaskDetails`, the
+   bulk route and the task routes (against O's stubs of A); C2 `src/lib/motion`, the pointer drag,
+   the keyboard move, the live region, `boardMotion`, `phaseMotion`, the tick, and the window and
+   toast exits (on 1.12's board markup plus the data attributes; C2 leaves `useBoardDrag.js` and
+   `useCardMoves`' 1.12 return in place, so the 1.12 board and its tests stay green).
+3. **C1, C3, T, D and M in parallel** (they can start on the stubs, O's stubs of C2's board hooks
+   included, and switch to the real pieces as A, B and C2 land): C1 the frame, toolbar, filters, rail, columns, the sideways scroll fix, the band's
+   markup, Completed and Reopen; C3 the cards, card menu, people window and Assign to me; T the
+   Table and bulk bar; D the task window, the task form, the picker and the share confirm; M My
+   tasks, the home cards and Today. Each replaces O's stub of its own file.
+4. **F** once C1, C2, C3, T, D and M are in: the new specs, then the changed ones (e2e in CI mode
+   from a copy of the project, never against localhost:3000; Tests).
+5. **O last**: demo data, README and `hostScripts.test.js`, the CONTRACT edits, the prototype fixed
+   where this section won, reviews, refute checks, fixes, the full unit and services runs, e2e (CI
+   mode from a copy, with the `scrollbars` project), `next build`, screenshots of every screen against the prototype at
+   1440 and 390 px, light and dark (`tests/visual/shot.mjs`, `compare.py`).
+
+### Choices made in this section (for the owner to confirm)
+
+1. **No faces in column headers** and **Assign to me in the task window's right rail** (a link under
+   "Assigned to"), as the reviewed option B draws them (the brief had both elsewhere).
+2. **Giving a task that has an "Only PM and Admins" file to someone else asks the same confirm**
+   ("Give and share", "Save and share"), and the server refuses without it: a reassign shares the
+   file with a new person, so it is treated like linking (fails closed). Taking a task never asks,
+   and neither does an Undo that gives a task back to the person who held it a moment ago.
+3. **Bulk actions use one new route**, all or nothing, with one notification per person ("3 tasks on
+   acme-store assigned to you"), not one per task; the bulk buttons wait for the answer instead of
+   moving rows first; the toast counts only the tasks that changed ("Nothing to change." when none
+   did).
+4. **Undo of a person change is an ordinary change**: the people it reaches are told again, and an
+   Undo that puts a task back to Anyone notifies everyone on the project. A silent Undo would leave
+   the people the first change told believing the wrong thing. Undo is offered only when the
+   earlier person can still be picked (not for someone taken off the project, deactivated, or an
+   Admin who isn't on the project).
+5. **The earlier person's notice is its own type** (`project_task.reassigned`, normal) and opens the
+   project's board, since an employee can no longer open a task that isn't theirs.
+6. **An Admin who takes a task on a project they aren't on** is listed as "Me" only to themself;
+   others see them only as that task's person (checked, last, in the people window and on Edit).
+7. **Status chip**: from the newest daily-report line the viewer may see; the Table shows "To do"
+   when there is none; cards show nothing then.
+8. **Time from timers** counts finished timers only; employees see only their own minutes, labelled
+   "Your time"; PMs and Admins see everyone's (the Table's Time column is for the PM view only).
+9. **Filters dim cards on the Board and hide rows in the Table**; filters last for the visit; the
+   view (Board or Table) and the Done phases rail (open or closed, closed at first) are remembered
+   per person on that computer, in cookies, so the page opens the right way with no jump.
+10. **Faces**: the PM first, then A to Z, at most 5 and "+2"; one person at a time; they overlap by
+    4 px (option B: 6 px) so each face keeps a 24 px target of its own.
+11. **Names of the two column add buttons**: the header "+" is "New task in Testing" (it opens New
+    task) and the foot is "Add task to Testing" (quick add), so screen readers can tell them apart
+    (the brief had "Add a task to Testing").
+12. **File X labels**: an own file keeps 1.12's "Remove brief.pdf" (soft delete with Undo); a linked
+    file says "Remove checkout-flow.docx from this task" (the prototype said "Delete" for own files).
+13. **File tiles get colours by type everywhere** (PDF red, Word blue, spreadsheet green, zip
+    marigold, a picture without a thumbnail violet, others neutral), as option B draws them; 1.12's
+    Files tab tiles were one neutral colour.
+14. **The Board tab has one add button** (the toolbar's Add task); the other tabs keep "+ New task"
+    in the header, or Reopen project on a Completed project.
+15. **A Completed project's band shows no forecast, "Move to …", "Start …" or "⋯"** (the note says it
+    once); the server still accepts phase moves, as 1.12.
+16. **Column dates add early notes** on the board only ("Ended 4 days early", "Started 7 days early");
+    the Timeline is unchanged.
+17. **My tasks** shows On hold projects (with an "On hold" tag), leaves Completed ones out, and shows
+    up to 200 tasks.
+18. **The picker** marks every "Only PM and Admins" file with the lock line and lists up to 500 files.
+19. **A shared "Only PM and Admins" file in an employee's Files tab** shows under that task in "On
+    tasks" and in "All files" with "Shared with you on …", never in its own place; an employee's
+    Files tab never names another person's task, even under an Everyone file.
+20. **The New task window's unsaved-files question counts picked project files too.**
+21. **The board fills the window's height only when a column shows 4 or more cards**; shorter boards
+    stay their own height; once filled it stays so for the visit; never on a phone.
+22. **Touch never drags** (no long press); phones and tablets use "Move to phase…", and the grip is
+    hidden on touch screens.
+23. **Today's Priority tasks card gains a Due column**, as option B draws it.
+24. **Changing a linked "Everyone" file to "Only PM and Admins"** keeps it open to the people of the
+    tasks it is on (everyone on the project for an Anyone task); Edit details says so as soon as the
+    setting is picked.
+25. **The fade at the board's edge and the arrows** show only on the side that has more columns.
+26. **A card can be dragged by its title too** (past 6 px; a plain click still opens the task), as
+    in 1.12; option B and brief 5.3 left the title out of the grab area.
+27. **The grip's click opens "Move to phase…"** for that card (a plain click, a screen reader's
+    activation, voice control); Space or Enter still picks the card up.
+28. **The phase move confirm says how many open tasks stay behind** ("5 open tasks stay in
+    Testing."), as option B draws it.
+
+### Risks to watch
+
+- **A missed read would hide or leak a linked file.** Every read builds `links` through one helper
+  and A's services test runs the full viewer matrix on every read, before and after unlink and
+  reassign. Reviews check that no new read of `project_files` skips it.
+- **The Admin assignee's knock-ons** (the card's "Not on the project" label, notifications, Today, My
+  tasks) change in four places at once (map.md 13.1); B's tests cover each.
+- **Removing the global reduce rule**: a CSS module left with a literal time would animate under
+  reduce motion; `motionTokens.test.js` fails on it. Third-party CSS: none.
+- **Pointer drag details** (the click after a drag, StrictMode's double effects, clones with ids, a
+  picture's native drag, scroll snapping, a refresh mid-drag): each has a rule above and a unit or
+  e2e test; e2e drags with real mouse steps.
+- **Slow office laptops**: FLIP stops past 150 cards; the opt-in perf spec measures; if a project
+  passes 150 open cards often, the drop commit may need `memo` on cards (an As built note, not a
+  first-build step).
+- **`100dvh`** (the board's height) works in the browsers Daybook supports; a `100vh` line first is
+  the fallback.
+- **e2e churn**: many selectors change (Add task, the Assign to radios, Filter, pointer drag, nav
+  lists); F changes them in one place (`support/board.js`).
+- **The eight service tests and the workflow that roll back 019** fail until 020 rolls back first (O
+  first).
+- **Size caps**: `useBoard.js`, `boardView.js`, `Board.module.css`, `TaskCard.module.css`,
+  `ProgressBand.module.css`, `TaskWindow.module.css`, `taskFormModel.js` are near 300 lines; owners
+  split them (the size test is recursive now).
+- **Bulk locks**: rows are locked in id order and deadlocks retried; 100 rows at most.
+- **Notification noise**: grouped bulk sends; an Undo notifies again (Choices 4).
+- **A stale share confirm**: the confirm names its person (`shareWith`), so a task given to someone
+  else while the window was open is refused and asked again, never shared with the wrong person.
+- **Deploy before migrate**: until the migrate line runs, project files can't be attached (one clear
+  sentence) and everything else works.
+- **The production build** is only run by the orchestrator; nothing in 1.13 depends on build-only
+  behaviour, but the e2e runs `next dev` (as 1.12).
+
+### Other section edits
+
+- **§2** (append to the client-imports bullet): "`src/lib/motion/` is client code (Pointer Events,
+  the Web Animations API); its pure files `tokens`, `settle` and `commitMotion` may be imported
+  anywhere. The pure `projectFiles/access.js` gains `canSeeLinkedOnTask`, `needsShareConfirm` and
+  `isProjectManager` (CONTRACT 28)."
+- **§5** (Shared library, add): "`src/lib/motion/` (CONTRACT 28, owner orchestrator after 1.13):
+  `tokens`, `reducedMotion`, `animate`, `flip`, `clone`, `settle`, `commitMotion`, `useMotion`,
+  `presence`."
+- **§6**: projectTasks (append): "`listAssigneeOptions` → `AssigneeOption[]` with `kind` and
+  `openHere`; `listOpenForUser(user)` (the CONTRACT 28 Today rule, with `phase` and `dueDate`);
+  `listMine({ viewer, today, limit })`, `countMineDue({ viewer, today })`, `updateCountsFor`,
+  `latestLinesFor`, `bulkUpdate({ user, projectId, changes, shareConfirmed, ip })`; create, update and
+  `attachFiles` take link fields; answers carry `toldEarlierName` (CONTRACT 28)." projectFiles
+  (append): "`chipsForTasks`, `pickerFiles`, `privateLinkCounts`, `countActiveLinks`, `linkFiles`,
+  `unlinkFiles`, `unlinkFile`; every read follows links (CONTRACT 28)." timers (add):
+  "`minutesByTask({ taskIds, userId? })` (CONTRACT 28)." dashboard: "`getNavBadges` adds `myTasks`
+  (CONTRACT 28)."
+- **§7**, "Later sections add" (append): "projects → `GET projects/[id]/files` (the picker),
+  `POST projects/[id]/tasks/bulk`, `DELETE project-tasks/[id]/links/[fileId]` (28)".
+- **§8** (add): "**files** gains `FilesPicker`, `ShareConfirm`, `LinkChip` and colours by kind in
+  `FileTile`; `Menu` items may be checkboxes (`checked`, `keepOpen`); `Dialog`, `Drawer` and toasts
+  play an exit (`usePresence`) (CONTRACT 28)."
+- **§9**: add the owner rows of Files and owners with "(CONTRACT 28)"; pages: "`/my-tasks`
+  `project.manage` (PMs and Admins; CONTRACT 28)".
+- **§10** (add): "Unit tests never use jsdom: browser APIs are hand fakes (`tests/helpers/motionFakes.js`).
+  The e2e `scrollbars` project runs Chrome with real scrollbars for the sideways scroll check
+  (CONTRACT 28)."
+- **§13**: replace "`assignee_id` (active member of the project, or null)" with "`assignee_id` (null,
+  an active member, the project's PM, or an active Admin who takes it themself; CONTRACT 28)";
+  Notifications (append): "`project_task.reassigned` tells the earlier person when the person of an
+  open task changes (CONTRACT 28)." Add: "Tasks can carry links to project files (CONTRACT 28)."
+- **§20**, Version label: "`APP_VERSION` in `src/config/version.js` (now '1.13'; raised with each
+  release)."
+- **§22**, Design (append): "The Board tab is redrawn again by CONTRACT 28 (toolbar, Table, fuller
+  cards, motion)."
+- **§24**, Priority tasks on Today (append): "Rows show the due date and include tasks a tracked
+  Admin took (CONTRACT 28)."
+- **§25**: no change (HR has no `team.view`, so on a task HR sees only its own report lines and
+  minutes).
+- **§26**, Important notifications: "44: 19 important, 25 normal" → "45: 19 important, 26 normal";
+  add the row "| 45 | `project_task.reassigned` | no | task | Your task went to someone else; like the
+  other task types. |"; Tests: "exactly the 44 types" → "exactly the 45 types". Preview stack,
+  Motion: replace "Reduced motion: no rule in the module; the global rule in `globals.css` cuts both
+  animations to 0.01 ms, so `animationend` still fires and a card appears and goes at once." with
+  "Reduced motion: the motion tokens make both animations 120 ms fades (CONTRACT 28), so
+  `animationend` still fires."
+- **§27**: Who sees and does what (append): "Links to project files: CONTRACT 28 (a member may open
+  an Only PM and Admins file linked to their task, through that task only)." Board tab: replace the
+  widths sentence ("Widths: Done phases 196 px; … scroll snapping to columns") with "Widths, the rail
+  and the board's own scroll: CONTRACT 28, The sideways scroll."; the filter pills paragraph, the
+  native drag bullet, the 1.5 s highlight and "Completed project: no + New task and no + Add task":
+  "replaced by CONTRACT 28". Task window: "A centred `Dialog` 640 px" → "720 px, two columns
+  (CONTRACT 28)". Look: "`prefers-reduced-motion`: no smooth scrolling, no highlight fade, no
+  sliding." → "Reduced motion: CONTRACT 28, Motion." Tests: "`project-board.spec.js`: drag a card …
+  (`dragTo`)" → "… with a pointer drag (CONTRACT 28)".
+- **§11, §21 and §26** (Two more owner requests): the `bellSound` default becomes `'all'` wherever it is given, and the Sound choices read All · Important only · Off, as item 7 of "Sound for every notification" lists.
+- **§21**, Slack preview (append to the "Slack preview off" bullet): "When it shows, its header has a Copy button that copies the exact message (CONTRACT 28)."

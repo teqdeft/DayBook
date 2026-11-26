@@ -1,13 +1,16 @@
 // The Files tab's places, counts and rows (CONTRACT 27, Files tab): each item once, a phase with its
 // task files under "On tasks in Design", On tasks grouped by task, search, the three sorts, every
 // empty state, the lines of each row and the row menus. Pure: the server already left out what the
-// viewer may not see, so these lists are per viewer.
+// viewer may not see, so these lists are per viewer. CONTRACT 28: linked files under their tasks in
+// On tasks (each counted once), never twice in a phase, " · On 2 tasks" for managers, a member's
+// shared file only in All files and On tasks, Edit details' line and the delete toast's body.
 import { describe, expect, it } from 'vitest';
 import {
   canReadForAi,
   deleteCopy,
   dropLabel,
   filesItems,
+  keepLine,
   optionPhase,
   phaseForPlace,
   phaseOption,
@@ -23,7 +26,9 @@ import {
   rowOpens,
   sortItems,
   sortOf,
+  unlinkCopy,
 } from '@/app/(app)/projects/[id]/_files/filesTabView.js';
+import FileRowMenu from '@/app/(app)/projects/[id]/_files/FileRowMenu.jsx';
 
 const PM = { id: 7, name: 'Riya Kapoor' };
 const MB = 1024 * 1024;
@@ -310,15 +315,19 @@ describe('rows', () => {
     expect(rowMeta(item(3), 'all')).toEqual({
       text: 'Excel · 340 KB · Riya Kapoor, 20 Nov · Testing',
       task: null,
+      onTasks: null,
+      shared: null,
+      linked: false,
     });
     expect(rowMeta(item(2), 'all').text).toBe('PDF · 340 KB · Riya Kapoor, 20 Nov · Whole project');
     expect(rowMeta(item(3), 'testing').text).toBe('Excel · 340 KB · Riya Kapoor, 20 Nov');
   });
 
   it("names a task file's task outside On tasks", () => {
-    expect(rowMeta(item(4), 'all')).toEqual({
+    expect(rowMeta(item(4), 'all')).toMatchObject({
       text: 'PDF · 340 KB · Riya Kapoor, 20 Nov · Design',
       task: LOGIN,
+      onTasks: null,
     });
     expect(rowMeta(item(7), 'all').text).toContain('· No phase yet');
     expect(rowMeta(item(4), 'tasks').task).toBeNull();
@@ -362,10 +371,22 @@ describe('rows', () => {
     expect(rowActions(item(13))).toEqual(['viewText', 'edit', 'delete']);
   });
 
+  it('draws a line above Delete and above Remove from this task, as the prototype', () => {
+    const lines = (of) =>
+      FileRowMenu({ item: of, onAction: () => {} })
+        .props.items.filter((entry) => entry.separator)
+        .map((entry) => entry.label);
+    expect(lines(item(4))).toEqual(['Delete']);
+    expect(lines(item(12))).toEqual(['Delete']);
+    const linked = managersTab().find((entry) => entry.key === 'link:31-2');
+    expect(lines(linked)).toEqual(['Remove from this task']);
+  });
+
   it('deletes through the right route, with the right words', () => {
     expect(deleteCopy(item(2))).toEqual({
       url: '/api/project-files/2',
       label: 'File deleted.',
+      body: null,
       failTitle: "Couldn't delete the file",
     });
     expect(deleteCopy(item(12))).toMatchObject({
@@ -376,5 +397,191 @@ describe('rows', () => {
       url: '/api/project-documents/13',
       label: 'File deleted.',
     });
+  });
+});
+
+// ---------- CONTRACT 28: files from the project on tasks ----------
+
+const VISHAL = 21;
+const person = (id, name, manages = false) => ({
+  assigneeId: id,
+  assigneeName: name,
+  assigneeManages: manages,
+});
+const managerTask = (onTask, who) => ({ id: onTask.id, title: onTask.title, ...who });
+const linkOf = (fileId, onTask) => ({
+  fileId,
+  taskId: onTask.id,
+  taskTitle: onTask.title,
+  taskPhase: onTask.phase,
+  taskAssigneeId: null,
+});
+
+/** The managers' tab: the Figma file on two tasks, brief.pdf (only PM and Admins) on one. */
+function managersTab() {
+  const files = FILES.map((file) => {
+    if (file.id === 1) {
+      const linkedTasks = [
+        managerTask(LOGIN, person(VISHAL, 'Vishal Saini')),
+        managerTask(CHECKOUT, person(null, null)),
+      ];
+      return { ...file, linkCount: 2, linkedTasks, sharedByLink: false };
+    }
+    if (file.id === 2) {
+      const linkedTasks = [managerTask(LOGIN, person(VISHAL, 'Vishal Saini'))];
+      return { ...file, linkCount: 1, linkedTasks, sharedByLink: false };
+    }
+    return { ...file, linkCount: 0, linkedTasks: [], sharedByLink: false };
+  });
+  const links = [linkOf(1, LOGIN), linkOf(1, CHECKOUT), linkOf(2, LOGIN)];
+  return filesItems({ files, documents: DOCUMENTS, links });
+}
+
+/** Vishal's tab: an Everyone file, and a contract he reaches only through his task's link. */
+function memberTab({ onBoth = false } = {}) {
+  const tasks = onBoth ? [LOGIN, OLD] : [LOGIN];
+  const contract = projectFile(9, {
+    name: 'contract.pdf',
+    phase: null,
+    visibility: 'managers',
+    linkCount: tasks.length,
+    linkedTasks: tasks.map((one) => ({ id: one.id, title: one.title })),
+    sharedByLink: true,
+    canManage: false,
+  });
+  // The Everyone file is also on Simran's task: Vishal's data never names it.
+  const everyone = projectFile(1, { linkCount: 0, linkedTasks: [], canManage: false });
+  return filesItems({
+    files: [everyone, contract, taskFile(4, LOGIN, { canManage: false })],
+    links: tasks.map((one) => linkOf(9, one)),
+  });
+}
+
+describe('links (CONTRACT 28)', () => {
+  it('lists linked files under their tasks in On tasks, own files first, each file counted once', () => {
+    const list = managersTab();
+    const view = placeView({ items: list, place: 'tasks' });
+    const login = view.groups.find((group) => group.key === 'task:31');
+    expect(login.items.map((item) => [item.type, item.name])).toEqual([
+      ['task', 'brand-check.pdf'],
+      ['task', 'login-page-now.png'],
+      ['link', 'brief.pdf'],
+      ['link', 'checkout-flow.fig'],
+    ]);
+    const checkout = view.groups.find((group) => group.key === 'task:32');
+    expect(names(checkout.items)).toEqual(['card-payment-error.png', 'checkout-flow.fig']);
+    const counts = placeCounts({ files: FILES, documents: DOCUMENTS });
+    const withLinks = placeView({ items: list, place: 'all' });
+    expect(withLinks.shown).toHaveLength(counts.all); // All files: each file once
+    expect(
+      placeCounts({
+        files: list.filter((item) => item.file && item.type !== 'link').map((item) => item.file),
+        documents: DOCUMENTS,
+        links: [linkOf(1, LOGIN), linkOf(1, CHECKOUT), linkOf(2, LOGIN)],
+      }),
+    ).toMatchObject({ all: counts.all, design: counts.design, tasks: counts.tasks + 2 });
+  });
+
+  it('never lists a linked file twice in a phase: "On tasks in Design" keeps own task files', () => {
+    const view = placeView({ items: managersTab(), place: 'design' });
+    expect(view.groups.map((group) => names(group.items))).toEqual([
+      ['checkout-flow.fig'],
+      ['brand-check.pdf', 'login-page-now.png'],
+    ]);
+  });
+
+  it('gives managers " · On 2 tasks" and its tasks; never anyone else', () => {
+    const figma = managersTab().find((item) => item.key === 'file:1');
+    const meta = rowMeta(figma, 'design', { canManage: true });
+    expect(meta.onTasks.map((one) => one.title)).toEqual([LOGIN.title, CHECKOUT.title]);
+    expect(rowMeta(figma, 'design').onTasks).toBeNull();
+    const plain = managersTab().find((item) => item.key === 'file:3');
+    expect(rowMeta(plain, 'all', { canManage: true }).onTasks).toBeNull();
+  });
+
+  it('says where a linked row comes from, with its menu and the unlink words', () => {
+    const list = managersTab();
+    const figma = list.find((item) => item.key === 'link:31-1');
+    expect(rowMeta(figma, 'tasks', { canManage: true })).toEqual({
+      text: 'FIG · 340 KB · From Design',
+      task: null,
+      onTasks: null,
+      shared: null,
+      linked: true,
+    });
+    const brief = list.find((item) => item.key === 'link:31-2');
+    expect(rowMeta(brief, 'tasks').text).toBe('PDF · 340 KB · From Whole project');
+    expect(rowNotes(brief)).toEqual({ managers: false, program: false });
+    expect(rowActions(brief)).toEqual(['download', 'openTask', 'unlink']);
+    expect(rowOpens(brief)).toBe('download');
+    expect(unlinkCopy(brief)).toEqual({
+      url: '/api/project-tasks/31/links/2',
+      label: 'Removed from this task. It stays in Files.',
+      failTitle: "Couldn't remove the file from the task",
+    });
+  });
+
+  it("shows a member's shared file only in All files and On tasks, with no lock and no count", () => {
+    const list = memberTab();
+    const contract = list.find((item) => item.key === 'file:9');
+    expect(rowMeta(contract, 'all')).toMatchObject({
+      text: 'PDF · 340 KB · Riya Kapoor, 20 Nov · Whole project',
+      shared: 'Shared with you on Fix the login page',
+      onTasks: null,
+    });
+    expect(rowNotes(contract)).toEqual({ managers: false, program: false });
+    expect(names(placeView({ items: list, place: 'all' }).shown)).toContain('contract.pdf');
+    expect(placeView({ items: list, place: 'project' }).shown).toEqual([]);
+    const counts = placeCounts({
+      files: list.filter((item) => item.type !== 'link').map((item) => item.file),
+      links: [linkOf(9, LOGIN)],
+    });
+    expect(counts).toMatchObject({ all: 3, project: 0, design: 2, tasks: 2 });
+    const onTask = placeView({ items: list, place: 'tasks' }).groups[0].items;
+    expect(onTask.map((item) => rowMeta(item, 'tasks').text)).toEqual([
+      'PDF · 340 KB · Riya Kapoor, 20 Nov',
+      'PDF · 340 KB · From Files',
+    ]);
+    const two = memberTab({ onBoth: true }).find((item) => item.key === 'file:9');
+    expect(rowMeta(two, 'all').shared).toBe('Shared with you on Fix the login page and 1 more');
+  });
+
+  it("never shows a member another person's task under an Everyone file", () => {
+    const everyone = memberTab().find((item) => item.key === 'file:1');
+    expect(rowMeta(everyone, 'all')).toMatchObject({ onTasks: null, shared: null });
+    expect(memberTab().filter((item) => item.type === 'link' && item.id === 1)).toEqual([]);
+  });
+
+  it("writes Edit details' line from the tasks' people, as soon as Only PM and Admins is picked", () => {
+    const fileOn = (...tasks) => ({ linkedTasks: tasks });
+    const vishal = managerTask(LOGIN, person(VISHAL, 'Vishal Saini'));
+    const simran = managerTask(CHECKOUT, person(22, 'Simran Kaur'));
+    const anyone = (onTask) => managerTask(onTask, person(null, null));
+    const pm = managerTask(OLD, person(7, 'Riya Kapoor', true));
+    expect(keepLine(fileOn(vishal))).toBe(
+      'Vishal Saini can still open it from Fix the login page.',
+    );
+    expect(keepLine(fileOn(vishal, simran, pm))).toBe(
+      'People on the 2 tasks it is on can still open it from those tasks.',
+    );
+    expect(keepLine(fileOn(anyone(LOGIN), vishal))).toBe(
+      'Everyone on the project can still open it from Fix the login page, a task for anyone. ' +
+        'Remove it from that task to keep it for PM and Admins only.',
+    );
+    expect(keepLine(fileOn(anyone(LOGIN), anyone(CHECKOUT)))).toBe(
+      'Everyone on the project can still open it from 2 tasks for anyone. ' +
+        'Remove it from those tasks to keep it for PM and Admins only.',
+    );
+    expect(keepLine(fileOn(pm))).toBeNull();
+    expect(keepLine(fileOn())).toBeNull();
+    expect(keepLine(null)).toBeNull();
+  });
+
+  it('says in the delete toast how many tasks a file was on', () => {
+    const list = managersTab();
+    expect(deleteCopy(list.find((item) => item.key === 'file:1')).body).toBe('It was on 2 tasks.');
+    expect(deleteCopy(list.find((item) => item.key === 'file:2')).body).toBe('It was on 1 task.');
+    expect(deleteCopy(list.find((item) => item.key === 'file:3')).body).toBeNull();
+    expect(deleteCopy(list.find((item) => item.key === 'file:4')).body).toBeNull();
   });
 });

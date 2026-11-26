@@ -1,13 +1,14 @@
-// Reads and updates of `project_files` (CONTRACT 27): the Files tab, task windows, counts,
-// downloads and the management routes. A1's uploadRepo.js writes the rows at Finish and attach.
-// `project_tasks`, `projects`, `project_members` and `users` are read only here (the task's person
-// and phase, the creator's name, the member rule) and never written; `project_documents` is never
-// touched (E's service does, through syncFileDocument).
+// Reads and updates of `project_files` (CONTRACT 27): the Files tab, task windows, counts, chips,
+// the picker, downloads and the management routes (links to tasks are in linkRepo.js). A1's
+// uploadRepo.js writes the rows at Finish and attach. `project_tasks`, `projects`,
+// `project_members` and `users` are read only here (the task's person and phase, the creator's
+// name, the member rule) and never written; `project_documents` is never touched (E's service
+// does, through syncFileDocument).
 import { db } from '@/lib/db';
 
-// One file with its task (only a task on the same project counts) and who added it, in the row
-// shape fileView.toProjectFile reads.
-const FILE_COLUMNS = [
+// One file and who added it, in the row shape fileView.toProjectFile reads (linkRepo.js reads a
+// linked file with these too).
+export const FILE_BASE_COLUMNS = Object.freeze([
   'f.id',
   'f.projectId',
   'f.scope',
@@ -27,6 +28,11 @@ const FILE_COLUMNS = [
   'f.createdAt',
   'f.updatedAt',
   'u.name as creatorName',
+]);
+
+// The same with its task (only a task on the same project counts).
+const FILE_COLUMNS = [
+  ...FILE_BASE_COLUMNS,
   't.id as taskRowId',
   't.title as taskTitle',
   't.phase as taskPhase',
@@ -92,6 +98,38 @@ export function listActiveForTask({ projectId, taskId }) {
       { column: 'f.createdAt', order: 'asc' },
       { column: 'f.id', order: 'asc' },
     ]);
+}
+
+/**
+ * The active files of these tasks (own files, `scope 'task'`), in the order they were added: the
+ * board's chips (linkReads.chipsForTasks).
+ * @param {number[]} taskIds
+ */
+export function listActiveForTasks(taskIds) {
+  if (taskIds.length === 0) return Promise.resolve([]);
+  return filesQuery()
+    .whereIn('f.taskId', taskIds)
+    .where({ 'f.scope': 'task', 'f.status': 'active' })
+    .orderBy([
+      { column: 'f.createdAt', order: 'asc' },
+      { column: 'f.id', order: 'asc' },
+    ]);
+}
+
+/**
+ * The project's active project files (`scope 'project'`, never a task's), newest first, at most
+ * `limit` (the "From project files" picker).
+ * @param {number} projectId
+ * @param {number} limit
+ */
+export function listActiveProjectFiles(projectId, limit) {
+  return filesQuery()
+    .where({ 'f.projectId': projectId, 'f.scope': 'project', 'f.status': 'active' })
+    .orderBy([
+      { column: 'f.createdAt', order: 'desc' },
+      { column: 'f.id', order: 'desc' },
+    ])
+    .limit(limit);
 }
 
 /**

@@ -124,7 +124,7 @@ button.groupToggle {
 
 .groupChevron {
   flex: none;
-  transition: transform 0.15s ease;
+  transition: transform var(--dur-lift) var(--ease-standard);
 }
 
 .collapsed {

@@ -2,8 +2,10 @@
 // on the design canvas, so every screen looks like its artboard, plus three project plans (an off
 // track, an at risk and an on track project, projectPlans.js) for the project management screens,
 // a to-do with unfinished tasks to suggest (todo.js) for Today's to-do, and the 1.10 HR tools'
-// holiday, leave, breaks, missing check-outs and marks (hrTools.js, hrTimers.js), and acme-store's
-// real files (CONTRACT 27, projectFiles.js).
+// holiday, leave, breaks, missing check-outs and marks (hrTools.js, hrTimers.js), acme-store's
+// real files (CONTRACT 27, projectFiles.js) and, for 1.13 (CONTRACT 28), the brand guide linked to
+// the checkout task, timer time on three acme-store tasks (taskTimers.js) and tasks two Admins took
+// on internal-tool (projectPlans.js).
 //
 //   npm run seed:demo                 evening state (the dashboards, 6:52 PM on the canvas)
 //   npm run seed:demo -- --midday     Vishal still checked in with a draft report (01 and 02)
@@ -36,6 +38,7 @@ import {
 import { checkDesignNumbers } from './checks.js';
 import { buildHrRows, planHrTools } from './hrTools.js';
 import { buildTimerDays } from './hrTimers.js';
+import { buildTaskTimers } from './taskTimers.js';
 import { PEOPLE } from './people.js';
 import { addStoreFiles } from './projectFiles.js';
 import { buildProjectPlanRows } from './projectPlanRows.js';
@@ -163,10 +166,8 @@ async function insertDemo(trx, { settings, anchor, days, midday, slackChannel })
     { tz, today: workDate(tz), anchor: days[0], users, projects },
     priorityTasks.map(({ row }) => row),
   );
-  await insertMany(trx, 'projectTasks', [
-    ...priorityTasks.map(({ row }) => row),
-    ...planRows.tasks,
-  ]);
+  const projectTasks = [...priorityTasks.map(({ row }) => row), ...planRows.tasks];
+  await insertMany(trx, 'projectTasks', projectTasks);
   await insertProjectPlans(trx, planRows);
   await insertMany(trx, 'attendance', rows.attendance);
   await insertMany(trx, 'dailyReports', rows.reports);
@@ -191,12 +192,16 @@ async function insertDemo(trx, { settings, anchor, days, midday, slackChannel })
   );
   await insertMany(trx, 'auditLogs', buildAuditLogs(extrasCtx));
   const timerDays = await insertHrTools(trx, hrRows, buildTimerDays(hrCtx));
+  // After the 1.10 entries: their ids are 1..n.
+  const firstId = timerDays.entries.length + 1;
+  const taskTimers = buildTaskTimers({ users, projects, index, tasks: projectTasks, firstId });
+  await insertMany(trx, 'timeEntries', taskTimers);
   return {
     users: users.size,
     projects: projects.size,
     ...countRows(rows),
     activitySegments: activitySegments.length,
-    projectTasks: priorityTasks.length + planRows.tasks.length,
+    projectTasks: projectTasks.length,
     linkedReportLines: linkedLines,
     projectPlans: planRows.plans.length,
     projectDocuments: planRows.documents.length,
@@ -204,6 +209,7 @@ async function insertDemo(trx, { settings, anchor, days, midday, slackChannel })
     leaveEntries: hrRows.leave.length,
     timeEntries: timerDays.entries.length,
     breaks: timerDays.breaks.length,
+    taskTimers: taskTimers.length,
   };
 }
 
@@ -261,7 +267,7 @@ async function main() {
   console.log(
     files.problem
       ? `  No files added: file storage isn't set up (${files.problem}).`
-      : `  projectFiles ${files.files} (acme-store)`,
+      : `  projectFiles ${files.files}, taskFileLinks ${files.links} (acme-store)`,
   );
 }
 

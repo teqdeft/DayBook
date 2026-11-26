@@ -72,6 +72,7 @@ beforeAll(async () => {
   await projectTasks.setStatus({ user: pm, id: doneTask.id, status: 'done' });
   setNowForTests(T0);
 
+  await db.migrate.down({ name: '020_task_file_links.js' });
   await db.migrate.down({ name: MIGRATION_019 });
   await db.migrate.down({ name: MIGRATION });
   expect(await hasTable('project_plans')).toBe(false);
@@ -89,9 +90,9 @@ afterAll(async () => {
 });
 
 describe('before migration 015', () => {
-  it('leaves the readers of Today, the report picker and My projects alone, with no warning', async () => {
-    const today = await projectTasks.listOpenForUser(alice.id);
-    expect(today.map((task) => task.title)).toEqual(['Still open']);
+  // Today's rows read the phase and due date since CONTRACT 28 (through the guarded read): see
+  // "keeps Today's rows working" below, after the one warning of the process.
+  it('leaves the readers of the report picker and My projects alone, with no warning', async () => {
     expect(await projectTasks.countOpenByProjectForUser(alice.id)).toEqual({
       [project.id]: { total: 1, p1: 1 },
     });
@@ -127,6 +128,14 @@ describe('before migration 015', () => {
     expect(await projectPlan.getPlan(project.id)).toMatchObject(NOT_SET);
     expect(warnings).toHaveLength(1);
     expect(String(warnings[0][0])).toContain('npm run migrate');
+  });
+
+  it("keeps Today's rows working, with no phase and no due date (CONTRACT 28)", async () => {
+    const today = await projectTasks.listOpenForUser(alice.id);
+    expect(today.map((task) => [task.title, task.phase, task.dueDate])).toEqual([
+      ['Still open', null, null],
+    ]);
+    expect(warnings).toHaveLength(1);
   });
 
   it("lists a project's tasks with no phase and no due date", async () => {
@@ -256,6 +265,7 @@ describe('a column missing from a plan table (errno 1054)', () => {
 describe('the migration', () => {
   it('goes down and up again cleanly, keeping tasks and their rows', async () => {
     const before = await db('projectTasks').count({ total: '*' }).first();
+    await db.migrate.down({ name: '020_task_file_links.js' });
     await db.migrate.down({ name: MIGRATION_019 });
     await db.migrate.down({ name: MIGRATION });
     for (const table of [

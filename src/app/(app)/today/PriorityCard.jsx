@@ -6,7 +6,8 @@
 // shows a muted check and "In to-do" instead. CONTRACT 27: a paperclip and count after the title
 // when the task has files this person may see; the title is a button, and a click on it or
 // anywhere on the row except the To-do cell opens the task window (mode `today`, with "Open
-// project" and the to-do button).
+// project" and the to-do button). CONTRACT 28: a Due column after "For" (the due tag; nothing for
+// no date), and the rows include the tasks a tracked Admin took ("For you").
 import { useId, useState } from 'react';
 import { Check, ChevronDown, Paperclip, Plus } from 'lucide-react';
 import Card, { CardHeader } from '@/components/Card';
@@ -15,6 +16,7 @@ import PriorityTag from '@/components/PriorityTag';
 import ProjectLabel from '@/components/ProjectLabel';
 import { TaskWindowProvider, useTaskWindow } from '@/components/task/TaskWindowProvider';
 import { plural } from '@/lib/text';
+import DueTag from '@/app/(app)/projects/[id]/DueTag';
 import { useTodo } from './TodoProvider';
 import { isLocked, linkedTaskIds } from './todoModel';
 import styles from './PriorityCard.module.css';
@@ -51,42 +53,61 @@ function TitleButton({ row, className = '' }) {
   );
 }
 
-const COLUMNS = [
-  {
-    key: 'priority',
-    header: 'Priority',
-    width: 96,
-    // A phone shows rows as cards: the title goes beside the tag there (the Task cell hides).
-    render: (row) => (
-      <span className={styles.priorityCell}>
-        <PriorityTag priority={row.priority} />
-        <TitleButton row={row} className={styles.phoneTitle} />
-      </span>
-    ),
-  },
-  {
-    key: 'title',
-    header: 'Task',
-    hideOnMobile: true,
-    render: (row) => <TitleButton row={row} />,
-  },
-  {
-    key: 'project',
-    header: 'Project',
-    width: 220,
-    render: (row) => <ProjectLabel project={row.project} />,
-  },
-  {
-    key: 'for',
-    header: 'For',
-    width: 220,
-    render: (row) => (
-      <span className={row.forYou ? styles.forYou : styles.muted}>
-        {row.forYou ? 'For you' : 'Anyone on the project'}
-      </span>
-    ),
-  },
-];
+/** The Due cell (CONTRACT 28): the due tag, its one size; nothing for a task without a date. */
+function DueCell({ row, today }) {
+  if (!row.dueDate || !today) return null;
+  return (
+    <span className={styles.due}>
+      <DueTag dueDate={row.dueDate} today={today} />
+    </span>
+  );
+}
+
+/** The columns every row has: Priority, Task, Project, For and Due (the 1.13 prototype's widths) */
+function baseColumns(today) {
+  return [
+    {
+      key: 'priority',
+      header: 'Priority',
+      width: 90,
+      // A phone shows rows as cards: the title goes beside the tag there (the Task cell hides).
+      render: (row) => (
+        <span className={styles.priorityCell}>
+          <PriorityTag priority={row.priority} />
+          <TitleButton row={row} className={styles.phoneTitle} />
+        </span>
+      ),
+    },
+    {
+      key: 'title',
+      header: 'Task',
+      hideOnMobile: true,
+      render: (row) => <TitleButton row={row} />,
+    },
+    {
+      key: 'project',
+      header: 'Project',
+      width: 170,
+      render: (row) => <ProjectLabel project={row.project} />,
+    },
+    {
+      key: 'for',
+      header: 'For',
+      width: 180,
+      render: (row) => (
+        <span className={row.forYou ? styles.forYou : styles.muted}>
+          {row.forYou ? 'For you' : 'Anyone on the project'}
+        </span>
+      ),
+    },
+    {
+      key: 'due',
+      header: 'Due',
+      width: 120,
+      render: (row) => <DueCell row={row} today={today} />,
+    },
+  ];
+}
 
 /** The To-do cell: "In to-do" when a line links the task, else Plus while the to-do takes lines. */
 function TodoCell({ row, todo, linked, locked }) {
@@ -119,16 +140,17 @@ function TodoCell({ row, todo, linked, locked }) {
 }
 
 /** The table's columns, with the To-do one while the page has a to-do (`report.self`). */
-function columnsFor(todo) {
-  if (!todo) return COLUMNS;
+function columnsFor(todo, today) {
+  const columns = baseColumns(today);
+  if (!todo) return columns;
   const linked = linkedTaskIds(todo.todo);
   const locked = isLocked(todo.todo);
   return [
-    ...COLUMNS,
+    ...columns,
     {
       key: 'todo',
       header: 'To-do',
-      width: 84,
+      width: 80,
       align: 'right',
       render: (row) => <TodoCell row={row} todo={todo} linked={linked} locked={locked} />,
     },
@@ -164,8 +186,9 @@ function openFromRow(event) {
  * The person's open priority tasks, P1 first (Today shows the card only when there are some).
  * The project's PM sets them; linking a report line to one is in the daily report.
  * @param {{ priority: { rows: Array<{ id, priority, title, projectId, project: { name, color },
- *   forYou: boolean, fileCount?: number }>, initial: number, today?: string } }} props initial:
- *   how many show before "Show more"; today: the company's date, for the task window
+ *   forYou: boolean, fileCount?: number, dueDate?: string | null }>, initial: number,
+ *   today?: string } }} props initial: how many show before "Show more"; today: the company's
+ *   date, for the due tags and the task window
  */
 export default function PriorityCard({ priority }) {
   const todo = useTodo();
@@ -192,7 +215,12 @@ function PriorityTable({ priority, todo }) {
       />
       {/* A row click is a mouse shortcut: the title button is the keyboard's way in. */}
       <div id={tableId} className={styles.priorityRows} onClick={openFromRow}>
-        <DataTable columns={columnsFor(todo)} rows={shown} dense caption="Priority tasks" />
+        <DataTable
+          columns={columnsFor(todo, priority.today)}
+          rows={shown}
+          dense
+          caption="Priority tasks"
+        />
       </div>
       {hidden > 0 ? (
         <button

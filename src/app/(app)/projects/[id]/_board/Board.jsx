@@ -1,61 +1,82 @@
 'use client';
-// The Board (CONTRACT 27, Board tab): the band, then every phase as a column of task cards, with
-// finished phases folded into "Done phases". The project's PM and Admins tick cards, add tasks under
-// a column, drag cards (or move them from their menu) and drop files on them; another PM reads it
-// all and changes nothing; a member sees only their tasks and Anyone tasks, read only. On a phone
-// one column shows at a time with back and next buttons.
+// The Board tab (CONTRACT 28, The project page frame and Screens): the band, the Completed note or
+// another PM's read-only line, then the view: the toolbar (Add task, Board | Table, search,
+// Filter, Mine, faces), the line saying what a filter changed, and the Board (the Done phases rail
+// and one column per phase, with its own sideways scroll) or the Table. The project's PM and
+// Admins tick cards, add tasks, drag cards (or move them from their menu) and drop files on them;
+// another PM reads it all and changes nothing; a member sees only their tasks and Anyone tasks,
+// read only. On a phone one column shows at a time with back and next buttons. The live region
+// for card moves is there from the first render.
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import MovePhaseButton from '../MovePhaseButton';
 import PhaseDatesDialog from '../PhaseDatesDialog';
 import UndoToast from '../UndoToast';
-import BoardFilters, { ScrollButtons } from './BoardFilters';
-import { progressOf } from './bandView';
-import { cardTitleId, editorsText, filterCounts, memberNote, switcherText } from './boardView';
-import DonePhasesColumn from './DonePhasesColumn';
+import BoardToolbar from './BoardToolbar';
+import { cardTitleId, editorsText, switcherText } from './boardView';
+import CompletedNote from './CompletedNote';
+import DoneRail from './DoneRail';
+import FilterLine from './FilterLine';
 import ForecastLine from './ForecastLine';
-import MoveTaskDialog from './MoveTaskDialog';
-import PhaseColumn, { NoPhaseColumn } from './PhaseColumn';
+import MoveLive, { MoveLiveProvider } from './MoveLive';
+import PhaseColumn from './PhaseColumn';
 import PhoneSwitcher from './PhoneSwitcher';
 import ProgressBand from './ProgressBand';
+import TaskTable from './table/TaskTable';
 import { useBoard } from './useBoard';
 import styles from './Board.module.css';
-import rowStyles from './BoardFilters.module.css';
 
-/** The columns: Done phases, the six phases, then No phase yet when it has tasks. */
-function Columns({ board, boardRef, member }) {
+/** "Scroll the board left" and "Scroll the board right", shown by CSS on a side with more. */
+function Arrow({ side, scroll }) {
+  const left = side === 'left';
+  const Icon = left ? ChevronLeft : ChevronRight;
   return (
-    <div
-      ref={boardRef}
-      className={`${styles.board} ${member ? styles.memberBoard : ''}`}
-      id="project-board"
+    <button
+      type="button"
+      className={`${styles.arrow} ${left ? styles.arrowLeft : styles.arrowRight}`}
+      aria-label={left ? 'Scroll the board left' : 'Scroll the board right'}
+      onClick={() => scroll.step(left ? -1 : 1)}
     >
-      <DonePhasesColumn tiles={board.tiles} onToggle={board.toggleOpened} />
-      {board.columns.map((column) =>
-        column.kind === 'none' ? (
-          <NoPhaseColumn key={column.key} column={column} board={board} />
-        ) : (
-          <PhaseColumn key={column.key} column={column} board={board} />
-        ),
-      )}
-    </div>
+      <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
+    </button>
   );
 }
 
-function Switcher({ board }) {
-  const column = board.columns.find((one) => one.key === board.step) ?? board.columns[0];
+/** The phone's switcher, then the rail and the columns in their own scroll box. */
+function Columns({ board, boardRef, wrapRef }) {
+  const shown = board.columns.find((one) => one.key === board.step) ?? board.columns[0];
   return (
-    <PhoneSwitcher
-      steps={board.steps}
-      step={board.step}
-      text={switcherText(column, board.filter)}
-      onStep={board.setStep}
-    />
+    <>
+      <PhoneSwitcher
+        steps={board.steps}
+        step={board.step}
+        text={switcherText(shown)}
+        onStep={board.setStep}
+      />
+      <div ref={wrapRef} className={styles.boardWrap}>
+        <Arrow side="left" scroll={board.scroll} />
+        <div
+          ref={boardRef}
+          className={styles.board}
+          id="project-board"
+          data-board=""
+          data-flip-scroll=""
+        >
+          <DoneRail board={board} />
+          {board.columns.map((column) => (
+            <PhaseColumn key={column.key} column={column} board={board} />
+          ))}
+        </div>
+        <Arrow side="right" scroll={board.scroll} />
+      </div>
+    </>
   );
 }
 
-/** A member's board: "Your tasks", the columns and what is left out. */
-function MemberTasks({ board, boardRef }) {
-  if (board.tasks.length === 0) {
+/** The Board, or a member's empty project, or the Table. */
+function ViewBody({ board, boardRef, wrapRef }) {
+  if (board.view === 'table') return <TaskTable board={board} />;
+  if (board.access === 'member' && board.tasks.length === 0) {
     return (
       <EmptyState
         title="Nothing for you on this project yet."
@@ -63,53 +84,15 @@ function MemberTasks({ board, boardRef }) {
       />
     );
   }
-  return (
-    <section className={styles.section} aria-labelledby="board-your-tasks">
-      <div className={rowStyles.row}>
-        <h2 id="board-your-tasks" className={rowStyles.heading}>
-          Your tasks
-        </h2>
-        <ScrollButtons scroll={board.scroll} />
-      </div>
-      <Switcher board={board} />
-      <Columns board={board} boardRef={boardRef} member />
-      <p className={styles.memberNote}>{memberNote(progressOf(board.counts).total)}</p>
-    </section>
-  );
+  return <Columns board={board} boardRef={boardRef} wrapRef={wrapRef} />;
 }
 
-/** The PM view: the pills, the switcher and the columns. */
-function TeamTasks({ board, boardRef }) {
-  return (
-    <>
-      <BoardFilters
-        filter={board.filter}
-        onFilter={board.setFilter}
-        counts={filterCounts(board.tasks)}
-        files={board.showFiles}
-        scroll={board.scroll}
-      />
-      <Switcher board={board} />
-      <Columns board={board} boardRef={boardRef} />
-    </>
-  );
-}
-
-/** The dialogs the PM opens from the board: move a card, a phase's dates, the project's phase. */
+/** The dialogs the PM opens from the board: a phase's dates, a phase move from a menu. */
 function Dialogs({ board }) {
   const { plan, moves } = board;
   const phase = board.datesFor ? plan.phases.find((row) => row.key === board.datesFor) : null;
   return (
     <>
-      <MoveTaskDialog
-        task={board.moveFor}
-        counts={board.counts}
-        onClose={board.closeMove}
-        onMove={(task, to) => {
-          board.closeMove();
-          board.move(task, to, 'dialog');
-        }}
-      />
       <PhaseDatesDialog
         projectId={board.projectId}
         phase={phase ?? null}
@@ -122,6 +105,8 @@ function Dialogs({ board }) {
           targetPhase={board.phaseMove}
           plan={plan}
           today={board.today}
+          stayText={board.stayFor(board.phaseMove)}
+          onMoved={board.phaseMoved}
           open
           onOpenChange={(open) => {
             if (!open) board.movePhase(null);
@@ -141,43 +126,68 @@ function Dialogs({ board }) {
   );
 }
 
-/**
- * @param {{ projectId: number, access: 'manage' | 'team' | 'member',
- *   filesAccess: 'manage' | 'member' | 'none', tasks: object[],
- *   counts: Record<string, { total: number, done: number }>, plan: object, today: string,
- *   status: string, pmName: string | null, hoursThisMonth?: number | null,
- *   forecast?: object | null, show?: string }} props tasks: board rows (phasesView.toBoardTask,
- *   with fileCount); counts: every task of the project per phase (countsByPhase for a member);
- *   forecast: the PM view's; show: '?show=critical' or 'files' presses that pill first
- */
-export default function Board(props) {
-  const [board, boardRef] = useBoard(props);
-  const member = props.access === 'member';
+/** The band, with the forecast (not for a member, not on a Completed project). */
+function Band({ board, bandRef }) {
+  const member = board.access === 'member';
   return (
-    <div className={styles.tab}>
-      {props.access === 'team' ? (
+    <ProgressBand
+      projectId={board.projectId}
+      access={board.access}
+      plan={board.plan}
+      today={board.today}
+      status={board.status}
+      counts={board.counts}
+      hoursThisMonth={board.hoursThisMonth}
+      onPart={board.showPhase}
+      onPhaseMove={board.movePhase}
+      onMoved={board.phaseMoved}
+      stayFor={board.stayFor}
+      bandRef={bandRef}
+    >
+      {member || board.status === 'completed' ? null : <ForecastLine forecast={board.forecast} />}
+    </ProgressBand>
+  );
+}
+
+function BoardBody(props) {
+  const { board, rootRef, bandRef, boardRef, wrapRef, viewRef } = useBoard(props);
+  return (
+    <div className={styles.tab} ref={rootRef}>
+      <MoveLive />
+      <Band board={board} bandRef={bandRef} />
+      {board.status === 'completed' ? <CompletedNote manage={board.access === 'manage'} /> : null}
+      {board.access === 'team' ? (
         <p className={styles.readOnly}>
-          Only {editorsText(props.pmName)} can change tasks and phases.
+          Only {editorsText(board.pmName)} can change tasks and phases.
         </p>
       ) : null}
-      <ProgressBand
-        projectId={props.projectId}
-        access={props.access}
-        plan={props.plan}
-        today={props.today}
-        counts={board.counts}
-        hoursThisMonth={props.hoursThisMonth}
-        onPart={board.showPhase}
-        onPhaseMove={board.movePhase}
-      >
-        {member ? null : <ForecastLine forecast={props.forecast} />}
-      </ProgressBand>
-      {member ? (
-        <MemberTasks board={board} boardRef={boardRef} />
-      ) : (
-        <TeamTasks board={board} boardRef={boardRef} />
-      )}
-      {props.access === 'manage' ? <Dialogs board={board} /> : null}
+      <section className={styles.view} data-fill={board.fill ? '' : undefined} aria-label="Tasks">
+        <BoardToolbar board={board} />
+        <FilterLine board={board} />
+        <div ref={viewRef} className={styles.views} data-view={board.view}>
+          <ViewBody board={board} boardRef={boardRef} wrapRef={wrapRef} />
+        </div>
+      </section>
+      {board.access === 'manage' ? <Dialogs board={board} /> : null}
     </div>
+  );
+}
+
+/**
+ * @param {{ projectId: number, projectName: string, access: 'manage' | 'team' | 'member',
+ *   filesAccess: 'manage' | 'member' | 'none', tasks: object[],
+ *   counts: Record<string, { total: number, done: number }>, plan: object, today: string,
+ *   status: string, pmId: number | null, pmName: string | null, viewerId: number | null,
+ *   viewerName: string | null, hoursThisMonth?: number | null, forecast?: object | null,
+ *   show?: string | null, view?: 'board' | 'table', railOpen?: boolean }} props tasks: board
+ *   rows (phasesView.toBoardTask); counts: every task of the project per phase (countsByPhase for
+ *   a member); forecast: the PM view's; show: `?show=critical` or `files` ticks that Filter item
+ *   first; view and railOpen: the remembered view and rail (cookies, or `?view=`)
+ */
+export default function Board(props) {
+  return (
+    <MoveLiveProvider>
+      <BoardBody {...props} />
+    </MoveLiveProvider>
   );
 }

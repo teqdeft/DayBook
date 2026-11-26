@@ -1,10 +1,12 @@
 'use client';
-// Opens the task window from anywhere under it (CONTRACT 27, Task window). On a project page
+// Opens the task window from anywhere under it (CONTRACT 27 and 28, Task window). On a project page
 // (`projectId`) it also opens the task a link names (`?task=<id>`: task notifications, Today's
-// "Open project", the Files tab) over whichever tab loads, and closing that window takes the
-// parameter away with router.replace (no history entry). There it also holds the file X's Undo
-// toast ("File removed."), so a closed window never cuts it short. Today's Priority card mounts it
-// in `today` mode, with its to-do card's "Add to to-do".
+// "Open project", the Files tab) over whichever tab loads, without its entrance (a deep link never
+// animates), and closing that window takes the parameter away with router.replace (no history
+// entry). There it also holds the file X's Undo toast ("File removed.", "Removed from this task.
+// It stays in Files."), so a closed window never cuts it short. Today's Priority card mounts it in
+// `today` mode, with its to-do card's "Add to to-do"; My tasks in `mine` mode. A closed window
+// stays drawn while its exit plays.
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useFileRemoval } from '@/components/files/useFileRemoval';
@@ -38,19 +40,28 @@ function useOpened() {
   return [opened, open, setOpened];
 }
 
+/** The window shown now, else the one that just closed (drawn while its exit plays). */
+function useLastShown(shown) {
+  const [last, setLast] = useState(shown);
+  if (shown && shown.key !== last?.key) setLast(shown);
+  return shown ?? last;
+}
+
 function Provider({ value, shown, close, windowProps, children, after = null }) {
+  const drawn = useLastShown(shown);
   return (
     <WindowContext.Provider value={value}>
       {children}
-      {shown ? (
+      {drawn ? (
         <TaskWindow
-          key={shown.key}
-          taskId={shown.taskId}
-          open
+          key={drawn.key}
+          taskId={drawn.taskId}
+          open={Boolean(shown)}
           onClose={close}
-          origin={shown.origin}
-          title={shown.title}
-          returnFocus={shown.returnFocus}
+          origin={drawn.origin}
+          title={drawn.title}
+          returnFocus={drawn.returnFocus}
+          instant={Boolean(drawn.instant)}
           {...windowProps}
         />
       ) : null}
@@ -72,7 +83,8 @@ function ProjectWindows({ windowProps, children }) {
   if (dismissed !== null && asked !== dismissed) setDismissed(null);
   const fromLink = asked && asked !== dismissed ? asked : null;
   const shown =
-    opened ?? (fromLink ? { taskId: fromLink, origin: null, key: `link:${fromLink}` } : null);
+    opened ??
+    (fromLink ? { taskId: fromLink, origin: null, key: `link:${fromLink}`, instant: true } : null);
 
   const close = useCallback(() => {
     if (opened) {
@@ -111,10 +123,12 @@ function PlainWindows({ windowProps, children }) {
 }
 
 /**
- * @param {{ mode: 'manage' | 'team' | 'member' | 'today', projectId?: number,
+ * @param {{ mode: 'manage' | 'team' | 'member' | 'today' | 'mine', projectId?: number,
  *   currentPhase?: string | null, today?: string,
  *   todo?: { has: (taskId: number) => boolean, add: (task: object) => void } | null,
- *   todoOpen?: boolean, children: import('react').ReactNode }} props projectId: the page's
+ *   todoOpen?: boolean, viewerId?: number | null,
+ *   children: import('react').ReactNode }} props viewerId: the signed-in person, for "(you)"
+ *   and Assign to me (managers fall back to the task editor's); projectId: the page's
  *   project (a task of another project shows the window's error state; reads `?task=`);
  *   currentPhase: the project's phase, for the header's "Current" tag; today: the company's date
  *   for the due tag and the report line (the browser's date when left out); todo: Today's to-do
@@ -128,6 +142,7 @@ export function TaskWindowProvider({
   today,
   todo,
   todoOpen = false,
+  viewerId = null,
   children,
 }) {
   const windowProps = {
@@ -137,6 +152,7 @@ export function TaskWindowProvider({
     today,
     todo: todo ?? null,
     todoOpen: Boolean(todoOpen),
+    viewerId: viewerId ?? null,
   };
   if (projectId) return <ProjectWindows windowProps={windowProps}>{children}</ProjectWindows>;
   return <PlainWindows windowProps={windowProps}>{children}</PlainWindows>;

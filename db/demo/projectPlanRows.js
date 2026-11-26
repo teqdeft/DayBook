@@ -42,21 +42,31 @@ function dayOf(ctx, value) {
 
 const dayOrNull = (ctx, value) => (value ? dayOf(ctx, value) : null);
 
-/** The project, its PM's id and an owner key -> user id lookup that allows members and the PM. */
+/**
+ * The project, its PM's id, an owner key -> user id lookup that allows members, the PM and an
+ * active Admin (who may take a task on any project, CONTRACT 28), and who took a task: an Admin
+ * who isn't on the project took it themself (null for everyone else).
+ */
 function projectOf(ctx, plan) {
   const project = ctx.projects.get(plan.project);
   if (!project) fail(`unknown project ${plan.project}`);
   const pmId = ctx.users.get(project.pm).id;
+  const personOf = (key) => (key === 'pm' ? project.pm : key);
+  const taker = (key) => {
+    const user = ctx.users.get(personOf(key));
+    const outside = key !== 'pm' && !project.members.includes(personOf(key));
+    return outside && user?.role === 'admin' ? user : null;
+  };
   const ownerId = (key) => {
-    const person = key === 'pm' ? project.pm : key;
-    const allowed = key === 'pm' || project.members.includes(person);
+    const person = personOf(key);
+    const allowed = key === 'pm' || project.members.includes(person) || taker(key);
     if (!allowed || ctx.users.get(person)?.status !== 'active') {
       fail(`${key} can't own a task on ${project.name}`);
     }
     if (person === 'vishal') fail(`a new task for Vishal on ${project.name} changes his canvas`);
     return ctx.users.get(person).id;
   };
-  return { project, pmId, ownerId };
+  return { project, pmId, ownerId, takenBy: (key) => taker(key)?.id ?? null };
 }
 
 /** project_plans and project_phase_plans rows. */
@@ -100,9 +110,10 @@ function planRows(ctx, plan, { project, pmId }) {
 
 /**
  * The plan's new tasks. A task is added when its phase was planned to start, at the latest a week
- * ago (the PM plans later phases ahead), and never after it was ticked.
+ * ago (the PM plans later phases ahead), and never after it was ticked. An Admin who took one is
+ * its last editor.
  */
-function taskRows(ctx, plan, { project, pmId, ownerId }, firstId) {
+function taskRows(ctx, plan, { project, pmId, ownerId, takenBy }, firstId) {
   const lastWeek = dayOf(ctx, '-1 Mon');
   const rows = [];
   for (const [phase, tasks] of Object.entries(plan.tasks)) {
@@ -124,7 +135,7 @@ function taskRows(ctx, plan, { project, pmId, ownerId }, firstId) {
         doneAt,
         doneBy: doneAt ? pmId : null,
         createdBy: pmId,
-        updatedBy: pmId,
+        updatedBy: takenBy(task.owner) ?? pmId,
         createdAt,
         updatedAt: doneAt ?? createdAt,
         phase,

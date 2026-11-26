@@ -1,11 +1,13 @@
 // Helpers shared by the projectTasks service files: row mapping, input parsing, errors, the latest
-// report line, and the manage checks and audit line every write uses (writes.js, taskFiles.js).
+// report line, who may read a project's tasks, and the manage checks, the team (teamOf, personOf,
+// CONTRACT 28) and audit line every write uses (writes.js, taskFiles.js, bulk.js).
 import { AppError, validationError } from '@/lib/errors';
 import { can } from '@/lib/permissions';
 import { initials } from '@/lib/text';
 import { audit } from '@/modules/audit';
 import { projects } from '@/modules/projects';
 import * as repo from './repo';
+import { listReportLines } from './updates';
 
 export const PRIORITY_LABELS = { p1: 'P1', p2: 'P2', p3: 'P3' };
 
@@ -112,7 +114,7 @@ export function toId(value) {
  * out: employees see their own report data only.
  */
 export async function withLatestReports(tasks, { ownOnlyFor = null } = {}) {
-  const lines = await repo.listReportLines(tasks.map((task) => task.id));
+  const lines = await listReportLines(tasks.map((task) => task.id));
   const latest = new Map();
   for (const line of lines) {
     if (latest.has(line.projectTaskId)) continue;
@@ -128,6 +130,27 @@ export async function withLatestReports(tasks, { ownOnlyFor = null } = {}) {
     const hidden = ownOnlyFor && line && Number(line.userId) !== Number(ownOnlyFor);
     return { ...task, latestReport: hidden ? null : line };
   });
+}
+
+// ---------- reading a project's tasks ----------
+
+/** PMs and Admin read every project's tasks; anyone else only their own projects'. */
+async function canRead(viewer, projectId) {
+  if (!viewer || (viewer.status && viewer.status !== 'active')) return false;
+  if (can(viewer, 'team.view') || can(viewer, 'project.manage')) return true;
+  return repo.isMember(projectId, viewer.id);
+}
+
+/** The project, when the viewer may read its tasks. @throws NOT_FOUND, FORBIDDEN */
+export async function readableProject(viewer, projectId) {
+  const project = await projects.findById(toId(projectId));
+  if (!project) throw projectNotFound();
+  if (!(await canRead(viewer, project.id))) {
+    throw new AppError('FORBIDDEN', {
+      message: 'Only people on this project can see its priority tasks.',
+    });
+  }
+  return project;
 }
 
 // ---------- the writes' checks (the project's PM or Admin) ----------
@@ -157,14 +180,39 @@ export async function lockForManage(user, id, trx) {
 }
 
 /**
- * The project's members, and its PM when they aren't one of them: a task can be for the PM, but
- * tasks for anyone only reach members.
+ * The project's members, its PM when they aren't one of them, and `others`: the active Admins among
+ * `alsoIds` who are neither (an Admin may take a task on any project without being a member,
+ * CONTRACT 28). A task can be for the PM or such an Admin, but tasks for anyone only reach members.
+ * @param {{ id: number, pmId: number | null }} project
+ * @param {import('knex').Knex.Transaction} [trx]
+ * @param {{ alsoIds?: Array<number | null | undefined> }} [options] the actor, the task's current
+ *   and new person
+ * @returns {Promise<{ members: object[], manager: object | null, others: object[] }>} person rows
+ *   `{ id, name, role, status, designation, avatarUrl, tracksAttendance }`
  */
-export async function teamOf(project, trx) {
+export async function teamOf(project, trx, { alsoIds = [] } = {}) {
   const members = await repo.listProjectMembers(project.id, trx);
   const isMember = members.some((member) => member.id === project.pmId);
-  const manager = isMember ? null : await repo.findPerson(project.pmId, trx);
-  return { members, manager: manager ?? null };
+  const manager = isMember || !project.pmId ? null : await repo.findPerson(project.pmId, trx);
+  const known = new Set([...members.map((member) => member.id), project.pmId]);
+  const ids = [...new Set(alsoIds.map(toId).filter((id) => id && !known.has(id)))];
+  const people = await repo.findPeople(ids, trx);
+  const others = people.filter((person) => person.role === 'admin' && person.status === 'active');
+  return { members, manager: manager ?? null, others };
+}
+
+/**
+ * A person of the team (members, the PM, `others`), or their row read on its own (someone taken off
+ * or a deactivated Admin), as `{ id, name, role, status }`; null for anyone on the project.
+ */
+export async function personOf(team, id, trx) {
+  const personId = toId(id);
+  if (!personId) return null;
+  const people = [...team.members, team.manager, ...(team.others ?? [])].filter(Boolean);
+  const row =
+    people.find((person) => person.id === personId) ?? (await repo.findPerson(personId, trx));
+  if (!row) return { id: personId, name: null, role: null, status: 'deactivated' };
+  return { id: row.id, name: row.name, role: row.role, status: row.status };
 }
 
 /** One project_task audit line, in the write's transaction. */

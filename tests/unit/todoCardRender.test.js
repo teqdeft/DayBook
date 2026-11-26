@@ -2,7 +2,8 @@
 // Play only where a timer can start, the header's count and buttons, every state of the Slack
 // button, the card after submit, the suggestion box and the reminder line, the paste dialog's
 // preview, the Priority tasks card's To-do column (and, CONTRACT 27, its paperclips, its title
-// buttons that open the task window and the to-do the window uses) and the report strip's copy.
+// buttons that open the task window and the to-do the window uses; CONTRACT 28, its Due column)
+// and the report strip's copy.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -403,6 +404,56 @@ describe('the Priority tasks card with files (CONTRACT 27)', () => {
     ]);
     expect(todoForWindow({ todo: todo({ submitted: true }), addLine: () => {} }).add).toBeNull();
     expect(todoForWindow(null)).toBeNull();
+  });
+});
+
+describe('the Priority tasks card with due dates (CONTRACT 28)', () => {
+  const row = (id, title, dueDate) => ({
+    id,
+    priority: 'p2',
+    title,
+    projectId: 12,
+    project: ACME,
+    forYou: true,
+    dueDate,
+  });
+  const render = (rows, today = '2026-11-25') => {
+    ctx.current = null;
+    return renderToStaticMarkup(
+      createElement(PriorityCard, { priority: { initial: 6, today, rows } }),
+    );
+  };
+  const cells = (html, label) =>
+    [
+      ...html.matchAll(new RegExp(`data-label="${label}"[^>]*><div[^>]*>(.*?)</div></td>`, 'g')),
+    ].map((match) => text(match[1]));
+
+  it('adds a Due column after For, with the due tag of each task', () => {
+    const html = render([
+      row(7, 'Fix the booking form', '2026-11-23'),
+      row(8, 'Payment settings page', '2026-11-25'),
+      row(9, 'Shipping options at checkout', '2026-12-01'),
+    ]);
+    const heads = [...html.matchAll(/<th scope="col"[^>]*>([^<]*)</g)].map((match) => match[1]);
+    expect(heads).toEqual(['Priority', 'Task', 'Project', 'For', 'Due']);
+    expect(cells(html, 'Due')).toEqual(['2 days late', 'Due today', 'Due 1 Dec']);
+  });
+
+  it('leaves the cell empty for a task without a date (a phone shows no "Due" line then)', () => {
+    const html = render([row(7, 'Fix the booking form', null)]);
+    expect(cells(html, 'Due')).toEqual(['']);
+    expect(text(html)).not.toContain('No due date');
+  });
+
+  it('keeps the Due column before the To-do column', () => {
+    ctx.current = { todo: todo() };
+    const html = renderToStaticMarkup(
+      createElement(PriorityCard, {
+        priority: { initial: 6, today: '2026-11-25', rows: [row(7, 'Fix it', '2026-11-30')] },
+      }),
+    );
+    const heads = [...html.matchAll(/<th scope="col"[^>]*>([^<]*)</g)].map((match) => match[1]);
+    expect(heads.slice(-2)).toEqual(['Due', 'To-do']);
   });
 });
 

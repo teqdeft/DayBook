@@ -119,9 +119,10 @@ function Tools({ tab }) {
 
 /**
  * @param {{ projectId: number, canManage: boolean, place: string, currentPhase: string | null,
- *   pmName: string | null, files: object[], documents: object[], limits: object,
- *   storageReady: boolean }} props files: ProjectFile[] with `addedOn`; documents:
- *   listDocumentsFor's rows with `addedOn`; limits: projectFiles.limits() (managers)
+ *   pmName: string | null, files: object[], documents: object[], links?: object[],
+ *   limits: object, storageReady: boolean }} props files: ProjectFile[] with `addedOn`;
+ *   documents: listDocumentsFor's rows with `addedOn`; links: the links this viewer may see for
+ *   "On tasks" (CONTRACT 28); limits: projectFiles.limits() (managers)
  */
 export default function FilesView(props) {
   const { projectId, canManage, currentPhase, pmName, limits, storageReady } = props;
@@ -163,6 +164,7 @@ export default function FilesView(props) {
         url: file.downloadUrl,
       });
     } else if (action === 'openTask') openTask(item.task.id);
+    else if (action === 'unlink') tab.unlink(item, { keyboard: event?.detail === 0 });
     else if (action === 'edit') setPanel({ kind: item.type === 'note' ? 'note' : 'edit', item });
     else if (action === 'delete') tab.remove(item, { keyboard: event?.detail === 0 });
   }

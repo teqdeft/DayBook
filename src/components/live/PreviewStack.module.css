@@ -1,7 +1,7 @@
 /* The preview stack (CONTRACT 26): cards under the bell, newest on top. The section lets clicks
    through its gaps; each card takes them. `top` and `right` are set inline from the bell (or the
-   top bar) at 641 px and wider; on a phone it comes from the top. Reduced motion: the global rule
-   in globals.css cuts both animations, so animationend still fires. */
+   top bar) at 641 px and wider; on a phone it comes from the top. Reduced motion: the motion tokens
+   make both animations 120 ms fades (CONTRACT 28), so animationend still fires. */
 .stack {
   position: fixed;
   top: 16px;
@@ -27,11 +27,11 @@
 
 .item {
   pointer-events: auto;
-  animation: live-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: live-in var(--dur-toast-in) var(--ease-out);
 }
 
 .item.leaving {
-  animation: live-out 140ms ease-in forwards;
+  animation: live-out var(--dur-toast-out) var(--ease-accelerate) forwards;
   pointer-events: none;
 }
 
@@ -234,20 +234,20 @@
 @keyframes live-in {
   from {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translateY(var(--shift-live));
   }
 }
 
 @keyframes live-in-phone {
   from {
     opacity: 0;
-    transform: translateY(-16px);
+    transform: translateY(calc(var(--shift-live) * 2));
   }
 }
 
 @keyframes live-out {
   to {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(calc(var(--shift-live) * 0.5));
   }
 }

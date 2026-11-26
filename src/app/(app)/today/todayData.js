@@ -120,13 +120,15 @@ function weekDays({ today, current, submitted, dayStatus, presentToday, dayOf })
  * The "Priority tasks" card (CONTRACT section 13): every open priority task of the person, P1
  * first (the order listOpenForUser gives); the card shows the first MAX_PRIORITY_TASKS and opens
  * the rest with "Show more". CONTRACT 27: each row carries the files on it this person may see
- * (`fileCount`, the paperclip), and the card gets the company's date for the task window.
+ * (`fileCount`, the paperclip, own files and links), and the card gets the company's date for the
+ * task window. CONTRACT 28: and its due date (the Due column; null without one), and a task a
+ * tracked Admin took is "For you".
  * @param {object[]} tasks listOpenForUser's tasks
  * @param {number} userId
  * @param {Record<number, number>} fileCounts projectFiles.countsForTasks ({} when unread)
  * @param {string} today the company's date
- * @returns {{ rows: Array<{ id, priority, title, projectId, project, forYou, fileCount }>,
- *   initial: number, today: string }}
+ * @returns {{ rows: Array<{ id, priority, title, projectId, project, forYou, fileCount,
+ *   dueDate }>, initial: number, today: string }}
  */
 export function priorityRows(tasks, userId, fileCounts = {}, today = null) {
   const rows = tasks.map((task) => ({
@@ -137,6 +139,7 @@ export function priorityRows(tasks, userId, fileCounts = {}, today = null) {
     project: { name: task.project?.name ?? '', color: task.project?.color ?? null },
     forYou: Number(task.assigneeId ?? task.assignee?.id) === Number(userId),
     fileCount: Number(fileCounts?.[task.id]) || 0,
+    dueDate: task.dueDate ?? null,
   }));
   return { rows, initial: MAX_PRIORITY_TASKS, today };
 }
@@ -209,7 +212,7 @@ export async function loadToday({ user, ip }) {
       attendance.listCorrections({ status: 'pending', userId: user.id, limit: 10 }),
       safe(reports.listReports({ user, from: today, to: today, limit: 1 }), { rows: [] }),
       screenTracked ? safe(activity.getDay(user.id, today), null) : null,
-      safe(projectTasks.listOpenForUser(user.id), []),
+      safe(projectTasks.listOpenForUser(user), []),
       Promise.all([
         timerParts,
         loadWfh({ user, mine, today, current }),

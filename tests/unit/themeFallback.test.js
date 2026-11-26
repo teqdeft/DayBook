@@ -1,6 +1,7 @@
 // The light theme for browsers without light-dark() (globals.css, CONTRACT 21): every colour token
 // written light-dark(light, dark) has a fallback in the @supports not block, with the same light
-// value, and the block holds nothing else. Without it those browsers would lose every colour.
+// value, and the block holds nothing else but the two shadows written without color-mix(). Without
+// it those browsers would lose every colour.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
@@ -25,24 +26,40 @@ function themedTokens() {
   return tokens;
 }
 
+/** A value written over several lines (a list of shadows), on one line. */
+const oneLine = (value) => value.replace(/\s+/g, ' ').trim();
+
 function fallbackTokens() {
   const start = css.indexOf('@supports not (color: light-dark(#000, #fff))');
   expect(start).toBeGreaterThan(-1);
   const block = css.slice(start, css.indexOf('\n}\n', start));
   return new Map(
-    [...block.matchAll(/^ {4}(--[a-z0-9-]+): ([^;]+);/gm)].map(([, name, value]) => [name, value]),
+    [...block.matchAll(/^ {4}(--[a-z0-9-]+):\s*([^;]+);/gm)].map(([, name, value]) => [
+      name,
+      oneLine(value),
+    ]),
   );
 }
 
 /** A top-level :root token's value (two-space indent, outside the @supports block). */
-const rootToken = (name) => css.match(new RegExp(`^ {2}${name}: ([^;]+);$`, 'm'))?.[1];
+const rootToken = (name) => {
+  const value = css.match(new RegExp(`^ {2}${name}:\\s*([^;]+);$`, 'm'))?.[1];
+  return value === undefined ? undefined : oneLine(value);
+};
+
+/** The light navy as "r, g, b" for an rgba() fallback. */
+const lightNavy = () => {
+  const navy = themedTokens().get('--navy');
+  return [1, 3, 5].map((at) => parseInt(navy.slice(at, at + 2), 16)).join(', ');
+};
 
 describe('globals.css without light-dark()', () => {
-  it('gives every themed colour its light value, and the menu shadow, and nothing else', () => {
+  it('gives every themed colour its light value, and the two shadows, and nothing else', () => {
     const themed = themedTokens();
     expect(themed.size).toBeGreaterThan(40);
     const fallback = fallbackTokens();
-    fallback.delete('--shadow-menu'); // the one token without light-dark() (below)
+    fallback.delete('--shadow-menu'); // the tokens without light-dark() (below)
+    fallback.delete('--shadow-lift');
     expect(Object.fromEntries(fallback)).toEqual(Object.fromEntries(themed));
   });
 
@@ -52,9 +69,19 @@ describe('globals.css without light-dark()', () => {
       '0 12px 32px color-mix(in srgb, var(--navy) 14%, transparent)',
     );
     // Browsers without light-dark() may lack color-mix() too: the light navy at 14%.
-    const navy = themedTokens().get('--navy');
-    const rgb = [1, 3, 5].map((at) => parseInt(navy.slice(at, at + 2), 16)).join(', ');
-    expect(fallbackTokens().get('--shadow-menu')).toBe(`0 12px 32px rgba(${rgb}, 0.14)`);
+    expect(fallbackTokens().get('--shadow-menu')).toBe(`0 12px 32px rgba(${lightNavy()}, 0.14)`);
+  });
+
+  it("has the dragged card's lift shadow in both themes and without color-mix() (CONTRACT 28)", () => {
+    expect(rootToken('--shadow-lift')).toBe(
+      '0 14px 32px color-mix(in srgb, var(--navy) 18%, transparent), ' +
+        '0 2px 6px color-mix(in srgb, var(--navy) 10%, transparent)',
+    );
+    // The light navy at 18% and 10%, as CONTRACT 28 writes it.
+    expect(lightNavy()).toBe('21, 24, 51');
+    expect(fallbackTokens().get('--shadow-lift')).toBe(
+      '0 14px 32px rgba(21, 24, 51, 0.18), 0 2px 6px rgba(21, 24, 51, 0.1)',
+    );
   });
 
   it('keeps the picture veil and its text the same in both themes (CONTRACT 27)', () => {

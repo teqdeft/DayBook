@@ -16,9 +16,9 @@
   text-decoration: none;
   cursor: pointer;
   transition:
-    background-color 120ms ease,
-    border-color 120ms ease,
-    color 120ms ease;
+    background-color var(--dur-press) var(--ease-press),
+    border-color var(--dur-press) var(--ease-press),
+    color var(--dur-press) var(--ease-press);
 }
 
 .button:hover {
@@ -175,5 +175,18 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Reduced motion: no turning; a slow pulse still shows the work is going on. */
+@keyframes pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: pulse 2s ease-in-out infinite;
   }
 }

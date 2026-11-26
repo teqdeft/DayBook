@@ -1,31 +1,71 @@
 'use client';
-// The New task and Edit task window (CONTRACT 27, Board tab): a centred 560 px Dialog (a full-screen
-// sheet on a phone) with the task's fields and its files. Picked files go up at once through the
-// tab's upload queue and are held until Add task or Save changes names them; while any is still on
-// its way the main button says so and does nothing, and a paused one blocks the save until Retry or
-// Remove. Closing with files not saved asks first, in the footer. Edit loads the task's attached
-// files (useTaskDetails) and sends only what changed.
+// The New task and Edit task window (CONTRACT 27, Board tab; CONTRACT 28, New task and Edit task): a
+// centred 560 px Dialog (a full-screen sheet on a phone) with the task's fields and its files.
+// Picked files go up at once through the tab's upload queue and are held until Add task or Save
+// changes names them; project files picked in "From project files" are linked by the save. While
+// any upload is still on its way the main button says so and does nothing, and a paused one
+// blocks the save until Retry or Remove. A save that would let someone who isn't a manager open an
+// "Only PM and Admins" file shows the share confirm in place of the footer ("Add task and share",
+// "Save and share"). Closing with files not saved asks first, in the footer. Edit loads the
+// task's files (useTaskDetails) and sends only what changed. After a save the new card plays its
+// entrance and an edited card flashes, through the Board when it is there (useTaskActions).
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Trash2 } from 'lucide-react';
 import Button from '@/components/Button';
 import Dialog from '@/components/Dialog';
+import ShareConfirm from '@/components/files/ShareConfirm';
+import {
+  ADD_AND_SHARE,
+  SAVE_AND_SHARE,
+  shareText,
+  taskShareText,
+} from '@/components/files/shareConfirmView';
 import Skeleton from '@/components/Skeleton';
-import UploadField from '@/components/files/UploadField';
 import { useTaskDetails } from '@/components/task/useTaskDetails';
-import { formatSize } from '@/modules/projectFiles/kinds';
 import windowStyles from '../projectWindows.module.css';
+import FilesField from './FilesField';
+import { useTaskActions } from './TaskActionsProvider';
 import TaskFormFields from './TaskFormFields';
-import { closeQuestion, editable, uploadingLabel } from './taskFormModel';
+import { chosenName, closeQuestion, editable, uploadingLabel } from './taskFormModel';
 import { useTaskForm } from './useTaskForm';
 import styles from './TaskFormDialog.module.css';
 
-/** The Files field's help: "Up to 20 files, each up to 500 MB. Any type of file." */
-const filesHelp = (limits) =>
-  `Up to ${limits.maxTaskFiles} files, each up to ${formatSize(limits.maxFileBytes)}. Any type of file.`;
+/** The share confirm's sentence: the files and the person, or the count the server knows. */
+function confirmText(form, task) {
+  const name = chosenName(form.choices, form.values.owner);
+  const anyone = !form.values.owner;
+  if (form.share.files.length > 0) {
+    return shareText({ files: form.share.files, personName: name, anyone });
+  }
+  return taskShareText({
+    count: Math.max(1, task?.privateLinkCount ?? 1),
+    personName: name,
+    anyone,
+  });
+}
 
-/** The footer: Delete (Edit only), Cancel and the main button; or the question before closing. */
-function Footer({ task, form, asking, onAsk, onKeep, onDiscard, onDelete, keepRef }) {
+/** The share confirm in place of the footer: "Add task and share" or "Save and share". */
+function ShareFooter({ task, form, mainRef }) {
+  return (
+    <ShareConfirm
+      className={styles.share}
+      text={confirmText(form, task)}
+      confirmLabel={task ? SAVE_AND_SHARE : ADD_AND_SHARE}
+      busy={form.saving}
+      onBack={() => {
+        form.backFromShare();
+        requestAnimationFrame(() => mainRef.current?.focus());
+      }}
+      onConfirm={() => form.save(null, { shareOk: true })}
+    />
+  );
+}
+
+/** The footer: Delete (Edit only), Cancel and the main button; the question; the confirm. */
+function Footer({ task, form, asking, keepRef, onAsk, onKeep, onDiscard, onDelete, mainRef }) {
   const { counts, saving } = form;
+  if (form.share) return <ShareFooter task={task} form={form} mainRef={mainRef} />;
   if (asking) {
     return (
       <>
@@ -58,6 +98,7 @@ function Footer({ task, form, asking, onAsk, onKeep, onDiscard, onDelete, keepRe
         Cancel
       </Button>
       <Button
+        ref={mainRef}
         type="submit"
         className={styles.main}
         loading={saving}
@@ -71,25 +112,32 @@ function Footer({ task, form, asking, onAsk, onKeep, onDiscard, onDelete, keepRe
 
 /**
  * Closing with files not saved asks first, in the footer: Keep editing (focus goes back to what
- * asked) or Discard and close (the files stop and are deleted on the server).
- * @returns {{ asking: HTMLElement | true | null, keepRef: object, requestClose: () => void,
- *   keep: () => void, discard: () => void }} asking: the element that asked, or null
+ * asked) or Discard and close (the files stop and are deleted on the server). `then` runs after a
+ * close (the picker's "Open Files").
  */
 function useCloseQuestion({ form, onClose }) {
   const [asking, setAsking] = useState(null);
   const keepRef = useRef(null);
+  const thenRef = useRef(null);
 
   useEffect(() => {
     if (asking) keepRef.current?.focus();
   }, [asking]);
 
-  function requestClose() {
+  function closeNow() {
+    onClose();
+    thenRef.current?.();
+    thenRef.current = null;
+  }
+  function requestClose(then = null) {
+    thenRef.current = typeof then === 'function' ? then : null;
     if (asking) return keep();
-    if (form.counts.unsaved === 0) return onClose();
+    if (form.counts.unsaved === 0) return closeNow();
     setAsking(document.activeElement ?? true);
   }
   function keep() {
     const origin = asking;
+    thenRef.current = null;
     setAsking(null);
     requestAnimationFrame(() => {
       if (origin instanceof HTMLElement && origin.isConnected) origin.focus();
@@ -97,49 +145,39 @@ function useCloseQuestion({ form, onClose }) {
   }
   function discard() {
     form.uploads.cancelAll();
-    onClose();
+    closeNow();
   }
-  return { asking, keepRef, requestClose, keep, discard };
+  return {
+    asking,
+    keepRef,
+    requestClose: () => requestClose(),
+    closeThen: requestClose,
+    keep,
+    discard,
+  };
 }
 
-/** The Files field with the task's attached files, and the lines under it that block a save. */
-function TaskFiles({ form, filesRef, task, details, limits, storageReady }) {
-  return (
-    <div ref={filesRef}>
-      <UploadField
-        id="task-form-files"
-        uploads={form.uploads}
-        limits={limits}
-        help={filesHelp(limits)}
-        storageReady={storageReady !== false}
-        attached={details.task?.files ?? []}
-        removedIds={form.removedIds}
-        onToggleRemove={form.toggleRemove}
-        loadingAttached={Boolean(task) && details.loading && !details.task}
-        attachedError={form.attachedError}
-      />
-      {form.paused ? (
-        <p className={styles.fileError} role="alert">
-          {form.paused}
-        </p>
-      ) : null}
-      {form.error.files ? (
-        <p className={styles.fileError} role="alert">
-          {form.error.files}
-        </p>
-      ) : null}
-    </div>
-  );
+/** After a save: the editor's toast and refresh, and the Board's motion when it is there. */
+function useAfterSave(onSaved) {
+  const actions = useTaskActions();
+  return (result) => {
+    onSaved(result);
+    if (result.edited) actions?.board?.flash(result.id);
+    else actions?.board?.expectNew(result.id, result.phase);
+  };
 }
 
 /** The window with its fields, once the task to edit (if any) is known. */
 function TaskForm(props) {
-  const { task, details, options, limits, viewerId, onClose, onDelete } = props;
-  const form = useTaskForm(props);
+  const { task, details, limits, onClose, onDelete, projectId } = props;
+  const router = useRouter();
+  const form = useTaskForm({ ...props, onSaved: useAfterSave(props.onSaved) });
   const question = useCloseQuestion({ form, onClose });
+  const mainRef = useRef(null);
+  const openFiles = () => question.closeThen(() => router.push(`/projects/${projectId}?tab=files`));
   return (
     <Dialog
-      open
+      open={props.form.open !== false}
       width={560}
       className={`${styles.panel} ${windowStyles.window}`}
       title={task ? 'Edit task' : 'New task'}
@@ -147,8 +185,7 @@ function TaskForm(props) {
       onSubmit={form.save}
       footer={
         <Footer
-          task={task}
-          form={form}
+          {...{ task, form, mainRef }}
           asking={question.asking}
           keepRef={question.keepRef}
           onAsk={question.requestClose}
@@ -164,16 +201,17 @@ function TaskForm(props) {
         error={form.error}
         titleRef={form.titleRef}
         task={task}
-        options={options}
-        viewerId={viewerId}
+        choices={form.choices}
       >
-        <TaskFiles
+        <FilesField
           form={form}
-          filesRef={form.filesRef}
           task={task}
           details={details}
           limits={limits}
           storageReady={props.storageReady}
+          projectId={projectId}
+          filesRef={form.filesRef}
+          onOpenFiles={openFiles}
         />
       </TaskFormFields>
     </Dialog>
@@ -181,10 +219,10 @@ function TaskForm(props) {
 }
 
 /** Edit from a task id alone: the window waits for the task's details. */
-function Waiting({ error, onClose }) {
+function Waiting({ error, open, onClose }) {
   return (
     <Dialog
-      open
+      open={open}
       width={560}
       className={`${styles.panel} ${windowStyles.window}`}
       title="Edit task"
@@ -210,22 +248,31 @@ const DEFAULT_LIMITS = { maxFileBytes: 500 * 1024 * 1024, maxTaskFiles: 20, pick
 
 /**
  * @param {{ form: { mode: 'new' | 'edit', preset?: { phase?: string, title?: string },
- *   taskId?: number, task?: object | null }, projectId: number, plan: object,
+ *   taskId?: number, task?: object | null, open?: boolean }, projectId: number, plan: object,
  *   options: object[], limits?: object, viewerId?: number | null, storageReady?: boolean,
- *   onClose: () => void,
+ *   project?: { id: number, pmId: number | null }, onClose: () => void,
  *   onSaved: (result: object) => void, onDelete: (task: object, opts: object) => void }} props
- *   form: what TaskEditorProvider opened; task: a board card or the task window's details
+ *   form: what TaskEditorProvider opened (`open` false while its exit plays); task: a board
+ *   card or the task window's details;
+ *   project: the project's id and PM, for the share confirm
  */
 export default function TaskFormDialog(props) {
   const { form, onClose } = props;
   const editing = form.mode === 'edit';
   const details = useTaskDetails(editing ? form.taskId : null);
-  const source = form.task ?? details.task;
+  // The details are the fresher of the two (read again after a refused confirm).
+  const source = details.task ?? form.task;
   const limits = props.limits ?? DEFAULT_LIMITS;
-  if (editing && !source) return <Waiting error={details.error} onClose={onClose} />;
+  if (editing && !source) {
+    return <Waiting error={details.error} open={form.open !== false} onClose={onClose} />;
+  }
+  const pmId = details.task?.project?.pmId;
+  const project =
+    pmId !== undefined && pmId !== null ? { id: props.projectId, pmId } : props.project;
   return (
     <TaskForm
       {...props}
+      project={project}
       limits={limits}
       details={editing ? details : { task: null, loading: false, error: null }}
       task={editing ? editable(source) : null}

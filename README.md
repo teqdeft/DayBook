@@ -42,7 +42,10 @@ label. acme-store also gets real files (`db/demo/projectFiles.js`, the small fil
 `db/demo/files/`): a picture and a PDF on Simran's checkout task, a Word file on an Anyone task
 and two Whole project files, one only for the PM and Admins. They go in the files folder
 (`FILES_DIR`, in development `.daybook-files` by default), which `seed:demo` empties first (only
-the files Daybook made).
+the files Daybook made). For the 1.13 board, the brand guide is also linked to the checkout task
+(the PM and Admins file is left unlinked), three acme-store tasks have time from timers
+(`db/demo/taskTimers.js`), and on internal-tool the CEO and Meera Pillai each took a task, so My
+tasks has rows for the PM and the CEO.
 
 Without Slack credentials, set `DEV_LOGIN_ENABLED=true` in `.env.local`: the sign-in page then shows
 a "Development sign-in" list. It never exists when `NODE_ENV=production`. Demo accounts:
@@ -128,7 +131,7 @@ npm run test:e2e
   projects table shows each project's all-time hours under "Hours this week".
 - **AI with Gemini, version label, notification center** (CONTRACT 20): see
   [AI with Gemini](#ai-with-gemini) below. The sidebar and sign-in page show the version, now
-  "Daybook v1.11" (`src/config/version.js`, raised with each release). In the bell, clicking a
+  "Daybook v1.13" (`src/config/version.js`, raised with each release). In the bell, clicking a
   notification marks it read; each one can be marked unread or deleted (swipe left on touch
   screens, with Undo), and the bell swings gently while there are unread ones.
 - **My settings** (company request, CONTRACT 21): every person has a **My settings** page (last
@@ -324,17 +327,17 @@ hold the text of files and notes, and Ask Daybook never reads it.
 - Run behind Caddy or Nginx with HTTPS and `TRUST_PROXY=true`, so the client IP (used for Office
   check-in) comes from `X-Forwarded-For`. Save the office's static public IP in Settings.
 - Set `WORKER_CRON_ENABLED=false` on any extra web servers so jobs run once.
-- Deploy after 7 PM: `npm run migrate`, then restart `web` and `worker`. `/api/health` checks the
+- Deploy after 7 PM: the migrate line (Updating), then restart `web` and `worker`. `/api/health` checks the
   database for uptime monitoring.
-- Daybook 1.07 (project management): run `npm run migrate` before the restart (migration 015 adds
+- Daybook 1.07 (project management): run the migrate line (Updating) before the restart (migration 015 adds
   the plan, files and summary tables). There is nothing new to install on the server: the PDF
   reader (`pdfjs-dist`, a dev dependency) is bundled into the build. **Project summaries** in
   Settings → AI starts off.
-- Daybook 1.08 (Pending requests card, project colours): run `npm run migrate` before the restart
+- Daybook 1.08 (Pending requests card, project colours): run the migrate line (Updating) before the restart
   (migration 016 changes `projects.color` so it can hold yellow and custom colours; until it runs,
   the first six colours keep working and yellow or a custom colour is refused with a clear
   message). There is nothing new to install.
-- Daybook 1.09 (today's to-do, suggestions): run `npm run migrate` before the restart (migration
+- Daybook 1.09 (today's to-do, suggestions): run the migrate line (Updating) before the restart (migration
   017 adds the to-do's Slack columns to `daily_reports` and "Done already" / "Not needed" to
   `report_tasks`). There is nothing new to install. To-dos post to Slack only once an Admin picks
   a channel under Settings → Slack → **Post to-dos to**. Report saves and to-do writes run at the
@@ -349,11 +352,15 @@ hold the text of files and notes, and Ask Daybook never reads it.
   migrate line again (Updating, 1.10 step 2); it continues where it stopped.
 - Daybook 1.11 (bell sound and preview): no database update and nothing new to install. People
   choose the sound and the preview in My settings; the default is a chime for important
-  notifications only. Each person can also pick the sound: Chime, Soft bell, Ding or Pop.
+  notifications only (from 1.13 a chime for every notification: Sound is All for everyone who
+  never chose, Off stays Off). Each person can also pick the sound: Chime, Soft bell, Ding or Pop.
 - Daybook 1.12 (project board, task files and the Files tab): a database update (migration 019
   adds three tables and two columns to project documents) and a new setting, `FILES_DIR`, the
   private folder for files. Nothing new to install. Without `FILES_DIR` Daybook works, but files
   are off.
+- Daybook 1.13 (task board and table, files from the project on tasks, Assign to me, My tasks, calm
+  motion): one database update (migration 020 adds one table, `task_file_links`). Nothing new to
+  install and no new setting.
 
 ## Deploying on cPanel (Setup Node.js App)
 
@@ -538,7 +545,7 @@ For 1.12 (project board and files), step by step:
    `~/daybook`:
 
    ```bash
-   NODE_ENV=production npm run doctor
+   NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 --import ./src/worker/alias.js scripts/doctor.js
    ```
 
    It shows "✓ File storage is ready".
@@ -546,23 +553,127 @@ For 1.12 (project board and files), step by step:
 To go back to 1.11: on your computer, revert the 1.12 commit on `main` but keep its database update
 file: `git revert --no-commit <the 1.12 commit>`, then
 `git checkout <the 1.12 commit> -- db/migrations/019_project_files.js`, then
-`git commit -m "Back to 1.11"`, and push. Without that file, `npm run doctor` and the migrate line
+`git commit -m "Back to 1.11"`, and push. Without that file, the doctor line and the migrate line
 stop with "The migration directory is corrupt" (the database has run 019); 1.11 never reads it.
 After the green build, `git pull origin deploy` and Restart. Leave the database as it is (1.11
 ignores the new tables; Whole project notes don't show in 1.11 but are kept) and leave the files
 folder; nothing reads it.
 
-**Checking** — `NODE_ENV=production npm run doctor` (after the `source` command, in `~/daybook`)
-shows whether every database update has run ("✓ Database is up to date"), whether the worker cron
-is running, whether Slack works, whether file storage is ready ("✓ File storage is ready (1.2 GB
-of 10 GB used)") and who gets desktop notifications; it prints no secrets. Adding `-- --notify=person@company.com` also sends that person a test
-notification.
+For 1.13 (task board and My tasks), step by step:
 
-**Fresh start** — `NODE_ENV=production npm run reset` shows what's in the database;
-`NODE_ENV=production npm run reset -- --confirm=<DB_NAME>` empties every table (people, data,
-settings, sign-ins) and runs the base seeds again, leaving only the Admin from `SEED_ADMIN_EMAIL`.
-`reset` also empties the files folder (only when it holds Daybook's marker file, and only the
-files Daybook made). It can't be undone: export a backup in phpMyAdmin first.
+1. phpMyAdmin → your Daybook database → Export → Go: keep the file as a backup.
+2. Wait for the green "Build for cPanel" run on GitHub. Then in Terminal, after the `source`
+   command (it also goes to `~/daybook`):
+
+   ```bash
+   git pull origin deploy
+   ```
+
+   then the migrate line:
+
+   ```bash
+   NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:latest
+   ```
+
+   It ends with "Batch … run". If it stops with `Aborted` (or says the migration table is already
+   locked), run this line once:
+
+   ```bash
+   NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:unlock
+   ```
+
+   then the migrate line again; it continues where it stopped:
+
+   ```bash
+   NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 node_modules/knex/bin/cli.js migrate:latest
+   ```
+
+   If it says `Lock wait timeout exceeded` instead, the database was busy for 30 seconds and
+   nothing was changed. Wait a minute, then run the migrate line again (no unlock line needed).
+
+3. Press Restart in Setup Node.js App.
+4. Check, in Terminal after the `source` command:
+
+   ```bash
+   NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 --import ./src/worker/alias.js scripts/doctor.js
+   ```
+
+   It shows "✓ Database is up to date" (no "020_task_file_links.js" left to run).
+
+5. Test: as the PM, open a project → Board → Add task → pick a person under Assign to → From
+   project files → tick a file → Attach → Add task; the card shows the file. As an Admin, on any
+   card press Assign to me; Overview shows it under My tasks.
+
+To go back to 1.12, step by step:
+
+1. On your computer, in the Daybook folder:
+
+   ```bash
+   git revert --no-commit <the 1.13 commit>
+   ```
+
+2. Put the database update file back. The live database has run it; without it, the doctor line
+   and the migrate line stop with "The migration directory is corrupt" (1.12 never reads the new
+   table):
+
+   ```bash
+   git checkout <the 1.13 commit> -- db/migrations/020_task_file_links.js
+   ```
+
+3. Save the change:
+
+   ```bash
+   git commit -m "Back to 1.12"
+   ```
+
+4. Send it to GitHub:
+
+   ```bash
+   git push
+   ```
+
+   GitHub's "Migration check" turns red for this commit (1.12's check undoes 019 while 020 is
+   still there). That is expected. Only "Build for cPanel" must be green.
+
+5. Wait for the green "Build for cPanel" run. Then in Terminal, after the `source` command:
+
+   ```bash
+   git pull origin deploy
+   ```
+
+6. Press Restart in Setup Node.js App. Leave the database as it is: files linked to tasks stay in
+   Files; the tasks just stop showing them.
+
+**Checking** — the doctor line (after the `source` command, in `~/daybook`):
+
+```bash
+NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 --import ./src/worker/alias.js scripts/doctor.js
+```
+
+It shows whether every database update has run ("✓ Database is up to date"), whether the worker
+cron is running, whether Slack works, whether file storage is ready ("✓ File storage is ready (1.2
+GB of 10 GB used)") and who gets desktop notifications; it prints no secrets. With
+`--notify=person@company.com` at the end it also sends that person a test notification:
+
+```bash
+NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 --import ./src/worker/alias.js scripts/doctor.js --notify=person@company.com
+```
+
+**Fresh start** — this line shows what's in the database:
+
+```bash
+NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 --import ./src/worker/alias.js scripts/reset.js
+```
+
+and this one empties every table (people, data, settings, sign-ins) and runs the base seeds again,
+leaving only the Admin from `SEED_ADMIN_EMAIL`:
+
+```bash
+NODE_ENV=production UV_THREADPOOL_SIZE=2 node --disable-wasm-trap-handler --v8-pool-size=2 --import ./src/worker/alias.js scripts/reset.js --confirm=<DB_NAME>
+```
+
+It also empties the files folder (only when it holds Daybook's marker file, and only the files
+Daybook made). It can't be undone: export a backup in phpMyAdmin first.
 
 **Backups**: enable cPanel backups, or add a nightly cron with `mysqldump`, and test a restore once
 a month. Files are not in the phpMyAdmin export. Once a month: File Manager →

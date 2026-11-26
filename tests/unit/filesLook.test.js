@@ -343,3 +343,23 @@ describe("a thumbnail's X on a phone", () => {
     );
   });
 });
+
+describe('links on the Files tab (CONTRACT 28)', () => {
+  const rows = () => css('src/app/(app)/projects/[id]/_files/FileListRow.module.css');
+
+  it('starts a linked row line with its 14 px Link icon, and keeps "On 2 tasks" in the line', () => {
+    expect(rows()).toMatch(/\.metaLinked \{\s*display: flex;\s*align-items: center;\s*gap: 5px;/);
+    expect(rows()).toMatch(/\.meta \.onTasks \{\s*display: inline;\s*\}/);
+    // On a phone the line's buttons ("On task", "On 2 tasks") get the 44 px target.
+    const phone = rows().slice(rows().indexOf('@media (max-width: 640px)'));
+    expect(phone).toMatch(/\.meta \.link \{\s*display: inline-block;\s*padding: 13px 0;/);
+  });
+
+  it("sets Edit details' line as a muted 13 px line that takes no room while empty", () => {
+    const dialogs = css('src/app/(app)/projects/[id]/_files/FileDialogs.module.css');
+    expect(dialogs).toMatch(
+      /\.keep \{\s*margin: 0;\s*font-size: 13px;\s*line-height: 19px;\s*color: var\(--muted\);/,
+    );
+    expect(dialogs).toMatch(/\.keep:not\(:empty\) \{\s*margin-top: 8px;\s*\}/);
+  });
+});

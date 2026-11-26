@@ -1,0 +1,266 @@
+/* A phase column's look (CONTRACT 28, Done phases rail and columns), as the prototype: the muted box
+   (the column under a dragged card is tinted by BoardDrag.module.css), the header (the name, the
+   count of open cards, the Current / Done / Skipped tag, "+", "⋯" and X), its dates line, the open
+   cards 12 px apart, "› 6 done" with the done cards, the empty line and "+ Add task". Its width
+   and its body's scroll are Board.module.css's (The sideways scroll); the phone's switcher too. */
+.column {
+  position: relative;
+  padding: 10px 10px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-muted);
+  transition:
+    background-color var(--dur-tint) var(--ease-tint),
+    border-color var(--dur-tint) var(--ease-tint);
+}
+
+.noPhase {
+  border-style: dashed;
+}
+
+/* The header */
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 2px 8px;
+}
+
+/* The count and the tag wrap under the name before it is cut ("Development" with "Current" in a
+   248 px column); "+", "⋯" and X stay in the top right corner, beside the first line. */
+.titleRow {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  padding: 5px 0;
+}
+
+.titleRow:has(.tools) {
+  padding-right: 64px;
+}
+
+/* cut only when it is wider than the row */
+.name {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-heading-stack);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* the count of open cards: a 22 px pill */
+.count {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 1px 6px 0;
+  border-radius: var(--radius-pill);
+  background: var(--track);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tag {
+  flex: none;
+}
+
+.tools {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  display: flex;
+  align-items: center;
+}
+
+/* "+", "⋯" and X: 32 px icon buttons */
+.tool {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-cell);
+  background: transparent;
+  color: var(--muted);
+  transition:
+    background-color var(--dur-press) var(--ease-press),
+    color var(--dur-press) var(--ease-press);
+}
+
+.tool:hover,
+.tool[aria-expanded='true'] {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.dates {
+  margin: 0;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.toneRed {
+  color: var(--red-text);
+}
+
+.toneMarigold {
+  color: var(--marigold-text);
+}
+
+.toneMuted {
+  color: var(--muted);
+}
+
+/* The body: the open cards, the empty line, "› 6 done" and the done cards */
+.body {
+  margin: 0 -6px;
+  padding: 2px 6px 8px;
+}
+
+.cards {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.empty {
+  margin: 0;
+  padding: 2px 2px 10px;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  transition: opacity var(--dur-fade) var(--ease-out);
+}
+
+.fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  margin-top: 8px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-cell);
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  transition:
+    background-color var(--dur-press) var(--ease-press),
+    color var(--dur-press) var(--ease-press);
+}
+
+.fold:hover {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.fold svg {
+  transition: transform var(--dur-room) var(--ease-standard);
+}
+
+.fold[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+
+.doneCards {
+  margin-top: 4px;
+}
+
+/* The foot: "+ Add task" (QuickAdd.module.css) */
+.foot {
+  padding-top: 4px;
+}
+
+/* The phone's switcher: Previous phase / Next phase around "Testing · 1 of 6" */
+.switcher {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.switcherText {
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  text-align: center;
+}
+
+.switcherText b {
+  font-family: var(--font-heading-stack);
+  font-weight: 600;
+}
+
+.squareButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.squareButton:hover {
+  background: var(--surface-muted);
+}
+
+.squareButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .switcher {
+    display: flex;
+  }
+
+  /* the switcher above already names the phase */
+  .name {
+    display: none;
+  }
+
+  .tool {
+    width: 44px;
+    height: 44px;
+  }
+
+  .titleRow:has(.tools) {
+    padding: 11px 88px 11px 0;
+  }
+
+  .hideOnPhone {
+    display: none;
+  }
+
+  .fold {
+    height: 44px;
+  }
+}

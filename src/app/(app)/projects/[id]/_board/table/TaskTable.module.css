@@ -1,0 +1,245 @@
+/* The Table view (CONTRACT 28, Table and bulk bar), as the 1.13 prototype's table keys: a white card
+   (1 px --line, radius 16) holding one 14 px table; the header row 40 px on --surface-muted, sticky
+   while the page scrolls; rows 54 px with a 1 px --track rule between them, --surface-muted on hover
+   and a primary tint when selected (on the row itself, so the flash ends on it); 44 px group rows.
+   The cells' own pieces are TableParts.module.css's. The card clips its own corners without
+   becoming a scroll box, so the header can stick. Below a 1,280 px window the card scrolls
+   sideways itself (the table at least 880 px) and the header stops sticking; at 640 px and below
+   the phone's stacked list (StackList.module.css) shows instead. Only colours change on hover and
+   press; the rows' slide and flash are the motion code's. */
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.card {
+  position: relative;
+  min-width: 0;
+  overflow: clip;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+/* separate borders: collapsed ones belong to the table and stay behind when the header sticks */
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: var(--table-head-height);
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--muted);
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* a header is a button that sorts by its column */
+.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  margin: 0 -4px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--dur-press) var(--ease-press);
+}
+
+.sort:hover,
+th[aria-sort] .sort {
+  color: var(--ink);
+}
+
+.table td {
+  height: var(--table-row-height);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--track);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* the select box and the tick: 40 px; every other column but Task as narrow as its content */
+.table .narrow {
+  width: 40px;
+  padding-right: 0;
+}
+
+.small {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* ---------- rows ---------- */
+.row {
+  cursor: pointer;
+  transition: background-color var(--dur-press) var(--ease-press);
+}
+
+.row:hover {
+  background: var(--surface-muted);
+}
+
+.row.selected {
+  background: color-mix(in srgb, var(--primary-soft) 55%, var(--surface));
+}
+
+/* ticked: 0.6 with a muted title until its leave has played (the motion code's data-ticking) */
+.row[data-ticking] {
+  opacity: 0.6;
+}
+
+.done .title,
+.row[data-ticking] .title {
+  color: var(--muted);
+}
+
+.title {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 20px;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.title:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* the newest report line under an open task's title */
+.line {
+  display: block;
+  font-size: var(--text-small);
+  line-height: 18px;
+}
+
+.primary {
+  color: var(--primary-text);
+}
+
+.red {
+  color: var(--red-text);
+}
+
+.green {
+  color: var(--green-text);
+}
+
+/* ---------- group rows ---------- */
+.group td {
+  height: 44px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.groupIn {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.groupName {
+  margin: 0;
+  font-family: var(--font-heading-stack);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.groupCount {
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.groupAdd {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.groupAdd:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.table .empty {
+  height: auto;
+  padding: 28px 20px;
+  font-size: 14px;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* below a 1,280 px window: the card scrolls sideways itself, its header no longer sticks */
+@media (max-width: 1279px) {
+  .card {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .table {
+    min-width: 880px;
+  }
+
+  .table th {
+    position: static;
+  }
+}
+
+/* a phone: the stacked list instead */
+@media (max-width: 640px) {
+  .card {
+    display: none;
+  }
+}

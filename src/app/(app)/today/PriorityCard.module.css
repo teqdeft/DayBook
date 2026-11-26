@@ -1,5 +1,6 @@
-/* Today's "Priority tasks" card (CONTRACT 13, 24 and 27; not on the canvas): the My tasks card's
-   table, full width, with the title buttons, the paperclips and the To-do column. */
+/* Today's "Priority tasks" card (CONTRACT 13, 24, 27 and 28; not on the canvas): the My tasks
+   card's table, full width, with the title buttons, the paperclips, the Due column and the To-do
+   column. */
 
 /* The artboard's table header is 1 px taller than the shared divider header. */
 .priority .tasksHead {
@@ -77,6 +78,12 @@
   color: var(--ink);
 }
 
+/* The Due column (CONTRACT 28): the due tag in its one size, never wrapped */
+.due {
+  display: inline-flex;
+  white-space: nowrap;
+}
+
 /* The To-do column (CONTRACT 24): a 32 px Plus, or a muted check and "In to-do". */
 .todoAdd {
   display: inline-flex;
@@ -145,7 +152,7 @@
 
 .moreChevron {
   flex: none;
-  transition: transform 0.15s ease;
+  transition: transform var(--dur-lift) var(--ease-standard);
 }
 
 .moreChevronOpen {

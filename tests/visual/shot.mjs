@@ -25,6 +25,27 @@ function readArgs(argv) {
   return args;
 }
 
+/**
+ * Waits (at most 2 s) until no finite animation or transition runs on the page (CONTRACT 28,
+ * Motion), so the shot shows where a fade or a glide ends; infinite ones (spinners, the bell
+ * swing, the timer's dot) don't count.
+ */
+async function settled(page) {
+  await page
+    .waitForFunction(
+      () =>
+        document
+          .getAnimations()
+          .filter(
+            (a) =>
+              a.playState === 'running' && a.effect?.getComputedTiming().iterations !== Infinity,
+          ).length === 0,
+      null,
+      { timeout: 2000, polling: 50 },
+    )
+    .catch(() => {}); // a long one: the screenshot below jumps it to its end anyway
+}
+
 const args = readArgs(process.argv.slice(2));
 const base = args.base ?? 'http://localhost:3000';
 const width = Number(args.width ?? 1440);
@@ -63,10 +84,20 @@ try {
     await page.waitForTimeout(400);
   }
   if (args.wait) await page.waitForTimeout(Number(args.wait));
+  await settled(page);
   mkdirSync(path.dirname(out), { recursive: true });
   // caret: 'initial' — hiding the caret writes a style onto inputs, which React reports as a
   // hydration mismatch when the screenshot lands before a slow dev page has hydrated.
-  await page.screenshot({ path: out, fullPage: Boolean(args.full), caret: 'initial' });
+  // animations: 'disabled' (CONTRACT 28, Motion) — Playwright jumps finite animations and
+  // transitions to their end and resets infinite ones (the bell swing, the timer's live dot,
+  // spinners, the Skeleton shimmer), so a shot never hangs and never catches a half-played fade;
+  // a held drag still shows its lift, which is the end state of a finite transition.
+  await page.screenshot({
+    path: out,
+    fullPage: Boolean(args.full),
+    caret: 'initial',
+    animations: 'disabled',
+  });
   console.log(`saved ${out} (${page.url()})`);
   if (errors.length) console.log(`browser errors:\n  ${errors.join('\n  ')}`);
 } finally {

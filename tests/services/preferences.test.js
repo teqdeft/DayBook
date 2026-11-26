@@ -19,7 +19,7 @@ const DEFAULTS = {
   polishLines: true,
   polishAfterTimers: true,
   bellRing: true,
-  bellSound: 'important',
+  bellSound: 'all', // CONTRACT 28: every notification rings by default
   bellTone: 'chime',
   bellPreview: true,
   theme: 'system',
@@ -94,6 +94,22 @@ describe('reading preferences', () => {
     });
   });
 
+  it('gives All to everyone who never chose a Sound, and keeps the choices made (CONTRACT 28)', async () => {
+    expect((await preferences.getFor(alice.id)).bellSound).toBe('all');
+    // Rows from before 1.13: a stored All stays valid, Off stays Off, and a stored Important only
+    // (never written before, since it was the default) reads as itself.
+    for (const bellSound of ['all', 'off', 'important']) {
+      await db('userPreferences').delete();
+      await db('userPreferences').insert({
+        userId: alice.id,
+        prefs: JSON.stringify({ bellSound, theme: 'dark' }),
+        updatedAt: new Date(T0),
+      });
+      expect(await preferences.getFor(alice.id)).toEqual({ ...DEFAULTS, bellSound, theme: 'dark' });
+    }
+    expect((await preferences.getFor(bob.id)).bellSound).toBe('all');
+  });
+
   it('gives the defaults when the stored value is not an object', async () => {
     await db('userPreferences').insert({
       userId: alice.id,
@@ -145,9 +161,14 @@ describe('saving preferences', () => {
   });
 
   it('stores the bell sound, the tone and the preview only when they differ (CONTRACT 26)', async () => {
-    const all = await preferences.update({ user: alice, values: { bellSound: 'all' } });
-    expect(all).toEqual({ ...DEFAULTS, bellSound: 'all' });
-    expect(await storedRow(alice)).toEqual({ bellSound: 'all' });
+    const important = await preferences.update({ user: alice, values: { bellSound: 'important' } });
+    expect(important).toEqual({ ...DEFAULTS, bellSound: 'important' });
+    expect(await storedRow(alice)).toEqual({ bellSound: 'important' });
+    // All is the default since CONTRACT 28: choosing it removes the key.
+    expect(await preferences.update({ user: alice, values: { bellSound: 'all' } })).toEqual(
+      DEFAULTS,
+    );
+    expect(await storedRow(alice)).toEqual({});
     await preferences.update({ user: alice, values: { bellSound: 'off', bellTone: 'ding' } });
     expect(await storedRow(alice)).toEqual({ bellSound: 'off', bellTone: 'ding' });
     await preferences.update({ user: alice, values: { bellPreview: false } });
@@ -158,10 +179,7 @@ describe('saving preferences', () => {
       bellPreview: false,
     });
     // Back to the defaults: the keys leave the row.
-    await preferences.update({
-      user: alice,
-      values: { bellSound: 'important', bellTone: 'chime' },
-    });
+    await preferences.update({ user: alice, values: { bellSound: 'all', bellTone: 'chime' } });
     await preferences.update({ user: alice, values: { bellPreview: true } });
     expect(await storedRow(alice)).toEqual({});
     expect(await preferences.getFor(alice.id)).toEqual(DEFAULTS);

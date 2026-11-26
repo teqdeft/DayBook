@@ -1,6 +1,7 @@
-// Who opens the project page and with what (CONTRACT 27, The project page: access, frame and tabs),
-// against the real modules: loadProjectHead gives the project's PM and Admins the PM view with every
-// right, the uploaders' limits and the people list; another PM the read-only PM view, with a
+// Who opens the project page and with what (CONTRACT 27 and 28, The project page: access, frame and
+// tabs), against the real modules: loadProjectHead gives the project's PM and Admins the PM view with
+// every right, the uploaders' limits and the people list (the viewer first as "Me"), and every
+// viewer their id and name; another PM the read-only PM view, with a
 // member's file rights only when they are on the project; a person on the project (an employee or
 // HR) the member view, with no forecast, their own hours this company month and whether today's
 // to-do still takes lines (the task window's "Add to to-do"); and null (the
@@ -82,10 +83,15 @@ describe('the PM view', () => {
     });
     expect(head.today).toBe('2026-11-23');
     expect(head).not.toHaveProperty('hoursThisMonth');
+    // the viewer's id and name (the board's Mine, "Me" and "(you)"), and the PM first as "Me"
+    expect(head).toMatchObject({ viewerId: pm.id, viewerName: pm.name });
+    expect(head.options[0]).toMatchObject({ id: pm.id, kind: 'me', status: 'active' });
   });
 
   it('gives an Admin the same', async () => {
     const head = await loadProjectHead(project.id, admin);
+    expect(head).toMatchObject({ viewerId: admin.id, viewerName: admin.name });
+    expect(head.options[0]).toMatchObject({ id: admin.id, kind: 'me' });
     expect(head.access).toBe('manage');
     expect(head.filesAccess).toBe('manage');
     expect(head.limits.maxTaskFiles).toBe(20);
@@ -99,6 +105,7 @@ describe('the PM view', () => {
     expect(head.forecast).toBeTruthy();
     expect(head).not.toHaveProperty('limits');
     expect(head).not.toHaveProperty('options');
+    expect(head.viewerId).toBe(otherPm.id);
   });
 
   it('gives a PM who is a member the read-only view with a member’s file rights', async () => {

@@ -1,0 +1,102 @@
+/* The bulk bar (CONTRACT 28, Table and bulk bar; Motion, Moments: Bulk bar), as the prototype's
+   select key: sticky 16 px above the bottom of the window, centred, as wide as its content up to the
+   full width, at least 56 px, radius 12, 1 px --line on --surface with --shadow-menu; "2 selected"
+   then 38 px buttons (44 px on a phone, where it spans the width and its buttons wrap). It rises
+   when the selection goes from none to some and fades out when it empties (inert meanwhile); with
+   reduce motion both are fades. */
+.bar {
+  position: sticky;
+  bottom: 16px;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 56px;
+  margin: 4px auto 0;
+  padding: 8px 10px 8px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-menu);
+  animation: bar-in var(--dur-in) var(--ease-decelerate);
+}
+
+.bar[data-closing] {
+  pointer-events: none;
+  animation: bar-out var(--dur-out) var(--ease-accelerate) forwards;
+}
+
+@keyframes bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--shift-bar));
+  }
+}
+
+@keyframes bar-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.count {
+  margin-right: 8px;
+  font-family: var(--font-heading-stack);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 38 px, 14 px text, 13 px each side (the secondary button's 1 px extra included) */
+.bar .action {
+  --btn-pad-x: 12px;
+  font-size: 14px;
+}
+
+/* the pressed one keeps its full colour while it works; the others wait at half */
+.bar .busy[aria-disabled='true'] {
+  opacity: 1;
+  cursor: progress;
+}
+
+.clear {
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.clear:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.clear[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .bar {
+    bottom: 12px;
+    width: 100%;
+    padding: 10px;
+  }
+
+  .bar .action {
+    flex: 1 1 auto;
+    height: 44px;
+  }
+
+  .clear {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

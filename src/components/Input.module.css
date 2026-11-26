@@ -13,7 +13,7 @@
   font-size: var(--text-body);
   line-height: 20px;
   color: var(--ink);
-  transition: border-color 120ms ease;
+  transition: border-color var(--dur-press) var(--ease-press);
 }
 
 .control::placeholder {

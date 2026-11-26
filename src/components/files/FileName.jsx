@@ -4,7 +4,7 @@
 // their own, so screen readers would read them as two words ("two- pages.pdf"): they are hidden
 // from them and the whole name is read once instead (never selected, so a copy has it once).
 // React escapes the name.
-import styles from './Files.module.css';
+import styles from './FileName.module.css';
 
 /**
  * Where the name is cut: before the last 5 characters of the base name and the extension, or the

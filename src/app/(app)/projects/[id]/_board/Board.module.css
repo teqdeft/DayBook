@@ -1,7 +1,11 @@
-/* The Board tab (CONTRACT 27), as the prototype: the band, the pills row, then the columns side by
-   side. Columns share the width (the current one 1.25 times) down to 236 px (272 px), an empty
-   later phase is slim; when they don't fit the board scrolls sideways inside its own area. On a
-   phone one column shows at a time under the switcher. */
+/* The Board tab's frame (CONTRACT 28, The sideways scroll), as the prototype: the band, then the
+   view (the toolbar, the line under it and the Board or the Table). The page never scrolls
+   sideways: every wrapper keeps `min-width: 0`, and the board scrolls inside its own box, with a
+   24 px fade and a round arrow on each side that has more (data-more, set by useBoardScroll).
+   When a column shows 4 or more cards (data-fill) the toolbar and the board take the window's
+   height and each column's body scrolls inside, so the board's own scrollbar is on screen. On a
+   phone the page scrolls and one column shows at a time under the switcher. The columns are
+   Columns.module.css's, the Done phases rail DoneRail.module.css's. */
 .tab {
   display: flex;
   flex-direction: column;
@@ -9,238 +13,231 @@
   min-width: 0;
 }
 
-.readOnly,
-.memberNote {
+.readOnly {
   margin: 0;
-  font-size: var(--text-small);
-  line-height: 18px;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--muted);
 }
 
-.readOnly {
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.section {
+.view {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
+  scroll-margin-top: 12px;
 }
 
-/* The columns */
+/* toolbar + board fill the window (100vh first, for a browser without dvh) */
+.view[data-fill] {
+  height: calc(100vh - 24px);
+  height: calc(100dvh - 24px);
+  min-height: 560px;
+}
+
+/* the Board or the Table: the wrapper the switch crossfades */
+.views {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.boardWrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
 .board {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   min-width: 0;
   overflow-x: auto;
-  scroll-snap-type: x proximity;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
   scrollbar-width: thin;
+  padding-bottom: 2px; /* no scroll-snap any more */
 }
 
-.board > * {
-  scroll-snap-align: start;
+.view[data-fill] .board {
+  align-items: stretch;
+  height: 100%;
 }
 
-.column,
-.doneColumn {
+/* while a card is lifted without data-fill, the columns stretch and the board grows by one card */
+.view:not([data-fill]) .board[data-dragging] {
+  align-items: stretch;
+  padding-bottom: calc(2px + var(--drag-room, 0px));
+}
+
+/* and every column's background (the rail's too) reaches into that room, so the cards, the fold and
+   "+ Add task" pushed down in the tallest column stay on it, and a card let go there lands */
+.view:not([data-fill]) .board[data-dragging] > * {
+  margin-bottom: calc(-1 * var(--drag-room, 0px));
+}
+
+.view:not([data-fill]) .board[data-dragging] > .column {
+  padding-bottom: calc(6px + var(--drag-room, 0px));
+}
+
+.boardWrap[data-more~='right'] .board {
+  mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+}
+
+.boardWrap[data-more~='left'] .board {
+  mask-image: linear-gradient(to left, black calc(100% - 24px), transparent);
+}
+
+.boardWrap[data-more='left right'] .board {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 24px,
+    black calc(100% - 24px),
+    transparent
+  );
+}
+
+/* One width for every phase column, the current one too: 248 to 320 px; free space stays at the
+   right. Only the body scrolls (with data-fill); the header and "+ Add task" stay put. The look is
+   Columns.module.css's. */
+.column {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--surface-muted);
-  transition:
-    border-color 0.12s ease,
-    background-color 0.12s ease;
+  flex: 1 1 248px;
+  min-width: 248px;
+  max-width: 320px;
+  min-height: 0;
 }
 
-.column {
-  flex: 1 1 0;
-  min-width: 236px;
+.view:not([data-fill]) .column {
+  min-height: 220px;
 }
 
-.current {
-  flex-grow: 1.25;
-  min-width: 272px;
-}
-
-.slim {
-  flex: 0 0 140px;
-  min-width: 0;
-}
-
-.doneColumn {
-  flex: 0 0 196px;
-}
-
-.foldedAway {
+/* a done phase in the rail (shown on a phone as a step of the switcher) */
+.column[hidden] {
   display: none;
 }
 
-.memberBoard > .column {
-  max-width: 480px;
-}
-
-.noPhase {
-  border-style: dashed;
-}
-
-.dropOn {
-  border-color: var(--primary);
-  background: color-mix(in srgb, var(--primary-soft) 45%, var(--surface-muted));
-}
-
-/* A column's header */
 .columnHead {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 0 2px;
-}
-
-.columnTitle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-}
-
-.columnName {
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 20px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.slim .columnTitle {
-  flex-wrap: wrap;
-}
-
-.slim .columnName {
-  white-space: normal;
-}
-
-.columnTools {
-  display: flex;
   flex: none;
-  align-items: center;
-  margin-right: -6px;
-  margin-left: auto;
 }
 
-.toolButton {
+.columnBody {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.view[data-fill] .columnBody {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+
+.view:not([data-fill]) .columnBody {
+  flex: none;
+}
+
+.columnFoot {
+  flex: none;
+}
+
+/* The Done phases rail: 72 px, 220 px open (it widens by FLIP, never by a transition). */
+.rail {
+  flex: 0 0 72px;
+}
+
+.rail[data-open] {
+  flex-basis: 220px;
+}
+
+/* "Scroll the board left" and "Scroll the board right": only on a side with more */
+.arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 5;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 30px;
-  height: 30px;
-  padding: 0 5px;
-  border: 0;
-  border-radius: var(--radius-cell);
-  background: transparent;
-  color: var(--muted);
-}
-
-.toolButton:hover,
-.toolButton[aria-expanded='true'] {
-  background: var(--track);
-  color: var(--ink);
-}
-
-.columnDates,
-.emptyText {
-  margin: 0;
-  font-size: var(--text-small);
-  line-height: 18px;
-  color: var(--muted);
-}
-
-.emptyText {
-  padding: 0 2px;
-}
-
-.toneRed {
-  color: var(--red-text);
-}
-
-.toneMarigold {
-  color: var(--marigold-text);
-}
-
-.toneMuted {
-  color: var(--muted);
-}
-
-.cards {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin: 0;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
   padding: 0;
-  list-style: none;
-}
-
-/* "› 6 done" */
-.fold {
-  display: inline-flex;
-  align-self: flex-start;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: var(--radius-cell);
-  background: transparent;
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.fold:hover {
-  background: var(--track);
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
   color: var(--ink);
+  box-shadow: var(--shadow-menu);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--dur-fade) var(--ease-out),
+    visibility var(--dur-fade) linear;
 }
 
-.fold svg {
-  transition: transform 0.15s ease;
+.arrow:hover {
+  background: var(--surface-muted);
 }
 
-.fold[aria-expanded='true'] svg {
-  transform: rotate(90deg);
+.arrow:focus-visible {
+  box-shadow: var(--focus-ring), var(--shadow-menu);
 }
 
-/* The dashed gap where a dragged card will land */
-.gap {
-  height: 64px;
-  border: 2px dashed var(--line-dashed);
-  border-radius: var(--radius-tile);
+.arrowLeft {
+  left: 4px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .column,
-  .fold svg {
-    transition: none;
-  }
+.arrowRight {
+  right: 4px;
+}
+
+.boardWrap[data-more~='left'] .arrowLeft,
+.boardWrap[data-more~='right'] .arrowRight {
+  opacity: 1;
+  visibility: visible;
 }
 
 @media (max-width: 640px) {
-  .board {
-    display: block;
-    overflow: visible;
-    padding: 0;
+  /* a phone: the page scrolls, one full-width column */
+  .view[data-fill] {
+    height: auto;
+    min-height: 0;
   }
 
+  .boardWrap {
+    flex: none;
+  }
+
+  .board,
+  .view[data-fill] .board {
+    display: block;
+    height: auto;
+    overflow: visible;
+    mask-image: none;
+  }
+
+  .boardWrap[data-more] .board {
+    mask-image: none;
+  }
+
+  .column {
+    max-width: none;
+    min-width: 0;
+  }
+
+  .view[data-fill] .columnBody {
+    overflow: visible;
+  }
+
+  /* one column at a time: the switcher's step (a done phase too); the rail's phases are steps */
   .board > .column,
-  .board > .doneColumn {
+  .board > .rail {
     display: none;
   }
 
@@ -248,29 +245,7 @@
     display: flex;
   }
 
-  .memberBoard > .column {
-    max-width: none;
-  }
-
-  /* the switcher above already names the phase */
-  .columnName {
+  .arrow {
     display: none;
-  }
-
-  .columnTitle:not(:has(.columnTag, .columnTools)) {
-    display: none;
-  }
-
-  .toolButton {
-    min-width: 44px;
-    height: 44px;
-  }
-
-  .hideOnPhone {
-    display: none;
-  }
-
-  .fold {
-    height: 44px;
   }
 }

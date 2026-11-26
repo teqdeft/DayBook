@@ -1,0 +1,35 @@
+/* A chip's upload (CONTRACT 27, Upload states): the percent and the 3 px bar under its state line.
+   The chip itself is in Files.module.css. */
+.percent {
+  font-family: var(--font-heading-stack);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 160px;
+  height: 3px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--track);
+}
+
+/* the fill grows by scaleX (CONTRACT 28, Motion rule 1), 120 ms a step */
+.barFill {
+  position: absolute;
+  inset: 0;
+  background: var(--primary);
+  transform: scaleX(var(--fill, 0));
+  transform-origin: left center;
+  transition: transform var(--dur-fade) var(--ease-out);
+}
+
+/* Reduce motion: the upload bar steps without sliding (no scale moves, CONTRACT 28 rule 7). */
+@media (prefers-reduced-motion: reduce) {
+  .barFill {
+    transition: none;
+  }
+}

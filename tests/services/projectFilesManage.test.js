@@ -2,7 +2,8 @@
 // kept), move and change who sees a project file, a task file's place refused, the soft delete
 // (never listed, counted or served again), who may change a file (403 to a member who can see it,
 // 404 to anyone who can't), syncFileDocument called inside each transaction (the document itself is
-// E's test), audit rows without the name, the routes, and the reads before migration 019.
+// E's test), audit rows without the name, the routes, a file on tasks through links (CONTRACT 28:
+// changed and deleted in one place, links kept until the purge), and before migrations 020 and 019.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, parseJson } from '@/lib/db';
 import { setNowForTests } from '@/lib/time';
@@ -13,6 +14,8 @@ import {
   emptyFilesDir,
   expectCode,
   fileRow,
+  linkFile,
+  linkRowsOf,
   onDisk,
   projectFile,
   storedFilePath,
@@ -425,11 +428,63 @@ describe('the routes', () => {
   });
 });
 
+describe('a file linked to tasks (CONTRACT 28)', () => {
+  it('keeps its links through a rename, a move and a change of who sees it', async () => {
+    const file = await newFile({ name: 'plan.pdf', visibility: 'everyone' });
+    await linkFile({ user: pm, project, task, fileIds: file.id });
+    const input = { name: 'launch plan', phase: 'launch', visibility: 'managers' };
+    const changed = await projectFiles.updateFile({ user: pm, id: file.id, input });
+    expect(changed).toMatchObject({ name: 'launch plan.pdf', phase: 'launch' });
+    expect((await linkRowsOf(task.id)).map((row) => row.fileId)).toContain(file.id);
+    // Now "Only PM and Admins": still open to the task's person through the task.
+    const shown = await projectFiles.listForTask({ viewer: member, task });
+    expect(shown.find((one) => one.id === file.id)).toMatchObject({
+      name: 'launch plan.pdf',
+      linked: true,
+    });
+  });
+
+  it('a delete takes it off every task at once; the links stay until the purge', async () => {
+    const file = await newFile({ name: 'old.pdf', visibility: 'everyone' });
+    await linkFile({ user: pm, project, task, fileIds: file.id });
+    await projectFiles.removeFile({ user: pm, id: file.id });
+    const ids = (await projectFiles.listForTask({ viewer: pm, task })).map((one) => one.id);
+    expect(ids).not.toContain(file.id);
+    expect((await linkRowsOf(task.id)).map((row) => row.fileId)).toContain(file.id);
+    const audits = await auditRows(file.id);
+    expect(audits.map((row) => row.action)).toEqual(['project_file.link', 'project_file.delete']);
+  });
+});
+
+describe('before migration 020', () => {
+  let file;
+
+  beforeAll(async () => {
+    file = await newFile({ name: 'before-020.pdf' });
+    await db.migrate.down({ name: '020_task_file_links.js' });
+  });
+
+  afterAll(async () => {
+    await db.migrate.latest();
+  });
+
+  it('renames and deletes as 1.12; the Files tab has no links', async () => {
+    const renamed = await projectFiles.updateFile({ user: pm, id: file.id, input: { name: 'b' } });
+    expect(renamed).toMatchObject({ name: 'b.pdf', linkCount: 0, linkedTasks: [] });
+    const list = await projectFiles.listForProject({ viewer: pm, projectId: project.id });
+    expect(list.links).toEqual([]);
+    expect(list.files.find((one) => one.id === file.id)).toMatchObject({ linkCount: 0 });
+    await projectFiles.removeFile({ user: pm, id: file.id });
+    expect((await fileRow(file.id)).status).toBe('deleted');
+  });
+});
+
 describe('before migration 019', () => {
   let file;
 
   beforeAll(async () => {
     file = await newFile({ name: 'before.pdf' });
+    await db.migrate.down({ name: '020_task_file_links.js' });
     await db.migrate.down({ name: '019_project_files.js' });
   });
 
@@ -439,7 +494,7 @@ describe('before migration 019', () => {
 
   it('lists and counts read as empty, never failing a page', async () => {
     const list = await projectFiles.listForProject({ viewer: pm, projectId: project.id });
-    expect(list).toEqual({ files: [], canSee: true, canManage: true });
+    expect(list).toEqual({ files: [], links: [], canSee: true, canManage: true });
     expect(await projectFiles.listForTask({ viewer: member, task })).toEqual([]);
     expect(await projectFiles.countsForTasks({ viewer: member, tasks: [task] })).toEqual({});
     expect(

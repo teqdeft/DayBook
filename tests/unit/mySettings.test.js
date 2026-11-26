@@ -1,4 +1,10 @@
-import { describe, expect, it } from 'vitest';
+// My settings (CONTRACT 21, 26, 28): the sections each person sees, the Segmented choices, the
+// one-at-a-time saver, and the default Sound (All since CONTRACT 28: a person with no stored row
+// chimes for a new task, and the Notifications card shows All pressed with its help line).
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
+import MySettingsSections from '@/app/(app)/my-settings/MySettingsSections.jsx';
 import {
   NEW_TASK_CHOICES,
   SECTIONS,
@@ -11,13 +17,33 @@ import {
 } from '@/app/(app)/my-settings/sections';
 import { createPreferenceSaver } from '@/app/(app)/my-settings/preferenceSaver';
 import { TONE_NAMES } from '@/components/live/chime';
+import { shouldChime } from '@/components/live/liveRules';
+import { UserPrefsProvider, useBellSound } from '@/components/UserPrefs.jsx';
 import {
   BELL_SOUNDS,
   BELL_TONES,
   NEW_TASK_STATUSES,
+  PREFERENCE_DEFAULTS,
   SUBMIT_BUTTONS,
   THEMES,
 } from '@/modules/preferences/schemas';
+import { getFor } from '@/modules/preferences/service';
+
+// No stored row for anyone, and the Notifications card drawn with the defaults (its save, desktop
+// push and Play sound stand-ins do nothing).
+vi.mock('@/modules/preferences/repo', () => ({ findPrefs: async () => null }));
+vi.mock('@/app/(app)/my-settings/PreferencesProvider', async () => {
+  const { PREFERENCE_DEFAULTS: values } = await import('@/modules/preferences/schemas');
+  return { usePreferences: () => ({ values, change() {} }) };
+});
+vi.mock('@/components/PushSwitch', () => ({
+  default: () => null,
+  useDesktopPush: () => ({ state: 'unsupported' }),
+}));
+vi.mock('@/app/(app)/my-settings/PlaySoundButton', () => ({
+  default: () => null,
+  usePlaySound: () => () => {},
+}));
 
 const ids = (who) => sectionsFor(who).map((section) => section.id);
 
@@ -89,8 +115,12 @@ describe('My settings sections (CONTRACT 21)', () => {
   });
 
   it('offers the bell sounds and the four tones with the contract labels (CONTRACT 26)', () => {
-    expect(SOUND_CHOICES.map((choice) => choice.value)).toEqual([...BELL_SOUNDS]);
-    expect(SOUND_CHOICES.map((choice) => choice.label)).toEqual(['Important only', 'All', 'Off']);
+    // All first, as the default (CONTRACT 28); the stored values are BELL_SOUNDS', unchanged.
+    expect(SOUND_CHOICES.map((choice) => choice.value)).toEqual(['all', 'important', 'off']);
+    expect(SOUND_CHOICES.map((choice) => choice.value).sort()).toEqual([...BELL_SOUNDS].sort());
+    expect(SOUND_CHOICES.map((choice) => choice.label)).toEqual(['All', 'Important only', 'Off']);
+    expect(SOUND_CHOICES[0].value).toBe(PREFERENCE_DEFAULTS.bellSound);
+    expect(BELL_SOUNDS).toEqual(['important', 'all', 'off']);
     expect(TONE_CHOICES.map((choice) => choice.value)).toEqual([...BELL_TONES]);
     // The page plays the picked value through playChimeNow(), so each must be a sound chime.js has.
     expect(TONE_CHOICES.map((choice) => choice.value)).toEqual([...TONE_NAMES]);
@@ -99,6 +129,63 @@ describe('My settings sections (CONTRACT 21)', () => {
       'Soft bell',
       'Ding',
       'Pop',
+    ]);
+  });
+});
+
+describe('the default Sound is All (CONTRACT 28)', () => {
+  const newTask = {
+    id: 41,
+    type: 'project_task.added',
+    title: 'Neha Kapoor gave you a task on Acme store: Write the FAQ',
+    readAt: null,
+  };
+  const chime = (choice) =>
+    shouldChime({
+      choice,
+      batch: { items: [newTask] },
+      osSound: new Set(),
+      gapMs: 30_000,
+      tabId: 'a',
+      soundTabId: 'a',
+      frontTabId: 'a',
+      push: { active: false, apple: false },
+    });
+
+  it('chimes for a new task for someone with no stored row', async () => {
+    const { bellSound } = await getFor(7);
+    expect(bellSound).toBe('all');
+    expect(chime(bellSound)).toBe('play');
+    // A normal type: Important only (now a choice, no longer the default) still skips it.
+    expect(chime('important')).toBe('not_important');
+  });
+
+  it('falls back to All in the browser for a missing or unknown choice, also outside the app', () => {
+    const Probe = () => useBellSound();
+    const soundFor = (prefs) =>
+      renderToStaticMarkup(createElement(UserPrefsProvider, { prefs }, createElement(Probe)));
+    expect(renderToStaticMarkup(createElement(Probe))).toBe('all');
+    expect(soundFor(null)).toBe('all');
+    expect(soundFor({ theme: 'dark' })).toBe('all');
+    expect(soundFor({ bellSound: 'loud' })).toBe('all');
+    expect(soundFor({ bellSound: 'all' })).toBe('all');
+    expect(soundFor({ bellSound: 'important' })).toBe('important');
+    expect(soundFor({ bellSound: 'off' })).toBe('off');
+  });
+
+  it('shows All pressed first in the Notifications card, with the new help line', () => {
+    const html = renderToStaticMarkup(
+      createElement(MySettingsSections, { sections: ['notifications'], push: null }),
+    );
+    const sound = html.slice(html.indexOf('>Sound</p>'), html.indexOf('>Choose a sound</p>'));
+    expect(sound).toContain(
+      'A short sound for every new notification while Daybook is open. Important only plays it just for reminders and requests that ask you to act.',
+    );
+    const buttons = [...sound.matchAll(/<button[^>]*aria-pressed="(true|false)"[^>]*>([^<]+)</g)];
+    expect(buttons.map(([, pressed, label]) => [label, pressed])).toEqual([
+      ['All', 'true'],
+      ['Important only', 'false'],
+      ['Off', 'false'],
     ]);
   });
 });

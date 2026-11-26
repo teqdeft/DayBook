@@ -1,16 +1,20 @@
 'use client';
-// One row of the Files tab (CONTRACT 27, Files tab, Rows), at least 64 px: the thumbnail (44 x 44)
-// or the type tile (no colour per type), the name cut in the middle so its end shows, the muted
-// line ("PDF · 2.4 MB · Riya Kapoor, 21 Nov", the place in All files, "On task: Fix the login page"
-// as a button that opens the task window), a third line with the lock for "Only PM and Admins" and
-// the program warning, then Download and, for managers, "⋯". A picture's name opens the viewer,
-// another file's name downloads it (a plain link: the browser writes it to disk), a note or a
-// text-only document opens the note window.
+// One row of the Files tab (CONTRACT 27, Files tab, Rows, and CONTRACT 28, Files tab), at least 64
+// px: the thumbnail (44 x 44) or the type tile, the name cut in the middle so its end shows, the
+// muted line ("PDF · 2.4 MB · Riya Kapoor, 21 Nov", the place in All files, "On task: Fix the login
+// page" as a button that opens the task window; for managers " · On 2 tasks", a menu of those tasks;
+// for a member "· Shared with you on Fix the login page"; on a linked row a Link icon and "Word ·
+// 340 KB · From Design"), a third line with the lock for "Only PM and Admins" and the program
+// warning, then Download and, for managers, "⋯". A picture's name opens the viewer, another file's
+// name downloads it (a plain link: the browser writes it to disk), a note or a text-only document
+// opens the note window.
 import { useState } from 'react';
-import { Download, FileText, Lock, StickyNote } from 'lucide-react';
+import { Download, FileText, Link as LinkIcon, Lock, StickyNote } from 'lucide-react';
+import Menu from '@/components/Menu';
 import FileName from '@/components/files/FileName';
 import FileTile from '@/components/files/FileTile';
 import FileRowMenu from './FileRowMenu';
+import { onTasksLabel } from './fileRowView';
 import { MANAGERS_LINE, PROGRAM_LINE, rowMeta, rowNotes, rowOpens } from './filesTabView';
 import styles from './FileListRow.module.css';
 
@@ -108,35 +112,77 @@ function RowNotes({ item }) {
 }
 
 /**
+ * " · On 2 tasks" (managers): a text button opening a menu of the tasks' titles; each opens the
+ * task window, which gives focus back to this button when it closes.
+ */
+function OnTasks({ tasks, onOpenTask }) {
+  const label = onTasksLabel(tasks.length);
+  const items = tasks.map((task) => ({
+    label: task.title,
+    // The menu has put focus back on its button before this runs: the window's opener.
+    onSelect: () => onOpenTask(task.id, { currentTarget: document.activeElement }),
+  }));
+  return (
+    <>
+      {' · '}
+      <Menu
+        label="Tasks with this file"
+        items={items}
+        align="start"
+        width={240}
+        childrenName
+        className={styles.onTasks}
+        triggerClassName={styles.link}
+      >
+        {label}
+      </Menu>
+    </>
+  );
+}
+
+/** The muted line: what the file is, then the task, the tasks it is on, or "Shared with you". */
+function RowMeta({ meta, onOpenTask }) {
+  if (meta.linked) {
+    return (
+      <div className={`${styles.meta} ${styles.metaLinked}`}>
+        <LinkIcon size={14} strokeWidth={1.8} aria-hidden="true" />
+        <span>{meta.text}</span>
+      </div>
+    );
+  }
+  return (
+    <div className={styles.meta}>
+      {meta.text}
+      {meta.task ? (
+        <>
+          {' · On task: '}
+          <button type="button" className={styles.link} onClick={() => onOpenTask(meta.task.id)}>
+            {meta.task.title}
+          </button>
+        </>
+      ) : null}
+      {meta.onTasks ? <OnTasks tasks={meta.onTasks} onOpenTask={onOpenTask} /> : null}
+      {meta.shared ? ` · ${meta.shared}` : null}
+    </div>
+  );
+}
+
+/**
  * @param {{ item: object, place: string, canManage: boolean,
  *   onOpen: (item: object, event: import('react').MouseEvent) => void,
- *   onOpenTask: (taskId: number) => void,
+ *   onOpenTask: (taskId: number, event?: { currentTarget: Element | null }) => void,
  *   onAction: (action: string, item: object, event?: import('react').MouseEvent) => void }}
  *   props item: a filesItems item; onOpen: a picture's or a note's name; onAction: the row menu's
  *   choices (managers), with the menu item's click
  */
 export default function FileListRow({ item, place, canManage, onOpen, onOpenTask, onAction }) {
-  const meta = rowMeta(item, place);
+  const meta = rowMeta(item, place, { canManage });
   return (
     <li className={styles.row}>
       <RowTile item={item} />
       <div className={styles.rowText}>
         <RowName item={item} onOpen={onOpen} />
-        <p className={styles.meta}>
-          {meta.text}
-          {meta.task ? (
-            <>
-              {' · On task: '}
-              <button
-                type="button"
-                className={styles.link}
-                onClick={() => onOpenTask(meta.task.id)}
-              >
-                {meta.task.title}
-              </button>
-            </>
-          ) : null}
-        </p>
+        <RowMeta meta={meta} onOpenTask={onOpenTask} />
         <RowNotes item={item} />
       </div>
       <div className={styles.rowActions}>

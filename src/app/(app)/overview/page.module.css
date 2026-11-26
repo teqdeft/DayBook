@@ -11,7 +11,7 @@
    one, on the card's own radius. */
 .kpiLink {
   color: inherit;
-  transition: border-color 120ms ease;
+  transition: border-color var(--dur-press) var(--ease-press);
 }
 
 .kpiLink:hover {
@@ -21,13 +21,20 @@
 
 .kpiChevron {
   transition:
-    transform 120ms ease,
-    color 120ms ease;
+    transform var(--dur-lift) var(--ease-standard),
+    color var(--dur-press) var(--ease-press);
 }
 
 .kpiLink:hover .kpiChevron {
   color: var(--ink);
   transform: translateX(2px);
+}
+
+/* Reduced motion: only the colours change (CONTRACT 28, Motion, rule 7). */
+@media (prefers-reduced-motion: reduce) {
+  .kpiLink:hover .kpiChevron {
+    transform: none;
+  }
 }
 
 .rowCharts {

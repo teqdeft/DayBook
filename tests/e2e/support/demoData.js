@@ -2,10 +2,11 @@
 // screen (which locked report to ask about, which day has a missing check-out, a project's or a
 // person's id, today's company date),
 // and one thing no screen shows: whether the server asked the AI. Everything else the specs check
-// is read from the screens, not from here. Three writes (the teardown loads the demo data again):
+// is read from the screens, not from here. A few writes (the teardown loads the demo data again):
 // removeCheckInToday (holidays-leave.spec.js needs a second person without a check-in today),
-// startBreakToday (breaks.spec.js needs someone on a break now, at any time of day) and
-// addNotification (live-notifications.spec.js needs a new notification while a page is open).
+// startBreakToday (breaks.spec.js needs someone on a break now, at any time of day),
+// addNotification (live-notifications.spec.js needs a new notification while a page is open), and
+// addTasks / removeTasks (board-perf.spec.js needs a board of 150 cards, CONTRACT 28).
 import knex from 'knex';
 import { buildKnexConfig } from '../../../knexfile.js';
 
@@ -77,6 +78,32 @@ export async function projectIdByName(name) {
   const row = await db()('projects').where({ name }).first('id');
   if (!row) throw new Error(`The demo data has no project ${name}.`);
   return row.id;
+}
+
+/**
+ * A project task by its title, as it is now: its id, person, phase, due date and status.
+ * @param {number} projectId
+ * @param {string} title
+ * @returns {Promise<{ id: number, assigneeId: number | null, phase: string | null,
+ *   dueDate: string | null, status: string }>}
+ */
+export async function taskByTitle(projectId, title) {
+  const row = await db()('projectTasks')
+    .where({ projectId, title })
+    .first('id', 'assigneeId', 'phase', 'dueDate', 'status');
+  if (!row) throw new Error(`The demo data has no task "${title}" on project ${projectId}.`);
+  return row;
+}
+
+/**
+ * A project's current phase as its plan has it now (project-plan.spec.js moves acme-store on to
+ * Testing), or null without a plan or a current phase.
+ * @param {number} projectId
+ * @returns {Promise<string | null>}
+ */
+export async function currentPhaseOf(projectId) {
+  const row = await db()('projectPlans').where({ projectId }).first('currentPhase');
+  return row?.currentPhase ?? null;
 }
 
 /**
@@ -208,4 +235,48 @@ export async function addNotification(email, { type, title, body = null, link = 
     updatedAt: createdAt,
   });
   return Number(id);
+}
+
+/**
+ * Adds open tasks to a project straight into the database (no notifications): titles
+ * "<prefix> 1" to "<prefix> <count>", spread over `phases` in turn, P1 to P3 in turn, for anyone
+ * on the project, added by the project's PM.
+ * @param {number} projectId
+ * @param {number} count
+ * @param {{ prefix: string, phases: string[] }} options
+ * @returns {Promise<number>} how many were added
+ */
+export async function addTasks(projectId, count, { prefix, phases }) {
+  const project = await db()('projects').where({ id: projectId }).first('pmId');
+  if (!project) throw new Error(`The demo data has no project ${projectId}.`);
+  const now = new Date();
+  const rows = Array.from({ length: count }, (_, index) => ({
+    projectId,
+    title: `${prefix} ${index + 1}`,
+    priority: ['p1', 'p2', 'p3'][index % 3],
+    assigneeId: null,
+    status: 'open',
+    phase: phases[index % phases.length],
+    createdBy: project.pmId,
+    updatedBy: project.pmId,
+    createdAt: now,
+    updatedAt: now,
+  }));
+  for (let start = 0; start < rows.length; start += 50) {
+    await db()('projectTasks').insert(rows.slice(start, start + 50));
+  }
+  return rows.length;
+}
+
+/**
+ * Removes the tasks addTasks added (every task of the project whose title starts with the prefix).
+ * @param {number} projectId
+ * @param {string} prefix
+ * @returns {Promise<number>} how many were removed
+ */
+export async function removeTasks(projectId, prefix) {
+  return db()('projectTasks')
+    .where({ projectId })
+    .andWhere('title', 'like', `${prefix} %`)
+    .delete();
 }

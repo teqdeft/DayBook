@@ -229,8 +229,8 @@
   text-align: left;
   cursor: pointer;
   transition:
-    border-color 120ms ease,
-    background-color 120ms ease;
+    border-color var(--dur-press) var(--ease-press),
+    background-color var(--dur-press) var(--ease-press);
 }
 
 .example svg {

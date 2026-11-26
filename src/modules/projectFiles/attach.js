@@ -1,13 +1,15 @@
 // Files on tasks inside the caller's transaction (CONTRACT 27, Task files; B's task save, the
 // attach call and the task delete). Lock order everywhere: the task row (B), then upload rows,
-// then file rows. Empty lists answer [] without a query; before 019 the reads answer 0 and a save
-// that names upload keys or file ids answers UPDATE_NEEDED (Deploy before migrate).
+// then file rows, then link rows (CONTRACT 28: the 20 files count own files and links). Empty
+// lists answer [] without a query; before 019 the reads answer 0 and a save that names upload keys
+// or file ids answers UPDATE_NEEDED (Deploy before migrate).
 import { validationError } from '@/lib/errors';
 import { nowDate } from '@/lib/time';
 import { audit } from '@/modules/audit';
 import { isOnDisk } from './disk';
 import { fileError } from './errors';
 import { auditFields } from './finish';
+import { countActiveLinks } from './linkReads';
 import { projectFilesFor } from './fileView';
 import { guard019Read, guard019Write } from './migration019';
 import { MAX_TASK_FILES } from './spaceRules';
@@ -70,7 +72,8 @@ function taskFileRow(row, taskId, at) {
  * Turns held uploads into files of a task, inside the caller's transaction: each key must be the
  * person's own, on this project, for a task (none yet, or this one), `ready`, not expired, and
  * its file on disk; else the whole save is refused. Each upload row is locked (`FOR UPDATE`), so
- * two saves can't use one upload. Writes `project_file.add` for each file.
+ * two saves can't use one upload. Own active files plus links to active files plus these stay
+ * within 20. Writes `project_file.add` for each file.
  * @param {{ user: object, projectId: number, taskId: number, uploadKeys: string[],
  *   ip?: string | null }} args
  * @param {import('knex').Knex.Transaction} trx
@@ -91,7 +94,8 @@ export async function attachUploads({ user, projectId, taskId, uploadKeys, ip = 
       if (refusal) throw couldNotAdd(refusal.name);
     }
     const active = await lockActiveFiles(taskId, trx);
-    if (active.length + keys.length > MAX_TASK_FILES) throw fileError('TOO_MANY_FILES');
+    const links = await countActiveLinks(taskId, trx); // CONTRACT 28: own files + links, 20 at most
+    if (active.length + links + keys.length > MAX_TASK_FILES) throw fileError('TOO_MANY_FILES');
     const ids = [];
     for (const key of keys) {
       const row = byKey.get(key);

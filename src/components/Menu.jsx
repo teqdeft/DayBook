@@ -3,13 +3,17 @@
 // The list opens below (or above) the trigger in a fixed layer, so a table or drawer that scrolls
 // never clips it. Arrow keys move, Escape and Tab close, focus returns to the trigger. onSelect gets
 // the click, so a Delete can tell Enter or Space (detail 0: its Undo toast takes focus) from a tap.
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+// An item may be a checkbox (`checked`: the board's Filter menu, CONTRACT 28), may leave the menu
+// open when picked (`keepOpen`), so several can be ticked in a row, and may have a line above it
+// (`separator`: a card menu's Delete).
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Ellipsis } from 'lucide-react';
+import { Check, Ellipsis } from 'lucide-react';
 import styles from './Menu.module.css';
 
 const GAP = 6;
 const EDGE = 8;
+const ITEMS = '[role^="menuitem"]:not([aria-disabled="true"])';
 
 /**
  * Fixed-position offsets for a list `width` px wide next to the trigger's rect: below or above it,
@@ -29,17 +33,39 @@ function placeNextTo(rect, { placement, align, width }) {
 /**
  * @typedef {{ label: string, onSelect?: (event: import('react').MouseEvent) => void,
  *   href?: string, tone?: 'default'|'danger', disabled?: boolean,
- *   icon?: import('react').ReactNode }} MenuItem
+ *   icon?: import('react').ReactNode, checked?: boolean, keepOpen?: boolean,
+ *   separator?: boolean }} MenuItem
+ *   checked: a checkbox item (`role="menuitemcheckbox"` with `aria-checked` and a check when
+ *   true); keepOpen: picking it leaves the menu open (focus stays on the item); separator: a line
+ *   above the item (never above the first)
  */
+
+/** An item's icon, words and, for a checkbox item, its check at the right. */
+function EntryContent({ item }) {
+  return (
+    <>
+      {item.icon ? <span className={styles.icon}>{item.icon}</span> : null}
+      {item.label}
+      {item.checked !== undefined ? (
+        <span className={styles.check} aria-hidden="true">
+          {item.checked ? <Check size={16} strokeWidth={1.8} /> : null}
+        </span>
+      ) : null}
+    </>
+  );
+}
 
 /**
  * @param {{
  *   label: string, items: MenuItem[], header?: import('react').ReactNode,
  *   children?: import('react').ReactNode, align?: 'start'|'end', placement?: 'bottom'|'top',
  *   width?: number, triggerClassName?: string, className?: string,
+ *   triggerProps?: Record<string, unknown>, childrenName?: boolean,
  * }} props
- *   `label` is the trigger's accessible name. `children` replaces the default "⋯" icon inside
- *   the trigger button.
+ *   `label` is the trigger's accessible name and the list's. `children` replaces the default "⋯"
+ *   icon inside the trigger button (with `label` visually hidden after it, unless `childrenName`
+ *   says the children's own words already name it). `triggerProps`: more attributes for the
+ *   trigger (`aria-pressed`, `title`, `id`).
  */
 export default function Menu({
   label,
@@ -51,6 +77,8 @@ export default function Menu({
   width = 200,
   triggerClassName,
   className = '',
+  triggerProps,
+  childrenName = false,
 }) {
   const [position, setPosition] = useState(null);
   const open = position !== null;
@@ -90,9 +118,7 @@ export default function Menu({
 
   useEffect(() => {
     if (!open) return undefined;
-    listRef.current
-      ?.querySelector('[role="menuitem"]:not([aria-disabled="true"])')
-      ?.focus({ preventScroll: true });
+    listRef.current?.querySelector(ITEMS)?.focus({ preventScroll: true });
     function onPointerDown(event) {
       if (!rootRef.current?.contains(event.target)) setPosition(null);
     }
@@ -130,9 +156,7 @@ export default function Menu({
   }
 
   function onListKeyDown(event) {
-    const entries = [
-      ...listRef.current.querySelectorAll('[role="menuitem"]:not([aria-disabled="true"])'),
-    ];
+    const entries = [...listRef.current.querySelectorAll(ITEMS)];
     const index = entries.indexOf(document.activeElement);
     const moves = {
       ArrowDown: (index + 1) % entries.length,
@@ -154,13 +178,14 @@ export default function Menu({
 
   function select(item, event) {
     if (item.disabled) return;
-    close();
+    if (!item.keepOpen) close();
     item.onSelect?.(event);
   }
 
   return (
     <div ref={rootRef} className={`${styles.root} ${className}`}>
       <button
+        {...triggerProps}
         ref={triggerRef}
         type="button"
         className={triggerClassName ?? styles.trigger}
@@ -172,7 +197,7 @@ export default function Menu({
         onKeyDown={onTriggerKeyDown}
       >
         {children ?? <Ellipsis size={18} strokeWidth={1.8} aria-hidden="true" />}
-        {children ? <span className="visually-hidden">{label}</span> : null}
+        {children && !childrenName ? <span className="visually-hidden">{label}</span> : null}
       </button>
       {open ? (
         <div
@@ -185,37 +210,40 @@ export default function Menu({
           onKeyDown={onListKeyDown}
         >
           {header ? <div className={styles.header}>{header}</div> : null}
-          {items.map((item) => {
+          {items.map((item, index) => {
             const itemClass = `${styles.item} ${item.tone === 'danger' ? styles.danger : ''}`;
-            const content = (
-              <>
-                {item.icon ? <span className={styles.icon}>{item.icon}</span> : null}
-                {item.label}
-              </>
-            );
-            return item.href && !item.disabled ? (
-              <Link
-                key={item.label}
-                href={item.href}
-                role="menuitem"
-                tabIndex={-1}
-                className={itemClass}
-                onClick={() => close({ focusTrigger: false })}
-              >
-                {content}
-              </Link>
-            ) : (
-              <button
-                key={item.label}
-                type="button"
-                role="menuitem"
-                tabIndex={-1}
-                className={itemClass}
-                aria-disabled={item.disabled ? 'true' : undefined}
-                onClick={(event) => select(item, event)}
-              >
-                {content}
-              </button>
+            const checkbox = item.checked !== undefined;
+            const entry =
+              item.href && !item.disabled ? (
+                <Link
+                  href={item.href}
+                  role="menuitem"
+                  tabIndex={-1}
+                  className={itemClass}
+                  onClick={() => close({ focusTrigger: false })}
+                >
+                  <EntryContent item={item} />
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  role={checkbox ? 'menuitemcheckbox' : 'menuitem'}
+                  aria-checked={checkbox ? Boolean(item.checked) : undefined}
+                  tabIndex={-1}
+                  className={itemClass}
+                  aria-disabled={item.disabled ? 'true' : undefined}
+                  onClick={(event) => select(item, event)}
+                >
+                  <EntryContent item={item} />
+                </button>
+              );
+            return (
+              <Fragment key={item.label}>
+                {item.separator && index > 0 ? (
+                  <div role="separator" className={styles.separator} />
+                ) : null}
+                {entry}
+              </Fragment>
             );
           })}
         </div>

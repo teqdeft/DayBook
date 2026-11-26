@@ -1,0 +1,20 @@
+/* A linked project file's chip (CONTRACT 28, New task and Edit task): a chip of Files.module.css
+   (`li.link` beats its 52 px in whatever order the sheets load) that grows when its meta wraps
+   ("From Files · Word · 340 KB · Removed when you save") and ends on its 12 px Lock. */
+li.link {
+  height: auto;
+  min-height: 52px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.meta {
+  white-space: normal;
+}
+
+.lock {
+  display: inline-flex;
+  margin-left: 6px;
+  vertical-align: -1px;
+  color: var(--marigold-text);
+}

@@ -2,7 +2,8 @@
 // first, a company request). The report's "Submit and check out" is only asked and cancelled here,
 // since there is no second check-in on a day. Karan Mehta has not checked in today in the demo
 // data. The demo saves this computer's addresses (127.0.0.1 and ::1) as office networks, so the
-// check-in is an Office one.
+// check-in is an Office one. The Slack preview's Copy button (CONTRACT 28, an owner request) puts
+// exactly the preview's text on the clipboard.
 import { PEOPLE, cellUnder, expect, open, test, toasts } from './support/fixtures.js';
 
 const PROJECT = 'acme-app';
@@ -65,7 +66,15 @@ test('an employee checks in, submits the daily report and the PM sees it', async
     await question.getByRole('button', { name: 'Cancel' }).click();
     await expect(question).toHaveCount(0);
 
+    // `next dev` may compile the submit route on this first submit, which can take over 15 s.
+    const submitted = karan.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        /\/api\/reports\/\d+\/submit$/.test(new URL(response.url()).pathname),
+      { timeout: 60_000 },
+    );
     await karan.getByRole('button', { name: 'Submit report' }).click();
+    expect((await submitted).ok()).toBe(true);
     await expect(toasts(karan)).toContainText('Report submitted');
     await expect(karan.getByRole('button', { name: 'Update report' })).toBeVisible();
     // Only a draft offers it.
@@ -73,6 +82,20 @@ test('an employee checks in, submits the daily report and the PM sees it', async
     const preview = karan.getByRole('region', { name: 'Slack preview' });
     await expect(preview).toContainText(`Project: ${PROJECT}`);
     await expect(preview).toContainText(`${TASK} (In Progress)`);
+
+    // Copy puts the preview's text on the clipboard. Windows hands it back with CRLF breaks.
+    await karan.context().grantPermissions(['clipboard-read', 'clipboard-write'], {
+      origin: new URL(baseURL).origin,
+    });
+    const shown = await preview.locator('p').last().textContent();
+    const copy = preview.getByRole('button', { name: 'Copy Slack message' });
+    await expect(copy).toHaveText('Copy');
+    await copy.click();
+    await expect(copy).toHaveText('Copied');
+    await expect(preview.getByRole('status')).toHaveText('Slack message copied');
+    const copied = await karan.evaluate(() => navigator.clipboard.readText());
+    expect(copied.replace(/\r\n/g, '\n')).toBe(shown);
+    await expect(copy).toHaveText('Copy', { timeout: 5000 });
   });
 
   await test.step('Today shows the report as submitted', async () => {

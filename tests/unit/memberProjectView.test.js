@@ -1,4 +1,4 @@
-// The member's project page (CONTRACT 27): a person on the project opens it read only. The header
+// The member's project page (CONTRACT 27 and 28): a person on the project opens it read only. The header
 // has no health tag (only the Urgent tag, without the urgent note) and no "+ New task"; the tabs are
 // Board and Files only (no Summary, Timeline or Hours, whatever the URL asks); the task window opens
 // read only; the band, with "Your hours this month" and no forecast, is part of the Board tab only.
@@ -72,11 +72,15 @@ vi.mock('@/modules/projectTasks', () => ({
     countsByPhase: (...args) => countsByPhase(...args),
     progressByProject: (...args) => progressByProject(...args),
     listAssigneeOptions: (...args) => listAssigneeOptions(...args),
+    updateCountsFor: async () => ({}),
+    latestLinesFor: async () => ({}),
   },
 }));
+vi.mock('@/modules/timers', () => ({ timers: { minutesByTask: async () => ({}) } }));
 vi.mock('@/modules/projectFiles', () => ({
   projectFiles: {
     countsForTasks: (...args) => countsForTasks(...args),
+    chipsForTasks: async () => ({ 1: { count: 2, chips: [] } }),
     viewerContext: (...args) => viewerContext(...args),
     limits: (...args) => limits(...args),
   },
@@ -270,9 +274,14 @@ describe('the member’s Board tab', () => {
     expect(html).not.toContain('More phase actions');
   });
 
-  it('shows "Your tasks", the cards for them and the muted line', async () => {
-    const text = noTags(await board());
-    expect(text).toContain('Your tasks');
+  it('shows their cards, the toolbar without Add task, Mine or faces, and the muted line', async () => {
+    const html = await board();
+    const text = noTags(html);
+    expect(html).toContain('aria-label="Task tools"');
+    expect(html).toContain('placeholder="Search tasks or #number"');
+    expect(html).not.toContain('id="board-add-task"');
+    expect(text).not.toContain('Mine (');
+    expect(html).not.toContain('Show one person');
     expect(text).toContain('For you');
     expect(text).toContain('Anyone');
     expect(text).toContain('Only your tasks and tasks for anyone on the project are shown.');

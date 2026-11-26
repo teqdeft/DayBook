@@ -34,6 +34,19 @@
   }
 }
 
+/* Reduced motion: no turning; a slow pulse still shows the work is going on. */
+@keyframes line-polish-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: line-polish-pulse 2s ease-in-out infinite;
+  }
+}
+
 /* The suggestion: under the line, inside the row, as wide as the row's content. */
 .strip {
   display: flex;

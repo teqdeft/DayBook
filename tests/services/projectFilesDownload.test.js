@@ -1,5 +1,6 @@
 // Downloads and reads (CONTRACT 27, Who sees and does what and Downloads): every viewer row of the
-// permission table through the routes and the reads (lists and counts), the download headers,
+// permission table through the routes and the reads (lists and counts), the linked rows of
+// CONTRACT 28, the download headers,
 // `/view` only for magic-checked pictures, `/thumb`, Range, If-Range, If-None-Match, and a missing
 // disk file. Files are made through storeFile (projectFilesKit.js) in the test files folder.
 import fsp from 'node:fs/promises';
@@ -12,6 +13,7 @@ import {
   createTask,
   emptyFilesDir,
   jpegBytes,
+  linkFile,
   pdfBytes,
   pngBytes,
   projectFile,
@@ -359,6 +361,55 @@ describe('the download answer', () => {
     expect(await page.text()).toBe('This file is missing. Ask your PM to add it again.');
     const unknown = await get(fileRoute, 999999, { accept: 'text/html' });
     expect(await unknown.text()).toBe(NOT_FOUND);
+  });
+});
+
+// CONTRACT 28: the "Only PM and Admins" file linked to the person's task (Simran's) and to the
+// Anyone task, row by row: the person and every member through the Anyone task, never anyone else;
+// after the Anyone link goes, only the person (and the earlier person never).
+const LINKED = [
+  ['pm', Y, Y],
+  ['admin', Y, Y],
+  ['person', Y, Y],
+  ['other', Y, N],
+  ['hrMember', Y, N],
+  ['hrOutside', N, N],
+  ['otherPm', N, N],
+  ['otherPmMember', Y, N],
+  ['takenOff', N, N],
+  ['earlier', Y, N],
+  ['deactivated', N, N],
+];
+
+describe('the linked rows of the permission table (CONTRACT 28)', () => {
+  it('serves a linked "Only PM and Admins" file through the task only, and stops at once', async () => {
+    const pm = people.pm;
+    const both = { user: pm, project, fileIds: files.managers.id, shareConfirmed: true };
+    await linkFile({ ...both, task: tasks.forPerson, shareWith: people.person.id });
+    await linkFile({ ...both, task: tasks.anyone, shareWith: '' });
+    for (const [who, withAnyone] of LINKED) {
+      signInAs(people[who]);
+      const response = await get(fileRoute, files.managers.id);
+      await response.arrayBuffer();
+      expect([who, response.status]).toEqual([who, withAnyone ? 200 : 404]);
+    }
+    await db.transaction((trx) =>
+      projectFiles.unlinkFiles({ user: pm, task: tasks.anyone, fileIds: [files.managers.id] }, trx),
+    );
+    for (const [who, , onlyPerson] of LINKED) {
+      signInAs(people[who]);
+      const response = await get(fileRoute, files.managers.id);
+      await response.arrayBuffer();
+      expect([who, response.status]).toEqual([who, onlyPerson ? 200 : 404]);
+    }
+    await db.transaction((trx) =>
+      projectFiles.unlinkFiles(
+        { user: pm, task: tasks.forPerson, fileIds: [files.managers.id] },
+        trx,
+      ),
+    );
+    signInAs(people.person);
+    expect((await get(fileRoute, files.managers.id)).status).toBe(404);
   });
 });
 

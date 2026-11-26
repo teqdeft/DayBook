@@ -1,8 +1,9 @@
 // The Files tab (CONTRACT 27, Files tab), a server component: by `head.filesAccess`, the managers'
 // tab (the project's PM and Admins), the members' tab (people on the project, a PM who is a member
 // included: no Upload, no menus), or for anyone else one lock card with nothing about the files
-// loaded. It loads the files (projectFiles.listForProject) and the notes and texts
-// (projectSummaries.listDocumentsFor) this viewer may see, with the company date each was added.
+// loaded. It loads the files and the links to tasks this viewer may see (projectFiles.listForProject,
+// CONTRACT 28) and the notes and texts (projectSummaries.listDocumentsFor), with the company date
+// each was added.
 // Before migration 019 it shows only the update card.
 import { Info, Lock } from 'lucide-react';
 import Card from '@/components/Card';
@@ -54,6 +55,7 @@ async function loadFiles(viewer, projectId, canManage) {
   return {
     ready,
     files: list.files.map(addedOn),
+    links: list.links ?? [],
     documents: documents.map(addedOn),
     storageReady: Boolean(storage?.ready),
   };
@@ -81,6 +83,7 @@ export default async function FilesTab({ head, place }) {
       currentPhase={head.plan?.currentPhase ?? null}
       pmName={project.pmName ?? null}
       files={data.files}
+      links={data.links}
       documents={data.documents}
       limits={canManage ? head.limits : undefined}
       storageReady={data.storageReady}

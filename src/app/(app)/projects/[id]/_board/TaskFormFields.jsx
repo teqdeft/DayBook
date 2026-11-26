@@ -1,12 +1,14 @@
 'use client';
-// The fields of the New task and Edit task window (CONTRACT 27, Board tab), as the prototype lays
-// them out: the title, the note, Assign to and Due date side by side, Phase and Priority side by
-// side, then the Files field the window passes in. Errors from the API show under their field.
+// The fields of the New task and Edit task window (CONTRACT 28, New task and Edit task), in the
+// prototype's order: the title (focused), "Assign to" (radio chips), Due date and Priority side by
+// side (stacked on a phone), Phase full width, the note with its count, then the Files field the
+// window passes in. Errors from the API show under their field.
 import Field from '@/components/Field';
 import Input from '@/components/Input';
 import Select from '@/components/Select';
 import Textarea from '@/components/Textarea';
-import { NOTE_MAX, PRIORITY_OPTIONS, noteCount, ownerOptions, phaseOptions } from './taskFormModel';
+import AssignField from './AssignField';
+import { NOTE_MAX, PRIORITY_OPTIONS, noteCount, phaseOptions } from './taskFormModel';
 import styles from './TaskFormDialog.module.css';
 
 const Optional = ({ children }) => (
@@ -38,61 +40,51 @@ function PriorityField({ value, onChange }) {
   );
 }
 
-/** The task title (focused when the window opens) and the note with its count. */
-function TitleAndNote({ values, set, errorOf, titleRef }) {
+/** The task title, focused when the window opens. */
+function Title({ values, set, errorOf, titleRef }) {
   return (
-    <>
-      <Field label="Task title" htmlFor="task-form-title" error={errorOf('title')}>
-        <Input
-          id="task-form-title"
-          ref={titleRef}
-          value={values.title}
-          maxLength={200}
-          placeholder="For example: Fix the login page"
-          autoComplete="off"
-          error={Boolean(errorOf('title'))}
-          data-autofocus=""
-          onChange={set('title')}
-        />
-      </Field>
-      <Field
-        label={<Optional>Note</Optional>}
-        htmlFor="task-form-note"
-        help={noteCount(values.details)}
-        error={errorOf('details')}
-      >
-        <Textarea
-          id="task-form-note"
-          rows={3}
-          maxLength={NOTE_MAX}
-          placeholder="Instructions or details for the person doing it"
-          value={values.details}
-          error={Boolean(errorOf('details'))}
-          onChange={set('details')}
-        />
-      </Field>
-    </>
+    <Field label="Task title" htmlFor="task-form-title" error={errorOf('title')}>
+      <Input
+        id="task-form-title"
+        ref={titleRef}
+        value={values.title}
+        maxLength={200}
+        placeholder="For example: Fix the login page"
+        autoComplete="off"
+        error={Boolean(errorOf('title'))}
+        data-autofocus=""
+        onChange={set('title')}
+      />
+    </Field>
   );
 }
 
-/** Assign to (Anyone says who sees it) and Due date, side by side. */
-function OwnerAndDue({ values, set, errorOf, task, options, viewerId }) {
+/** The note with its count past 800 characters. */
+function Note({ values, set, errorOf }) {
+  return (
+    <Field
+      label={<Optional>Note</Optional>}
+      htmlFor="task-form-note"
+      help={noteCount(values.details)}
+      error={errorOf('details')}
+    >
+      <Textarea
+        id="task-form-note"
+        rows={3}
+        maxLength={NOTE_MAX}
+        placeholder="Instructions or details for the person doing it"
+        value={values.details}
+        error={Boolean(errorOf('details'))}
+        onChange={set('details')}
+      />
+    </Field>
+  );
+}
+
+/** Due date and Priority, side by side. */
+function DueAndPriority({ values, set, errorOf }) {
   return (
     <div className={styles.two}>
-      <Field
-        label="Assign to"
-        htmlFor="task-form-owner"
-        help={values.owner ? null : 'Everyone on the project sees it on their Today page.'}
-        error={errorOf('assigneeId')}
-      >
-        <Select
-          id="task-form-owner"
-          options={ownerOptions(options ?? [], task, viewerId)}
-          value={values.owner}
-          error={Boolean(errorOf('assigneeId'))}
-          onChange={set('owner')}
-        />
-      </Field>
       <Field
         label={<Optional>Due date</Optional>}
         htmlFor="task-form-due"
@@ -106,14 +98,30 @@ function OwnerAndDue({ values, set, errorOf, task, options, viewerId }) {
           onChange={set('dueDate')}
         />
       </Field>
+      <PriorityField value={values.priority} onChange={set('priority')} />
     </div>
   );
 }
 
-/** Phase and Priority, side by side. */
-function PhaseAndPriority({ values, set, errorOf, task }) {
+/**
+ * @param {{ values: object, set: (key: string) => (event: Event) => void,
+ *   error: { field: string | null, message: string }, titleRef: object, task: object | null,
+ *   choices: object[], children: import('react').ReactNode }} props task: the one being edited
+ *   (editable()), none for a new task; choices: assignChoices(); children: the Files field
+ */
+export default function TaskFormFields({ values, set, error, titleRef, task, choices, children }) {
+  const errorOf = (field) => (error.field === field ? error.message : null);
+  const field = { values, set, errorOf };
   return (
-    <div className={styles.two}>
+    <div className={styles.fields}>
+      <Title {...field} titleRef={titleRef} />
+      <AssignField
+        choices={choices}
+        value={values.owner}
+        onChange={set('owner')}
+        error={errorOf('assigneeId')}
+      />
+      <DueAndPriority {...field} />
       <Field label="Phase" htmlFor="task-form-phase" error={errorOf('phase')}>
         <Select
           id="task-form-phase"
@@ -123,35 +131,7 @@ function PhaseAndPriority({ values, set, errorOf, task }) {
           onChange={set('phase')}
         />
       </Field>
-      <PriorityField value={values.priority} onChange={set('priority')} />
-    </div>
-  );
-}
-
-/**
- * @param {{ values: object, set: (key: string) => (event: Event) => void,
- *   error: { field: string | null, message: string }, titleRef: object, task: object | null,
- *   options: Array<{ id: number, name: string }>, viewerId?: number | null,
- *   children: import('react').ReactNode }} props task: the one being edited (editable()), none
- *   for a new task; children: the Files field
- */
-export default function TaskFormFields({
-  values,
-  set,
-  error,
-  titleRef,
-  task,
-  options,
-  viewerId,
-  children,
-}) {
-  const errorOf = (field) => (error.field === field ? error.message : null);
-  const field = { values, set, errorOf };
-  return (
-    <div className={styles.fields}>
-      <TitleAndNote {...field} titleRef={titleRef} />
-      <OwnerAndDue {...field} task={task} options={options} viewerId={viewerId} />
-      <PhaseAndPriority {...field} task={task} />
+      <Note {...field} />
       {children}
     </div>
   );

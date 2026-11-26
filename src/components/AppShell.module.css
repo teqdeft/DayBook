@@ -27,10 +27,14 @@
   background: var(--navy);
 }
 
-/* The navy column runs the full page height; its content stays in view while the page scrolls. */
+/* The navy column runs the full page height; its content stays in view while the page scrolls. It
+   paints after the page (over the page's own z-index 1 to 6, under its menus at 30 and up): Chrome
+   gives the sticky box its own layer and, painted before the page, every positioned piece of the
+   page after it one too (about 150 on a board of 150 cards, 28 ms of every frame that moves). */
 .shell .sidebar > * {
   position: sticky;
   top: 0;
+  z-index: 10;
   height: 100vh;
   height: 100dvh;
 }
@@ -66,14 +70,14 @@
     visibility: hidden;
     transform: translateX(-100%);
     transition:
-      transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
-      visibility 0s linear 0.22s;
+      transform var(--dur-out) var(--ease-accelerate),
+      visibility var(--dur-out) linear;
   }
 
   .shell[data-sidebar-open='true'] .sidebar {
     visibility: visible;
     transform: none;
-    transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: transform var(--dur-in) var(--ease-decelerate);
   }
 
   .scrim {
@@ -87,6 +91,14 @@
   .main {
     gap: 18px;
     padding: 20px 24px 32px;
+  }
+}
+
+/* Reduced motion (CONTRACT 28): the sidebar comes and goes at once, without sliding. */
+@media (max-width: 1023px) and (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .shell[data-sidebar-open='true'] .sidebar {
+    transition: none;
   }
 }
 

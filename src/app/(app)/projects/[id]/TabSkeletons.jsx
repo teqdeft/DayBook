@@ -1,5 +1,5 @@
-// The skeleton of each tab of the project page (CONTRACT 27), at the same sizes as the tab: the
-// Board (band, pills, columns), Summary, Files, Timeline and Hours. Server-safe.
+// The skeleton of each tab of the project page (CONTRACT 27 and 28), at the same sizes as the tab:
+// the Board (band, toolbar, 248 px columns), Summary, Files, Timeline and Hours. Server-safe.
 import Card from '@/components/Card';
 import Skeleton from '@/components/Skeleton';
 import { tabsFor } from './ProjectTabs';
@@ -12,7 +12,8 @@ const BARS = [0, 1, 2, 3, 4];
 const COLUMNS = [0, 1, 2, 3, 4, 5, 6];
 const ROWS = [0, 1, 2, 3];
 const PHASES = [0, 1, 2, 3, 4, 5];
-const PILLS = [96, 92, 110];
+/** The toolbar's pieces: Add task, Board | Table, the search, Filter, Mine (a member: 3). */
+const TOOLS = [150, 164, 260, 96, 84];
 const BOARD_COLUMNS = [3, 2, 1, 0];
 const PLACES = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 const FILE_ROWS = [0, 1, 2, 3, 4];
@@ -49,7 +50,19 @@ function BandBlock() {
   );
 }
 
-/** Columns of task cards, the busiest first. */
+/** The toolbar, as the Board's: a white bar of 40 px controls. */
+function ToolbarBlock({ member }) {
+  const tools = member ? TOOLS.slice(1, 4) : TOOLS;
+  return (
+    <div className={styles.toolbar}>
+      {tools.map((width) => (
+        <Skeleton key={width} width={width} height={40} radius={10} />
+      ))}
+    </div>
+  );
+}
+
+/** Columns of task cards (248 px and up), the busiest first. */
 function BoardColumns() {
   return (
     <div className={styles.boardColumns}>
@@ -69,18 +82,12 @@ function BoardColumns() {
   );
 }
 
-/** The band, the pills (PM view) or "Your tasks" (member view), then the columns. */
+/** The band, the toolbar (a member's without Add task and Mine), then the columns. */
 export function BoardSkeleton({ member }) {
   return (
     <Busy label="Loading the board">
       <BandBlock />
-      <div className={styles.pills}>
-        {member ? (
-          <Skeleton width={110} height={22} />
-        ) : (
-          PILLS.map((width) => <Skeleton key={width} width={width} height={36} radius={18} />)
-        )}
-      </div>
+      <ToolbarBlock member={member} />
       <BoardColumns />
     </Busy>
   );
@@ -231,7 +238,7 @@ const SKELETONS = {
 
 /**
  * @param {{ tab: 'board'|'summary'|'files'|'timeline'|'hours', member?: boolean }} props member:
- *   the member's Board ("Your tasks" in place of the pills)
+ *   the member's Board (a toolbar without Add task and Mine)
  */
 export function TabSkeleton({ tab, member = false }) {
   const Chosen = SKELETONS[tab] ?? BoardSkeleton;

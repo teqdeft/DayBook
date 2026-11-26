@@ -1,15 +1,17 @@
 // Today's Priority tasks card with files (CONTRACT 27, Today), against the real modules: each row
 // carries the files on it this person may see (`fileCount`: their own task's and an Anyone task's
 // files; a deleted file and a project file don't count), and the card gets the company's date for
-// the task window. Before migration 019 the page still loads and every count reads as 0
-// (`countsForTasks` gives {}).
+// the task window. CONTRACT 28: linked project files count too (an Everyone file, and a
+// managers-only file after the share confirm), each on its own and Anyone tasks only, never on
+// someone else's task; an unlinked file stops counting at once. Before migration 019 the page
+// still loads and every count reads as 0 (`countsForTasks` gives {}).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { setNowForTests } from '@/lib/time';
 import { projectFiles } from '@/modules/projectFiles';
 import { createUser, resetDatabase, setSettings } from '../helpers/db.js';
 import { addMembers, createProject } from './dashboardKit.js';
-import { createTask, emptyFilesDir, projectFile, taskFile } from './projectFilesKit.js';
+import { createTask, emptyFilesDir, linkFile, projectFile, taskFile } from './projectFilesKit.js';
 
 const { loadToday } = await import('@/app/(app)/today/todayData.js');
 
@@ -74,7 +76,35 @@ describe("Today's priority rows", () => {
     expect(countsBy(priority)).toEqual({ 'Payment settings': 1, 'Product image zoom': 1 });
   });
 
+  it('count linked project files on the tasks they are linked to (CONTRACT 28)', async () => {
+    const guide = await projectFile({ user: pm, projectId: project.id, name: 'guide.pdf' });
+    const contract = await projectFile({
+      user: pm,
+      projectId: project.id,
+      visibility: 'managers',
+      name: 'contract.pdf',
+    });
+    const link = (task, fileIds, extra = {}) =>
+      linkFile({ user: pm, project, task, fileIds, ...extra });
+    await link(own, [guide.id]);
+    await link(own, [contract.id], { shareConfirmed: true, shareWith: vishal.id });
+    await link(anyone, [guide.id]);
+    await link(others, [contract.id], { shareConfirmed: true, shareWith: simran.id });
+    expect(countsBy(await rowsOf(vishal))).toEqual({
+      'Fix the login page': 4,
+      'SEO meta tags': 0,
+      'Product image zoom': 2,
+    });
+    expect(countsBy(await rowsOf(simran))).toEqual({
+      'Payment settings': 2,
+      'Product image zoom': 2,
+    });
+    await projectFiles.unlinkFile({ user: pm, taskId: own.id, fileId: contract.id, ip: null });
+    expect(countsBy(await rowsOf(vishal))['Fix the login page']).toBe(3);
+  });
+
   it('read as 0 before migration 019, and the page still loads', async () => {
+    await db.migrate.down({ name: '020_task_file_links.js' });
     await db.migrate.down({ name: '019_project_files.js' });
     const tasks = [{ id: own.id, projectId: project.id }];
     expect(await projectFiles.countsForTasks({ viewer: vishal, tasks })).toEqual({});

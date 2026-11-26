@@ -1,13 +1,14 @@
-// The task window (CONTRACT 27, Task window), its parts rendered on the server with the page's
-// providers mocked: the header's phase and "Current" tag, the facts (owner with the away label or
-// Anyone, Due, "critical" after P1, Added by), "No note.", the latest report line (Blocked in red,
-// "No report on this task yet."), the footer of each mode (`today` and `member` never get Mark
-// done, Reopen, Edit, Delete, the file X or Add files, even with `canManage`; Reopen on a done task
-// in manage mode; the member's "Add to to-do" only while today's to-do takes lines; nothing for
-// another PM), Files for a PM who is a member (`'team'` with `canSeeFiles`: files, no X), none
-// without `canSeeFiles`, one "Add files" control for screen readers, the error state (a 404, and a
-// task of another project) and where focus goes back on close. The window itself (portal, focus,
-// Escape) opens in the browser; taskWindowFocus.test.js has its busy buttons.
+// The task window (CONTRACT 27 and 28, Task window), its parts rendered on the server with the
+// page's providers mocked: the header ("#40", the phase and "Current"), the right rail (the face
+// button and "Assign to me" only in manage mode on an open task that isn't the viewer's, "Move to
+// phase…" only in manage mode on an open task, "(you)", the away labels, "None yet", "Your time"
+// for a viewer without `team.view`, "critical" after P1, Added by), Updates ("Showing the newest
+// 10.", the empty sentence) and Latest report (the first update), the footer of each mode (`mine`
+// gets Open project and, with `canManage`, Mark done or Reopen, never Edit or Delete; `today` and
+// `member` never change tasks), Files (linked rows with " · From Files: Design", the two X labels,
+// the Add files menu only in manage mode on a project page), the error state and where focus goes
+// back on close. The window itself (portal, focus, Escape, exit) opens in the browser;
+// taskWindowFocus.test.js has its busy buttons, taskWindowLook.test.js its look.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,17 +32,22 @@ vi.mock('@/app/(app)/projects/[id]/_board/TaskEditorProvider', () => ({
   useSavedTask: () => null,
   TaskEditorProvider: ({ children }) => children,
 }));
+vi.mock('@/app/(app)/projects/[id]/_board/TaskActionsProvider', () => ({
+  useTaskActions: () => null,
+}));
 vi.mock('@/components/files/TaskAttachProvider', () => ({
   useTaskAttach: () => page.attach,
   useTaskBatch: () => page.batch,
   TaskAttachProvider: ({ children }) => children,
 }));
 
-const { TaskContext, TaskFacts, TaskNote, TaskReport } =
-  await import('@/components/task/TaskWindowParts.jsx');
+const { TaskContext, TaskNote } = await import('@/components/task/TaskWindowParts.jsx');
+const { default: TaskWindowRail } = await import('@/components/task/TaskWindowRail.jsx');
+const { TaskLatest, TaskUpdates } = await import('@/components/task/TaskUpdates.jsx');
 const { default: TaskWindowFiles } = await import('@/components/task/TaskWindowFiles.jsx');
 const { useTaskWindowFooter } = await import('@/components/task/TaskWindowFooter.jsx');
 const view = await import('@/components/task/taskWindowView.js');
+const { nextPin } = await import('@/components/task/shownPerson.js');
 
 const TODAY = '2026-11-23';
 const SIMRAN = {
@@ -49,9 +55,30 @@ const SIMRAN = {
   name: 'Simran Kaur',
   initials: 'SK',
   avatarUrl: null,
+  role: 'employee',
   status: 'active',
   isMember: true,
 };
+const UPDATES = [
+  {
+    userId: 11,
+    userName: 'Simran Kaur',
+    initials: 'SK',
+    avatarUrl: null,
+    workDate: '2026-11-23',
+    status: 'in_progress',
+    title: "Found the cause: the bank's reply times out on the last step.",
+  },
+  {
+    userId: 11,
+    userName: 'Simran Kaur',
+    initials: 'SK',
+    avatarUrl: null,
+    workDate: '2026-11-20',
+    status: 'blocked',
+    title: 'Reproduced the failure with a test card.',
+  },
+];
 
 const file = (id, name, extra = {}) => ({
   id,
@@ -80,7 +107,14 @@ const PDF = file(2, 'checkout-error-steps.pdf');
 const details = (extra = {}) => ({
   id: 40,
   projectId: 5,
-  project: { id: 5, name: 'acme-store', color: 'green', status: 'active', isUrgent: false },
+  project: {
+    id: 5,
+    name: 'acme-store',
+    color: 'green',
+    status: 'active',
+    isUrgent: false,
+    pmId: 7,
+  },
   title: 'Checkout fix before client demo',
   details: 'Card payments fail on the last step.\nThe demo is on Friday.',
   priority: 'p1',
@@ -91,12 +125,11 @@ const details = (extra = {}) => ({
   createdBy: { id: 7, name: 'Riya Kapoor' },
   createdAt: '2026-11-23T06:30:00.000Z',
   doneAt: null,
-  latestReport: {
-    status: 'in_progress',
-    userId: 11,
-    userName: 'Simran Kaur',
-    workDate: '2026-11-20',
-  },
+  latestReport: UPDATES[0],
+  updates: UPDATES,
+  updateCount: 2,
+  minutes: 340,
+  privateLinkCount: 0,
   files: [PNG, PDF],
   fileCount: 2,
   canManage: true,
@@ -132,47 +165,110 @@ beforeEach(() => {
   page.batch = null;
 });
 
-describe('the header and the facts', () => {
-  it('names the project and the phase, with "Current" only on the current phase', () => {
+/** The rail as a mode draws it. */
+const rail = (task, { mode = 'manage', viewerId = null, canAct = true } = {}) =>
+  render(TaskWindowRail, {
+    task,
+    facts: view.railFacts(task, { mode, viewerId, canAct }),
+    today: TODAY,
+    faceRef: { current: null },
+    onPeople: () => {},
+    onTake: () => {},
+    onMove: () => {},
+  });
+
+describe('the header', () => {
+  it('names the task number, the project and the phase, with "Current" on the current phase', () => {
     const current = render(TaskContext, { task: details(), currentPhase: 'development' });
-    expect(text(current)).toBe('acme-store Development Current');
+    expect(text(current)).toBe('#40 acme-store Development Current');
     expect(text(render(TaskContext, { task: details(), currentPhase: 'testing' }))).toBe(
-      'acme-store Development',
+      '#40 acme-store Development',
     );
     expect(text(render(TaskContext, { task: details({ phase: null }) }))).toBe(
-      'acme-store No phase yet',
+      '#40 acme-store No phase yet',
     );
   });
+});
 
-  it('shows the owner, the due date, "critical" after P1 and who added it', () => {
-    const html = render(TaskFacts, { task: details(), today: TODAY });
+describe('the right rail', () => {
+  it('shows the facts: the person, the due date, "critical" after P1, the time, who added it', () => {
+    const html = rail(details(), { mode: 'team' });
     const shown = text(html);
-    expect(shown).toContain('Owner SK Simran Kaur');
+    expect(shown).toContain('Assigned to SK Simran Kaur');
     expect(shown).toContain('Due Due 27 Nov');
     expect(shown).toContain('Priority P1 Priority 1, highest critical');
+    expect(shown).toContain('Phase Development');
+    expect(shown).toContain('Time spent 5h 40m from timers');
     expect(shown).toContain('Added by Riya Kapoor on Mon, 23 Nov');
     expect(html).toContain('<dl');
+    expect(shown).not.toMatch(/Assign to me|Move to phase/);
   });
 
-  it('says Anyone on the project, the away label, and no "critical" after P2', () => {
-    const anyone = text(render(TaskFacts, { task: details({ assignee: null }), today: TODAY }));
-    expect(anyone).toContain('Owner Anyone on the project');
+  it('gives the manager the face button, Assign to me and Move to phase… on an open task', () => {
+    const html = rail(details(), { viewerId: 7 });
+    expect(labels(html)).toContain('Assigned to Simran Kaur. Change person');
+    expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*data-face-button=""/);
+    expect(text(html)).toContain('Assign to me');
+    expect(text(html)).toContain('Move to phase…');
+    const anyone = rail(details({ assignee: null }), { viewerId: 7 });
+    expect(labels(anyone)).toContain('Assigned to anyone on the project. Change person');
+  });
+
+  it("leaves Assign to me out on the viewer's own task, and both out on a done task", () => {
+    const own = text(rail(details(), { viewerId: 11 }));
+    expect(own).not.toContain('Assign to me');
+    expect(own).toContain('Move to phase…');
+    const done = text(rail(details({ status: 'done' }), { viewerId: 7 }));
+    expect(done).not.toMatch(/Assign to me|Move to phase/);
+    // Without the page's task actions (no provider) nothing is offered.
+    expect(text(rail(details(), { viewerId: 7, canAct: false }))).not.toMatch(/Assign to me/);
+  });
+
+  it('never offers the actions in the other modes, whatever canManage says', () => {
+    for (const mode of ['team', 'member', 'today', 'mine']) {
+      const html = rail(details(), { mode, viewerId: 7 });
+      expect(text(html)).not.toMatch(/Assign to me|Move to phase/);
+      expect(labels(html).some((label) => label.startsWith('Assigned to'))).toBe(false);
+    }
+  });
+
+  it('says "(you)" after the viewer, Anyone, and the away labels', () => {
+    expect(text(rail(details(), { mode: 'member' }))).toContain('Simran Kaur (you)');
+    expect(text(rail(details(), { mode: 'team', viewerId: 11 }))).toContain('Simran Kaur (you)');
+    expect(text(rail(details(), { mode: 'team', viewerId: 7 }))).not.toContain('(you)');
+    // My tasks: every row is the viewer's own, until someone else takes it while it is open.
+    expect(text(rail(details(), { mode: 'mine', viewerId: 11 }))).toContain('Simran Kaur (you)');
+    expect(text(rail(details(), { mode: 'mine', viewerId: 7 }))).not.toContain('(you)');
+    const anyone = text(rail(details({ assignee: null }), { mode: 'member' }));
+    expect(anyone).toContain('Assigned to Anyone on the project');
     const away = details({ assignee: { ...SIMRAN, isMember: false }, priority: 'p2' });
-    const shown = text(render(TaskFacts, { task: away, today: TODAY }));
+    const shown = text(rail(away, { mode: 'team' }));
     expect(shown).toContain('Simran Kaur Not on the project');
     expect(shown).not.toContain('critical');
     const gone = details({ assignee: { ...SIMRAN, status: 'deactivated' } });
-    expect(text(render(TaskFacts, { task: gone, today: TODAY }))).toContain('Deactivated');
+    expect(text(rail(gone, { mode: 'team' }))).toContain('Deactivated');
+    expect(text(rail(gone, { viewerId: 7 }))).toContain('Deactivated');
+  });
+
+  it('labels a member\'s own minutes "Your time", and says "None yet" at 0', () => {
+    const member = details({ canManage: false, minutes: 30 });
+    expect(text(rail(member, { mode: 'member' }))).toContain('Your time 30m from timers');
+    expect(text(rail(member, { mode: 'today' }))).toContain('Your time 30m from timers');
+    expect(text(rail(details(), { mode: 'today' }))).toContain('Time spent 5h 40m');
+    expect(text(rail(details({ minutes: 0 }), { mode: 'mine' }))).toContain('Time spent None yet');
+    expect(rail(details({ minutes: 120 }), { mode: 'team' })).toMatch(
+      /<span class="[^"]*number[^"]*">2h<\/span> from timers/,
+    );
   });
 
   it('leaves Added by out when the task does not say who added it', () => {
-    const html = render(TaskFacts, { task: details({ createdBy: null }), today: TODAY });
+    const html = rail(details({ createdBy: null }), { mode: 'team' });
     expect(text(html)).not.toContain('Added by');
     expect(view.addedByText(details({ createdBy: null }))).toBeNull();
   });
 });
 
-describe('the note and the latest report', () => {
+describe('the note, Updates and the latest report', () => {
   it('keeps the note with its line breaks, or says "No note."', () => {
     const html = render(TaskNote, { task: details(), headingId: 'n' });
     expect(html).toContain('Card payments fail on the last step.\nThe demo is on Friday.');
@@ -181,22 +277,48 @@ describe('the note and the latest report', () => {
     );
   });
 
-  it('shows the latest line with its status, Blocked in red', () => {
-    const shown = text(render(TaskReport, { task: details(), today: TODAY, headingId: 'r' }));
-    expect(shown).toBe('Latest report Simran, Fri, 20 Nov: In progress');
-    const blocked = details({ latestReport: { ...details().latestReport, status: 'blocked' } });
-    expect(view.reportParts(blocked.latestReport, TODAY)).toEqual({
-      lead: 'Simran, Fri, 20 Nov',
-      status: 'Blocked',
-      tone: 'red',
-    });
-    const html = render(TaskReport, { task: blocked, today: TODAY, headingId: 'r' });
+  it('lists the newest report lines with their status in its tone', () => {
+    const html = render(TaskUpdates, { task: details(), headingId: 'u' });
+    const shown = text(html);
+    expect(shown).toContain('Updates (2)');
+    expect(shown).toContain(
+      "SK Simran Kaur · Mon, 23 Nov · In progress Found the cause: the bank's reply times out",
+    );
+    expect(shown).toContain('Simran Kaur · Fri, 20 Nov · Blocked Reproduced the failure');
     expect(html).toMatch(/<span class="[^"]*red[^"]*">Blocked<\/span>/);
+    expect(shown).not.toContain('Showing the newest 10.');
+  });
+
+  it('says there are none yet, and when only the newest 10 show', () => {
+    const none = details({ updates: [], updateCount: 0 });
+    expect(text(render(TaskUpdates, { task: none, headingId: 'u' }))).toBe(
+      'Updates (0) No updates yet. They come from the daily reports.',
+    );
+    const ten = Array.from({ length: 10 }, () => UPDATES[0]);
+    const many = details({ updates: ten, updateCount: 12 });
+    const shown = text(render(TaskUpdates, { task: many, headingId: 'u' }));
+    expect(shown).toContain('Updates (12)');
+    expect(shown.endsWith('Showing the newest 10.')).toBe(true);
+  });
+
+  it('shows the latest report: the first update, the same line as the status chip', () => {
+    const shown = text(render(TaskLatest, { task: details(), headingId: 'r' }));
+    expect(shown).toBe(
+      "Latest report In progress · Mon, 23 Nov. Simran Kaur: Found the cause: the bank's reply times out on the last step.",
+    );
+    const blocked = details({ latestReport: UPDATES[1] });
+    const html = render(TaskLatest, { task: blocked, headingId: 'r' });
+    expect(html).toMatch(/<span class="[^"]*red[^"]*">Blocked · Fri, 20 Nov\.<\/span>/);
+    expect(view.latestParts(UPDATES[1])).toEqual({
+      head: 'Blocked · Fri, 20 Nov.',
+      tone: 'red',
+      text: 'Simran Kaur: Reproduced the failure with a test card.',
+    });
   });
 
   it('says there is no report yet (members only ever get their own line)', () => {
-    const none = details({ latestReport: null });
-    expect(text(render(TaskReport, { task: none, today: TODAY, headingId: 'r' }))).toBe(
+    const none = details({ latestReport: null, updates: [] });
+    expect(text(render(TaskLatest, { task: none, headingId: 'r' }))).toBe(
       'Latest report No report on this task yet.',
     );
   });
@@ -254,6 +376,27 @@ describe('the footer of each mode', () => {
       kind: 'member',
       done: false,
       todo: false,
+      status: false,
+    });
+  });
+
+  it('gives My tasks Open project and, for a task the viewer manages, Mark done or Reopen', () => {
+    const open = footer({ task: details(), mode: 'mine' });
+    expect(text(open)).toBe('Open project Mark done');
+    expect(open).toContain('href="/projects/5?task=40"');
+    expect(text(footer({ task: details({ status: 'done' }), mode: 'mine' }))).toBe(
+      'Open project Reopen',
+    );
+    // Another PM's project where the viewer is only a member: the task shows, without a tick.
+    expect(text(footer({ task: details({ canManage: false }), mode: 'mine' }))).toBe(
+      'Open project',
+    );
+    expect(text(open)).not.toMatch(/Edit|Delete|Add to to-do/);
+    expect(view.footerFor({ mode: 'mine', task: details() })).toEqual({
+      kind: 'mine',
+      done: false,
+      todo: false,
+      status: true,
     });
   });
 
@@ -310,8 +453,11 @@ describe('the Files part', () => {
     expect(input).toContain('aria-hidden="true"');
     expect(input).toContain('tabindex="-1"');
     expect(input).not.toContain('aria-label');
-    expect(labels(html).some((label) => label.startsWith('Add files'))).toBe(false);
     expect(html.match(/<button[^>]*>(?:(?!<\/button>).)*Add files/g)).toHaveLength(1);
+    // Its name is said once: the visible words are hidden from screen readers, the label isn't.
+    const [button] = html.match(/<button[^>]*aria-haspopup="menu"[^>]*>.*?<\/button>/) ?? [];
+    expect(button).toContain('<span aria-hidden="true">Add files</span>');
+    expect(button).toContain('<span class="visually-hidden">Add files</span>');
   });
 
   it('warns on a program file and says when there are no files', () => {
@@ -325,6 +471,61 @@ describe('the Files part', () => {
   it('draws nothing about files without canSeeFiles (another PM not on the project)', () => {
     const html = files({ task: details({ files: [], canSeeFiles: false }), mode: 'team' });
     expect(html).toBe('');
+  });
+
+  it('says where a linked file sits in Files, and names the two X apart', () => {
+    page.attach = { add: () => {}, retry: () => {}, remove: () => {} };
+    const linked = file(5, 'checkout-flow.docx', {
+      scope: 'project',
+      taskId: null,
+      phase: 'design',
+      linked: true,
+      typeLabel: 'Word',
+    });
+    const whole = file(6, 'acme-brand-guide.pdf', { scope: 'project', phase: null, linked: true });
+    const task = details({ files: [PDF, linked, whole], fileCount: 3 });
+    const html = files({ task, mode: 'manage' });
+    expect(text(html)).toContain('Word · 340 KB · From Files: Design');
+    expect(text(html)).toContain('PDF · 340 KB · From Files: Whole project');
+    expect(text(html)).toMatch(/checkout-error-steps\.pdf PDF · 340 KB(?! ·)/); // its own file
+    expect(labels(html)).toEqual(
+      expect.arrayContaining([
+        'Remove checkout-error-steps.pdf',
+        'Remove checkout-flow.docx from this task',
+        'Remove acme-brand-guide.pdf from this task',
+      ]),
+    );
+    const member = files({ task, mode: 'member' });
+    expect(text(member)).toContain('From Files: Design');
+    expect(labels(member).some((label) => label.startsWith('Remove'))).toBe(false);
+  });
+
+  it('offers Add files as a menu only in manage mode on a project page, never in My tasks', () => {
+    page.attach = { add: () => {}, retry: () => {}, remove: () => {} };
+    const html = files({ task: details(), mode: 'manage' });
+    expect(html).toMatch(/<button[^>]*aria-haspopup="menu"[^>]*>/);
+    for (const mode of ['mine', 'team', 'today', 'member']) {
+      const other = files({ task: details(), mode });
+      expect(text(other)).not.toContain('Add files');
+      expect(other).not.toContain('aria-haspopup="menu"');
+    }
+  });
+
+  it('hides a linked file while its unlink waits behind its Undo', () => {
+    const linked = file(5, 'checkout-flow.docx', {
+      scope: 'project',
+      phase: 'design',
+      linked: true,
+    });
+    const task = details({ files: [PDF, linked], fileCount: 2 });
+    const hiding = { ...removal, isLinkHidden: (taskId, fileId) => taskId === 40 && fileId === 5 };
+    const html = files({ task, mode: 'manage', removal: hiding });
+    expect(text(html)).toContain('Files (1)');
+    expect(text(html)).not.toContain('checkout-flow.docx');
+    // The same file id as an own file is a different file: only the link is hidden.
+    expect(view.filesPart({ mode: 'manage', task, isLinkHidden: hiding.isLinkHidden }).count).toBe(
+      1,
+    );
   });
 
   it('hides a file whose removal waits behind its Undo', () => {
@@ -380,5 +581,33 @@ describe('focus when the window closes', () => {
     expect(view.returnTarget(element(false), () => null)).toBeNull();
     expect(view.returnTarget(element(false), null)).toBeNull();
     expect(view.returnTarget(null, undefined)).toBeNull();
+  });
+});
+
+describe('the person while a change settles', () => {
+  const simran = { id: 11, name: 'Simran Kaur' };
+  const riya = { id: 7, name: 'Riya Kapoor' };
+
+  it('shows the person on its way, then keeps it until the task has loaded again', () => {
+    let step = nextPin(null, { overlay: riya, task: { assignee: simran }, loading: false });
+    expect(step.assignee).toBe(riya);
+    // The page refreshed: the overlay goes, the window's task still names Simran.
+    step = nextPin(step.pin, { overlay: undefined, task: { assignee: simran }, loading: false });
+    expect(step.assignee).toBe(riya);
+    step = nextPin(step.pin, { overlay: undefined, task: { assignee: simran }, loading: true });
+    expect(step.assignee).toBe(riya);
+    step = nextPin(step.pin, { overlay: undefined, task: { assignee: riya }, loading: false });
+    expect(step).toEqual({ pin: null, assignee: riya });
+  });
+
+  it('shows the task again when the change failed or was undone', () => {
+    let step = nextPin(null, { overlay: riya, task: { assignee: simran }, loading: false });
+    step = nextPin(step.pin, { overlay: undefined, task: { assignee: simran }, loading: false });
+    step = nextPin(step.pin, { overlay: undefined, task: { assignee: simran }, loading: true });
+    step = nextPin(step.pin, { overlay: undefined, task: { assignee: simran }, loading: false });
+    expect(step).toEqual({ pin: null, assignee: simran });
+    expect(
+      nextPin(null, { overlay: undefined, task: { assignee: simran }, loading: false }),
+    ).toEqual({ pin: null, assignee: simran });
   });
 });

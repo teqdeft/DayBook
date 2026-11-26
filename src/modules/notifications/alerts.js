@@ -1,12 +1,14 @@
 // How loudly each notification type alerts (CONTRACT 26): 'important' types ask the reader to act
 // today (check in or out, end a break, add a missing time, start a timer, send a report, decide a
-// request, drop other work for an urgent project) and chime under the default Sound choice
-// ("Important only"); every other type is 'normal'. Pure and browser-safe (no imports), so the bell's
-// client code imports it too, an exception to CONTRACT 2 like @/modules/reports/todoText.
+// request, drop other work for an urgent project) and are the ones the "Important only" Sound
+// choice chimes for (since CONTRACT 28 the default Sound is All, which chimes for every type);
+// every other type is 'normal'. Pure and browser-safe (no imports), so the bell's client code
+// imports it too, an exception to CONTRACT 2 like @/modules/reports/todoText.
 
 /**
- * Every type Daybook creates, with its level: 44 types, 19 important. The table in CONTRACT 26 is
- * the contract (CONTRACT 27 adds project_task.files_added).
+ * Every type Daybook creates, with its level: 45 types, 19 important, 26 normal. The table in
+ * CONTRACT 26 is the contract (CONTRACT 27 adds project_task.files_added, CONTRACT 28
+ * project_task.reassigned).
  */
 export const ALERT_TYPES = Object.freeze({
   // Important (19)
@@ -29,7 +31,7 @@ export const ALERT_TYPES = Object.freeze({
   'timer.reminder': 'important',
   'timer.stopped_midnight': 'important',
   'system.test': 'important',
-  // Normal (25)
+  // Normal (26)
   'attendance_correction.approved': 'normal',
   'attendance_correction.rejected': 'normal',
   'attendance.self_checkout_past': 'normal',
@@ -50,6 +52,7 @@ export const ALERT_TYPES = Object.freeze({
   'project_task.added': 'normal',
   'project_task.changed': 'normal',
   'project_task.files_added': 'normal',
+  'project_task.reassigned': 'normal',
   'report_edit.sent': 'normal',
   'report_edit.approved': 'normal',
   'report_edit.declined': 'normal',
@@ -88,7 +91,7 @@ export function alertLevel(type) {
   return isClassified(type) ? ALERT_TYPES[type] : 'normal';
 }
 
-/** True when the type chimes under "Important only" (the default Sound choice). */
+/** True when the type chimes under the "Important only" Sound choice. */
 export function isImportant(type) {
   return alertLevel(type) === 'important';
 }

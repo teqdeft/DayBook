@@ -573,24 +573,24 @@ describe('getNavBadges', () => {
   const badges = (user) => dashboard.getNavBadges(user);
 
   it('gives a PM the edit requests of their people plus pending project requests', async () => {
-    expect(await badges(people.pm)).toEqual({ requests: 2, corrections: 0 });
-    expect(await badges(people.pm2)).toEqual({ requests: 2, corrections: 0 });
+    expect(await badges(people.pm)).toEqual({ requests: 2, corrections: 0, myTasks: 0 });
+    expect(await badges(people.pm2)).toEqual({ requests: 2, corrections: 0, myTasks: 0 });
   });
 
   it('gives HR the pending attendance corrections only', async () => {
-    expect(await badges(people.hr)).toEqual({ requests: 0, corrections: 2 });
+    expect(await badges(people.hr)).toEqual({ requests: 0, corrections: 2, myTasks: 0 });
   });
 
   it('gives an Admin every pending edit and project request, and the corrections', async () => {
-    expect(await badges(people.admin)).toEqual({ requests: 4, corrections: 2 });
+    expect(await badges(people.admin)).toEqual({ requests: 4, corrections: 2, myTasks: 0 });
   });
 
   it("never counts a person's own edit request (nobody approves their own)", async () => {
     const other = await createUser({ name: 'Meera', role: 'admin', tracksAttendance: true });
     const id = await createEditRequest(people.admin, '2026-09-24');
     try {
-      expect(await badges(people.admin)).toEqual({ requests: 4, corrections: 2 });
-      expect(await badges(other)).toEqual({ requests: 5, corrections: 2 });
+      expect(await badges(people.admin)).toEqual({ requests: 4, corrections: 2, myTasks: 0 });
+      expect(await badges(other)).toEqual({ requests: 5, corrections: 2, myTasks: 0 });
     } finally {
       await db('reportEditRequests').where({ id }).del();
       await db('users').where({ id: other.id }).del();
@@ -600,8 +600,8 @@ describe('getNavBadges', () => {
   it("never counts HR's own correction request (another HR person or an Admin decides)", async () => {
     const id = await createCorrection(people.hr, '2026-09-29');
     try {
-      expect(await badges(people.hr)).toEqual({ requests: 0, corrections: 2 });
-      expect(await badges(people.admin)).toEqual({ requests: 4, corrections: 3 });
+      expect(await badges(people.hr)).toEqual({ requests: 0, corrections: 2, myTasks: 0 });
+      expect(await badges(people.admin)).toEqual({ requests: 4, corrections: 3, myTasks: 0 });
     } finally {
       await db('attendanceCorrections').where({ id }).del();
     }
@@ -611,9 +611,9 @@ describe('getNavBadges', () => {
     const meera = await createUser({ name: 'Meera', role: 'admin', tracksAttendance: true });
     const id = await createCorrection(meera, '2026-09-29');
     try {
-      expect(await badges(people.hr)).toEqual({ requests: 0, corrections: 2 });
-      expect(await badges(people.admin)).toEqual({ requests: 4, corrections: 3 });
-      expect(await badges(meera)).toEqual({ requests: 4, corrections: 2 }); // never their own
+      expect(await badges(people.hr)).toEqual({ requests: 0, corrections: 2, myTasks: 0 });
+      expect(await badges(people.admin)).toEqual({ requests: 4, corrections: 3, myTasks: 0 });
+      expect(await badges(meera)).toEqual({ requests: 4, corrections: 2, myTasks: 0 }); // never their own
     } finally {
       await db('attendanceCorrections').where({ id }).del();
       await db('users').where({ id: meera.id }).del();
@@ -621,15 +621,16 @@ describe('getNavBadges', () => {
   });
 
   it('gives employees, deactivated people and nobody zero', async () => {
-    expect(await badges(people.e1)).toEqual({ requests: 0, corrections: 0 });
+    expect(await badges(people.e1)).toEqual({ requests: 0, corrections: 0, myTasks: 0 });
     expect(await badges({ ...people.pm, status: 'deactivated' })).toEqual({
       requests: 0,
       corrections: 0,
+      myTasks: 0,
     });
-    expect(await badges(null)).toEqual({ requests: 0, corrections: 0 });
+    expect(await badges(null)).toEqual({ requests: 0, corrections: 0, myTasks: 0 });
   });
 
-  it('counts with one query', async () => {
+  it('counts with one query, plus one for My tasks (CONTRACT 28)', async () => {
     // The company day comes from the settings cache, which is warm on a page load in the app
     // (tests read settings from the database unless the cache is turned on).
     settings.setCacheTtlForTests(60_000);
@@ -643,6 +644,8 @@ describe('getNavBadges', () => {
       db.removeListener('query', listen);
       settings.setCacheTtlForTests(null);
     }
-    expect(queries).toHaveLength(1);
+    const myTasks = queries.filter((sql) => sql.includes('project_tasks'));
+    expect(queries.length - myTasks.length).toBe(1);
+    expect(myTasks.length).toBeLessThanOrEqual(1); // projectTasks.countMineDue: one count
   });
 });

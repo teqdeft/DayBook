@@ -1,6 +1,6 @@
 // Every main screen opens for the roles that can use it, without console or page errors, and the
-// sidebar shows each role the right items (company rule: PMs have no Today or My log), with the
-// screen's item marked as the current page. Screens are [path, page title, sidebar item]. A
+// sidebar shows each role the right items (company rule: PMs have no Today or My log; PMs and
+// Admins have My tasks, CONTRACT 28), with the screen's item marked as the current page. Screens are [path, page title, sidebar item]. A
 // project page opens on each of its five tabs (CONTRACT 27), and the hours range works both on
 // the projects table and on a project's Hours tab.
 import { PEOPLE, expect, open, problemsOf, sidebarLinks, test } from './support/fixtures.js';
@@ -25,10 +25,11 @@ const ROLES = [
     role: 'PM',
     person: PEOPLE.pm,
     home: '/team',
-    nav: ['Projects', 'Team', 'Screen time', 'Attendance', 'Requests', 'My settings'],
+    nav: ['Projects', 'Team', 'My tasks', 'Screen time', 'Attendance', 'Requests', 'My settings'],
     screens: [
       ['/projects', 'Projects', 'Projects'],
       ['/team', 'Team dashboard', 'Team'],
+      ['/my-tasks', 'My tasks', 'My tasks'],
       ['/screen-time', 'Screen time', 'Screen time'],
       ['/attendance', 'Attendance', 'Attendance'],
       ['/requests', 'Requests', 'Requests'],
@@ -55,6 +56,7 @@ const ROLES = [
     home: '/overview',
     nav: [
       'Overview',
+      'My tasks',
       'Team',
       'Screen time',
       'Projects',
@@ -66,6 +68,7 @@ const ROLES = [
     ],
     screens: [
       ['/overview', 'Company overview', 'Overview'],
+      ['/my-tasks', 'My tasks', 'My tasks'],
       ['/team', 'Team dashboard', 'Team'],
       ['/screen-time', 'Screen time', 'Screen time'],
       ['/projects', 'Projects', 'Projects'],
@@ -78,8 +81,8 @@ const ROLES = [
   },
 ];
 
-/** A sidebar label, optionally followed by its badge ("Requests 3 waiting"). */
-const navItem = (label) => new RegExp(`^${label}(\\s*\\d+\\+?\\s*waiting)?$`);
+/** A sidebar label, optionally followed by its badge ("Requests 3 waiting", "My tasks 1 due now"). */
+const navItem = (label) => new RegExp(`^${label}(\\s*\\d+\\+?\\s*(waiting|due now))?$`);
 
 for (const { role, person, home, nav, screens } of ROLES) {
   test(`${role}: the sidebar and every main screen`, async ({ signInAs }) => {

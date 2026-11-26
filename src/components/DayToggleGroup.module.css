@@ -43,8 +43,8 @@
   color: var(--ink);
   pointer-events: none;
   transition:
-    background-color 120ms ease,
-    border-color 120ms ease;
+    background-color var(--dur-press) var(--ease-press),
+    border-color var(--dur-press) var(--ease-press);
 }
 
 .day:hover .face {

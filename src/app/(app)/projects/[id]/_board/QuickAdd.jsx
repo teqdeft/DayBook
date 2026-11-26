@@ -1,8 +1,9 @@
 'use client';
-// "+ Add task" under a column (CONTRACT 27, Quick add): it turns into one title field. Enter or Add
-// makes a P2 task for anyone on the project, with no date, in that phase; the field stays open and
-// empty for the next one. "More options" opens the New task window with the typed title and the
-// column's phase. Escape or X closes it and focus goes back to "+ Add task".
+// "+ Add task" under a column (CONTRACT 27 and 28, Quick add), named "Add task to Testing": it turns
+// into one title field. Enter or Add makes a P2 task for anyone on the project, with no date, in
+// that phase; the field stays open and empty for the next one (the new card makes its entrance
+// once the refresh draws it). "More options" opens the New task window with the typed title and
+// the column's phase. Escape or X closes it and focus goes back to "+ Add task".
 import { useEffect, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import Button from '@/components/Button';
@@ -148,6 +149,7 @@ export default function QuickAdd({ open, onOpen, ...rest }) {
     >
       <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
       Add task
+      <span className="visually-hidden"> to {rest.column.label}</span>
     </button>
   );
 }

@@ -1,7 +1,8 @@
-// The `ProjectFile` shape (CONTRACT 27, Modules): `toProjectFile` is the one mapper every answer
-// uses (reads.js and manage.js too). `projectFilesFor` answers the files just added: Finish of a
-// project file, the files a task save or the attach call added, and storeFile. These files are
-// new, so none has a project document yet (`hasText` false).
+// The `ProjectFile` shape (CONTRACT 27, Modules, with CONTRACT 28's link fields): `toProjectFile`
+// is the one mapper every answer uses (reads.js, linkReads.js, links.js and manage.js too).
+// `projectFilesFor` answers the files just added: Finish of a project file, the files a task save
+// or the attach call added, the files just linked, and storeFile. These files are new to the task,
+// so none has `hasText` here.
 import { db } from '@/lib/db';
 import { projects } from '@/modules/projects';
 import { kindOf, pictureType, typeLabel } from './kinds';
@@ -10,13 +11,17 @@ import { kindOf, pictureType, typeLabel } from './kinds';
 const SMALL_PICTURE_BYTES = 2 * 1_048_576;
 
 /**
- * One `ProjectFile` from a `project_files` row joined with its task and its creator.
+ * One `ProjectFile` from a `project_files` row joined with its task and its creator. The link
+ * fields of CONTRACT 28 default to "no links": `linked` (an entry shown on a task through a link),
+ * `linkCount` and `linkedTasks` (the tasks this viewer may see it on) and `sharedByLink` (a member
+ * reaches an "Only PM and Admins" file only through a link).
  * @param {object} row project_files columns plus taskTitle, taskPhase, taskAssigneeId,
  *   creatorName
- * @param {{ canManage: boolean, hasText?: boolean }} options
+ * @param {{ canManage: boolean, hasText?: boolean, linked?: boolean, linkCount?: number,
+ *   linkedTasks?: object[], sharedByLink?: boolean }} options
  * @returns {import('./service').ProjectFile}
  */
-export function toProjectFile(row, { canManage, hasText = false }) {
+export function toProjectFile(row, { canManage, hasText = false, ...links }) {
   const id = Number(row.id);
   const base = `/api/project-files/${id}`;
   const shown = Boolean(row.isPicture) && pictureType(row.ext) !== null;
@@ -56,6 +61,10 @@ export function toProjectFile(row, { canManage, hasText = false }) {
     downloadUrl: base,
     viewUrl,
     canManage,
+    linked: Boolean(links.linked),
+    linkCount: Number(links.linkCount ?? 0),
+    linkedTasks: links.linkedTasks ?? [],
+    sharedByLink: Boolean(links.sharedByLink),
   };
 }
 

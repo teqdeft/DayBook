@@ -21,7 +21,7 @@ import { pageState, useLiveEngine } from './useLiveEngine';
 import { useStack } from './useStack';
 
 const LiveContext = createContext(null);
-const SOUNDS = ['important', 'all', 'off'];
+const SOUNDS = ['all', 'important', 'off'];
 const ANNOUNCE_CLEAR_MS = 5000;
 const clock = () => now().valueOf();
 const viewport = () => ({ width: window.innerWidth, height: window.innerHeight });
@@ -35,7 +35,10 @@ export function useLiveNotifications() {
   return useContext(LiveContext);
 }
 
-/** The person's three live preferences; a `prefs` message counts until the next refresh. */
+/**
+ * The person's three live preferences; a `prefs` message counts until the next refresh. Without
+ * a valid one the sound falls back to useBellSound()'s, so 'all' (the default, CONTRACT 28).
+ */
 function useLivePrefs() {
   const base = useUserPrefs();
   const sound = useBellSound();

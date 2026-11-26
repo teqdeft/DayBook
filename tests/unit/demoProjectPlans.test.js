@@ -29,7 +29,7 @@ function seedContext(day, clock = '12:00', status = null) {
   const days = workingDaysBack(anchor, WORKING_DAYS);
   const dateOf = (offset) => days[offset] ?? dateAtOffset(anchor, offset, WORKING_DAYS);
   const when = (offset, time) => at(dateOf(offset), time, TZ);
-  const users = new Map([['ceo', { id: 1, status: 'active' }]]);
+  const users = new Map([['ceo', { id: 1, role: 'admin', status: 'active' }]]);
   PEOPLE.forEach((person, i) => users.set(person.key, { ...person, id: i + 2 }));
   const projects = new Map();
   [...PROJECTS, ...COMPLETED_PROJECTS].forEach((project, i) => {

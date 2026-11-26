@@ -1,7 +1,9 @@
-// POST /api/project-tasks/:id/files { uploadKeys: [1 to 20] }: adds the PM's held uploads to an
-// existing task (the task window's "Add files" and a drop on a card, CONTRACT 27), tells the task's
-// person (or everyone on the project for a task for anyone) and answers 201 { files, told,
-// toldName }. The project's PM or Admin; RATE_LIMITED past 60 a minute for one person.
+// POST /api/project-tasks/:id/files { uploadKeys?: [0 to 20], linkFileIds?: [0 to 20],
+// shareConfirmed?, shareWith? } (one list at least, together up to 20): adds the PM's held uploads
+// and links project files to an existing task (the task window's "Add files", "From project files"
+// and a drop on a card, CONTRACT 27, 28), tells the task's person (or everyone on the project for
+// a task for anyone) in one `files_added` and answers 201 { files, told, toldName }. The project's
+// PM or Admin; RATE_LIMITED past 60 a minute for one person.
 import { AppError } from '@/lib/errors';
 import { checkRateLimit, withRoute } from '@/lib/route';
 import { projectTasks } from '@/modules/projectTasks';
@@ -17,6 +19,15 @@ export const POST = withRoute(
     checkRateLimit(PER_PERSON, ROUTE, `user:${user.id}`);
     const id = routeId(params);
     if (!id) throw new AppError('NOT_FOUND', { message: "We couldn't find that priority task." });
-    return projectTasks.attachFiles({ user, id, uploadKeys: body.uploadKeys, ip });
+    const { uploadKeys, linkFileIds, shareConfirmed, shareWith } = body;
+    return projectTasks.attachFiles({
+      user,
+      id,
+      uploadKeys,
+      linkFileIds,
+      shareConfirmed,
+      shareWith,
+      ip,
+    });
   },
 );

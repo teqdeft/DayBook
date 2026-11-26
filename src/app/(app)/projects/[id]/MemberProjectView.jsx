@@ -1,10 +1,11 @@
-// The project page for a person on the project (CONTRACT 27, The member's project page): read
-// only. The header has no health, the tabs are Board and Files, and the band sits inside the Board
-// tab with "Your hours this month" and no forecast. The board shows only their own tasks and tasks
-// for anyone on the project; cards open the task window read only (with "Add to to-do" while
-// today's to-do takes lines: `head.todoOpen`, false once the report is in). Never on
-// this page: health, forecast, AI, Summary, Timeline, Hours, other people's tasks, names on them,
-// hours or report lines, attendance, leave, screen time.
+// The project page for a person on the project (CONTRACT 27 and 28, The member's project page and
+// board): read only. The header has no health and no button, the tabs are Board and Files, and the
+// band sits inside the Board tab with "Your hours this month" and no forecast. The board (or the
+// Table: Board | Table, search and Filter, no Add task, Mine or faces) shows only their own tasks
+// and tasks for anyone on the project; cards open the task window read only (with "Add to to-do"
+// while today's to-do takes lines: `head.todoOpen`, false once the report is in). Never on this
+// page: health, forecast, AI, Summary, Timeline, Hours, other people's tasks, names on them, hours
+// or report lines, attendance, leave, screen time.
 import { Suspense } from 'react';
 import { TaskWindowProvider } from '@/components/task/TaskWindowProvider';
 import BoardTab from './BoardTab';
@@ -31,6 +32,7 @@ export default function MemberProjectView({ head, query }) {
       currentPhase={head.plan?.currentPhase ?? null}
       today={head.today}
       todoOpen={head.todoOpen === true}
+      viewerId={head.viewerId}
     >
       <div className={styles.page}>
         <ProjectHeader project={project} member />
@@ -39,7 +41,7 @@ export default function MemberProjectView({ head, query }) {
           {tab === 'files' ? (
             <FilesTab head={head} place={first(query?.place)} />
           ) : (
-            <BoardTab head={head} />
+            <BoardTab head={head} query={query} />
           )}
         </Suspense>
       </div>

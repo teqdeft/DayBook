@@ -10,11 +10,17 @@
  *   thumbUrl: string | null, width: number | null, height: number | null,
  *   createdBy: { id: number, name: string }, createdAt: Date,
  *   task: { id: number, title: string, phase: string | null, assigneeId: number | null } | null,
- *   hasText: boolean, downloadUrl: string, viewUrl: string | null, canManage: boolean }} ProjectFile
+ *   hasText: boolean, downloadUrl: string, viewUrl: string | null, canManage: boolean,
+ *   linked: boolean, linkCount: number, linkedTasks: Array<{ id: number, title: string,
+ *   assigneeId?: number | null, assigneeName?: string | null, assigneeManages?: boolean }>,
+ *   sharedByLink: boolean }} ProjectFile
  *   phase: null = Whole project (always null on a task file); downloadUrl '/api/project-files/12';
  *   viewUrl '/api/project-files/12/view' for a picture, else null; thumbUrl '/thumb' with a
  *   thumbnail, else '/view' for a picture up to 2 MB, else null; hasText: a document holds its
- *   text (managers only, else false)
+ *   text (managers only, else false); linked: shown on a task through a link (CONTRACT 28);
+ *   linkCount and linkedTasks: the tasks this viewer may see it on (the Files tab; managers also
+ *   get each task's person); sharedByLink: a member reaches an "Only PM and Admins" file only
+ *   through a link
  */
 
 /**
@@ -57,3 +63,21 @@ export {
 } from './reads';
 export { fileResponse, plainNotFound } from './download';
 export { removeFile, updateFile } from './manage';
+
+// ============ CONTRACT 28: files from the project on tasks (links) ============
+// Linking, unlinking and the picker (links.js), the reads with links new in 1.13 (linkReads.js); the
+// 1.12 reads above follow links too. The pure rules (canSeeLinkedOnTask, needsShareConfirm,
+// isProjectManager) are in access.js, which the browser imports directly.
+
+/**
+ * @typedef {{ id: number, name: string, ext: string, kind: string, typeLabel: string,
+ *   isPicture: boolean, thumbUrl: string | null, viewUrl: string | null, downloadUrl: string,
+ *   sizeBytes: number }} FileChip
+ */
+
+/**
+ * @typedef {ProjectFile & { onThisTask: boolean }} PickerFile
+ */
+
+export { chipsForTasks, countActiveLinks, privateLinkCounts } from './linkReads';
+export { linkFiles, pickerFiles, shareConfirmFits, unlinkFile, unlinkFiles } from './links';

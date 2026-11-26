@@ -2,9 +2,11 @@
 // Edit details (CONTRACT 27, Files tab): for a file its Name (the base name; the extension shows
 // as a fixed ".pdf" after the input and never changes, Names), for a text-only document its Title;
 // project files and text-only documents also have Place and Who can see it (a task's file goes
-// where its task goes). Save sends what changed to `PATCH /api/project-files/[id]` or the document
-// route, then the toast "Changes saved."; the tab then closes the window with its new data and puts
-// focus back in the list (useFilesTab's `saved`). Save stays focusable while it works (BusyButton).
+// where its task goes). While "Only PM and Admins" is chosen for a file on tasks of people who
+// aren't managers, a line says who can still open it from those tasks (CONTRACT 28). Save sends what
+// changed to `PATCH /api/project-files/[id]` or the document route, then the toast "Changes
+// saved."; the tab then closes the window with its new data and puts focus back in the list
+// (useFilesTab's `saved`). Save stays focusable while it works (BusyButton).
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/Button';
@@ -15,7 +17,7 @@ import { api } from '@/lib/apiClient';
 import BusyButton from '../BusyButton';
 import windowStyles from '../projectWindows.module.css';
 import { PlaceField, VisibilityField } from './FileChoices';
-import { optionPhase, phaseOption } from './filesTabView';
+import { keepLine, optionPhase, phaseOption } from './filesTabView';
 import styles from './FileDialogs.module.css';
 
 const MAX_NAME = 200;
@@ -171,12 +173,17 @@ function EditWindow({ item, currentPhase, pmName, onClose, onSaved }) {
               error={error?.field === 'phase' ? error.message : null}
               onChange={(value) => set('phase')(optionPhase(value))}
             />
-            <VisibilityField
-              name="file-edit-visibility"
-              value={values.visibility}
-              pmName={pmName}
-              onChange={set('visibility')}
-            />
+            <div>
+              <VisibilityField
+                name="file-edit-visibility"
+                value={values.visibility}
+                pmName={pmName}
+                onChange={set('visibility')}
+              />
+              <p className={styles.keep} aria-live="polite">
+                {values.visibility === 'managers' ? keepLine(item.file) : null}
+              </p>
+            </div>
           </>
         ) : null}
       </div>

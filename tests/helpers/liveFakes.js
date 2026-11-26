@@ -177,7 +177,7 @@ export function makeTab(name, { bus, locks, server, respond, cursor = 100, ...se
     batches: [],
     events: [],
     stops: [],
-    prefs: { choice: 'important', preview: true },
+    prefs: { choice: 'all', preview: true }, // the defaults (All since CONTRACT 28)
   };
   store.subscribe((event) => tab.events.push(event));
   tab.live = createLiveTab({

@@ -31,6 +31,17 @@ export const NAV_ITEMS = {
   },
   projects: { label: 'Projects', href: '/projects', icon: 'Folder', permission: 'project.request' },
   team: { label: 'Team', href: '/team', icon: 'Users', permission: 'team.view' },
+  // My tasks (CONTRACT 28): the open tasks a PM or Admin took or was given, on all their projects.
+  // The badge counts the overdue ones and those due today, so it reads "due now", not "waiting".
+  myTasks: {
+    label: 'My tasks',
+    href: '/my-tasks',
+    icon: 'ListChecks',
+    permission: 'project.manage',
+    badge: 'myTasks',
+    badgeRoles: ['pm', 'admin'],
+    badgeLabel: 'due now',
+  },
   screenTime: {
     label: 'Screen time',
     href: '/screen-time',
@@ -92,6 +103,7 @@ export const NAVIGATION = {
   pm: [
     'projects',
     'team',
+    'myTasks',
     'screenTime',
     'attendance',
     'requests',
@@ -103,6 +115,7 @@ export const NAVIGATION = {
   // Today and My log appear for an Admin only when they track attendance (the CEO doesn't).
   admin: [
     'overview',
+    'myTasks',
     'today',
     'log',
     'team',
@@ -132,7 +145,7 @@ function allowed(user, item) {
 /**
  * The sidebar items for a user.
  * @param {{ role: string, tracksAttendance: boolean }} user
- * @param {{ corrections?: number, requests?: number }} [badges]
+ * @param {{ corrections?: number, requests?: number, myTasks?: number }} [badges]
  * @param {{ ask?: boolean, summaries?: boolean }} [features] items that show only then (ask:
  *   Ask Daybook is available; summaries: the person has AI summaries; CONTRACT 20); a missing
  *   flag hides the item
@@ -150,6 +163,7 @@ export function navigationFor(user, badges = {}, features = {}) {
       icon: item.icon,
       matches: item.matches ?? [],
       badge: item.badge && item.badgeRoles.includes(user.role) ? badges[item.badge] || 0 : 0,
+      badgeLabel: item.badgeLabel ?? 'waiting', // the badge's visually hidden word
     }));
 }
 

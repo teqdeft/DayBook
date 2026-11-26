@@ -1,6 +1,7 @@
 // Shared kit for the file tests (CONTRACT 27, Tests "Services"): the test files folder (always
 // under the system temp folder, one per DB_NAME), small bytes built in code (no fixture files),
-// and files made through `projectFiles.storeFile`, so no test copies storage code.
+// files made through `projectFiles.storeFile`, so no test copies storage code, and links made as
+// a task save makes them (`linkFile`, CONTRACT 28).
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -160,6 +161,40 @@ export async function createTask(project, overrides = {}) {
   });
   return db('projectTasks').where({ id }).first();
 }
+
+/**
+ * Links project files to a task as B's save does (CONTRACT 28): one transaction, the task row
+ * locked first, the person after the save read from the task row (`assigneeId` overrides it, as a
+ * save that also changes the person).
+ * @param {{ user: object, project: { id: number, pmId: number }, task: { id: number },
+ *   fileIds: number | number[], shareConfirmed?: boolean, shareWith?: number | '' | null,
+ *   assigneeId?: number | null }} args
+ * @returns {Promise<import('@/modules/projectFiles/service').ProjectFile[]>} the new links
+ */
+export function linkFile({ user, project, task, fileIds, shareConfirmed, shareWith, ...rest }) {
+  return db.transaction(async (trx) => {
+    const row = await trx('projectTasks')
+      .where({ id: task.id })
+      .forUpdate()
+      .first('id', 'projectId', 'assigneeId');
+    const assigneeId = Object.hasOwn(rest, 'assigneeId') ? rest.assigneeId : row.assigneeId;
+    return projectFiles.linkFiles(
+      {
+        user,
+        project: { id: project.id, pmId: project.pmId },
+        task: { id: row.id, projectId: row.projectId, assigneeId },
+        fileIds: [].concat(fileIds),
+        shareConfirmed,
+        shareWith,
+      },
+      trx,
+    );
+  });
+}
+
+/** The link rows of a task, oldest first. */
+export const linkRowsOf = (taskId) =>
+  db('taskFileLinks').where({ taskId }).orderBy(['createdAt', 'fileId']).select('*');
 
 /** One `project_files` row by id. */
 export const fileRow = (id) => db('projectFiles').where({ id }).first();
