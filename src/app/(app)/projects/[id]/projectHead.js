@@ -1,5 +1,6 @@
-// What every tab of the project page needs (CONTRACT 27): who the viewer is to the project, the
-// project, its plan and, for the PM view, its health, in a few small queries. Server only. The tabs
+// What every tab of the project page needs (CONTRACT 27 and 28): who the viewer is to the project
+// (and their id and name, for the board's Mine, "Me" and "(you)"), the project, its plan and, for
+// the PM view, its health, in a few small queries. Server only. The tabs
 // load the rest of their data themselves, under their own Suspense. Who may open the page is read
 // once per request (React cache): the segment's layout answers a real 404 with it before anything
 // streams, and the page reuses it.
@@ -95,7 +96,11 @@ async function loadTodoOpen(user) {
   }
 }
 
-/** The uploaders' limits and the people list, for the New task and Edit task window. */
+/**
+ * The uploaders' limits and the people a task can be given to (AssigneeOption[], CONTRACT 28: the
+ * viewer first as "Me", the PM, then the active members), for New task, Edit task and the people
+ * window.
+ */
 async function loadManagerParts(project, user) {
   const [limits, options, storage] = await Promise.all([
     projectFiles.limits(),
@@ -110,19 +115,21 @@ async function loadManagerParts(project, user) {
  * @param {number} projectId
  * @param {object} user the session user
  * @returns {Promise<null | { project: object, plan: object, forecast?: object, today: string,
+ *   viewerId: number | null, viewerName: string | null,
  *   canManage: boolean, access: 'manage' | 'team' | 'member',
  *   filesAccess: 'manage' | 'member' | 'none', hoursThisMonth?: number | null,
  *   todoOpen?: boolean, limits?: object, options?: object[], storageReady?: boolean }>} null
  *   when there is no such project or the viewer may not open it (the page answers 404). project
- *   has `statusLabel`; plan is projectPlan.getPlan's (Not set before migration 015); forecast (PM
+ *   has `statusLabel`; viewerId and viewerName: the viewer's (the board's Mine, "Me (Riya
+ *   Kapoor)" and "(you)"); plan is projectPlan.getPlan's (Not set before migration 015); forecast (PM
  *   view only, never computed for a member) is forecastProject's; today is the company's date;
  *   access: 'manage' (the project's PM or an Admin), 'team' (another `team.view` holder),
  *   'member' (an active member without `team.view`); filesAccess: the file rights, from the
  *   files rule, never from access; hoursThisMonth (member view only): the viewer's minutes this
  *   month, null without `report.self`; todoOpen (member view only): the task window's "Add to
  *   to-do" shows (`report.self` and a to-do that still takes lines); limits, options and
- *   storageReady (managers only): projectFiles.limits(), projectTasks.listAssigneeOptions and
- *   whether file storage is set up (projectFiles.storageStatus)
+ *   storageReady (managers only): projectFiles.limits(), projectTasks.listAssigneeOptions
+ *   (AssigneeOption[]) and whether file storage is set up (projectFiles.storageStatus)
  */
 export async function loadProjectHead(projectId, user) {
   const opened = await accessFor(projectId, user);
@@ -149,6 +156,8 @@ export async function loadProjectHead(projectId, user) {
     plan,
     ...(forecast ? { forecast } : {}),
     today,
+    viewerId: user?.id ?? null,
+    viewerName: user?.name ?? null,
     canManage,
     access,
     filesAccess: filesAccess(ctx),

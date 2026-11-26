@@ -204,3 +204,20 @@
     margin: -13px 0;
   }
 }
+
+/* CONTRACT 28: a linked row's line starts with the Link icon */
+.metaLinked {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.metaLinked svg {
+  flex: none;
+}
+
+/* " · On 2 tasks": the menu's button sits in the line like the "On task" link */
+.meta .onTasks {
+  display: inline;
+}

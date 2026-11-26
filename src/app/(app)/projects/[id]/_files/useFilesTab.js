@@ -2,8 +2,9 @@
 // The Files tab's own state (CONTRACT 27, Files tab): the place (in the URL, changed with the
 // native History API so it makes no server trip and the leave guard never asks), the search, the
 // sort (remembered per person in localStorage `daybook.files.sort`), the open window, the picture
-// viewer, Delete with Undo (the row hides at once; the DELETE goes after the 6 s toast), and where
-// focus goes once Edit details has saved.
+// viewer, Delete with Undo (the row hides at once, with the rows of its links; the DELETE goes after
+// the 6 s toast), "Remove from this task" with Undo for a linked row (CONTRACT 28: the unlink goes
+// after the toast, the file stays in Files), and where focus goes once Edit details has saved.
 import {
   useCallback,
   useEffect,
@@ -25,6 +26,7 @@ import {
   placeView,
   SORT_KEY,
   sortOf,
+  unlinkCopy,
 } from './filesTabView';
 
 // ---------- the sort, remembered per person in this browser ----------
@@ -114,11 +116,35 @@ function useSavedEdit({ panel, setPanel, shown }) {
   };
 }
 
+/** True while an item is hidden by a waiting delete or unlink: a linked row goes with its file. */
+const hiddenBy = (undo) => (item) =>
+  undo.isHidden(item.key) || (item.type === 'link' && undo.isHidden(`file:${item.id}`));
+
 /**
- * @param {{ files: object[], documents: object[], place: string, canManage: boolean }} props
- *   place: the server's `?place=` (the URL's wins once it changes)
+ * A row's Delete ("File deleted." · "It was on 2 tasks.") and "Remove from this task" (the link
+ * goes, the file stays in Files), both with Undo: the row hides at once, its DELETE waits behind
+ * the toast, and focus goes to the next row.
+ * @param {{ undo: object, shown: object[], setPanel: Function }} parts undo: useUndoDelete's;
+ *   shown: the rows as they are listed now
  */
-export function useFilesTab({ files, documents, place: firstPlace, canManage }) {
+function rowRemoval({ undo, shown, setPanel }) {
+  const hold = (copyOf) =>
+    function remove(item, { keyboard = false } = {}) {
+      const next = neighbourOf(shown, item);
+      const returnFocus = () => firstOf(next, 'files-upload', 'files-search');
+      setPanel(null);
+      undo.remove({ key: item.key, ...copyOf(item), keyboard, returnFocus });
+      if (!keyboard) requestAnimationFrame(() => returnFocus()?.focus());
+    };
+  return { remove: hold(deleteCopy), unlink: hold(unlinkCopy) };
+}
+
+/**
+ * @param {{ files: object[], documents: object[], links?: object[], place: string,
+ *   canManage: boolean }} props links: listForProject's `links` (CONTRACT 28); place: the
+ *   server's `?place=` (the URL's wins once it changes)
+ */
+export function useFilesTab({ files, documents, links, place: firstPlace, canManage }) {
   const params = useSearchParams();
   const place = placeOf(params?.get('place') ?? firstPlace);
   const [query, setQuery] = useState('');
@@ -127,8 +153,9 @@ export function useFilesTab({ files, documents, place: firstPlace, canManage }) 
   const [viewer, setViewer] = useState(null); // the index of the picture shown
   const undo = useUndoDelete();
 
-  const all = useMemo(() => filesItems({ files, documents }), [files, documents]);
-  const items = all.filter((item) => !undo.isHidden(item.key));
+  const all = useMemo(() => filesItems({ files, documents, links }), [files, documents, links]);
+  const hidden = hiddenBy(undo);
+  const items = all.filter((item) => !hidden(item));
   const counts = countItems(items);
   const view = placeView({ items, place, query, sort, canManage });
 
@@ -136,16 +163,7 @@ export function useFilesTab({ files, documents, place: firstPlace, canManage }) 
     window.history.replaceState(null, '', placeHref(next));
   }, []);
   const saved = useSavedEdit({ panel, setPanel, shown: view.shown });
-
-  /** Delete with Undo; focus goes to the next row (or the Upload button). */
-  function remove(item, { keyboard = false } = {}) {
-    const { url, label, failTitle } = deleteCopy(item);
-    const next = neighbourOf(view.shown, item);
-    const returnFocus = () => firstOf(next, 'files-upload', 'files-search');
-    setPanel(null);
-    undo.remove({ key: item.key, url, label, failTitle, keyboard, returnFocus });
-    if (!keyboard) requestAnimationFrame(() => returnFocus()?.focus());
-  }
+  const { remove, unlink } = rowRemoval({ undo, shown: view.shown, setPanel });
 
   return {
     place,
@@ -162,6 +180,7 @@ export function useFilesTab({ files, documents, place: firstPlace, canManage }) 
     viewer,
     setViewer,
     remove,
+    unlink,
     saved,
     toast: undo.toast,
   };

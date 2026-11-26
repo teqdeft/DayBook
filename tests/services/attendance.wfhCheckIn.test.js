@@ -248,21 +248,28 @@ describe('lists, the pending count and the nav badge', () => {
     expect(await attendance.countPendingWfh({ viewer: hr })).toBe(0);
     expect(await attendance.countPendingWfh({ viewer: admin })).toBe(2);
     expect(await attendance.countPendingWfh({ viewer: admin2 })).toBe(1);
-    expect(await dashboard.getNavBadges(hr)).toEqual({ requests: 0, corrections: 0 });
+    expect(await dashboard.getNavBadges(hr)).toEqual({ requests: 0, corrections: 0, myTasks: 0 });
     expect(await dashboard.getNavBadges(admin)).toMatchObject({ corrections: 2 });
     expect((await attendance.listWfhRequests({ viewer: hr, status: 'pending' })).total).toBe(3);
   });
 
   it('adds them to the Attendance badge with the corrections, in one query', async () => {
-    expect(await dashboard.getNavBadges(hr)).toEqual({ requests: 0, corrections: 2 });
+    expect(await dashboard.getNavBadges(hr)).toEqual({ requests: 0, corrections: 2, myTasks: 0 });
     expect(await dashboard.getNavBadges(admin2)).toMatchObject({ corrections: 3 });
-    expect(await dashboard.getNavBadges(farhan)).toEqual({ requests: 0, corrections: 0 });
+    expect(await dashboard.getNavBadges(farhan)).toEqual({
+      requests: 0,
+      corrections: 0,
+      myTasks: 0,
+    });
     const queries = [];
     const listen = (query) => queries.push(query.sql);
     db.on('query', listen);
     expect(await dashboard.getNavBadges(admin)).toMatchObject({ corrections: 4 });
     db.removeListener('query', listen);
-    // Besides the company's settings (cached in-process outside tests) for today's date.
-    expect(queries.filter((sql) => !sql.includes('`settings`'))).toHaveLength(1);
+    // Besides the company's settings (cached in-process outside tests) for today's date, and
+    // the My tasks count (CONTRACT 28, at most one query on project_tasks).
+    const counted = (sql) => !sql.includes('`settings`') && !sql.includes('project_tasks');
+    expect(queries.filter(counted)).toHaveLength(1);
+    expect(queries.filter((sql) => sql.includes('project_tasks')).length).toBeLessThanOrEqual(1);
   });
 });

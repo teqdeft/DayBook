@@ -22,6 +22,13 @@
   display: none;
 }
 
+/* Reduced motion without the script's answer (CONTRACT 28): no splash, never one that stays. */
+@media (prefers-reduced-motion: reduce) {
+  .splash {
+    display: none;
+  }
+}
+
 .lockup {
   display: flex;
   align-items: center;

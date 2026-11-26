@@ -9,7 +9,9 @@
 // menu) never asks "Leave site?" and the page stays; one that fails (the file was deleted
 // meanwhile) asks the guard's question first, and No keeps the upload going. A piece answered 401
 // stops the file with Retry in the Uploads card, and Retry brings it in. Cancelling the only
-// upload puts focus on Upload files, not on the page.
+// upload puts focus on Upload files, not on the page. On acme-store (only read) the demo's brand
+// guide, linked to the checkout task (CONTRACT 28), says " · On 1 task" for the PM, a menu that
+// opens the task window.
 //
 // The spec works on internal-tool, which has no files in the demo, so the counts start at 0 and
 // project-plan.spec.js (acme-store) is left as it is. Every /api/ai/** request is answered in the
@@ -577,5 +579,35 @@ test('from the keyboard: Delete gives Undo the focus, Edit details keeps the pla
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
   });
+  expect(problemsOf(page), 'console and page errors').toEqual([]);
+});
+
+test('acme-store: the brand guide linked to a task says " · On 1 task", and its menu opens it', async ({
+  signInAs,
+}) => {
+  const store = await projectIdByName('acme-store');
+  const task = 'Checkout fix before client demo';
+  const page = await signInAs(PEOPLE.pm);
+  await stubAi(page);
+  await open(page, `/projects/${store}?tab=files&place=project`);
+  const guide = row(page, 'acme-brand-guide.pdf');
+  await expect(guide).toContainText(' · On 1 task');
+  await expect(row(page, 'acme-store-contract-signed.pdf')).not.toContainText(/On \d+ tasks?/);
+  const onTasks = guide.getByRole('button', { name: 'On 1 task', exact: true });
+  await expect(onTasks).toHaveAttribute('aria-haspopup', 'menu');
+  await onTasks.click();
+  await page
+    .getByRole('menu', { name: 'Tasks with this file' })
+    .getByRole('menuitem', { name: task })
+    .click();
+  const window = page.getByRole('dialog', { name: task });
+  await expect(
+    window
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('link', { name: 'Download acme-brand-guide.pdf' }) }),
+  ).toContainText('From Files: Whole project');
+  await page.keyboard.press('Escape');
+  await expect(window).toHaveCount(0);
+  await expect(onTasks).toBeFocused();
   expect(problemsOf(page), 'console and page errors').toEqual([]);
 });

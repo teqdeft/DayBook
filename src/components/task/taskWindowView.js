@@ -1,9 +1,12 @@
-// What the task window shows (CONTRACT 27, Task window), as plain values: the header's phase, the
-// facts (owner, "Added by"), the latest report line, the Files part and the footer for each mode.
-// Pure and safe in the browser; TaskWindow.jsx draws it.
-import { awayLabel, latestReportLabel } from '@/app/(app)/projects/[id]/phasesView';
+// What the task window shows (CONTRACT 27, Task window; CONTRACT 28, Task window), as plain values:
+// the header's phase, the right rail's facts (who it is for, "Assign to me" and "Move to phase…"
+// only in manage mode on an open task, the time from timers or the viewer's own time, who added
+// it), the Updates lines and the latest report, the Files part (own and linked files) and the
+// footer of each mode (`mine`, My tasks', included). Pure and safe in the browser; TaskWindow.jsx
+// and its parts draw it.
+import { awayLabel } from '@/app/(app)/projects/[id]/phasesView';
 import { picturesOf } from '@/components/files/FileThumbs';
-import { dayjs, formatDayShort } from '@/lib/time';
+import { dayjs, formatDayShort, formatDuration } from '@/lib/time';
 import { phaseLabel } from '@/modules/projectPlan/phases';
 
 export const NOT_AVAILABLE =
@@ -11,9 +14,18 @@ export const NOT_AVAILABLE =
 export const NO_NOTE = 'No note.';
 export const NO_FILES = 'No files on this task.';
 export const NO_REPORT = 'No report on this task yet.';
+export const NO_UPDATES = 'No updates yet. They come from the daily reports.';
+export const MORE_UPDATES = 'Showing the newest 10.';
+export const NO_TIME = 'None yet';
 export const ANYONE = 'Anyone on the project';
+export const UPDATES_SHOWN = 10;
 
-const MODES = ['manage', 'team', 'member', 'today'];
+const MODES = ['manage', 'team', 'member', 'today', 'mine'];
+const STATUS = {
+  in_progress: { label: 'In progress', tone: 'primary' },
+  blocked: { label: 'Blocked', tone: 'red' },
+  done: { label: 'Done', tone: 'green' },
+};
 
 /** The window's mode, 'member' (the most careful) for anything not on the list. */
 export function modeOf(mode) {
@@ -37,15 +49,22 @@ export function localDay(at) {
   return day.isValid() ? day.format('YYYY-MM-DD') : null;
 }
 
+/** "#88": the task's number (its id, the same on every screen). */
+export const taskNumber = (task) => `#${task.id}`;
+
 /**
- * The Owner fact: the person (with the away label: "Deactivated", "Not on the project") or Anyone.
- * @returns {{ anyone: true, name: string } | { anyone: false, person: object, name: string,
- *   away: string | null }}
+ * Whose minutes the window shows: viewers without `team.view` (employees and HR, in the `member`
+ * and `today` modes) get only their own, so the rail says "Your time" for them.
  */
-export function ownerFact(task) {
-  const person = task?.assignee ?? null;
-  if (!person) return { anyone: true, name: ANYONE };
-  return { anyone: false, person, name: person.name, away: awayLabel(person) };
+export function ownTimeOnly(mode, task) {
+  const shown = modeOf(mode);
+  return (shown === 'member' || shown === 'today') && !task?.canManage;
+}
+
+/** "5h 40m" (the number shown before " from timers"), or null at 0 ("None yet"). */
+export function minutesText(minutes) {
+  const value = Math.max(0, Math.floor(Number(minutes) || 0));
+  return value > 0 ? formatDuration(value) : null;
 }
 
 /** "Riya Kapoor on Mon, 23 Nov", or null when the task doesn't say who added it. */
@@ -57,32 +76,109 @@ export function addedByText(task) {
 }
 
 /**
- * The latest report line ("Simran, Fri, 20 Nov: In progress"), split so the status gets its colour
- * (Blocked in red). latestReportLabel says "yesterday" and "today" for those days.
- * @param {{ status, userName, workDate } | null} latest
- * @param {string} today the company's date
- * @returns {{ lead: string, status: string, tone: 'red' | 'green' | 'primary' } | null}
+ * Who the task is for, as the rail shows it: the person (with "(you)" after the viewer's own and
+ * the away label: "Not on the project", "Deactivated"), or Anyone on the project.
+ * @param {object} task TaskDetails
+ * @param {{ viewerId?: number | null, mode?: string }} [viewer] in `member` and `today` the
+ *   person of a task the viewer sees is always the viewer, so "(you)" shows without `viewerId`
+ * @returns {{ anyone: true, name: string } | { anyone: false, person: object, name: string,
+ *   you: boolean, away: string | null }}
  */
-export function reportParts(latest, today) {
-  const label = latestReportLabel(latest, today);
-  if (!label) return null;
-  const at = label.lastIndexOf(': ');
-  const tone = { blocked: 'red', done: 'green' }[latest.status] ?? 'primary';
-  return { lead: label.slice(0, at), status: label.slice(at + 2), tone };
+export function ownerFact(task, { viewerId = null, mode = 'manage' } = {}) {
+  const person = task?.assignee ?? null;
+  if (!person) return { anyone: true, name: ANYONE };
+  const shown = modeOf(mode);
+  const you =
+    viewerId !== null && viewerId !== undefined
+      ? Number(person.id) === Number(viewerId)
+      : shown === 'member' || shown === 'today';
+  return { anyone: false, person, name: person.name, you, away: awayLabel(person) };
+}
+
+/**
+ * The rail's facts and the controls beside them: "Assign to me" (manage mode, an open task that
+ * isn't the viewer's) and "Move to phase…" (manage mode, an open task); "Time spent" with
+ * everyone's minutes, or "Your time" for a viewer who only gets their own.
+ * @param {object} task TaskDetails
+ * @param {{ mode: string, viewerId?: number | null, canAct?: boolean }} args canAct: the page's
+ *   task actions are there (useTaskActions)
+ */
+export function railFacts(task, { mode, viewerId = null, canAct = true }) {
+  const manage = modeOf(mode) === 'manage' && Boolean(task?.canManage) && canAct;
+  const open = task?.status !== 'done';
+  const owner = ownerFact(task, { viewerId, mode });
+  const mine = !owner.anyone && viewerId !== null && Number(owner.person.id) === Number(viewerId);
+  return {
+    owner,
+    manage,
+    assignToMe: manage && open && !mine,
+    moveToPhase: manage && open,
+    timeLabel: ownTimeOnly(mode, task) ? 'Your time' : 'Time spent',
+    time: minutesText(task?.minutes),
+    critical: task?.priority === 'p1',
+    phase: phaseText(task?.phase),
+    addedBy: addedByText(task),
+  };
+}
+
+/** A report line's status in words and its tone: In progress (primary), Blocked (red), Done. */
+export const statusOf = (status) => STATUS[status] ?? STATUS.in_progress;
+
+/**
+ * One Updates line: "Simran Kaur · Mon, 23 Nov · In progress" (the status in its tone) and the
+ * line's text.
+ * @param {{ userName: string, workDate: string, status: string, title: string }} update
+ */
+export function updateLine(update) {
+  const status = statusOf(update.status);
+  return {
+    lead: `${update.userName} · ${formatDayShort(update.workDate)} · `,
+    status: status.label,
+    tone: status.tone,
+    text: update.title ?? '',
+  };
+}
+
+/**
+ * The Updates section: the newest 10 lines and whether there are more.
+ * @param {object} task TaskDetails (`updates`, `updateCount`)
+ */
+export function updatesPart(task) {
+  const updates = task?.updates ?? [];
+  const count = Math.max(Number(task?.updateCount ?? 0), updates.length);
+  return { count, shown: updates.slice(0, UPDATES_SHOWN), more: count > UPDATES_SHOWN };
+}
+
+/**
+ * The latest report (the first update, the one rule of the status chip): "In progress · Mon, 23
+ * Nov." in its tone, then "Simran Kaur: Found the cause …"; null without one.
+ * @param {{ status: string, workDate: string, userName: string, title?: string } | null} latest
+ */
+export function latestParts(latest) {
+  if (!latest) return null;
+  const status = statusOf(latest.status);
+  const head = `${status.label} · ${formatDayShort(latest.workDate)}.`;
+  const text = latest.title ? `${latest.userName}: ${latest.title}` : latest.userName;
+  return { head, tone: status.tone, text };
 }
 
 /**
  * The Files part: shown only when the viewer may see the task's files (`canSeeFiles`); the file X
  * and "Add files" only in manage mode on a project page (the attach store is there), never in the
- * `today`, `member` or `team` modes, whatever `canManage` says.
+ * `today`, `member`, `team` or `mine` modes, whatever `canManage` says. Own files and links whose
+ * removal waits behind its Undo are hidden.
  * @param {{ mode: string, task: object, canAttach?: boolean,
- *   isHidden?: (fileId: number) => boolean }} args canAttach: the page has the attach store
+ *   isHidden?: (fileId: number) => boolean,
+ *   isLinkHidden?: (taskId: number, fileId: number) => boolean }} args canAttach: the page has
+ *   the attach store
  * @returns {{ show: boolean, files: object[], pictures: object[], others: object[],
  *   count: number, canChange: boolean }}
  */
-export function filesPart({ mode, task, canAttach = false, isHidden = () => false }) {
+export function filesPart({ mode, task, canAttach = false, isHidden, isLinkHidden }) {
   const show = Boolean(task?.canSeeFiles);
-  const files = show ? (task.files ?? []).filter((file) => !isHidden(file.id)) : [];
+  const hidden = (file) =>
+    file.linked ? Boolean(isLinkHidden?.(task.id, file.id)) : Boolean(isHidden?.(file.id));
+  const files = show ? (task.files ?? []).filter((file) => !hidden(file)) : [];
   const { pictures, others } = picturesOf(files);
   const canChange = show && modeOf(mode) === 'manage' && Boolean(task.canManage) && canAttach;
   return { show, files, pictures, others, count: files.length, canChange };
@@ -91,24 +187,30 @@ export function filesPart({ mode, task, canAttach = false, isHidden = () => fals
 /**
  * The footer: `manage` (Delete, Edit, Mark done or Done and Reopen) for the project's PM and Admins
  * on a project page with the task editor; `today` (Open project, and the to-do button); `member`
- * (the to-do button while today's to-do takes lines); nothing for another PM.
+ * (the to-do button while today's to-do takes lines); `mine` (Open project, and Mark done or
+ * Reopen when the viewer manages that task's project); nothing for another PM.
  * @param {{ mode: string, task: object, hasEditor?: boolean, hasTodo?: boolean,
  *   todoOpen?: boolean }} args hasTodo: Today's to-do card is there (the person has
  *   `report.self`); todoOpen: on the member's project page, the person has `report.self` and
  *   today's to-do still takes lines (the report isn't in and hasn't locked, CONTRACT 24)
- * @returns {{ kind: 'manage' | 'today' | 'member' | 'none', done: boolean, todo: boolean }}
- *   todo: show "Add to to-do" (or "In to-do") on an open task
+ * @returns {{ kind: 'manage' | 'today' | 'member' | 'mine' | 'none', done: boolean,
+ *   todo: boolean, status: boolean }} todo: "Add to to-do" (or "In to-do") on an open task;
+ *   status: Mark done or Reopen
  */
 export function footerFor({ mode, task, hasEditor = false, hasTodo = false, todoOpen = false }) {
   const done = task?.status === 'done';
   const shown = modeOf(mode);
   if (shown === 'manage') {
     const manages = Boolean(task?.canManage) && hasEditor;
-    return { kind: manages ? 'manage' : 'none', done, todo: false };
+    return { kind: manages ? 'manage' : 'none', done, todo: false, status: manages };
   }
-  if (shown === 'today') return { kind: 'today', done, todo: hasTodo && !done };
-  if (shown === 'member') return { kind: 'member', done, todo: Boolean(todoOpen) && !done };
-  return { kind: 'none', done, todo: false };
+  if (shown === 'mine')
+    return { kind: 'mine', done, todo: false, status: Boolean(task?.canManage) };
+  if (shown === 'today') return { kind: 'today', done, todo: hasTodo && !done, status: false };
+  if (shown === 'member') {
+    return { kind: 'member', done, todo: Boolean(todoOpen) && !done, status: false };
+  }
+  return { kind: 'none', done, todo: false, status: false };
 }
 
 /**

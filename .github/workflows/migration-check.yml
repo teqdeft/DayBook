@@ -1,8 +1,10 @@
-# Migrations 018 (CONTRACT 25) and 019 (CONTRACT 27) on MySQL 8.4, the engine production may run.
-# Local development runs MariaDB 10.4 (XAMPP), so this is where they meet MySQL 8.4 before the live
-# migrate: migrate up from an empty database, down for 019 only, up again, down for 018 only, up
-# again, then the 018 and 019 service tests. It runs on main and pull requests to main only, never
-# on the deploy branch, and publishes nothing.
+# Migrations 018 (CONTRACT 25), 019 (CONTRACT 27) and 020 (CONTRACT 28) on MySQL 8.4, the engine
+# production may run. Local development runs MariaDB 10.4 (XAMPP), so this is where they meet
+# MySQL 8.4 before the live migrate: migrate up from an empty database, down for 020 and then 019
+# (019's down can't drop project_files while task_file_links points at it), up again, down for 018
+# only, up again, down for 020 only, up again, then the 018, 019 and 020 service tests and the 1.13
+# service tests whose new grouped and locking reads must pass MySQL 8.4's ONLY_FULL_GROUP_BY. It
+# runs on main and pull requests to main only, never on the deploy branch, and publishes nothing.
 name: Migration check
 
 on:
@@ -88,14 +90,23 @@ jobs:
       - name: Migrate up from an empty database
         run: node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:latest
 
-      - name: Migrate down for 019 only
-        run: node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:down 019_project_files.js
+      # 020 first: 019's down can't drop project_files while task_file_links points at it.
+      - name: Migrate down for 020, then 019
+        run: |
+          node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:down 020_task_file_links.js
+          node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:down 019_project_files.js
 
       - name: Migrate up again after 019
         run: node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:latest
 
       - name: Migrate down for 018 only
         run: node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:down 018_hr_tools.js
+
+      - name: Migrate up again after 018
+        run: node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:latest
+
+      - name: Migrate down for 020 only
+        run: node --disable-wasm-trap-handler node_modules/knex/bin/cli.js migrate:down 020_task_file_links.js
 
       - name: Migrate up again
         run: |
@@ -113,3 +124,21 @@ jobs:
       # Under Vitest NODE_ENV is test, so FILES_DIR is ignored (the 019 test never touches files).
       - name: Migration 019 service test
         run: npx vitest run tests/services/migration019.test.js
+
+      - name: Migration 020 service test
+        run: npx vitest run tests/services/migration020.test.js
+
+      # The 1.13 reads (CONTRACT 28): every new grouped query and locking read meets MySQL 8.4's
+      # default ONLY_FULL_GROUP_BY here before the live site, which MariaDB 10.4 doesn't check.
+      # One file at a time on the same database (vitest.config.js: fileParallelism false); the
+      # files kit keeps its files in a temp folder.
+      - name: The 1.13 service tests on MySQL 8.4
+        run: >-
+          npx vitest run
+          tests/services/projectFileLinks.test.js
+          tests/services/projectFilesPicker.test.js
+          tests/services/projectTasksMine.test.js
+          tests/services/projectTasksBulk.test.js
+          tests/services/projectTaskTake.test.js
+          tests/services/taskMinutes.test.js
+          tests/services/projectBoardTab.test.js

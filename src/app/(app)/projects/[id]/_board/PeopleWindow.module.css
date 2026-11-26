@@ -1,0 +1,187 @@
+/* The people window (CONTRACT 28, The people window), as the 1.13 prototype's "Assign to": the
+   300 px popover (--shadow-menu, radius 12) with its heading, "Find a person" and 40 px rows (a
+   28 px face, the name in 15 px and a 13 px muted second line, a check on the current person), and
+   the share confirm in its foot; the same list in a 400 px window (a bottom sheet on a phone) with
+   44 px rows. */
+.popover {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  width: 300px;
+  max-width: calc(100vw - 16px);
+  max-height: min(440px, calc(100vh - 16px));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-tile);
+  background: var(--surface);
+  box-shadow: var(--shadow-menu);
+  animation: people-in var(--dur-fade) var(--ease-out);
+}
+
+@keyframes people-in {
+  from {
+    transform: translateY(var(--shift-menu));
+    opacity: 0;
+  }
+}
+
+.popover .head {
+  flex: none;
+  padding: 12px 12px 8px;
+}
+
+.heading {
+  margin: 0 2px 8px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.head .search {
+  width: 100%;
+  font-size: 14px;
+}
+
+.popover .list {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 6px 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* the window: the Dialog's body holds the search and the rows */
+.window .head {
+  padding: 0 0 10px;
+}
+
+.window .list {
+  margin: 0 -8px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-cell);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-press) var(--ease-press);
+}
+
+.row:hover,
+.row:focus-visible {
+  background: var(--surface-muted);
+}
+
+.row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.row[aria-disabled='true'] {
+  cursor: default;
+}
+
+.row[aria-disabled='true'] .name {
+  color: var(--muted);
+}
+
+.text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.row[aria-pressed='true'] .name {
+  font-weight: 600;
+}
+
+.sub {
+  overflow: hidden;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.check {
+  flex: none;
+  margin-left: auto;
+  color: var(--primary);
+}
+
+.anyone {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1.5px dashed var(--line-dashed);
+  border-radius: 50%;
+  color: var(--muted);
+}
+
+.none {
+  margin: 0;
+  padding: 0 8px;
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.none:not(:empty) {
+  padding-block: 8px;
+}
+
+/* the popover's foot: the share confirm */
+.foot {
+  flex: none;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.confirm {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+/* A phone: 44 px rows and search, and the window is a bottom sheet (also between 521 and 640 px,
+   where the Dialog's frame would centre it) */
+@media (max-width: 640px) {
+  .row {
+    min-height: 44px;
+  }
+
+  .head .search {
+    height: 44px;
+  }
+
+  [role='dialog'].window {
+    position: fixed;
+    inset: auto 0 0;
+    width: auto;
+    max-height: 92%;
+    border-bottom: 0;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+  }
+}

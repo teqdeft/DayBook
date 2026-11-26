@@ -1,4 +1,5 @@
-/* The Move to phase dialog (CONTRACT 27): one 44 px button per phase, 6 px apart. */
+/* The Move to phase dialog (CONTRACT 27; CONTRACT 28, Move to phase…): one 44 px button per phase,
+   6 px apart; a bottom sheet on a phone. */
 .list {
   display: flex;
   flex-direction: column;
@@ -41,4 +42,16 @@
   font-size: var(--text-small);
   font-variant-numeric: tabular-nums;
   color: var(--muted);
+}
+
+/* A phone: a bottom sheet (also between 521 and 640 px, where the Dialog's frame would centre it) */
+@media (max-width: 640px) {
+  [role='dialog'].sheet {
+    position: fixed;
+    inset: auto 0 0;
+    width: auto;
+    max-height: 92%;
+    border-bottom: 0;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+  }
 }

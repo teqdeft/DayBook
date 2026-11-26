@@ -1,29 +1,52 @@
-// What the Board tab shows (CONTRACT 27, Board tab), worked out from the plan and the tasks the
-// viewer may see: the columns in order (which past phases fold into
-// "Done phases", which are slim, "No phase yet" only when needed), the order of the cards, which
-// cards a filter dims, the phone's steps and the words beside them. Pure and safe in the browser:
-// today comes in as an argument, and every date is 'YYYY-MM-DD' in the company time zone.
+// What the Board tab shows (CONTRACT 27 and 28, Done phases rail and columns), worked out from the
+// plan and the tasks the viewer may see: the columns in order (which past phases fold into the Done
+// phases rail, "No phase yet" only when needed), the order of the cards, the words of each column's
+// second line, when the board fills the window, the phone's steps and the words beside them. Every
+// phase column has one width (CSS, Columns.module.css); nothing here sizes a column. The filters are
+// boardFilters.js's. Pure and safe in the browser: today comes in as an argument, and every date is
+// 'YYYY-MM-DD' in the company time zone.
 import { plural } from '@/lib/text';
-import { formatDayShort } from '@/lib/time';
 import { PROJECT_PHASES, isPhase, phaseIndex } from '@/modules/projectPlan/phases';
 import { NO_PHASE, NO_PHASE_LABEL, sortDoneTasks, sortOpenTasks } from '../phasesView';
-import { dateRange, lateNote, phaseStatus, plannedRange } from '../planFormat';
+import {
+  dateRange,
+  dayCount,
+  daysBetween,
+  lateNote,
+  phaseStatus,
+  plannedRange,
+} from '../planFormat';
 import { columnOf, countText } from './bandView';
 
-/** The filter pills, in order: nothing dimmed, open P1s, open tasks with files. */
-export const FILTERS = ['all', 'critical', 'files'];
+/** In a column's open list: an open task, or a ticked one still playing its leave (holdOpen). */
+const isOpen = (task) => task.status !== 'done' || task.holdOpen === true;
 
-/** The filter a URL asks for (`?show=critical`, `?show=files`); anything else is 'all'. */
-export function filterOf(show) {
-  const value = Array.isArray(show) ? show[0] : show;
-  return value === 'critical' || value === 'files' ? value : 'all';
-}
-
-const isOpen = (task) => task.status !== 'done';
+/** A column shows 4 or more cards: the toolbar and the board then fill the window (data-fill). */
+export const FILL_CARDS = 4;
 
 /**
- * A column's second line: the dates, the actual ones for a done phase, then planFormat's late
- * note. A skipped phase reads "Skipped" and nothing else.
+ * The note beside a phase's dates on the board: planFormat's late note in its tone, else a muted
+ * early one ("Ended 4 days early" for a done phase, "Started 7 days early" for the current one).
+ * @returns {{ text: string, tone: 'red' | 'marigold' | 'muted' } | null}
+ */
+export function phaseNote(status, phase, today) {
+  const late = lateNote(status, phase, today);
+  if (late) return late;
+  const { plannedStart, plannedEnd, actualStart, actualEnd } = phase;
+  if (status === 'done' && actualEnd && plannedEnd) {
+    const early = daysBetween(actualEnd, plannedEnd);
+    if (early > 0) return { text: `Ended ${dayCount(early)} early`, tone: 'muted' };
+  }
+  if (status === 'current' && actualStart && plannedStart) {
+    const early = daysBetween(actualStart, plannedStart);
+    if (early > 0) return { text: `Started ${dayCount(early)} early`, tone: 'muted' };
+  }
+  return null;
+}
+
+/**
+ * A column's second line: the dates, the actual ones for a done phase, then the note. A skipped
+ * phase reads "Skipped" and nothing else.
  * @returns {{ dates: string | null, note: { text: string, tone: string } | null }}
  */
 export function columnDates(status, phase, today) {
@@ -32,90 +55,117 @@ export function columnDates(status, phase, today) {
   const dates = ran
     ? dateRange(phase.actualStart, phase.actualEnd, today)
     : plannedRange(phase, today);
-  return { dates, note: lateNote(status, phase, today) };
+  return { dates, note: phaseNote(status, phase, today) };
 }
 
 const isPast = (key, currentPhase) =>
   isPhase(currentPhase) && phaseIndex(key) < phaseIndex(currentPhase);
 
+/** What an empty column says: Completed first, then a member's words, then a manager's. */
+function emptyTextFor({ member, completed }) {
+  if (completed) return 'No tasks here. This project is completed.';
+  return member ? 'Nothing for you yet' : 'No tasks yet';
+}
+
+/** A column's open and done cards, in order. */
+function cardsOf(tasks, key) {
+  const list = tasks.filter((task) => columnOf(task) === key);
+  return {
+    open: sortOpenTasks(list.filter(isOpen)),
+    done: sortDoneTasks(list.filter((task) => !isOpen(task))),
+    total: list.length,
+  };
+}
+
 /** A phase column, before the board decides whether it shows. */
-function phaseColumn({ key, label }, { plan, tasks, member, today }) {
+function phaseColumn({ key, label }, { plan, tasks, member, today, completed }) {
   const row = plan.phases.find((phase) => phase.key === key) ?? { key, label };
   const status = phaseStatus(plan.currentPhase, row);
-  const list = tasks.filter((task) => columnOf(task) === key);
-  const open = sortOpenTasks(list.filter(isOpen));
-  const past = isPast(key, plan.currentPhase);
+  const cards = cardsOf(tasks, key);
+  const folded = isPast(key, plan.currentPhase) && cards.open.length === 0;
   return {
     key,
     label,
     kind: 'phase',
     status,
     phase: row,
-    folded: past && open.length === 0,
-    slim: !past && status !== 'current' && list.length === 0,
-    open,
-    done: sortDoneTasks(list.filter((task) => !isOpen(task))),
-    total: list.length,
+    current: status === 'current',
+    finished: folded,
+    skipped: status === 'skipped',
+    folded,
+    ...cards,
     ...columnDates(status, row, today),
-    emptyText: member ? 'Nothing for you yet' : `No tasks in ${label} yet.`,
+    emptyText: emptyTextFor({ member, completed }),
   };
 }
 
-/** "No phase yet", for tasks from before phases. */
+/** "No phase yet", for tasks from before phases: never folded, never a drop target. */
 function noPhaseColumn(tasks) {
-  const list = tasks.filter((task) => columnOf(task) === NO_PHASE);
   return {
     key: NO_PHASE,
     label: NO_PHASE_LABEL,
     kind: 'none',
     status: null,
     phase: null,
+    current: false,
+    finished: false,
+    skipped: false,
     folded: false,
-    slim: false,
-    open: sortOpenTasks(list.filter(isOpen)),
-    done: sortDoneTasks(list.filter((task) => !isOpen(task))),
-    total: list.length,
+    ...cardsOf(tasks, NO_PHASE),
     dates: null,
     note: null,
     emptyText: '',
-    width: 'normal',
+    hidden: false,
+    tag: null,
+    doneOpen: false,
   };
 }
 
+/** The tag beside a column's name: Current, or Done / Skipped on an opened done phase. */
+function tagOf(column) {
+  if (column.status === 'current') return 'current';
+  if (column.folded) return column.status === 'skipped' ? 'skipped' : 'done';
+  return null;
+}
+
 /**
- * The board's columns and the Done phases tiles.
+ * The board's columns and the Done phases rail's tiles.
  * @param {{ plan: { currentPhase: string | null, phases: object[] }, tasks: object[],
- *   member?: boolean, today: string, opened?: string[] }} args tasks: the ones the viewer sees
- *   (board rows); member: the member's board (their tasks and Anyone tasks); opened: the done
- *   phases whose tasks were opened from their tile
- * @returns {{ tiles: Array<{ key, label, skipped, text, note, opened }>, columns: object[] }}
- *   columns: the six phases in order, then No phase yet when some task has no phase. A phase before
- *   the current one with no open task is `folded` into a tile and `hidden` until opened (a
- *   member's tile only where they have tasks); `tag`: 'current', or 'done'/'skipped' on an opened
- *   folded phase; `doneOpen`: whether its done cards start unfolded; `width`: 'slim' (empty, after
- *   the current one), 'current' or 'normal'
+ *   member?: boolean, today: string, opened?: string[], completed?: boolean }} args tasks: the
+ *   ones the viewer sees (board rows); member: the member's board (their tasks and Anyone tasks);
+ *   opened: the done phases opened as columns (from a tile or a band part); completed: the project
+ *   is Completed (its empty columns say so)
+ * @returns {{ tiles: Array<{ key, label, skipped, text, note, opened }>, columns: Array<{ key,
+ *   label, kind: 'phase' | 'none', status, phase, current: boolean, finished: boolean,
+ *   skipped: boolean, folded: boolean, hidden: boolean, tag: 'current' | 'done' | 'skipped' |
+ *   null, doneOpen: boolean, open: object[], done: object[], total: number, dates, note,
+ *   emptyText: string }> }} columns: the six phases in order, then No phase yet when some task has
+ *   no phase. A phase before the current one with no open task is `folded` (`finished`) into the
+ *   rail and `hidden` until opened (a member's tile only where they have tasks); with no current
+ *   phase nothing folds. doneOpen: its "› 6 done" starts open (an opened done phase)
  */
-export function boardColumns({ plan, tasks, member = false, today, opened = [] }) {
-  const args = { plan, tasks, member, today };
+export function boardColumns({
+  plan,
+  tasks,
+  member = false,
+  today,
+  opened = [],
+  completed = false,
+}) {
+  const args = { plan, tasks, member, today, completed };
   const columns = PROJECT_PHASES.map((phase) => {
     const column = phaseColumn(phase, args);
-    let tag = null;
-    if (column.status === 'current') tag = 'current';
-    else if (column.folded) tag = column.status === 'skipped' ? 'skipped' : 'done';
     return {
       ...column,
       hidden: column.folded && !opened.includes(column.key),
-      tag,
+      tag: tagOf(column),
       doneOpen: column.folded,
-      width: column.slim ? 'slim' : column.status === 'current' ? 'current' : 'normal',
     };
   });
   const tiles = columns
     .filter((column) => column.folded && (!member || column.total > 0))
     .map((column) => tileOf(column, { member, opened }));
-  if (tasks.some((task) => columnOf(task) === NO_PHASE)) {
-    columns.push({ ...noPhaseColumn(tasks), hidden: false, tag: null, doneOpen: true });
-  }
+  if (tasks.some((task) => columnOf(task) === NO_PHASE)) columns.push(noPhaseColumn(tasks));
   return { tiles, columns };
 }
 
@@ -139,50 +189,44 @@ function tileOf(column, { member, opened }) {
   };
 }
 
+/** The closed rail's hidden words: ': Requirement gathering, Design. Show them.' */
+export const railHiddenText = (tiles) =>
+  `: ${tiles.map((tile) => tile.label).join(', ')}. Show them.`;
+
 /**
- * How many open tasks each pill counts.
- * @param {Array<{ status: string, priority: string, fileCount?: number }>} tasks
- * @returns {{ all: number, critical: number, files: number }}
+ * Whether the toolbar and the board take the window's height: some shown column has 4 or more
+ * cards (open, plus the done cards of an opened fold).
+ * @param {object[]} columns boardColumns' columns
+ * @param {(column: object) => boolean} isFoldOpen
  */
-export function filterCounts(tasks) {
-  const open = tasks.filter(isOpen);
+export function fillsWindow(columns, isFoldOpen) {
+  return columns.some(
+    (column) =>
+      !column.hidden &&
+      column.open.length + (isFoldOpen(column) ? column.done.length : 0) >= FILL_CARDS,
+  );
+}
+
+/**
+ * The columns that fold away and whether the rail is new, between the board before a phase move
+ * and after it (phaseMotion's `folds` and `railIsNew`).
+ * @param {{ tiles: object[], columns: object[] }} before boardColumns' answer before the move
+ * @param {{ tiles: object[], columns: object[] }} after the same after it
+ * @returns {{ folds: string[], railIsNew: boolean }}
+ */
+export function foldsBetween(before, after) {
+  const shownBefore = new Set(before.columns.filter((c) => !c.hidden).map((c) => c.key));
   return {
-    all: open.length,
-    critical: open.filter((task) => task.priority === 'p1').length,
-    files: open.filter((task) => task.fileCount > 0).length,
+    folds: after.columns.filter((c) => c.hidden && shownBefore.has(c.key)).map((c) => c.key),
+    railIsNew: before.tiles.length === 0 && after.tiles.length > 0,
   };
 }
 
-/** The pills' words: 'All open (10)', 'Critical (4)', 'With files (4)'. */
-export function filterItems(counts, { files = true } = {}) {
-  const items = [
-    { value: 'all', label: `All open (${counts.all})` },
-    { value: 'critical', label: `Critical (${counts.critical})` },
-  ];
-  if (files) items.push({ value: 'files', label: `With files (${counts.files})` });
-  return items;
-}
-
-/** The line under the pills, or '' with All open pressed. */
-export function filterStatus(filter, counts) {
-  if (filter === 'critical') {
-    return counts.critical
-      ? `${counts.critical} ${plural(counts.critical, 'critical task')} highlighted.`
-      : 'No critical tasks open.';
-  }
-  if (filter === 'files') {
-    return counts.files
-      ? `${counts.files} ${plural(counts.files, 'task')} with files highlighted.`
-      : 'No tasks with files.';
-  }
-  return '';
-}
-
-/** True when a pressed filter fades this card: every done card, and every other open one. */
-export function isDimmed(task, filter) {
-  if (filter === 'critical') return !isOpen(task) || task.priority !== 'p1';
-  if (filter === 'files') return !isOpen(task) || !(task.fileCount > 0);
-  return false;
+/** The phase move confirm's muted line: '5 open tasks stay in Testing.'; null at 0. */
+export function stayText(openCount, label) {
+  if (!openCount) return null;
+  const verb = openCount === 1 ? 'stays' : 'stay';
+  return `${openCount} ${plural(openCount, 'open task')} ${verb} in ${label}.`;
 }
 
 /**
@@ -199,21 +243,10 @@ export function firstStep(currentPhase) {
   return isPhase(currentPhase) ? currentPhase : PROJECT_PHASES[0].key;
 }
 
-/**
- * What the switcher says about the phase shown: 'Development · 6 of 12', and with a filter
- * pressed its matches among the open cards ('Development · 6 of 12 · 2 critical').
- * @param {{ label: string, open: object[], done: object[] }} column
- * @param {string} filter
- */
-export function switcherText(column, filter) {
+/** What the switcher says about the phase shown: 'Development · 6 of 12'. */
+export function switcherText(column) {
   const total = column.open.length + column.done.length;
-  const parts = [column.label, countText({ total, done: column.done.length })];
-  if (filter === 'critical') {
-    parts.push(`${column.open.filter((task) => task.priority === 'p1').length} critical`);
-  } else if (filter === 'files') {
-    parts.push(`${column.open.filter((task) => task.fileCount > 0).length} with files`);
-  }
-  return parts.join(' · ');
+  return [column.label, countText({ total, done: column.done.length })].join(' · ');
 }
 
 /** 'Only your tasks and tasks for anyone on the project are shown. Progress counts all 29 tasks.' */
@@ -225,24 +258,16 @@ export function memberNote(total) {
 export const editorsText = (pmName) => (pmName ? `${pmName} and Admins` : 'Admins');
 
 /**
- * The report line on an open card: 'Blocked · Fri, 20 Nov' or 'In progress · Fri, 20 Nov'.
- * @returns {{ text: string, tone: 'red'|'primary' } | null} null on a done task or with no report
- */
-export function reportLine(task) {
-  if (task.status === 'done' || !task.latestStatus || !task.latestOn) return null;
-  const words = { blocked: 'Blocked', done: 'Done' }[task.latestStatus] ?? 'In progress';
-  return {
-    text: `${words} · ${formatDayShort(task.latestOn)}`,
-    tone: task.latestStatus === 'blocked' ? 'red' : 'primary',
-  };
-}
-
-/**
  * The ids focus moves to: a card, its title button, a column's "+ Add task", its "› 6 done" fold
- * button, a tile's button.
+ * button, a tile's button, the rail's toggle, the toolbar's Add task, its Board and Table buttons,
+ * Reopen project (the toolbar's or the header's, whichever is drawn).
  */
 export const cardId = (taskId) => `board-card-${taskId}`;
 export const cardTitleId = (taskId) => `board-card-${taskId}-title`;
 export const addTaskId = (columnKey) => `board-${columnKey}-add`;
 export const foldButtonId = (columnKey) => `board-${columnKey}-done`;
 export const tileButtonId = (columnKey) => `board-tile-${columnKey}`;
+export const RAIL_BUTTON_ID = 'board-rail';
+export const ADD_TASK_ID = 'board-add-task';
+export const viewButtonId = (view) => `board-view-${view}`;
+export const REOPEN_ID = 'project-reopen';

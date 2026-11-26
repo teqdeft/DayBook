@@ -1,12 +1,14 @@
-// CONTRACT 27 (Daybook 1.12): the phase board. The PM drags a card from Development to Testing and
-// takes it back with Undo, moves one from its menu with the keyboard (Move to phase… → Launch) and
-// adds a task with quick add. Vishal Saini, an employee on the project, gets the read-only page:
-// no health tag, no forecast and no Hours tab. Another PM who isn't on the project sees no
-// paperclips and the Files tab's lock line, and a file's link answers 404.
+// CONTRACT 27 (Daybook 1.12) and 28 (1.13): the phase board. The PM drags a card from Development
+// to Testing with the mouse (a pointer drag) and takes it back with Undo, moves one from its menu
+// with the keyboard (Move to phase… → Launch) and adds a task with quick add ("Add task to
+// Testing"). Vishal Saini, an employee on the project, gets the read-only page: no health tag, no
+// forecast, no Hours tab and no Add task. Another PM who isn't on the project sees no file chips,
+// no "With files" filter and the Files tab's lock line, and a file's link answers 404.
 //
 // Everything this spec changes on acme-store is put back (Undo, and the added task and the file
 // are deleted), so project-plan.spec.js, which runs later, finds the demo plan as it is. Every
 // /api/ai/** request is answered in the browser (support/projectPlan.js).
+import { pointerDrag } from './support/board.js';
 import { closeDemoData, projectIdByName } from './support/demoData.js';
 import { fileFixture, uploadByApi } from './support/files.js';
 import { PEOPLE, expect, open, problemsOf, test, toasts } from './support/fixtures.js';
@@ -38,6 +40,11 @@ const card = (page, title) =>
   page.locator('li[id^="board-card-"]').filter({
     has: page.getByRole('button', { name: title, exact: true }),
   });
+/** The file chip of logo.png on a card: the picture's thumbnail button, or a chip with its name. */
+const fileChip = (page, title) =>
+  card(page, title)
+    .getByRole('button', { name: 'Open picture logo.png' })
+    .or(card(page, title).getByText('logo.png', { exact: true }));
 /** The undo toast of a move or a delete. */
 const undoToast = (page, text) => toasts(page).getByRole('status').filter({ hasText: text });
 /** Waits for the PATCH of a move and checks the phase it sent. */
@@ -56,7 +63,11 @@ test('the PM drags a card to Testing and Undo puts it back', async ({ signInAs }
   await expect(development.getByRole('button', { name: DRAGGED, exact: true })).toBeVisible();
 
   const moved = movePatched(page, 'testing');
-  await card(page, DRAGGED).dragTo(testing.getByRole('list').first());
+  await pointerDrag(
+    page,
+    card(page, DRAGGED).getByRole('button', { name: DRAGGED, exact: true }),
+    testing,
+  );
   expect((await moved).status()).toBe(200);
   await expect(testing.getByRole('button', { name: DRAGGED, exact: true })).toBeVisible();
   await expect(development.getByRole('button', { name: DRAGGED, exact: true })).toHaveCount(0);
@@ -120,7 +131,7 @@ test('quick add: a short title is refused, then the task is added and deleted', 
   const page = await openAs(signInAs, PEOPLE.pm, `/projects/${projectId}`);
   const testing = column(page, 'Testing');
   const title = 'Book the test phones';
-  const add = testing.getByRole('button', { name: 'Add task', exact: true });
+  const add = testing.getByRole('button', { name: 'Add task to Testing', exact: true });
   await add.click();
   const input = testing.getByRole('textbox', { name: 'Task title for Testing' });
   await expect(input).toBeFocused();
@@ -202,14 +213,18 @@ test('an employee on the project gets the read-only page', async ({ signInAs }) 
   for (const name of ['Change deadline', /^Move to /, 'More phase actions', 'New task']) {
     await expect(page.getByRole('button', { name })).toHaveCount(0);
   }
-  await expect(page.getByRole('group', { name: 'Highlight cards' })).toHaveCount(0);
+  const tools = page.getByRole('group', { name: 'Task tools' });
+  await expect(tools.getByRole('group', { name: 'View' })).toBeVisible();
+  await expect(tools.getByRole('button', { name: 'Filter' })).toBeVisible();
+  await expect(tools.getByRole('button', { name: /^Add task|^Mine/ })).toHaveCount(0);
+  await expect(page.getByRole('group', { name: "Show one person's tasks" })).toHaveCount(0);
   await expect(page.getByRole('checkbox')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Add task', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Add task/ })).toHaveCount(0);
 
-  const yours = page.getByRole('region', { name: 'Your tasks' });
-  await expect(yours.getByRole('button', { name: 'Payment settings page' })).toBeVisible();
-  await expect(yours.getByText('For you', { exact: true }).first()).toBeVisible();
-  await expect(yours.getByRole('button', { name: DRAGGED, exact: true })).toHaveCount(0);
+  const development = column(page, 'Development');
+  await expect(development.getByRole('button', { name: 'Payment settings page' })).toBeVisible();
+  await expect(development.getByText('For you', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: DRAGGED, exact: true })).toHaveCount(0);
   await expect(
     page.getByText(
       'Only your tasks and tasks for anyone on the project are shown. Progress counts all 29 tasks.',
@@ -229,7 +244,7 @@ test('an employee on the project gets the read-only page', async ({ signInAs }) 
   expect(problemsOf(page), 'console and page errors').toEqual([]);
 });
 
-test('another PM not on the project: no paperclips, the lock line, and 404 for a file', async ({
+test('another PM not on the project: no file chips, the lock line, and 404 for a file', async ({
   signInAs,
   baseURL,
 }) => {
@@ -256,14 +271,14 @@ test('another PM not on the project: no paperclips, the lock line, and 404 for a
   );
 
   try {
-    await test.step('the PM sees the paperclip', async () => {
+    await test.step('the PM sees the file on the card and "With files" in Filter', async () => {
       await open(pm, `/projects/${projectId}`);
-      await expect(card(pm, PM_TASK).getByRole('img', { name: '1 file' })).toBeVisible();
+      await expect(fileChip(pm, PM_TASK)).toBeVisible();
+      await pm.getByRole('button', { name: 'Filter' }).click();
       await expect(
-        pm.getByRole('group', { name: 'Highlight cards' }).getByRole('button', {
-          name: /^With files \(\d+\)$/,
-        }),
+        pm.getByRole('menuitemcheckbox', { name: /^With files \(\d+\)$/ }),
       ).toBeVisible();
+      await pm.keyboard.press('Escape');
     });
 
     const page = await openAs(signInAs, PEOPLE.pm2, `/projects/${projectId}`);
@@ -271,8 +286,11 @@ test('another PM not on the project: no paperclips, the lock line, and 404 for a
       page.getByText(`Only ${PEOPLE.pm.name} and Admins can change tasks and phases.`),
     ).toBeVisible();
     await expect(card(page, PM_TASK)).toBeVisible();
-    await expect(page.getByRole('img', { name: /^\d+ files?$/ })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /^With files/ })).toHaveCount(0);
+    await expect(fileChip(page, PM_TASK)).toHaveCount(0);
+    await page.getByRole('button', { name: 'Filter' }).click();
+    await expect(page.getByRole('menuitemcheckbox', { name: /^Critical \(\d+\)$/ })).toBeVisible();
+    await expect(page.getByRole('menuitemcheckbox', { name: /^With files/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
     await expect(page.getByRole('checkbox')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^More for / })).toHaveCount(0);
 

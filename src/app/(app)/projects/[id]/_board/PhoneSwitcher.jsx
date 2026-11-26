@@ -1,9 +1,9 @@
 'use client';
-// The phone's switcher (CONTRACT 27, Phone): one phase column at a time, with "Previous phase" and
-// "Next phase" (44 px) around "Development · 6 of 12", read out politely when it changes. Shown
-// only at 640 px and below.
+// The phone's switcher (CONTRACT 27 and 28, Phone): one phase column at a time (a done phase is a
+// step too: no rail on a phone), with "Previous phase" and "Next phase" (44 px) around
+// "Development · 6 of 12", read out politely when it changes. Shown only at 640 px and below.
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import styles from './BoardFilters.module.css';
+import styles from './Columns.module.css';
 
 /**
  * @param {{ steps: string[], step: string, text: string, onStep: (key: string) => void }} props

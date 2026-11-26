@@ -1,0 +1,116 @@
+/* The pieces a Table row and a phone card share (CONTRACT 28, Table and bulk bar), as the 1.13
+   prototype's table: the 12 px task number, the 18 px select box in a 44 px target, the person (a
+   button with the full name for the project's PM and Admins, the chevron on hover, faded when away),
+   "For you", the muted "To do", and the paperclip, count and time in Schibsted. */
+.number {
+  font-family: var(--font-heading-stack);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* the 18 px select box in a 44 px target (a negative margin keeps the cell 18 px) */
+.select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: -13px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.select input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.select input:disabled {
+  cursor: not-allowed;
+}
+
+/* the person: a button with the full name for the PM and Admins */
+.face {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  margin-left: -2px;
+  padding: 0 6px 0 2px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+button.face {
+  cursor: pointer;
+  transition:
+    background-color var(--dur-press) var(--ease-press),
+    color var(--dur-press) var(--ease-press);
+}
+
+button.face:hover {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.faceIn,
+span.face {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chevron {
+  margin-left: 4px;
+  opacity: 0;
+  transition: opacity var(--dur-fade) var(--ease-out);
+}
+
+button.face:hover .chevron,
+button.face:focus-visible .chevron {
+  opacity: 1;
+}
+
+.away {
+  opacity: 0.5;
+}
+
+.awayText {
+  font-size: var(--text-tag);
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.own {
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.todo {
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.clip,
+.time {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-heading-stack);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}

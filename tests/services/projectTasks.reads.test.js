@@ -1,5 +1,7 @@
 // Priority task reads (CONTRACT 13): who may read a project's tasks, the order (P1, P2, P3, then
-// oldest), Today's list, My projects counts, the report picker and the latest linked report line.
+// oldest), Today's list, My projects counts, the report picker and the latest linked report line;
+// CONTRACT 28: updates per viewer (counts, the newest line, the task window's Updates) and the
+// Today rule (a tracked Admin's taken tasks, a removed member, phase and due date).
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { setNowForTests } from '@/lib/time';
@@ -335,8 +337,107 @@ describe('findOpenForPicker and findById', () => {
     expect(await projectTasks.findById('x')).toBeNull();
   });
 
-  it('lists tracked active members and the PM as assignee options', async () => {
+  it('lists the viewer first, then the active members, as assignee options (CONTRACT 28)', async () => {
     const options = await projectTasks.listAssigneeOptions({ viewer: pm, projectId: lyra.id });
-    expect(options.map((option) => option.name)).toEqual(['Alice Dev', 'Bob Dev', 'Paul Manager']);
+    expect(options.map((option) => [option.name, option.kind])).toEqual([
+      ['Paul Manager', 'me'],
+      ['Alice Dev', 'member'],
+      ['Bob Dev', 'member'],
+    ]);
+  });
+});
+
+describe('updates per viewer (CONTRACT 28)', () => {
+  // P1 older is an Anyone task: Alice reported on it on 28 Sep, Bob last on 29 Sep, Alice's draft
+  // of 30 Sep never counts (the latestReport cases above).
+  it("counts and picks the newest line among everyone's for PMs and Admins", async () => {
+    for (const viewer of [pm, pm2, admin]) {
+      const ids = [tasks.p1Old.id, tasks.p1New.id];
+      expect(await projectTasks.updateCountsFor({ viewer, taskIds: ids })).toEqual({
+        [tasks.p1Old.id]: 2,
+      });
+      expect(await projectTasks.latestLinesFor({ viewer, taskIds: ids })).toEqual({
+        [tasks.p1Old.id]: {
+          status: 'blocked',
+          workDate: '2026-09-29',
+          userId: bob.id,
+          userName: 'Bob Dev',
+        },
+      });
+    }
+  });
+
+  it("gives a member only their own lines, so Alice's newest is hers, in all four places", async () => {
+    const taskIds = [tasks.p1Old.id];
+    expect(await projectTasks.updateCountsFor({ viewer: alice, taskIds })).toEqual({
+      [tasks.p1Old.id]: 1,
+    });
+    const own = { status: 'in_progress', workDate: '2026-09-28', userId: alice.id };
+    expect((await projectTasks.latestLinesFor({ viewer: alice, taskIds }))[tasks.p1Old.id]).toEqual(
+      {
+        ...own,
+        userName: 'Alice Dev',
+      },
+    );
+    const details = await projectTasks.getForViewer({ viewer: alice, id: tasks.p1Old.id });
+    expect(details.updateCount).toBe(1);
+    expect(details.updates).toEqual([
+      expect.objectContaining({ ...own, userName: 'Alice Dev', initials: 'AD', title: 'Line' }),
+    ]);
+    expect(details.latestReport).toEqual(details.updates[0]);
+    expect(await projectTasks.updateCountsFor({ viewer: carol, taskIds })).toEqual({});
+  });
+
+  it("lists everyone's lines, newest first, in the PM's task window", async () => {
+    const details = await projectTasks.getForViewer({ viewer: pm, id: tasks.p1Old.id });
+    expect(details.updates.map((line) => [line.userName, line.status, line.workDate])).toEqual([
+      ['Bob Dev', 'blocked', '2026-09-29'],
+      ['Alice Dev', 'in_progress', '2026-09-28'],
+    ]);
+    expect(details).toMatchObject({ updateCount: 2, minutes: 0, privateLinkCount: 0 });
+    expect(details.project.pmId).toBe(pm.id);
+    expect(await projectTasks.updateCountsFor({ viewer: pm, taskIds: [] })).toEqual({});
+    expect(await projectTasks.latestLinesFor({ viewer: null, taskIds: [tasks.p1Old.id] })).toEqual(
+      {},
+    );
+  });
+});
+
+describe('the Today rule (CONTRACT 28)', () => {
+  it("lists a tracked Admin's taken task on a project she isn't on, with its phase and due date", async () => {
+    const meera = await createUser({ name: 'Meera Pillai', role: 'admin' });
+    const taken = await projectTasks.create({
+      user: meera,
+      projectId: vega.id,
+      input: {
+        title: 'Meera took it',
+        assigneeId: meera.id,
+        phase: 'design',
+        dueDate: '2026-10-02',
+      },
+    });
+    const rows = await projectTasks.listOpenForUser(meera);
+    expect(rows.map((row) => [row.title, row.phase, row.dueDate])).toEqual([
+      ['Meera took it', 'design', '2026-10-02'],
+    ]);
+    expect((await projectTasks.listOpenForUser(meera.id)).map((row) => row.id)).toEqual([taken.id]);
+    // Not Anyone tasks of a project she isn't on, and nothing on an on hold project.
+    expect(titles(rows)).not.toContain('Vega for Carol');
+    await projectTasks.remove({ user: meera, id: taken.id });
+  });
+
+  it('gives a removed member nothing, even their own tasks', async () => {
+    await db('projectMembers').where({ projectId: lyra.id, userId: bob.id }).del();
+    expect(await projectTasks.listOpenForUser(bob.id)).toEqual([]);
+    await addMembers(lyra, [bob]);
+    expect(titles(await projectTasks.listOpenForUser(bob))).toContain('P2 for Bob');
+  });
+
+  it("has every row's phase and due date (null when not set)", async () => {
+    const rows = await projectTasks.listOpenForUser(alice.id);
+    for (const row of rows) {
+      expect(row).toHaveProperty('phase', null);
+      expect(row).toHaveProperty('dueDate', null);
+    }
   });
 });

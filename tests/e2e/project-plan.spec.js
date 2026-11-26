@@ -1,6 +1,7 @@
-// CONTRACT 22 and 27: project management. The PM reads every project's health on the Projects list,
-// opens the off-track demo project (acme-store) on its Board and goes through its tabs (Board,
-// Summary, Files, Timeline, Hours), adds, edits, ticks and deletes a task (with Undo), uploads a
+// CONTRACT 22, 27 and 28: project management. The PM reads every project's health on the Projects
+// list, opens the off-track demo project (acme-store) on its Board (the Filter menu's "Critical (4)"
+// and the Done phases rail) and goes through its tabs (Board, Summary, Files, Timeline, Hours), adds
+// from the toolbar's Add task, edits, ticks and deletes a task (with Undo), uploads a
 // real PDF and a real Word file in the Files tab and has their text read for the AI in the browser,
 // writes a note, changes the deadline and moves the phase from the band. Another PM then sees the
 // plan with no files, no summary text in the page and no controls.
@@ -130,27 +131,38 @@ test('the board of an off-track project, its tabs, and the stored summary with A
     );
   });
 
-  await test.step('the columns, the pills and Done phases', async () => {
-    const pills = page.getByRole('group', { name: 'Highlight cards' });
-    await expect(pills.getByRole('button', { name: 'All open (10)' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    await pills.getByRole('button', { name: 'Critical (4)' }).click();
+  await test.step('the columns, the Filter menu and Done phases', async () => {
+    const filter = page.getByRole('group', { name: 'Task tools' }).getByRole('button', {
+      name: /^Filter/,
+    });
+    await filter.click();
+    const critical = page.getByRole('menuitemcheckbox', { name: 'Critical (4)' });
+    await expect(critical).toHaveAttribute('aria-checked', 'false');
+    await critical.click();
+    await expect(critical).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
+    await expect(filter).toHaveAccessibleName(/^Filter.*1 on$/);
     await expect(
-      page.getByRole('status').filter({ hasText: '4 critical tasks highlighted.' }),
+      page.getByRole('status').filter({ hasText: '4 tasks match. The others are faded.' }),
     ).toBeVisible();
+    await page.getByRole('button', { name: 'Clear all' }).click();
+    await expect(page.getByText('4 tasks match.')).toHaveCount(0);
+
     const development = column(page, 'Development');
     await expect(development).toContainText('Current');
     await expect(development).toContainText('Started 2 days late');
     await expect(development.getByRole('button', { name: '6 done' })).toBeVisible();
     const done = page.getByRole('region', { name: 'Done phases' });
+    await done.getByRole('button', { name: /^Done phases 2/ }).click();
+    await expect(done.getByRole('heading', { name: 'Done phases' })).toBeVisible();
     await expect(done).toContainText('Requirement gathering');
     await expect(done).toContainText('Ended 5 days late');
     await done.getByRole('button', { name: 'Show Design tasks' }).click();
     await expect(column(page, 'Design')).toContainText('Wireframes for the checkout');
     await column(page, 'Design').getByRole('button', { name: 'Hide Design tasks' }).click();
     await expect(column(page, 'Design')).toHaveCount(0);
+    await done.getByRole('button', { name: 'Fold the done phases' }).click();
+    await expect(done.getByRole('button', { name: /^Done phases 2/ })).toBeVisible();
   });
 
   await test.step('Summary: health, critical tasks and the stored summary, AI off', async () => {
@@ -183,10 +195,14 @@ test('the board of an off-track project, its tabs, and the stored summary with A
     await page.getByRole('link', { name: 'See all tasks' }).click();
     await expect(page).toHaveURL(/\?tab=board&show=critical$/);
     await expect(
-      page.getByRole('group', { name: 'Highlight cards' }).getByRole('button', {
-        name: 'Critical (4)',
-      }),
-    ).toHaveAttribute('aria-pressed', 'true');
+      page.getByRole('status').filter({ hasText: '4 tasks match. The others are faded.' }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: /^Filter/ }).click();
+    await expect(page.getByRole('menuitemcheckbox', { name: 'Critical (4)' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await page.keyboard.press('Escape');
   });
 
   await test.step('Files, Timeline and Hours are links with the tab in the address', async () => {
@@ -228,20 +244,26 @@ test('tasks: add, edit, tick and Undo, delete and Undo, then delete', async ({ s
   const titleButton = () => page.getByRole('button', { name: title, exact: true });
   const progress = (count) => part(page, `Development, current phase, 6 of ${count} tasks done`);
 
+  const addTask = page
+    .getByRole('group', { name: 'Task tools' })
+    .getByRole('button', { name: 'Add task', exact: true });
   await test.step('add a task, with the title checked first', async () => {
-    await page.getByRole('button', { name: 'New task' }).click();
+    await addTask.click();
     const dialog = page.getByRole('dialog', { name: 'New task' });
     await expect(dialog.getByLabel('Phase')).toHaveValue('development');
-    await dialog.getByRole('button', { name: 'Add task' }).click();
+    await dialog.getByRole('button', { name: 'Add task', exact: true }).click();
     await expect(dialog.getByText('Write a title of at least 2 characters.')).toBeVisible();
     await dialog.getByLabel('Task title').fill(title);
-    await dialog.getByLabel('Assign to').selectOption({ label: 'Simran Kaur' });
+    await dialog
+      .getByRole('group', { name: 'Assign to' })
+      .getByRole('radio', { name: 'Simran Kaur', exact: true })
+      .check();
     await dialog.getByLabel('Due date').fill(daysFromNow(7));
     await dialog.getByText('P1 critical', { exact: true }).click();
     const posted = page.waitForRequest(
       (request) => request.method() === 'POST' && request.url().endsWith('/tasks'),
     );
-    await dialog.getByRole('button', { name: 'Add task' }).click();
+    await dialog.getByRole('button', { name: 'Add task', exact: true }).click();
     expect((await posted).postDataJSON()).toMatchObject({
       title,
       priority: 'p1',
@@ -253,7 +275,7 @@ test('tasks: add, edit, tick and Undo, delete and Undo, then delete', async ({ s
     await expect(toasts(page).getByText('Task added to Development.')).toBeVisible();
     await expect(toasts(page).getByText('Simran Kaur gets a notification.')).toBeVisible();
     await expect(development.getByRole('button', { name: title, exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'New task' })).toBeFocused();
+    await expect(addTask).toBeFocused();
     await expect(progress(13)).toBeVisible();
   });
 
@@ -278,11 +300,16 @@ test('tasks: add, edit, tick and Undo, delete and Undo, then delete', async ({ s
     const ticked = status('done');
     await page.getByRole('checkbox', { name: `Done: ${title}` }).click();
     expect((await ticked).status()).toBe(200);
+    // After its 600 ms wait the card leaves for the closed "› 7 done" fold (CONTRACT 28).
+    await expect(titleButton()).toBeHidden();
+    await expect(progress(13)).toHaveCount(0);
     const undo = toasts(page).getByRole('status').filter({ hasText: 'Marked done.' });
     const reopened = status('open');
     await undo.getByRole('button', { name: 'Undo' }).click();
     expect((await reopened).status()).toBe(200);
-    await expect(progress(13)).toBeVisible();
+    // Back at once: the board no longer holds it as done once Undo reopened it.
+    await expect(progress(13)).toBeVisible({ timeout: 5000 });
+    await expect(titleButton()).toBeVisible();
     await expect(page.getByRole('checkbox', { name: `Done: ${title}` })).not.toBeChecked();
   });
 
@@ -486,7 +513,13 @@ test('the deadline changes the health, and Move starts the next phase, from the 
     const dialog = page.getByRole('dialog', { name: 'Change deadline' });
     await expect(dialog.getByLabel('Deadline')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
     await dialog.getByLabel('Deadline').fill(daysFromNow(120));
+    // `next dev` may compile the route on this first save, which can take longer than 15 s.
+    const saved = page.waitForResponse(
+      (response) => response.request().method() === 'PUT' && response.url().endsWith('/deadline'),
+      { timeout: 60_000 },
+    );
     await dialog.getByRole('button', { name: 'Save' }).click();
+    expect((await saved).status()).toBe(200);
     await expect(toasts(page).getByText('Deadline saved.')).toBeVisible();
     await expect(band(page)).toContainText(/On track: will finish about \d+ days early/);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('On track');
@@ -555,8 +588,8 @@ test('another PM sees the plan, but no files, no summary and no controls', async
     secrets.push('Scope for Acme Clinics', '/api/project-files/');
     // The demo's files and its note for everyone on the project (db/demo/projectFiles.js).
     secrets.push('card-payment-error.png', 'zoom-notes.docx', 'acme-brand-guide.pdf');
-    secrets.push('Who to call at Acme Retail');
-    for (const tab of ['board', 'summary', 'files', 'timeline']) {
+    secrets.push('acme-store-contract-signed.pdf', 'Who to call at Acme Retail');
+    for (const tab of ['board', 'board&view=table', 'summary', 'files', 'timeline']) {
       const html = await (await page.request.get(`/projects/${projectId}?tab=${tab}`)).text();
       for (const secret of secrets) expect(html, `${secret} on ${tab}`).not.toContain(secret);
     }

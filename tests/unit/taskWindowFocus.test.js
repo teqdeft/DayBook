@@ -1,14 +1,16 @@
-// Focus in the task window while Mark done and Reopen work (CONTRACT 27, Task window: "Focus stays
-// inside while open"; CONTRACT 22, BusyButton): the pressed button stays focusable (aria-disabled
-// and aria-busy, never disabled), so the browser doesn't drop the focus to the page behind the
-// open window; Mark done keeps its Check icon when idle. useTransition is held busy here, as it is
-// while the status request runs. That the new Reopen takes the focus when the footer flips, and
-// that Escape then finds the card again under "› 6 done", runs in the browser.
+// Focus in the task window (CONTRACT 27, Task window: "Focus stays inside while open"; CONTRACT 22,
+// BusyButton; CONTRACT 28, Focus after a control goes away): while Mark done and Reopen work the
+// pressed button stays focusable (aria-disabled and aria-busy, never disabled), so the browser
+// doesn't drop the focus to the page behind the open window; Mark done keeps its Check icon when
+// idle (useTransition is held busy here, as it is while the status request runs). Assign to me in
+// the rail puts the focus on the "Assigned to" face button, and hands the page's take that button
+// to focus again once the new face shows. That the new Reopen takes the focus when the footer
+// flips, and that Escape then finds the card again under "› 6 done", runs in the browser.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const page = vi.hoisted(() => ({ busy: false }));
+const page = vi.hoisted(() => ({ busy: false, actions: null }));
 
 vi.mock('react', async (importOriginal) => {
   const react = await importOriginal();
@@ -32,7 +34,12 @@ vi.mock('@/app/(app)/projects/[id]/_board/TaskEditorProvider', () => ({
   TaskEditorProvider: ({ children }) => children,
 }));
 
+vi.mock('@/app/(app)/projects/[id]/_board/TaskActionsProvider', () => ({
+  useTaskActions: () => page.actions,
+}));
+
 const { useTaskWindowFooter } = await import('@/components/task/TaskWindowFooter.jsx');
+const { useWindowActions } = await import('@/components/task/useWindowActions.js');
 
 const task = (status) => ({ id: 40, projectId: 5, title: 'Go live', status, canManage: true });
 
@@ -72,5 +79,29 @@ describe('Mark done and Reopen while they work', () => {
     expect(markDone).toContain('lucide-check');
     expect(markDone).not.toContain('lucide-loader-circle');
     expect(openTag(buttonOf(footer('done'), 'Reopen'))).not.toContain('aria-disabled');
+  });
+});
+
+describe('Assign to me in the task window', () => {
+  it('puts the focus on the face button and lets the take focus it again', () => {
+    const take = vi.fn();
+    page.actions = { take, apply: (tasks) => tasks, openPeople: vi.fn(), openMove: vi.fn() };
+    let got = null;
+    function Probe() {
+      got = useWindowActions({ id: 40, title: 'Go live', assignee: null, status: 'open' });
+      return null;
+    }
+    renderToStaticMarkup(createElement(Probe));
+    const face = { focus: vi.fn() };
+    got.faceRef.current = face;
+    const button = { tagName: 'BUTTON' };
+    got.take(button);
+    expect(face.focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(take).toHaveBeenCalledTimes(1);
+    const [task, options] = take.mock.calls[0];
+    expect(task.id).toBe(40);
+    expect(options.origin).toBe(button);
+    expect(options.focus()).toBe(face);
+    page.actions = null;
   });
 });

@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const menus = vi.hoisted(() => new Map());
 const undo = vi.hoisted(() => ({ remove: null }));
 const pending = vi.hoisted(() => ({ value: false }));
+const search = vi.hoisted(() => ({ value: 'tab=files&place=all' }));
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal();
@@ -23,7 +24,7 @@ vi.mock('react', async (importOriginal) => {
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: () => {}, replace: () => {}, push: () => {} }),
   usePathname: () => '/projects/5',
-  useSearchParams: () => new URLSearchParams('tab=files&place=all'),
+  useSearchParams: () => new URLSearchParams(search.value),
 }));
 vi.mock('@/lib/apiClient', () => ({
   api: { get: () => new Promise(() => {}), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
@@ -111,6 +112,7 @@ function deleteFromMenu(name, click) {
 }
 
 beforeEach(() => {
+  search.value = 'tab=files&place=all';
   menus.clear();
   undo.remove = vi.fn();
   pending.value = false;
@@ -220,7 +222,84 @@ describe('a file name cut in the middle', () => {
   });
 
   it('is never copied twice: the hidden whole name is not selectable', () => {
-    const sheet = readFileSync('src/components/files/Files.module.css', 'utf8');
+    const sheet = readFileSync('src/components/files/FileName.module.css', 'utf8');
     expect(sheet).toMatch(/\.nameWhole \{\s*user-select: none;\s*\}/);
+  });
+});
+
+describe('a linked row and a file on tasks (CONTRACT 28)', () => {
+  const TASK = { id: 31, title: 'Fix the login page', phase: 'design' };
+  const onTasks = () => {
+    search.value = 'tab=files&place=tasks';
+    const brief = {
+      ...FILES[0],
+      linkCount: 2,
+      linkedTasks: [
+        { id: 31, title: TASK.title, assigneeId: null, assigneeName: null, assigneeManages: false },
+        { id: 32, title: 'Payment settings page', assigneeId: 21, assigneeName: 'Vishal Saini' },
+      ],
+    };
+    const link = { fileId: 1, taskId: 31, taskTitle: TASK.title, taskPhase: 'design' };
+    renderToStaticMarkup(
+      createElement(FilesView, {
+        projectId: 5,
+        canManage: true,
+        place: 'tasks',
+        currentPhase: 'development',
+        pmName: PM.name,
+        files: [brief, FILES[1]],
+        links: [link],
+        documents: [],
+        limits: LIMITS,
+        storageReady: true,
+      }),
+    );
+  };
+
+  it('names its task in the menu and takes the file off the task with Undo after the toast', () => {
+    onTasks();
+    const items = menus.get('More for brief.pdf on Fix the login page');
+    expect(items.map((item) => item.label)).toEqual([
+      'Download',
+      'Open task',
+      'Remove from this task',
+    ]);
+    items.at(-1).onSelect({ detail: 0 });
+    const [entry] = undo.remove.mock.calls[0];
+    expect(entry).toMatchObject({
+      key: 'link:31-1',
+      url: '/api/project-tasks/31/links/1',
+      label: 'Removed from this task. It stays in Files.',
+      keyboard: true,
+    });
+  });
+
+  it('says in the delete toast how many tasks the file was on, and lists the tasks to open', () => {
+    onTasks();
+    expect(menus.get('Tasks with this file')).toBeUndefined(); // On tasks lists no project rows
+    menus.clear();
+    search.value = 'tab=files&place=all';
+    renderToStaticMarkup(
+      createElement(FilesView, {
+        projectId: 5,
+        canManage: true,
+        place: 'all',
+        currentPhase: 'development',
+        pmName: PM.name,
+        files: [{ ...FILES[0], linkCount: 2, linkedTasks: [TASK, { id: 32, title: 'Other' }] }],
+        documents: [],
+        limits: LIMITS,
+        storageReady: true,
+      }),
+    );
+    expect(menus.get('Tasks with this file').map((item) => item.label)).toEqual([
+      'Fix the login page',
+      'Other',
+    ]);
+    deleteFromMenu('brief.pdf', { detail: 1 });
+    expect(undo.remove.mock.calls[0][0]).toMatchObject({
+      label: 'File deleted.',
+      body: 'It was on 2 tasks.',
+    });
   });
 });

@@ -1,0 +1,106 @@
+/* Moving a card (CONTRACT 28, Motion, Pointer drag; Keyboard move): the lifted picture under the
+   pointer, the dashed place the card left, the column that takes it, the grip and the page while a
+   card is held. The motion code (dragSession.js, dragTargets.js) adds these classes next to the
+   data attributes of the contract (data-drag-preview, data-outline, data-drop, data-dragging), so
+   every selector here stays local to this module. Only the preview has will-change. */
+
+/* The picture: a fixed wrapper moved by translate3d, above menus (80), below the skip link (100). */
+.preview {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 90;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* The card at full strength: never dimmed by a filter, never ticking; it lifts by transform and
+   its shadow fades in on a ::after, so box-shadow itself never animates. */
+.preview > [data-flip] {
+  margin: 0;
+  opacity: 1;
+  cursor: grabbing;
+  transition: transform var(--dur-lift) var(--ease-standard);
+}
+
+.preview > [data-flip]::after {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: var(--shadow-lift);
+  content: '';
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-lift) var(--ease-standard);
+}
+
+.preview > [data-lifted] {
+  border-color: var(--line-strong);
+  transform: translateY(var(--lift-rise)) rotate(var(--lift-tilt)) scale(var(--lift-scale));
+}
+
+.preview > [data-lifted]::after {
+  opacity: 1;
+}
+
+/* No hover buttons in the picture, except the grip's focus ring that travels with it. */
+.preview [data-card-actions] {
+  opacity: 0 !important;
+}
+
+.preview > [data-flip]:has([data-focus-ring]) [data-card-actions] {
+  opacity: 1 !important;
+}
+
+.preview [data-focus-ring] {
+  border-radius: 6px;
+  box-shadow: var(--focus-ring);
+}
+
+/* The place the card left: the same size, dashed, its controls hidden and out of reach (the grip
+   keeps the keyboard focus through opacity). */
+.outline.outline {
+  border: 1.5px dashed var(--line-dashed);
+  background: var(--surface-muted);
+  box-shadow: none;
+}
+
+.outline > * {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+/* The column under the card (only columns that take it react). */
+[data-drop='on'].dropOn {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary-soft) 60%, var(--surface-muted));
+}
+
+.dropOn [data-empty-text] {
+  opacity: 0;
+}
+
+/* While a card is held: no text selection, and the grabbing hand. Both are inherited from the root,
+   and the pointer is captured by the board (dragSession.js), whose cursor the browser keeps
+   showing wherever the pointer goes. No rule reaches every element (`*`) or every control: on a
+   150-card board (8,000 elements) those recalculated thousands of styles at the lift and again at
+   the drop, 70 to 120 ms each way on a fast computer; these two take about 15 ms. */
+.dragging,
+.dragging [data-board] {
+  cursor: grabbing !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The grip (C3 renders it with usePointerDrag's gripProps): grab on a computer; hidden on a phone
+   and on touch screens, by CSS only, so the server's markup is the same everywhere. */
+.grip {
+  cursor: grab;
+  touch-action: none;
+}
+
+@media (max-width: 640px), (pointer: coarse) {
+  .grip {
+    display: none !important;
+  }
+}

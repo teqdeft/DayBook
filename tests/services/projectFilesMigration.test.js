@@ -1,12 +1,14 @@
-// Deploy before migrate (CONTRACT 27): with migration 019 rolled back, the upload routes answer
-// UPDATE_NEEDED (503), the task file reads count 0 without ending the caller's transaction, empty
-// lists ask nothing, Space used reads as "update needed" and the files step counts 0.
+// Deploy before migrate (CONTRACT 27 and 28): with migration 019 rolled back, the upload routes
+// answer UPDATE_NEEDED (503), the task file reads count 0 without ending the caller's transaction,
+// empty lists ask nothing, Space used reads as "update needed" and the files step counts 0; the
+// link reads count nothing and the picker and link writes answer UPDATE_NEEDED. With only 020 rolled
+// back, a save without links still commits and the picker says `linksReady: false`.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { setNowForTests } from '@/lib/time';
 import { createUser, resetDatabase } from '../helpers/db.js';
 import { createProject } from './dashboardKit.js';
-import { createTask, emptyFilesDir } from './projectFilesKit.js';
+import { createTask, emptyFilesDir, projectFile } from './projectFilesKit.js';
 
 const jar = new Map();
 const store = {
@@ -50,6 +52,7 @@ beforeAll(async () => {
   pm = await createUser({ name: 'Riya Kapoor', role: 'pm', tracksAttendance: false });
   project = await createProject(pm, { name: 'acme-store' });
   task = await createTask(project);
+  await db.migrate.down({ name: '020_task_file_links.js' });
   await db.migrate.down({ name: '019_project_files.js' });
   sessionUser = { ...pm, status: 'active', sessionExpiresAt: EXPIRES };
   jar.set(env.SESSION_COOKIE_NAME, { value: encodeSessionCookie('tok', EXPIRES) });
@@ -129,5 +132,55 @@ describe('before migration 019', () => {
       pickMax: 50,
     });
     expect(await projectFiles.cleanUp({ limit: 500, budgetMs: 20_000 })).toBe(0);
+  });
+});
+
+describe('links before migration 019 (CONTRACT 28)', () => {
+  it('reads no links inside a task transaction that still commits; writes need the update', async () => {
+    await db.transaction(async (trx) => {
+      expect(await projectFiles.countActiveLinks(task.id, trx)).toBe(0);
+      expect(await projectFiles.privateLinkCounts([task.id], trx)).toEqual({});
+      const save = { user: pm, project, task: { id: task.id, assigneeId: null } };
+      expect(await projectFiles.linkFiles({ ...save, fileIds: [] }, trx)).toEqual([]);
+      expect(await projectFiles.unlinkFiles({ ...save, fileIds: [] }, trx)).toEqual([]);
+      await trx('projectTasks').where({ id: task.id }).update({ title: 'Saved again' });
+    });
+    expect((await db('projectTasks').where({ id: task.id }).first()).title).toBe('Saved again');
+    expect(await projectFiles.chipsForTasks({ viewer: pm, tasks: [task] })).toEqual({});
+    const save = { user: pm, project, task: { id: task.id, assigneeId: null }, fileIds: [1] };
+    await expect(db.transaction((trx) => projectFiles.linkFiles(save, trx))).rejects.toMatchObject({
+      code: 'UPDATE_NEEDED',
+      status: 503,
+    });
+    await expect(
+      projectFiles.pickerFiles({ viewer: pm, projectId: project.id }),
+    ).rejects.toMatchObject({ code: 'UPDATE_NEEDED', status: 503 });
+  });
+});
+
+describe('before migration 020 only (CONTRACT 28)', () => {
+  let file;
+
+  beforeAll(async () => {
+    await db.migrate.latest();
+    file = await projectFile({ user: pm, projectId: project.id, name: 'brief.pdf' });
+    await db.migrate.down({ name: '020_task_file_links.js' });
+  });
+
+  it('commits a save without links, refuses one with links, and the picker waits', async () => {
+    await db.transaction(async (trx) => {
+      expect(await projectFiles.countActiveLinks(task.id, trx)).toBe(0);
+      await trx('projectTasks').where({ id: task.id }).update({ title: 'Without links' });
+    });
+    expect((await db('projectTasks').where({ id: task.id }).first()).title).toBe('Without links');
+    const save = { user: pm, project, task: { id: task.id, assigneeId: null }, fileIds: [file.id] };
+    await expect(db.transaction((trx) => projectFiles.linkFiles(save, trx))).rejects.toMatchObject({
+      code: 'UPDATE_NEEDED',
+      status: 503,
+    });
+    const unlink = { user: pm, taskId: task.id, fileId: file.id };
+    await expect(projectFiles.unlinkFile(unlink)).rejects.toMatchObject({ code: 'UPDATE_NEEDED' });
+    const picker = await projectFiles.pickerFiles({ viewer: pm, projectId: project.id });
+    expect(picker).toEqual({ files: [], places: [], taskPhase: null, linksReady: false });
   });
 });

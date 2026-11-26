@@ -1,0 +1,172 @@
+/* The Files field (CONTRACT 27, Upload states; CONTRACT 28, New task and Edit task): the Files
+   tab's drop box with "Choose files" (the phone's "Attach files"), the task form's two buttons over
+   a slim drop box; label, help and error as Field. Its chips are in Files.module.css. */
+.field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.label {
+  margin-bottom: 4px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
+.drop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 10px;
+  min-height: 88px;
+  padding: 14px;
+  border: 1px dashed var(--line-dashed);
+  border-radius: var(--radius-tile);
+  background: var(--surface-muted);
+  color: var(--ink-2);
+  font-size: 14px;
+  text-align: center;
+  transition:
+    background-color var(--dur-press) var(--ease-press),
+    border-color var(--dur-press) var(--ease-press);
+}
+
+.drop > svg {
+  color: var(--muted);
+}
+
+.dropOn {
+  display: none;
+  font-weight: 600;
+  color: var(--primary-text);
+}
+
+.dragIn .drop {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.dragIn .drop > :not(.dropOn) {
+  display: none;
+}
+
+.dragIn .dropOn {
+  display: inline;
+}
+
+/* "Choose files" and the phone's "Attach files" are labels of one visually hidden file input,
+   drawn as Button's small secondary (and default, full width) buttons */
+.choose,
+.attachPhone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 37px;
+  padding: 2px 18px 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.choose:hover,
+.attachPhone:hover {
+  background: var(--surface-muted);
+}
+
+.choose:has(input:focus-visible),
+.attachPhone:has(input:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+
+.attachPhone {
+  display: none;
+  width: 100%;
+  height: var(--control-height);
+}
+
+/* the task form's "Upload files" and "From project files" (CONTRACT 28), then a slim drop box */
+.fileButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.uploadButton {
+  cursor: pointer;
+}
+
+.uploadButton:has(input:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+
+.dropSlim {
+  gap: 8px;
+  min-height: 64px;
+  padding: 12px;
+  color: var(--muted);
+}
+
+.attachedSkeleton {
+  display: block;
+  margin-top: 10px;
+}
+
+.help {
+  margin-top: 5px;
+  font-size: var(--text-tag);
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.notice {
+  margin-top: 5px;
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--red-text);
+}
+
+.line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.line > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* one chip alone takes the line (the task form's list, as the prototype) */
+.taskField > ul > li:only-child {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .drop {
+    display: none;
+  }
+
+  .attachPhone {
+    display: inline-flex;
+  }
+
+  .fileButtons > .uploadButton,
+  .fileButtons > .fromProject {
+    height: 44px;
+  }
+}

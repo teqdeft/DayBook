@@ -1,8 +1,10 @@
-// What the Files tab shows (CONTRACT 27, Files tab): the places and their counts, which items a place
-// lists (a phase with "On tasks in Design", On tasks grouped by task), search, the three sorts and
-// every empty state (the lines of each row are in fileRowView.js). Pure and safe in the browser. The
-// server already left out what this viewer may not see, so a count never hints at a hidden file; a
-// file's text for the AI is never a row or a count of its own.
+// What the Files tab shows (CONTRACT 27, Files tab, and CONTRACT 28, Files tab): the places and their
+// counts, which items a place lists (a phase with "On tasks in Design", On tasks grouped by task with
+// its own files then its linked files), search, the three sorts and every empty state (the lines of
+// each row are in fileRowView.js). Pure and safe in the browser. The server already left out what
+// this viewer may not see, so a count never hints at a hidden file; a file's text for the AI is never
+// a row or a count of its own. A file a member reaches only through a link ("Shared with you") is
+// listed in All files and under its task in On tasks, never in its place.
 import {
   PHASE_KEYS,
   PROJECT_PHASES,
@@ -10,12 +12,14 @@ import {
   phaseIndex,
   phaseLabel,
 } from '@/modules/projectPlan/phases';
+import { filesItems } from './filesItems';
 
 // The lines of each row and the note window live in fileRowView.js; they are re-exported here so
 // the tab has one view module.
 export {
   canReadForAi,
   deleteCopy,
+  keepLine,
   MANAGERS_LINE,
   noteWindowMeta,
   pagesText,
@@ -25,9 +29,13 @@ export {
   rowMeta,
   rowNotes,
   rowOpens,
+  unlinkCopy,
   visibilityLabel,
   windowDocument,
 } from './fileRowView';
+
+// The tab's items (each file, link, note and text once) are built in filesItems.js.
+export { filesItems };
 
 /** Every place, in the side list's order. */
 export const PLACES = Object.freeze(['all', 'project', ...PHASE_KEYS, 'tasks']);
@@ -63,82 +71,32 @@ export function placeName(place) {
 /** The side list's link: '?tab=files&place=design'. */
 export const placeHref = (place) => `?tab=files&place=${place}`;
 
-const timeOf = (value) => (value ? new Date(value).getTime() : 0);
-
-/**
- * The tab's items: each file, note and text-only document once. A project file gets the document
- * holding its text (`text`), when the viewer may see it.
- * @param {{ files?: object[], documents?: object[] }} data files: ProjectFile[] with `addedOn`
- *   (the company date); documents: listDocumentsFor's rows with `addedOn` and `createdByName`
- * @returns {Array<{ key: string, type: 'file' | 'task' | 'note' | 'text', id: number,
- *   name: string, phase: string | null, size: number, at: number, addedOn: string, by: string,
- *   visibility: 'everyone' | 'managers' | null, file?: object, task?: object | null,
- *   text?: object | null, document?: object }>} phase: a task file's is its task's; size -1 for
- *   notes and texts
- */
-export function filesItems({ files = [], documents = [] } = {}) {
-  const texts = new Map();
-  for (const document of documents) {
-    if (document.fileId !== null && document.fileId !== undefined) {
-      texts.set(Number(document.fileId), document);
-    }
-  }
-  const items = [];
-  for (const file of files) {
-    const onTask = file.scope === 'task';
-    if (onTask && !file.task) continue;
-    items.push({
-      key: `file:${file.id}`,
-      type: onTask ? 'task' : 'file',
-      id: file.id,
-      name: file.name,
-      phase: (onTask ? file.task.phase : file.phase) ?? null,
-      size: Number(file.sizeBytes) || 0,
-      at: timeOf(file.createdAt),
-      addedOn: file.addedOn ?? null,
-      by: file.createdBy?.name ?? '',
-      visibility: onTask ? null : (file.visibility ?? 'managers'),
-      file,
-      task: onTask ? file.task : null,
-      text: onTask ? null : (texts.get(Number(file.id)) ?? null),
-    });
-  }
-  for (const document of documents) {
-    if (document.fileId !== null && document.fileId !== undefined) continue;
-    items.push({
-      key: `doc:${document.id}`,
-      type: document.kind === 'note' ? 'note' : 'text',
-      id: document.id,
-      name: document.title,
-      phase: document.phase ?? null,
-      size: -1,
-      at: timeOf(document.createdAt),
-      addedOn: document.addedOn ?? null,
-      by: document.createdByName ?? '',
-      visibility: document.visibility ?? 'managers',
-      document,
-    });
-  }
-  return items;
-}
-
 /** The count of each place for these items (see placeCounts). */
 export function countItems(items) {
   const counts = Object.fromEntries(PLACES.map((place) => [place, 0]));
+  const onTasks = new Set(); // On tasks counts each file once, even when it is on 2 tasks
   for (const item of items) {
+    if (item.type === 'link') {
+      onTasks.add(item.id);
+      continue;
+    }
     counts.all += 1;
-    if (item.type === 'task') counts.tasks += 1;
+    if (item.type === 'task') onTasks.add(item.id);
+    else if (item.shared)
+      continue; // only in All files and On tasks, never in its place
     else if (item.phase === null) counts.project += 1;
     if (item.phase !== null && isPhase(item.phase)) counts[item.phase] += 1;
   }
+  counts.tasks = onTasks.size;
   return counts;
 }
 
 /**
  * How many items each place has, for this viewer (the side list and the phone's Show list). A phase
- * counts its own items and the files on its tasks; Whole project only its own; On tasks every task
- * file; a file on a task with no phase only counts in All files and On tasks.
- * @param {{ files?: object[], documents?: object[] }} data as filesItems
+ * counts its own items and the files on its tasks; Whole project only its own; On tasks every file
+ * on a task (own and linked), each once; a file on a task with no phase, and a file shared with the
+ * viewer through a link, only count in All files and On tasks.
+ * @param {{ files?: object[], documents?: object[], links?: object[] }} data as filesItems
  * @returns {Record<string, number>} by place
  */
 export function placeCounts(data) {
@@ -202,8 +160,9 @@ export function emptyState({ place, query, total, canManage }) {
 }
 
 /**
- * What one place shows: its groups of rows (a phase's own items, then "On tasks in Design"; On
- * tasks one group per task), the pictures in that order (for the viewer) and the empty state.
+ * What one place shows: its groups of rows (a phase's own items, then "On tasks in Design" with its
+ * tasks' own files only, so a linked file is never listed twice; On tasks one group per task, its
+ * own files then its linked files), the pictures in that order (for the viewer) and the empty state.
  * @param {{ items: object[], place: string, query?: string, sort?: string,
  *   canManage?: boolean }} args
  * @returns {{ groups: Array<{ key: string, heading: null | { text: string, count: number } |
@@ -214,21 +173,24 @@ export function placeView({ items, place, query = '', sort = 'new', canManage = 
   const hit = matcher(query);
   const groups = [];
   if (place === 'all') {
-    groups.push({ key: 'all', heading: null, items: sortItems(items.filter(hit), sort) });
+    const each = items.filter((item) => item.type !== 'link' && hit(item));
+    groups.push({ key: 'all', heading: null, items: sortItems(each, sort) });
   } else if (place === 'tasks') {
-    const onTasks = items.filter((item) => item.type === 'task' && hit(item));
+    const onTask = (item) => item.type === 'task' || item.type === 'link';
+    const onTasks = items.filter((item) => onTask(item) && hit(item));
     for (const task of tasksOf(onTasks)) {
       const phase = isPhase(task.phase) ? phaseLabel(task.phase) : 'No phase yet';
-      const own = onTasks.filter((item) => item.task.id === task.id);
+      const of = (type) => onTasks.filter((item) => item.type === type && item.task.id === task.id);
       groups.push({
         key: `task:${task.id}`,
         heading: { task, phase },
-        items: sortItems(own, sort),
+        items: [...sortItems(of('task'), sort), ...sortItems(of('link'), sort)], // own, then links
       });
     }
   } else {
     const inPlace = (item) => (place === 'project' ? item.phase === null : item.phase === place);
-    const own = items.filter((item) => item.type !== 'task' && inPlace(item) && hit(item));
+    const ownKind = (item) => item.type !== 'task' && item.type !== 'link' && !item.shared;
+    const own = items.filter((item) => ownKind(item) && inPlace(item) && hit(item));
     groups.push({ key: 'own', heading: null, items: sortItems(own, sort) });
     if (place !== 'project') {
       const onTasks = items.filter((item) => item.type === 'task' && inPlace(item) && hit(item));

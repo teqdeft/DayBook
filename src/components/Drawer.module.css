@@ -8,7 +8,7 @@
   position: absolute;
   inset: 0;
   background: var(--overlay);
-  animation: fade-in 0.18s ease-out;
+  animation: fade-in var(--dur-in) var(--ease-decelerate);
 }
 
 .panel {
@@ -21,7 +21,7 @@
   width: min(var(--drawer-w, 460px), 100vw);
   border-left: 1px solid var(--line);
   background: var(--surface);
-  animation: slide-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: slide-in var(--dur-in) var(--ease-decelerate);
 }
 
 .panel:focus {
@@ -94,15 +94,48 @@
   background: var(--surface);
 }
 
+/* Closing (CONTRACT 28, Motion): the drawer fades back the way it came while the page behind
+   already takes clicks; Drawer removes it on the panel's own animationend. One open when the page
+   loaded (data-instant) has no entrance. */
+.root[data-closing] {
+  pointer-events: none;
+}
+
+.root[data-closing] .overlay {
+  animation: fade-out var(--dur-out) var(--ease-accelerate) forwards;
+}
+
+.root[data-closing] .panel {
+  animation: slide-out var(--dur-out) var(--ease-accelerate) forwards;
+}
+
+.root[data-instant] .overlay,
+.root[data-instant] .panel {
+  animation: none;
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;
   }
 }
 
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
 @keyframes slide-in {
   from {
-    transform: translateX(32px);
+    transform: translateX(var(--shift-drawer));
+    opacity: 0;
+  }
+}
+
+@keyframes slide-out {
+  to {
+    transform: translateX(var(--shift-drawer));
     opacity: 0;
   }
 }

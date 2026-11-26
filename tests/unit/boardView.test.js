@@ -1,40 +1,31 @@
-// The Board tab's rules (CONTRACT 27, Board tab): the columns for a project with no phase yet, in a
-// middle phase and in Support; the fold rule (a past phase with an open task stays a column, and
-// folds once its last open task is done); a skipped phase; slim widths; No phase yet only when
-// needed and never a drop target; the order of the cards; dimming for Critical and With files; the
-// phone's steps and the switcher's matches; the band; and moving a card with its Undo
-// (boardView.js, bandView.js, boardMoves.js).
+// The Board tab's rules (CONTRACT 27 and 28, Done phases rail and columns): the columns for a
+// project with no phase yet, in a middle phase and in Support; the fold rule (a past phase with an
+// open task stays a column, and folds into the rail once its last open task is done); a skipped
+// phase; later empty phases as normal columns, with no width classes; No phase yet only when
+// needed; the early notes; when the board fills the window; the order of the cards; the phone's
+// steps; and the band (boardView.js, bandView.js): every part with a fill and a green layer, the
+// ring, the plan shown right after a phase move. The filters are boardFilters.test.js's; moving a
+// card with its Undo (boardMoves.js) is in boardMoves.test.js (split by CONTRACT 28).
 import { describe, expect, it } from 'vitest';
-import {
-  canDropOn,
-  landingIndex,
-  moveBody,
-  moveOf,
-  moveTargets,
-  movedText,
-  nextCardAfter,
-  pendingMoves,
-  undoOf,
-  withMoves,
-} from '@/app/(app)/projects/[id]/_board/boardMoves';
 import {
   bandParts,
   countByPhase,
   deadlineText,
   progressOf,
+  ringIndex,
+  shownPlan,
 } from '@/app/(app)/projects/[id]/_board/bandView';
 import {
   boardColumns,
   columnDates,
-  filterCounts,
-  filterItems,
-  filterOf,
-  filterStatus,
+  fillsWindow,
   firstStep,
-  isDimmed,
+  foldsBetween,
   memberNote,
+  phaseNote,
   phoneSteps,
-  reportLine,
+  railHiddenText,
+  stayText,
   switcherText,
 } from '@/app/(app)/projects/[id]/_board/boardView';
 import { NO_PHASE } from '@/app/(app)/projects/[id]/phasesView';
@@ -79,16 +70,16 @@ const task = (id, more = {}) => ({
   status: 'open',
   phase: 'development',
   dueDate: null,
-  fileCount: 0,
   ...more,
 });
 
 const keys = (list) => list.map((item) => item.key);
 const ids = (list) => list.map((item) => item.id);
 const byKey = (columns, key) => columns.find((column) => column.key === key);
+const shown = (columns) => columns.filter((column) => !column.hidden).map((column) => column.key);
 
 describe('the columns', () => {
-  it('with no phase yet: six columns, none folded, the empty ones slim', () => {
+  it('with no phase yet: all six show, none folds, none has a width of its own', () => {
     const { tiles, columns } = boardColumns({
       plan: planOf(null),
       tasks: [task(1, { phase: 'requirement_gathering' })],
@@ -97,29 +88,40 @@ describe('the columns', () => {
     expect(tiles).toEqual([]);
     expect(keys(columns)).toEqual(PHASE_KEYS);
     expect(columns.every((column) => column.status === 'later' && !column.hidden)).toBe(true);
-    expect(columns.map((column) => column.width)).toEqual([
-      'normal',
-      'slim',
-      'slim',
-      'slim',
-      'slim',
-      'slim',
-    ]);
-    expect(columns.some((column) => column.tag)).toBe(false);
+    expect(columns.some((column) => 'width' in column || 'slim' in column)).toBe(false);
+    expect(columns.some((column) => column.tag || column.current)).toBe(false);
+    expect(byKey(columns, 'design').emptyText).toBe('No tasks yet');
   });
 
-  it('in a middle phase: past phases without open tasks fold, later empty ones are slim', () => {
+  it('with no tasks at all: six columns, each saying so', () => {
+    const { tiles, columns } = boardColumns({
+      plan: planOf('design', DATES),
+      tasks: [],
+      today: TODAY,
+    });
+    expect(keys(tiles)).toEqual(['requirement_gathering']);
+    expect(shown(columns)).toEqual(PHASE_KEYS.slice(1));
+    expect(columns.every((column) => column.open.length === 0 && column.total === 0)).toBe(true);
+  });
+
+  it('in a middle phase: past phases without open tasks fold into the rail', () => {
     const { tiles, columns } = boardColumns({
       plan: planOf('development', DATES),
       tasks: [task(1, { phase: 'design', status: 'done' }), task(2), task(3, { phase: 'testing' })],
       today: TODAY,
     });
     expect(keys(tiles)).toEqual(['requirement_gathering', 'design']);
-    expect(byKey(columns, 'design')).toMatchObject({ folded: true, hidden: true, tag: 'done' });
-    expect(byKey(columns, 'development')).toMatchObject({ tag: 'current', width: 'current' });
-    expect(byKey(columns, 'testing')).toMatchObject({ width: 'normal', slim: false });
-    expect(byKey(columns, 'launch')).toMatchObject({ width: 'slim', slim: true });
-    expect(byKey(columns, 'support').emptyText).toBe('No tasks in Support yet.');
+    expect(byKey(columns, 'design')).toMatchObject({
+      folded: true,
+      finished: true,
+      hidden: true,
+      tag: 'done',
+    });
+    expect(byKey(columns, 'development')).toMatchObject({ tag: 'current', current: true });
+    // later empty phases are normal columns with their empty line
+    expect(byKey(columns, 'launch')).toMatchObject({ hidden: false, finished: false, total: 0 });
+    expect(byKey(columns, 'support').emptyText).toBe('No tasks yet');
+    expect(shown(columns)).toEqual(['development', 'testing', 'launch', 'support']);
   });
 
   it('in Support: every earlier phase folds when its tasks are done', () => {
@@ -129,10 +131,8 @@ describe('the columns', () => {
       today: TODAY,
     });
     expect(keys(tiles)).toEqual(PHASE_KEYS.slice(0, 5));
-    expect(columns.filter((column) => !column.hidden).map((column) => column.key)).toEqual([
-      'support',
-    ]);
-    expect(byKey(columns, 'support')).toMatchObject({ tag: 'current', width: 'current' });
+    expect(shown(columns)).toEqual(['support']);
+    expect(byKey(columns, 'support')).toMatchObject({ tag: 'current' });
   });
 
   it('keeps a past phase with an open task as a column, and folds it once it is done', () => {
@@ -141,6 +141,7 @@ describe('the columns', () => {
     expect(keys(before.tiles)).toEqual(['requirement_gathering']);
     expect(byKey(before.columns, 'design')).toMatchObject({
       folded: false,
+      finished: false,
       hidden: false,
       tag: null,
       doneOpen: false,
@@ -154,6 +155,7 @@ describe('the columns', () => {
     });
     expect(keys(after.tiles)).toEqual(['requirement_gathering', 'design']);
     expect(after.tiles[1]).toMatchObject({ text: '2 of 2 tasks', note: 'Ended 5 days late' });
+    expect(railHiddenText(after.tiles)).toBe(': Requirement gathering, Design. Show them.');
   });
 
   it('opens a folded phase as a column with Done, its done cards unfolded', () => {
@@ -164,7 +166,12 @@ describe('the columns', () => {
       opened: ['design'],
     });
     expect(tiles[1]).toMatchObject({ key: 'design', opened: true });
-    expect(byKey(columns, 'design')).toMatchObject({ hidden: false, tag: 'done', doneOpen: true });
+    expect(byKey(columns, 'design')).toMatchObject({
+      hidden: false,
+      tag: 'done',
+      doneOpen: true,
+      finished: true,
+    });
   });
 
   it('never marks a skipped phase done or checked', () => {
@@ -177,6 +184,7 @@ describe('the columns', () => {
     expect(tiles[0]).toMatchObject({ skipped: true, text: '1 of 1 task', note: null });
     expect(byKey(columns, 'requirement_gathering')).toMatchObject({
       status: 'skipped',
+      skipped: true,
       tag: 'skipped',
       dates: 'Skipped',
       note: null,
@@ -208,6 +216,34 @@ describe('the columns', () => {
     expect(columnDates('later', row('launch'), TODAY)).toEqual({ dates: null, note: null });
   });
 
+  it('adds muted early notes for the board: ended early, started early', () => {
+    const early = {
+      plannedStart: '2026-10-26',
+      plannedEnd: '2026-11-27',
+      actualStart: '2026-10-26',
+      actualEnd: '2026-11-23',
+    };
+    expect(phaseNote('done', early, TODAY)).toEqual({ text: 'Ended 4 days early', tone: 'muted' });
+    const started = {
+      plannedStart: '2026-11-30',
+      plannedEnd: '2026-12-11',
+      actualStart: '2026-11-23',
+    };
+    expect(phaseNote('current', started, TODAY)).toEqual({
+      text: 'Started 7 days early',
+      tone: 'muted',
+    });
+    expect(columnDates('current', started, TODAY)).toEqual({
+      dates: '30 Nov to 11 Dec',
+      note: { text: 'Started 7 days early', tone: 'muted' },
+    });
+    // a late note wins, and a phase on time says nothing
+    const late = { ...started, plannedEnd: '2026-11-20' };
+    expect(phaseNote('current', late, TODAY)).toEqual({ text: '3 days late', tone: 'red' });
+    const onTime = { ...early, actualEnd: '2026-11-27' };
+    expect(phaseNote('done', onTime, TODAY)).toBeNull();
+  });
+
   it('adds No phase yet last only when some task has no phase', () => {
     const plan = planOf('development', DATES);
     expect(keys(boardColumns({ plan, tasks: [task(1)], today: TODAY }).columns)).toEqual(
@@ -218,7 +254,15 @@ describe('the columns', () => {
       tasks: [task(1), task(2, { phase: null }), task(3, { phase: 'old', status: 'done' })],
       today: TODAY,
     });
-    expect(columns.at(-1)).toMatchObject({ key: NO_PHASE, kind: 'none', label: 'No phase yet' });
+    expect(columns.at(-1)).toMatchObject({
+      key: NO_PHASE,
+      kind: 'none',
+      label: 'No phase yet',
+      hidden: false,
+      finished: false,
+      tag: null,
+      doneOpen: false,
+    });
     expect(ids(columns.at(-1).open)).toEqual([2]);
     expect(ids(columns.at(-1).done)).toEqual([3]);
   });
@@ -232,6 +276,59 @@ describe('the columns', () => {
     });
     expect(tiles).toEqual([expect.objectContaining({ key: 'design', text: '1 of yours, done' })]);
     expect(byKey(columns, 'testing').emptyText).toBe('Nothing for you yet');
+  });
+
+  it('says so in every empty column of a Completed project', () => {
+    for (const member of [false, true]) {
+      const { columns } = boardColumns({
+        plan: planOf('testing', DATES),
+        tasks: [],
+        member,
+        today: TODAY,
+        completed: true,
+      });
+      expect(byKey(columns, 'launch').emptyText).toBe('No tasks here. This project is completed.');
+    }
+  });
+});
+
+describe('when the board fills the window', () => {
+  const plan = planOf('development', DATES);
+  const closed = () => false;
+  it('fills with 4 cards in a shown column, open plus an opened fold', () => {
+    const three = [task(1), task(2), task(3), task(4, { status: 'done' })];
+    const { columns } = boardColumns({ plan, tasks: three, today: TODAY });
+    expect(fillsWindow(columns, closed)).toBe(false);
+    expect(fillsWindow(columns, () => true)).toBe(true);
+    const four = boardColumns({ plan, tasks: [...three, task(5)], today: TODAY });
+    expect(fillsWindow(four.columns, closed)).toBe(true);
+  });
+
+  it('never counts a folded phase that is hidden in the rail', () => {
+    const done = [1, 2, 3, 4].map((id) => task(id, { phase: 'design', status: 'done' }));
+    const { columns } = boardColumns({ plan, tasks: done, today: TODAY });
+    expect(fillsWindow(columns, () => true)).toBe(false);
+  });
+});
+
+describe('a phase move', () => {
+  it('names the phases that fold and whether the rail is new', () => {
+    const tasks = [task(1, { phase: 'requirement_gathering', status: 'done' }), task(2)];
+    const plan = planOf('requirement_gathering');
+    const before = boardColumns({ plan, tasks, today: TODAY });
+    const after = boardColumns({ plan: shownPlan(plan, 'design', TODAY), tasks, today: TODAY });
+    expect(foldsBetween(before, after)).toEqual({
+      folds: ['requirement_gathering'],
+      railIsNew: true,
+    });
+    const back = boardColumns({ plan: shownPlan(plan, 'design', TODAY), tasks, today: TODAY });
+    expect(foldsBetween(back, back)).toEqual({ folds: [], railIsNew: false });
+  });
+
+  it('says how many open tasks stay behind', () => {
+    expect(stayText(5, 'Testing')).toBe('5 open tasks stay in Testing.');
+    expect(stayText(1, 'Testing')).toBe('1 open task stays in Testing.');
+    expect(stayText(0, 'Testing')).toBeNull();
   });
 });
 
@@ -252,54 +349,6 @@ describe('the order of the cards', () => {
   });
 });
 
-describe('the filters', () => {
-  const tasks = [
-    task(1, { priority: 'p1', fileCount: 2 }),
-    task(2, { priority: 'p1' }),
-    task(3, { fileCount: 1 }),
-    task(4, { priority: 'p1', status: 'done', fileCount: 3 }),
-    task(5),
-  ];
-
-  it('counts open tasks only', () => {
-    const counts = filterCounts(tasks);
-    expect(counts).toEqual({ all: 4, critical: 2, files: 2 });
-    expect(filterItems(counts).map((item) => item.label)).toEqual([
-      'All open (4)',
-      'Critical (2)',
-      'With files (2)',
-    ]);
-    expect(filterItems(counts, { files: false }).map((item) => item.value)).toEqual([
-      'all',
-      'critical',
-    ]);
-  });
-
-  it('dims every other card and every done card, and hides none', () => {
-    expect(tasks.filter((one) => isDimmed(one, 'critical')).map((one) => one.id)).toEqual([
-      3, 4, 5,
-    ]);
-    expect(tasks.filter((one) => isDimmed(one, 'files')).map((one) => one.id)).toEqual([2, 4, 5]);
-    expect(tasks.some((one) => isDimmed(one, 'all'))).toBe(false);
-  });
-
-  it('says what changed under the pills', () => {
-    expect(filterStatus('all', { critical: 4, files: 4 })).toBe('');
-    expect(filterStatus('critical', { critical: 4 })).toBe('4 critical tasks highlighted.');
-    expect(filterStatus('critical', { critical: 1 })).toBe('1 critical task highlighted.');
-    expect(filterStatus('critical', { critical: 0 })).toBe('No critical tasks open.');
-    expect(filterStatus('files', { files: 4 })).toBe('4 tasks with files highlighted.');
-    expect(filterStatus('files', { files: 0 })).toBe('No tasks with files.');
-  });
-
-  it('reads ?show= from the Summary tab', () => {
-    expect(filterOf('critical')).toBe('critical');
-    expect(filterOf(['files'])).toBe('files');
-    expect(filterOf('everything')).toBe('all');
-    expect(filterOf(undefined)).toBe('all');
-  });
-});
-
 describe('the phone', () => {
   it('steps through the six phases, then No phase yet', () => {
     const plan = planOf('development', DATES);
@@ -313,21 +362,18 @@ describe('the phone', () => {
     expect(firstStep(null)).toBe('requirement_gathering');
   });
 
-  it('names the phase shown, with the matches of a pressed filter', () => {
+  it('names the phase shown with its count', () => {
     const { columns } = boardColumns({
       plan: planOf('development'),
       tasks: [
-        task(1, { priority: 'p1', fileCount: 1 }),
+        task(1, { priority: 'p1' }),
         task(2, { priority: 'p1' }),
         task(3, { status: 'done' }),
       ],
       today: TODAY,
     });
-    const development = byKey(columns, 'development');
-    expect(switcherText(development, 'all')).toBe('Development · 1 of 3');
-    expect(switcherText(development, 'critical')).toBe('Development · 1 of 3 · 2 critical');
-    expect(switcherText(development, 'files')).toBe('Development · 1 of 3 · 1 with files');
-    expect(switcherText(byKey(columns, 'launch'), 'all')).toBe('Launch · No tasks yet');
+    expect(switcherText(byKey(columns, 'development'))).toBe('Development · 1 of 3');
+    expect(switcherText(byKey(columns, 'launch'))).toBe('Launch · No tasks yet');
   });
 });
 
@@ -352,7 +398,7 @@ describe('the band', () => {
     expect(progressOf({})).toEqual({ done: 0, total: 0, pct: 0 });
   });
 
-  it('draws six parts: done, skipped, current with its share, later', () => {
+  it('draws six parts, each with a fill and a green layer: a done part is full', () => {
     const parts = bandParts({ plan: planOf('development', DATES), counts });
     expect(parts.map((part) => part.status)).toEqual([
       'skipped',
@@ -362,6 +408,8 @@ describe('the band', () => {
       'later',
       'later',
     ]);
+    expect(parts.map((part) => part.share)).toEqual([0, 100, 50, 0, 0, 0]);
+    expect(parts.map((part) => part.doneLayer)).toEqual([false, true, false, false, false, false]);
     expect(parts.map((part) => part.text)).toEqual([
       'Skipped',
       '2 of 2',
@@ -370,14 +418,35 @@ describe('the band', () => {
       'No tasks yet',
       'No tasks yet',
     ]);
-    expect(parts[2]).toMatchObject({
-      share: 50,
-      ariaLabel: 'Development, current phase, 1 of 2 tasks done. Show its column.',
-    });
+    expect(parts[2].ariaLabel).toBe(
+      'Development, current phase, 1 of 2 tasks done. Show its column.',
+    );
     expect(parts[0].ariaLabel).toBe(
       'Requirement gathering, skipped, no tasks yet. Show its column.',
     );
     expect(parts[3].ariaLabel).toBe('Testing, later, 0 of 1 task done. Show its column.');
+    // a done phase with no tasks is still full
+    expect(bandParts({ plan: planOf('development', DATES), counts: {} })[1].share).toBe(100);
+  });
+
+  it('puts the one ring on the current phase, and none without one', () => {
+    expect(ringIndex('development')).toBe(2);
+    expect(ringIndex('requirement_gathering')).toBe(0);
+    expect(ringIndex(null)).toBeNull();
+  });
+
+  it('shows the plan as the server writes it after a move, forward and back', () => {
+    const plan = planOf('development', DATES);
+    const forward = shownPlan(plan, 'testing', TODAY);
+    const row = (one, key) => one.phases.find((phase) => phase.key === key);
+    expect(forward.currentPhase).toBe('testing');
+    expect(row(forward, 'development')).toMatchObject({ actualEnd: TODAY });
+    expect(row(forward, 'testing')).toMatchObject({ actualStart: TODAY, actualEnd: null });
+    expect(bandParts({ plan: forward, counts })[2]).toMatchObject({ status: 'done', share: 100 });
+    const back = shownPlan(plan, 'design', TODAY);
+    expect(row(back, 'design')).toMatchObject({ actualStart: '2026-10-07', actualEnd: null });
+    expect(row(back, 'development')).toMatchObject({ actualStart: null, actualEnd: null });
+    expect(shownPlan(plan, 'development', TODAY)).toBe(plan);
   });
 
   it('writes the deadline', () => {
@@ -391,69 +460,9 @@ describe('the band', () => {
     expect(deadlineText(null, TODAY)).toEqual({ date: null, left: 'No deadline', late: false });
   });
 
-  it('writes the member’s note and a card’s report line', () => {
+  it('writes the member’s note', () => {
     expect(memberNote(29)).toBe(
       'Only your tasks and tasks for anyone on the project are shown. Progress counts all 29 tasks.',
     );
-    const line = (latestStatus, status = 'open') =>
-      reportLine({ status, latestStatus, latestOn: '2026-11-20' });
-    expect(line('blocked')).toEqual({ text: 'Blocked · Fri, 20 Nov', tone: 'red' });
-    expect(line('in_progress')).toEqual({ text: 'In progress · Fri, 20 Nov', tone: 'primary' });
-    expect(line('blocked', 'done')).toBeNull();
-    expect(reportLine({ status: 'open', latestStatus: null, latestOn: null })).toBeNull();
-  });
-});
-
-describe('moving a card', () => {
-  const card = task(7, { title: 'Fix the login page', phase: 'design' });
-
-  it('takes a drop only on another phase column, never on No phase yet or Done phases', () => {
-    expect(canDropOn(card, 'testing')).toBe(true);
-    expect(canDropOn(card, 'design')).toBe(false);
-    expect(canDropOn(card, NO_PHASE)).toBe(false);
-    expect(canDropOn(card, 'done-phases')).toBe(false);
-    expect(canDropOn({ ...card, status: 'done' }, 'testing')).toBe(false);
-    expect(canDropOn({ ...card, phase: null }, 'design')).toBe(true);
-  });
-
-  it('lists the six phases, its own as here now', () => {
-    const rows = moveTargets(card, { design: { total: 8, done: 7 } });
-    expect(rows).toHaveLength(6);
-    expect(rows[1]).toEqual({
-      key: 'design',
-      label: 'Design (here now)',
-      count: '7 of 8',
-      here: true,
-    });
-    expect(rows[5]).toEqual({
-      key: 'support',
-      label: 'Support',
-      count: 'No tasks yet',
-      here: false,
-    });
-  });
-
-  it('moves at once and takes it back with Undo', () => {
-    const move = moveOf(card, 'testing');
-    expect(move).toEqual({ taskId: 7, from: 'design', to: 'testing' });
-    expect(movedText(move.to)).toBe('Moved to Testing.');
-    expect(undoOf(move)).toEqual({ taskId: 7, from: 'testing', to: 'design' });
-    expect(moveBody(undoOf(move))).toEqual({ phase: 'design' });
-    const fromNone = moveOf({ id: 8, phase: null }, 'design');
-    expect(moveBody(undoOf(fromNone))).toEqual({ phase: null });
-
-    const moves = new Map([[7, 'testing']]);
-    expect(withMoves([card], moves)[0].phase).toBe('testing');
-    expect(pendingMoves(moves, [card])).toBe(moves);
-    expect(pendingMoves(moves, [{ ...card, phase: 'testing' }]).size).toBe(0);
-  });
-
-  it('finds where a dragged card lands and what to focus after it leaves', () => {
-    const column = [task(1, { priority: 'p1' }), task(2, { title: 'A' }), task(3, { title: 'Z' })];
-    expect(landingIndex(column, { ...card, priority: 'p2', title: 'M' })).toBe(2);
-    expect(landingIndex(column, { ...card, priority: 'p1', title: 'A' })).toBe(0);
-    expect(nextCardAfter(column, 2)).toBe(3);
-    expect(nextCardAfter(column, 3)).toBe(2);
-    expect(nextCardAfter([task(1)], 1)).toBeNull();
   });
 });

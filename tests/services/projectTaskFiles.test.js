@@ -2,7 +2,9 @@
 // files added and removed, POST /api/project-tasks/:id/files, told and toldName, the 20-file limit
 // under the task row lock, refused keys with nothing written, a task delete taking its files,
 // GET /api/project-tasks/:id and getForViewer per viewer, countsByPhase, and the task writes
-// before migration 019. Files are made through the shared kit (projectFiles.storeFile).
+// before migration 019. CONTRACT 28: project files linked on create, edit and the files route (one
+// files_added naming uploads and links), links counted in the 20, refused links, and link writes
+// before migration 020. Files are made through the shared kit (projectFiles.storeFile).
 import crypto from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
@@ -11,7 +13,14 @@ import { setNowForTests } from '@/lib/time';
 import { projectTasks } from '@/modules/projectTasks';
 import { createUser, resetDatabase } from '../helpers/db.js';
 import { addMembers, createProject, createReport } from './dashboardKit.js';
-import { emptyFilesDir, expectCode, heldUpload, pngBytes, taskFile } from './projectFilesKit.js';
+import {
+  emptyFilesDir,
+  expectCode,
+  heldUpload,
+  pngBytes,
+  projectFile,
+  taskFile,
+} from './projectFilesKit.js';
 
 const jar = new Map();
 const store = {
@@ -343,7 +352,8 @@ describe('attach later (POST /api/project-tasks/:id/files)', () => {
     expect((await postFiles('abc', { uploadKeys: [randomKey()] })).status).toBe(404);
     const empty = await postFiles(task.id, { uploadKeys: [] });
     expect(empty.status).toBe(400);
-    expect(empty.json.error.fields.uploadKeys).toBe('Pick files to add.');
+    // CONTRACT 28: one list at least, uploads or project files.
+    expect(empty.json.error.message).toBe('Add files or pick project files.');
     const unknown = await postFiles(task.id, { uploadKeys: [randomKey()] });
     expect(unknown.status).toBe(400);
     expect(unknown.json.error.fields.uploadKeys).toBe("A file couldn't be added. Add it again.");
@@ -354,6 +364,115 @@ describe('attach later (POST /api/project-tasks/:id/files)', () => {
     }
     expect(last.status).toBe(429);
     expect(last.json.error.code).toBe('RATE_LIMITED');
+  });
+});
+
+describe('project files on tasks (CONTRACT 28)', () => {
+  const placed = (name, visibility = 'everyone') =>
+    projectFile({ user: pm, projectId: acme.id, name, visibility });
+  const linksOf = (taskId) => db('taskFileLinks').where({ taskId }).orderBy('fileId');
+
+  it('creates a task with uploads and links, naming both in the added body', async () => {
+    const guide = await placed('acme-brand-guide.pdf');
+    const key = await held('brief.pdf');
+    const task = await add({
+      title: 'Brand pass',
+      assigneeId: vishal.id,
+      uploadKeys: [key],
+      linkFileIds: [guide.id, guide.id],
+    });
+    expect((await linksOf(task.id)).map((row) => row.fileId)).toEqual([guide.id]);
+    const [added] = await notes('project_task.added');
+    expect(added.body).toBe(
+      'Riya Kapoor assigned it to you. 2 files attached: brief.pdf, acme-brand-guide.pdf.',
+    );
+    expect(task).toMatchObject({ told: 'person', toldName: 'Vishal Saini', toldEarlierName: null });
+  });
+
+  it('adds uploads and links through the files route in one files_added', async () => {
+    const task = await add({ title: 'Attach both', assigneeId: vishal.id });
+    await db('notifications').del();
+    const sheet = await placed('pricing.xlsx');
+    const key = await held('notes.txt', { taskId: task.id });
+    signInAs(pm);
+    const result = await postFiles(task.id, { uploadKeys: [key], linkFileIds: [sheet.id] });
+    expect(result.status).toBe(201);
+    expect(result.json.data.files.map((file) => [file.name, Boolean(file.linked)])).toEqual([
+      ['notes.txt', false],
+      ['pricing.xlsx', true],
+    ]);
+    expect(result.json.data).toMatchObject({ told: 'person', toldName: 'Vishal Saini' });
+    const sent = await notes('project_task.files_added');
+    expect(sent.map((row) => [row.userId, row.title, row.body])).toEqual([
+      [
+        vishal.id,
+        'Riya Kapoor added 2 files to Attach both',
+        'acme-store: notes.txt, pricing.xlsx',
+      ],
+    ]);
+    const onlyLinks = await postFiles(task.id, { linkFileIds: [(await placed('logo.png')).id] });
+    expect(onlyLinks.status).toBe(201);
+  });
+
+  it('unlinks and links in one edit; an unlink alone saves and tells nobody', async () => {
+    const one = await placed('one.pdf');
+    const two = await placed('two.pdf');
+    const task = await add({ title: 'Swap links', assigneeId: vishal.id, linkFileIds: [one.id] });
+    await db('notifications').del();
+    await edit(task, { removeLinkFileIds: [one.id], addLinkFileIds: [two.id] });
+    expect((await linksOf(task.id)).map((row) => row.fileId)).toEqual([two.id]);
+    expect((await notes('project_task.files_added')).map((row) => row.body)).toEqual([
+      'acme-store: two.pdf',
+    ]);
+    await db('notifications').del();
+    const saved = await edit(task, { removeLinkFileIds: [two.id] });
+    expect(saved).toMatchObject({ told: null, toldEarlierName: null });
+    expect(await linksOf(task.id)).toEqual([]);
+    expect(await db('notifications')).toEqual([]);
+    // the confirm fields alone change nothing
+    const nothing = await expectCode(
+      edit(task, { shareConfirmed: true, shareWith: vishal.id }),
+      'VALIDATION_FAILED',
+    );
+    expect(nothing.message).toBe('Nothing to change.');
+  });
+
+  it('checks the new person before any file change (the edit order)', async () => {
+    const task = await add({ title: 'Order matters', assigneeId: vishal.id });
+    const own = await fileOn(task, 'keep-me.pdf');
+    const guide = await placed('guide.pdf');
+    const fields = await fieldError(
+      edit(task, { assigneeId: gone.id, removeFileIds: [own.id], addLinkFileIds: [guide.id] }),
+    );
+    expect(fields.assigneeId).toBe(
+      'Pick someone who is on this project, or anyone on the project.',
+    );
+    expect((await activeFiles(task.id)).map((file) => file.name)).toEqual(['keep-me.pdf']);
+    expect(await linksOf(task.id)).toEqual([]);
+  });
+
+  it('counts links in the 20 (19 own files and 2 links refused)', async () => {
+    const task = await add({ title: 'Nearly full' });
+    await fillFiles(task, 19);
+    const a = await placed('a.pdf');
+    const b = await placed('b.pdf');
+    await expectCode(edit(task, { addLinkFileIds: [a.id, b.id] }), 'TOO_MANY_FILES');
+    expect(await linksOf(task.id)).toEqual([]);
+    await edit(task, { addLinkFileIds: [a.id] });
+    await expectCode(
+      attach(task, [await held('extra.pdf', { taskId: task.id })]),
+      'TOO_MANY_FILES',
+    );
+  });
+
+  it('refuses a link to a task file or a file of another project', async () => {
+    const task = await add({ title: 'Wrong files' });
+    const own = await fileOn(task, 'own.pdf');
+    const elsewhere = await projectFile({ user: pm, projectId: side.id, name: 'side.pdf' });
+    for (const fileId of [own.id, elsewhere.id]) {
+      const fields = await fieldError(edit(task, { addLinkFileIds: [fileId] }));
+      expect(fields.linkFileIds).toBe("That file isn't in this project's files any more.");
+    }
   });
 });
 
@@ -557,6 +676,7 @@ describe('countsByPhase', () => {
 
 describe('before migration 019', () => {
   beforeAll(async () => {
+    await db.migrate.down({ name: '020_task_file_links.js' });
     await db.migrate.down({ name: '019_project_files.js' });
   });
 
@@ -591,11 +711,21 @@ describe('before migration 019', () => {
     await expectCode(edit(task, { removeFileIds: [1] }), 'UPDATE_NEEDED');
     await expectCode(attach(task, [randomKey()]), 'UPDATE_NEEDED');
     expect((await db('projectTasks').where({ title: 'With files' })).length).toBe(0);
+    // Links need migration 020 (CONTRACT 28, Deploy before migrate); the same save without them works.
+    await expectCode(add({ title: 'With links', linkFileIds: [1] }), 'UPDATE_NEEDED');
+    await expectCode(edit(task, { addLinkFileIds: [1] }), 'UPDATE_NEEDED');
+    await expectCode(edit(task, { removeLinkFileIds: [1] }), 'UPDATE_NEEDED');
+    expect((await db('projectTasks').where({ title: 'With links' })).length).toBe(0);
+    expect(await edit(task, { title: 'No files, renamed' })).toMatchObject({
+      title: 'No files, renamed',
+    });
   });
 
   it('reads a task with no files', async () => {
     const task = await add({ title: 'Readable', assigneeId: vishal.id });
     const details = await projectTasks.getForViewer({ viewer: vishal, id: task.id });
     expect(details).toMatchObject({ title: 'Readable', files: [], fileCount: 0 });
+    const managed = await projectTasks.getForViewer({ viewer: pm, id: task.id });
+    expect(managed).toMatchObject({ privateLinkCount: 0, updates: [], updateCount: 0, minutes: 0 });
   });
 });

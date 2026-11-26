@@ -1,6 +1,8 @@
 // GET /api/project-tasks/:id (the task window: PMs and Admin any task, members their own and
-// Anyone tasks, CONTRACT 27), PATCH (title, details, priority, assignee, phase, due date and files)
-// and DELETE: the project's PM or Admin.
+// Anyone tasks, CONTRACT 27; with updates, minutes and links, CONTRACT 28), PATCH (title, details,
+// priority, assignee, phase, due date, files and links: `addLinkFileIds`, `removeLinkFileIds`,
+// `shareConfirmed`, `shareWith`; Assign to me is `{ assigneeId: <the viewer's id> }`) answering the
+// task plus `told`, `toldName` and `toldEarlierName`, and DELETE: the project's PM or Admin.
 import { AppError } from '@/lib/errors';
 import { withRoute } from '@/lib/route';
 import { projectTasks } from '@/modules/projectTasks';

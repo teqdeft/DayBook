@@ -93,7 +93,7 @@
   font-size: var(--text-body);
   line-height: 20px;
   text-decoration: none;
-  transition: background-color 0.12s ease;
+  transition: background-color var(--dur-press) var(--ease-press);
 }
 
 .item:hover {

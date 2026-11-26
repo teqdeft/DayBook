@@ -1,0 +1,171 @@
+/* The task window's right rail (CONTRACT 28), as the prototype's `.tw-rail`: a 1 px line before it,
+   13 px muted labels over 15 px values, 14 px apart; the face button (a 28 px pill, its chevron on
+   hover and focus) with "Assign to me" under it. Below a 720 px window the rail goes first as two
+   columns over a line; on a phone its text buttons and face are 44 px targets. */
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  padding-left: 20px;
+  border-left: 1px solid var(--line);
+}
+
+.rail > div {
+  min-width: 0;
+}
+
+.rail dt {
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.rail dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 4px 0 0;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+/* "Assign to me" sits under the person */
+.assigned dd {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.person,
+.face {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.face {
+  flex: none;
+  max-width: 100%;
+  height: 28px;
+  margin-left: -3px;
+  padding: 0 6px 0 2px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-press) var(--ease-press),
+    color var(--dur-press) var(--ease-press);
+}
+
+.face > span:not(.away) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.face:hover {
+  background: var(--track);
+}
+
+.chevron {
+  flex: none;
+  margin-left: -2px;
+  opacity: 0;
+  transition: opacity var(--dur-fade) var(--ease-out);
+}
+
+.face:hover .chevron,
+.face:focus-visible .chevron {
+  opacity: 1;
+}
+
+/* someone taken off the project or deactivated: a faded picture and the label */
+.awayPerson > :first-child {
+  opacity: 0.5;
+}
+
+.away {
+  font-size: var(--text-tag);
+  color: var(--muted);
+}
+
+/* "Anyone on the project": the dashed circle of the cards */
+.anyone {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1.5px dashed var(--line-dashed);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+
+/* "Assign to me", "Move to phase…" */
+.textButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.textButton:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.number {
+  font-family: var(--font-heading-stack);
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* Below a 720 px window (the panel's 720 px plus the overlay's 16 px sides): the facts first, in
+   two columns over a line. */
+@media (max-width: 751px) {
+  .rail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    order: -1;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 0 0 14px;
+    border-bottom: 1px solid var(--line);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .textButton {
+    min-width: 44px;
+    min-height: 44px;
+    margin-block: -12px;
+  }
+
+  .face {
+    height: 44px;
+    margin-block: -8px;
+  }
+}

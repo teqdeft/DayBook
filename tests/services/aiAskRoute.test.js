@@ -134,6 +134,7 @@ describe('the Ask Daybook nav item', () => {
     expect(keys(user('pm', false), { ask: true })).toEqual([
       'projects',
       'team',
+      'myTasks',
       'screenTime',
       'attendance',
       'requests',

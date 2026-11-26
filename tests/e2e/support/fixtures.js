@@ -10,6 +10,7 @@ export const PEOPLE = {
   vishal: { email: 'vishal@company.com', name: 'Vishal Saini' }, // employee, reports to the PM
   karan: { email: 'karan@company.com', name: 'Karan Mehta' }, // employee, not checked in today
   deepak: { email: 'deepak@company.com', name: 'Deepak Joshi' }, // employee, missing check-out
+  simran: { email: 'simran@company.com', name: 'Simran Kaur' }, // employee on acme-store
   pm: { email: 'pm@company.com', name: '[PM name]' }, // project manager
   pm2: { email: 'pm2@company.com', name: '[PM 2 name]' }, // another project manager
   neha: { email: 'neha@company.com', name: 'Neha Gupta' }, // HR

@@ -1,0 +1,271 @@
+/* The board's toolbar (CONTRACT 28, Board toolbar, filters, faces, Mine and search), as the
+   prototype: a white bar that wraps, with the split Add task (or Reopen project), Board | Table, the
+   search, Filter with its count, Mine and the faces pushed to the right (28 px, overlapping by 4 px,
+   so each keeps a 24 px target of its own). Under it the muted line saying what changed, and above
+   it on a Completed project the note. On a phone Add task takes the first row, the search is an
+   icon button that opens its own row, everything is 44 px and the faces scroll inside their row. */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 60px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+/* Add task: a primary split button, 40 px */
+.split {
+  display: inline-flex;
+  flex: none;
+}
+
+.split .addMain {
+  height: 40px;
+  padding: 2px 16px 0 14px;
+  border-radius: 10px 0 0 10px;
+}
+
+.addMore {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--on-primary) 40%, var(--primary));
+  border-radius: 0 10px 10px 0;
+  background: var(--primary);
+  color: var(--on-primary);
+  transition: background-color var(--dur-press) var(--ease-press);
+}
+
+.addMore:hover,
+.addMore[aria-expanded='true'] {
+  background: var(--primary-hover);
+}
+
+.toolbar .reopen {
+  height: 40px;
+}
+
+/* Board | Table */
+.views {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  height: 40px;
+  padding: 3px;
+  border-radius: var(--radius-control);
+  background: var(--track);
+}
+
+.viewButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-cell);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-small);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-press) var(--ease-press),
+    color var(--dur-press) var(--ease-press);
+}
+
+.viewButton:hover {
+  color: var(--ink);
+}
+
+.viewButton[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* The search: 260 px, its icon inside */
+.search {
+  position: relative;
+  width: 260px;
+  max-width: 100%;
+}
+
+.search > svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  color: var(--muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.search input.searchInput {
+  height: 40px;
+  padding-left: 36px;
+}
+
+.search input.searchInput::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.searchToggle {
+  display: none;
+}
+
+/* Filter: a secondary compact button with its count badge */
+.filter {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 2px 18px 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color var(--dur-press) var(--ease-press);
+}
+
+.filter > svg {
+  flex: none;
+  margin-top: -2px;
+}
+
+.filter:hover,
+.filter[aria-expanded='true'] {
+  background: var(--surface-muted);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-top: -2px;
+  padding: 1px 6px 0;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mine (3): a toggle pill */
+.mine {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  height: var(--pill-height);
+  padding: 0 13.5px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-small);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-press) var(--ease-press),
+    color var(--dur-press) var(--ease-press);
+}
+
+.mine:hover {
+  background: var(--surface-muted);
+}
+
+.mine[aria-pressed='true'] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--surface);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .toolbar {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .split {
+    flex: 1 1 100%;
+  }
+
+  .split .addMain {
+    flex: 1 1 auto;
+    height: 44px;
+  }
+
+  .addMore {
+    width: 44px;
+    height: 44px;
+  }
+
+  .views {
+    height: 44px;
+  }
+
+  /* 38 px buttons with a 44 px hit area */
+  .viewButton {
+    height: 38px;
+  }
+
+  .viewButton::before {
+    position: absolute;
+    inset: -3px 0;
+    content: '';
+  }
+
+  .search {
+    display: none;
+    flex: 1 1 100%;
+    width: auto;
+  }
+
+  .toolbar[data-search-open] .search {
+    display: block;
+  }
+
+  .search input.searchInput {
+    height: 44px;
+  }
+
+  .searchToggle {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .toolbar .reopen,
+  .filter,
+  .mine {
+    height: 44px;
+  }
+}

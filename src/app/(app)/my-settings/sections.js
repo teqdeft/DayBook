@@ -51,10 +51,13 @@ export const NEW_TASK_CHOICES = Object.freeze([
   { value: 'done', label: 'Done' },
 ]);
 
-/** "Sound" (CONTRACT 26): when Daybook chimes for new notifications while it is open. */
+/**
+ * "Sound" (CONTRACT 26): when Daybook chimes for new notifications while it is open. All comes
+ * first because it is the default (CONTRACT 28); the values are BELL_SOUNDS'.
+ */
 export const SOUND_CHOICES = Object.freeze([
-  { value: 'important', label: 'Important only' },
   { value: 'all', label: 'All' },
+  { value: 'important', label: 'Important only' },
   { value: 'off', label: 'Off' },
 ]);
 

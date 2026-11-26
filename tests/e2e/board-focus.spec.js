@@ -4,12 +4,17 @@
 // once it is open. A move that fails puts the card back with the focus on its "⋯". A card's title
 // shows in the window at once while the task loads. Vishal, whose report is in (the demo's evening
 // state), gets no "Add to to-do" in the window. Files dropped where nothing takes them are
-// swallowed on every tab of the PM's page.
+// swallowed on every tab of the PM's page. A card's controls take Tab in their order (CONTRACT
+// 28): the tick, the title, Assign to me, the grip, then "⋯"; the grip's click opens Move to
+// phase… for its card. An open card menu is over the next card's own actions, on a computer and on
+// a phone. After a tick from the keyboard whose answer comes late (the card has left), Tab and
+// Escape leave the "Marked done." toast for the next card's title, or the next row's in the Table,
+// never the page. A task reopened in its window is open on the board at once.
 //
 // Everything is put back (the task is reopened, the failed move never reached the server), so
 // the later specs find the demo data as it is. Every /api/ai/** request is answered in the browser.
-import { closeDemoData, projectIdByName } from './support/demoData.js';
-import { PEOPLE, expect, open, problemsOf, test } from './support/fixtures.js';
+import { closeDemoData, projectIdByName, taskByTitle } from './support/demoData.js';
+import { PEOPLE, expect, open, problemsOf, test, toasts } from './support/fixtures.js';
 import { stubAi, write } from './support/projectPlan.js';
 
 test.describe.configure({ mode: 'serial' });
@@ -50,6 +55,12 @@ const statusSent = (page) =>
   page.waitForResponse(
     (response) => /\/api\/project-tasks\/\d+\/status$/.test(response.url()) && response.ok(),
   );
+/** The task is open again, whatever happened above. */
+async function reopen(page, baseURL) {
+  const { id } = await taskByTitle(projectId, TASK);
+  const path = `/api/project-tasks/${id}/status`;
+  expect((await write(page, baseURL, 'post', path, { status: 'open' })).status()).toBe(200);
+}
 
 test('Mark done and Reopen keep the focus in the task window, and Escape finds the card', async ({
   signInAs,
@@ -161,12 +172,14 @@ test('files dropped off a card are swallowed on every tab of the PM’s page', a
   const page = await openAs(signInAs, PEOPLE.pm, `/projects/${projectId}`);
   for (const tab of ['board', 'summary', 'files', 'timeline', 'hours']) {
     await open(page, `/projects/${projectId}?tab=${tab}`);
-    // Asked again until the page's effects have run (the guard is added after hydration).
+    // Asked again until the page's effects have run (the guard is added after hydration) and its
+    // header has streamed in.
     const swallowed = () =>
       page.evaluate(() => {
         const files = new DataTransfer();
         files.items.add(new File(['hello'], 'brief.txt', { type: 'text/plain' }));
         const heading = document.querySelector('h1');
+        if (!heading) return [false, false];
         return ['dragover', 'drop'].map((type) => {
           const event = new DragEvent(type, {
             bubbles: true,
@@ -178,5 +191,137 @@ test('files dropped off a card are swallowed on every tab of the PM’s page', a
         });
       });
     await expect.poll(swallowed, { message: tab }).toEqual([true, true]);
+  }
+});
+
+test('a card’s controls take Tab in order, and the grip’s click opens Move to phase…', async ({
+  signInAs,
+}) => {
+  const page = await openAs(signInAs, PEOPLE.pm, `/projects/${projectId}`);
+  const shipping = card(page, TASK);
+  await shipping.getByRole('checkbox', { name: `Done: ${TASK}` }).focus();
+  for (const name of [TASK, `Assign ${TASK} to me`, `Move ${TASK}`, `More for ${TASK}`]) {
+    await page.keyboard.press('Tab');
+    await expect(shipping.getByRole('button', { name, exact: true })).toBeFocused();
+  }
+
+  const grip = shipping.getByRole('button', { name: `Move ${TASK}`, exact: true });
+  await expect(grip).toHaveAttribute('aria-describedby', 'move-help');
+  await expect(page.locator('#move-help')).toHaveText(
+    'Press Space to pick up. Use the Left and Right arrow keys to choose a phase. Press Space to drop or Escape to cancel.',
+  );
+  await grip.click();
+  const dialog = page.getByRole('dialog', { name: `Move ${TASK}` });
+  await expect(dialog.getByRole('button', { name: /^Development \(here now\)/ })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(problemsOf(page), 'console and page errors').toEqual([]);
+});
+
+for (const [where, viewport] of [
+  ['a computer', { width: 1440, height: 900 }],
+  ['a phone', { width: 390, height: 844 }],
+]) {
+  test(`an open card menu is over the next card’s actions on ${where}`, async ({ signInAs }) => {
+    const page = await openAs(signInAs, PEOPLE.pm, `/projects/${projectId}`);
+    await page.setViewportSize(viewport);
+    const shown = page.locator('ul[data-cards="development"] > li');
+    const first = shown.first();
+    await first.scrollIntoViewIfNeeded();
+    await first.hover();
+    await first.getByRole('button', { name: /^More for / }).click();
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    // Every 5 px along each item, what a click would reach.
+    const covered = await menu.evaluate((list) =>
+      [...list.querySelectorAll('[role="menuitem"]')].flatMap((item) => {
+        const box = item.getBoundingClientRect();
+        const found = [];
+        for (let x = box.left + 2; x < box.right - 2; x += 5) {
+          const hit = document.elementFromPoint(x, box.top + box.height / 2);
+          if (!list.contains(hit)) found.push(`${item.textContent} at ${Math.round(x)}`);
+        }
+        return found;
+      }),
+    );
+    expect(covered).toEqual([]);
+    // The line above Delete, as the prototype draws it.
+    const roles = await menu.evaluate((list) =>
+      [...list.children].map((one) => `${one.getAttribute('role')} ${one.textContent}`.trim()),
+    );
+    expect(roles.slice(-2)).toEqual(['separator', 'menuitem Delete']);
+    await page.keyboard.press('Escape');
+  });
+}
+
+for (const [name, query, rows, titles] of [
+  ['card', '', 'ul[data-cards="development"] > li', '[data-card-title]'],
+  ['row', '?view=table', 'tbody[data-table-body] > tr[data-flip^="row:"]', '[data-row-title]'],
+]) {
+  test(`after a tick from the keyboard, the toast gives the focus to the next ${name}`, async ({
+    signInAs,
+    baseURL,
+  }) => {
+    const page = await openAs(signInAs, PEOPLE.pm, `/projects/${projectId}${query}`);
+    // The answer comes after the card has left (its leave plays 600 ms after the tick).
+    await page.route(/\/api\/project-tasks\/\d+\/status$/, async (route) => {
+      await new Promise((done) => setTimeout(done, 1500));
+      await route.continue();
+    });
+    const shown = () => page.locator(`${rows} ${titles}`).allInnerTexts();
+    const before = await shown();
+    const at = before.indexOf(TASK);
+    const next = before[at + 1] ?? before[at - 1];
+    try {
+      await page.getByRole('checkbox', { name: `Done: ${TASK}` }).focus();
+      const done = statusSent(page);
+      await page.keyboard.press('Space');
+      await done;
+      const undo = toasts(page)
+        .getByRole('status')
+        .filter({ hasText: 'Marked done.' })
+        .getByRole('button', { name: 'Undo' });
+      await expect(undo).toBeFocused();
+      expect(await shown(), 'the task has left by now').not.toContain(TASK);
+
+      await page.keyboard.press('Tab');
+      await expect.poll(async () => (await focused(page)).name).toBe(next);
+      await undo.focus();
+      await page.keyboard.press('Escape');
+      await expect.poll(async () => (await focused(page)).name).toBe(next);
+      await expect(undo).toHaveCount(0);
+      expect((await focused(page)).name, 'and it stays there').toBe(next);
+    } finally {
+      await page.unrouteAll({ behavior: 'wait' });
+      await reopen(page, baseURL);
+    }
+    expect(problemsOf(page), 'console and page errors').toEqual([]);
+  });
+}
+
+test('a task reopened in its window is open on the board at once', async ({
+  signInAs,
+  baseURL,
+}) => {
+  const page = await openAs(signInAs, PEOPLE.pm, `/projects/${projectId}`);
+  const development = column(page, 'Development');
+  const openList = development.locator('ul[data-cards]');
+  const title = { name: TASK, exact: true };
+  try {
+    const done = statusSent(page);
+    await development.getByRole('checkbox', { name: `Done: ${TASK}` }).click();
+    await done;
+    await expect(openList.getByRole('button', title)).toHaveCount(0);
+    await development.getByRole('button', { name: /^\d+ done$/ }).click();
+    await development.getByRole('button', title).click();
+    const window = page.getByRole('dialog', { name: TASK });
+    const reopened = statusSent(page);
+    await window.getByRole('button', { name: 'Reopen' }).click();
+    await reopened;
+    // Once the refresh draws it: the board no longer holds it as done (for up to 15 s).
+    await expect(openList.getByRole('button', title)).toHaveCount(1, { timeout: 8000 });
+  } finally {
+    await reopen(page, baseURL);
   }
 });

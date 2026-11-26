@@ -1,40 +1,26 @@
 // Priority tasks (CONTRACT 13): reads for the project page, Today, My projects and the daily
 // report's suggestions. Writes live in writes.js and taskFiles.js (files on tasks, CONTRACT 27),
-// the task window's read in taskDetails.js; this file re-exports them so the module has one
-// service object. Order everywhere: P1, P2, P3, then oldest first.
-import { AppError } from '@/lib/errors';
+// the task window's read in taskDetails.js; CONTRACT 28 adds assignees.js, bulk.js, mine.js and
+// updates.js. This file re-exports them so the module has one service object. Order everywhere
+// but My tasks: P1, P2, P3, then oldest first.
 import { can } from '@/lib/permissions';
 import { PHASE_KEYS } from '@/modules/projectPlan/phases';
-import { projects } from '@/modules/projects';
 import * as repo from './repo';
-import { projectNotFound, toId, toTask, withLatestReports } from './shared';
+import { readableProject, toId, toTask, withLatestReports } from './shared';
 
 export { create, remove, setStatus, update } from './writes';
 export { attachFiles } from './taskFiles';
 export { getForViewer } from './taskDetails';
+// CONTRACT 28: the people a task can be for, the Table's bulk save, My tasks and the badge, and
+// the report lines per viewer.
+export { listAssigneeOptions } from './assignees';
+export { bulkUpdate } from './bulk';
+export { countMineDue, listMine } from './mine';
+export { latestLinesFor, updateCountsFor } from './updates';
 
 /** The member filter of a viewer without team.view (their own and Anyone tasks), else null. */
 function memberFilterFor(viewer) {
   return can(viewer, 'team.view') ? null : viewer.id;
-}
-
-/** PMs and Admin read every project's tasks; anyone else only their own projects'. */
-async function canRead(viewer, projectId) {
-  if (!viewer || (viewer.status && viewer.status !== 'active')) return false;
-  if (can(viewer, 'team.view') || can(viewer, 'project.manage')) return true;
-  return repo.isMember(projectId, viewer.id);
-}
-
-/** The project, when the viewer may read its tasks. @throws NOT_FOUND, FORBIDDEN */
-async function readableProject(viewer, projectId) {
-  const project = await projects.findById(toId(projectId));
-  if (!project) throw projectNotFound();
-  if (!(await canRead(viewer, project.id))) {
-    throw new AppError('FORBIDDEN', {
-      message: 'Only people on this project can see its priority tasks.',
-    });
-  }
-  return project;
 }
 
 /**
@@ -132,14 +118,16 @@ export async function progressByProject(projectIds, { weeks = [] } = {}) {
 }
 
 /**
- * Open tasks on the user's active projects (member) that are for them or for anyone, P1 first
- * (the "Priority tasks" card on Today).
- * @param {number} userId
- * @returns {Promise<object[]>} tasks with `project: { id, name, color, isUrgent }` and
- *   `latestReport` (null when the newest line on the task is someone else's)
+ * Today's Priority tasks (CONTRACT 28, Today): open tasks on active projects that are for the user
+ * or for anyone on a project they are a member of, plus the ones they took on a project they
+ * manage without being a member (a tracked Admin), P1 first.
+ * @param {object | number} user the user (an id still works: the role is read in the query)
+ * @returns {Promise<object[]>} tasks with `phase`, `dueDate` (null before migration 015),
+ *   `project: { id, name, color, isUrgent }` and `latestReport` (null when the newest line on the
+ *   task is someone else's)
  */
-export async function listOpenForUser(userId) {
-  const id = toId(userId);
+export async function listOpenForUser(user) {
+  const id = toId(user?.id ?? user);
   if (!id) return [];
   const rows = await repo.listOpenForUser(id);
   return withLatestReports(rows.map(toTask), { ownOnlyFor: id });
@@ -227,29 +215,4 @@ export async function findByIds(ids, { trx, lock = false } = {}) {
       },
     ]),
   );
-}
-
-/**
- * Who a task can be for (the Edit dialog's select): the project's active members who are tracked
- * (they write daily reports) and its PM while active, by name.
- * @param {{ viewer: object, projectId: number }} args
- * @returns {Promise<Array<{ id, name, designation, role }>>}
- * @throws NOT_FOUND, FORBIDDEN
- */
-export async function listAssigneeOptions({ viewer, projectId }) {
-  const project = await readableProject(viewer, projectId);
-  const members = await repo.listProjectMembers(project.id);
-  const manager = await repo.findPerson(project.pmId);
-  const people = members.filter(
-    (member) => member.status === 'active' && member.tracksAttendance && member.id !== project.pmId,
-  );
-  if (manager?.status === 'active') people.push(manager);
-  return people
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map((person) => ({
-      id: person.id,
-      name: person.name,
-      designation: person.designation || null,
-      role: person.role,
-    }));
 }

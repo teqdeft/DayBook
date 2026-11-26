@@ -66,6 +66,23 @@ const removeFileIds = z
   .array(idValue("That file isn't on this task any more."), { error: 'Send the files as a list.' })
   .max(MAX_TASK_FILES, { error: TASK_FILES_MESSAGE });
 
+/**
+ * Project files to link to (or unlink from) the task, 0 to 20 (CONTRACT 28, Linking). Made unique,
+ * so `[5, 5]` links once and counts once.
+ */
+const linkFileIds = z
+  .array(idValue("That file isn't in this project's files any more."), {
+    error: 'Send the files as a list.',
+  })
+  .max(MAX_TASK_FILES, { error: TASK_FILES_MESSAGE })
+  .transform((ids) => [...new Set(ids)]);
+
+/** The share confirm of an "Only PM and Admins" file (CONTRACT 28). */
+const shareConfirmed = z.boolean({ error: 'Send true or false.' });
+
+/** The person the share confirm named ('' or null = anyone on the project). */
+const shareWith = assigneeId.optional();
+
 /** POST /api/projects/:id/tasks */
 export const projectTaskCreateSchema = z.object(
   {
@@ -76,12 +93,18 @@ export const projectTaskCreateSchema = z.object(
     phase: taskPhase.optional().default(null),
     dueDate: dueDate.optional().default(null),
     uploadKeys: uploadKeys.default([]),
+    linkFileIds: linkFileIds.default([]),
+    shareConfirmed: shareConfirmed.optional().default(false),
+    shareWith,
   },
   { error: BODY_MESSAGE },
 );
 
 /** True when a field of an edit changes something: an empty file list doesn't. */
 const changesSomething = (field) => (Array.isArray(field) ? field.length > 0 : field !== undefined);
+
+/** The confirm fields only go with a change; on their own they change nothing. */
+const CONFIRM_KEYS = new Set(['shareConfirmed', 'shareWith']);
 
 /** PATCH /api/project-tasks/:id — only the fields sent change. */
 export const projectTaskUpdateSchema = z
@@ -95,20 +118,79 @@ export const projectTaskUpdateSchema = z
       dueDate: dueDate.optional(),
       addUploadKeys: uploadKeys.optional(),
       removeFileIds: removeFileIds.optional(),
+      addLinkFileIds: linkFileIds.optional(),
+      removeLinkFileIds: linkFileIds.optional(),
+      shareConfirmed: shareConfirmed.optional(),
+      shareWith,
     },
     { error: BODY_MESSAGE },
   )
-  .refine((value) => Object.values(value).some(changesSomething), {
-    message: 'Nothing to change.',
+  .refine(
+    (value) =>
+      Object.entries(value).some(
+        ([key, field]) => !CONFIRM_KEYS.has(key) && changesSomething(field),
+      ),
+    { message: 'Nothing to change.' },
+  );
+
+/**
+ * POST /api/project-tasks/:id/files: held uploads and project files to add to the task, at least
+ * one and together up to 20 (CONTRACT 28).
+ */
+export const projectTaskFilesSchema = z
+  .object(
+    {
+      uploadKeys: uploadKeys.default([]),
+      linkFileIds: linkFileIds.default([]),
+      shareConfirmed: shareConfirmed.optional().default(false),
+      shareWith,
+    },
+    { error: BODY_MESSAGE },
+  )
+  .refine((value) => value.uploadKeys.length + value.linkFileIds.length > 0, {
+    message: 'Add files or pick project files.',
+  })
+  .refine((value) => value.uploadKeys.length + value.linkFileIds.length <= MAX_TASK_FILES, {
+    message: TASK_FILES_MESSAGE,
   });
 
-/** POST /api/project-tasks/:id/files: held uploads to add to the task, 1 to 20. */
-export const projectTaskFilesSchema = z.object(
+// One strict shape with both keys optional, then "exactly one of them": a union of two strict
+// objects answers zod's generic "Invalid input" for both keys or a bad phase (checked on zod 4.6.5).
+const kindOf = (change) => (Object.hasOwn(change, 'phase') ? 'phase' : 'assigneeId');
+const bulkChange = z
+  .strictObject(
+    {
+      id: idValue("We couldn't find that task."),
+      assigneeId: assigneeId.optional(),
+      phase: taskPhase.optional(),
+    },
+    { error: 'Change one thing at a time.' },
+  )
+  .refine((change) => Object.hasOwn(change, 'assigneeId') !== Object.hasOwn(change, 'phase'), {
+    error: 'Change one thing at a time.',
+  });
+
+/** Most tasks one bulk save changes (CONTRACT 28, Bulk actions in the Table). */
+export const MAX_BULK_TASKS = 100;
+
+/**
+ * POST /api/projects/:id/tasks/bulk: 1 to 100 changes of one kind (a person or a phase), each task
+ * once. `assigneeId` as the task field ('' = anyone); `phase` one of the list, or null (an Undo
+ * back to No phase yet).
+ */
+export const projectTaskBulkSchema = z.object(
   {
-    uploadKeys: z
-      .array(uploadKeySchema, { error: 'Pick files to add.' })
-      .min(1, { error: 'Pick files to add.' })
-      .max(MAX_TASK_FILES, { error: TASK_FILES_MESSAGE }),
+    changes: z
+      .array(bulkChange, { error: 'Pick at least one task.' })
+      .min(1, { error: 'Pick at least one task.' })
+      .max(MAX_BULK_TASKS, { error: 'Pick up to 100 tasks.' })
+      .refine((list) => new Set(list.map(kindOf)).size === 1, {
+        error: 'Change one thing at a time.',
+      })
+      .refine((list) => new Set(list.map((change) => change.id)).size === list.length, {
+        error: 'A task is in the list twice.',
+      }),
+    shareConfirmed: shareConfirmed.optional().default(false),
   },
   { error: BODY_MESSAGE },
 );

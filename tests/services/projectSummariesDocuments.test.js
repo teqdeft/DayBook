@@ -711,6 +711,7 @@ describe('before migration 019', () => {
     project = await newProject();
     await addMembers(project, [member]);
     kept = await add(project, note({ title: 'Kept' }));
+    await db.migrate.down({ name: '020_task_file_links.js' });
     await db.migrate.down({ name: MIGRATION_019 });
     resetMigration019WarningsForTests();
     warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});

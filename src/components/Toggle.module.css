@@ -60,7 +60,7 @@
   height: 26px;
   border-radius: var(--radius-pill);
   background: var(--switch-off);
-  transition: background-color 150ms ease;
+  transition: background-color var(--dur-press) var(--ease-press);
   pointer-events: none;
 }
 
@@ -72,7 +72,7 @@
   height: 20px;
   border-radius: 50%;
   background: var(--on-fill);
-  transition: transform 150ms ease;
+  transition: transform var(--dur-lift) var(--ease-standard);
 }
 
 .input:checked + .track {

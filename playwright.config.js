@@ -18,6 +18,10 @@ import { defineConfig, devices } from '@playwright/test';
 // (`npm run seed:demo`), and the global teardown loads it again, so the database is left in the
 // normal demo state. The tests share one database, so they run one at a time.
 //
+// Projects (CONTRACT 28): `chrome` runs every spec but two; `scrollbars` runs
+// no-sideways-scroll.spec.js with real scrollbars; `perf` runs board-perf.spec.js only when PERF=1
+// (PERF=1 npm run test:e2e -- --project=perf). No spec runs twice against the one demo database.
+//
 // Files (CONTRACT 27): in CI mode the server, the setup's `seed:demo`, the teardown and
 // tests/e2e/support/files.js share one files folder under the system temp folder (FILES_DIR, unless
 // it is set already) and upload in 64 KB pieces, so a 2 MB file goes up in many pieces. Locally,
@@ -65,7 +69,34 @@ export default defineConfig({
         channel: 'chrome',
         viewport: { width: 1440, height: 1000 },
       },
+      testIgnore: ['**/no-sideways-scroll.spec.js', '**/board-perf.spec.js'],
     },
+    {
+      // CONTRACT 28, The sideways scroll: the page must never scroll sideways, checked with real
+      // scrollbars (Playwright's Chrome hides them, which would hide a scrollbar's width).
+      name: 'scrollbars',
+      testMatch: '**/no-sideways-scroll.spec.js',
+      use: {
+        ...devices['Desktop Chrome'],
+        channel: 'chrome',
+        viewport: { width: 1440, height: 1000 },
+        launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] },
+      },
+    },
+    // CONTRACT 28, Performance limits: only with PERF=1 (it adds 150 tasks and slows the CPU 4×).
+    ...(process.env.PERF === '1'
+      ? [
+          {
+            name: 'perf',
+            testMatch: '**/board-perf.spec.js',
+            use: {
+              ...devices['Desktop Chrome'],
+              channel: 'chrome',
+              viewport: { width: 1440, height: 1000 },
+            },
+          },
+        ]
+      : []),
   ],
   webServer: reuseServer
     ? undefined

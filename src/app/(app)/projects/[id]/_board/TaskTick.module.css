@@ -1,16 +1,15 @@
 /* The left of a card's first line (CONTRACT 27, Cards): TaskCheck's checkbox drawn as the
-   prototype's round tick, 20 px in a 36 px target (44 px on a phone), and the 10 px status dot for
-   people who can't tick. */
+   prototype's round tick, 20 px in a 36 px target (44 px on a phone), with the check that draws
+   (CONTRACT 28), and the 10 px status dot for people who can't tick. */
 label.tick {
   width: 36px;
   height: 36px;
-  margin: -8px -4px -8px -8px;
+  margin: -8px -6px -8px -8px;
   border-radius: 50%;
 }
 
 label.tick input {
-  display: grid;
-  place-content: center;
+  display: block;
   width: 20px;
   height: 20px;
   border: 1.8px solid color-mix(in srgb, var(--muted) 55%, var(--line-strong));
@@ -18,26 +17,12 @@ label.tick input {
   background: var(--surface);
   appearance: none;
   transition:
-    background-color 0.12s ease,
-    border-color 0.12s ease;
-}
-
-label.tick input::before {
-  width: 10px;
-  height: 10px;
-  background: var(--muted);
-  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
-  content: '';
-  transform: scale(0);
+    background-color var(--dur-press) var(--ease-press),
+    border-color var(--dur-press) var(--ease-press);
 }
 
 label.tick:hover input {
   border-color: var(--muted);
-}
-
-label.tick:hover input::before,
-label.tick input:focus-visible::before {
-  transform: scale(1);
 }
 
 label.tick input:focus-visible {
@@ -50,9 +35,42 @@ label.tick input:checked {
   background: var(--green);
 }
 
-label.tick input:checked::before {
-  background: var(--on-fill);
-  transform: scale(1);
+/* TaskCheck's drawn check (CONTRACT 28, Motion: Tick done), 12 px over the 20 px circle: a muted
+   hint on hover and focus, white once ticked. It draws (stroke-dashoffset 1 → 0) only while the
+   card or row is ticking, so a task already done never draws on load. */
+label.tick svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  color: transparent;
+  pointer-events: none;
+}
+
+label.tick svg path {
+  stroke-dasharray: 1;
+}
+
+label.tick:hover svg,
+label.tick input:focus-visible + svg {
+  color: var(--muted);
+}
+
+label.tick input:checked + svg {
+  color: var(--on-fill);
+}
+
+[data-ticking] label.tick input:checked + svg path {
+  animation: tick-draw var(--dur-tick) var(--ease-standard) backwards;
+}
+
+@keyframes tick-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
 }
 
 /* The status dot for people who can't tick */
@@ -68,12 +86,6 @@ label.tick input:checked::before {
 .dotDone {
   border-color: var(--green);
   background: var(--green);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  label.tick input {
-    transition: none;
-  }
 }
 
 @media (max-width: 640px) {

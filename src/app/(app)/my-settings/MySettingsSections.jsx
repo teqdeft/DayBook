@@ -186,7 +186,7 @@ function NotificationsSection({ push }) {
       <ChoiceRow
         name="bellSound"
         label="Sound"
-        help="A short sound for new notifications while Daybook is open. Important ones ask you to act, like a reminder to check in or a request to approve."
+        help="A short sound for every new notification while Daybook is open. Important only plays it just for reminders and requests that ask you to act."
         choices={SOUND_CHOICES}
       />
       <ToneRow />

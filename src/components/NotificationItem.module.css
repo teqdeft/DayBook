@@ -96,7 +96,7 @@
   gap: 2px;
   padding: 6px 6px 0 0;
   opacity: 0;
-  transition: opacity 0.12s ease;
+  transition: opacity var(--dur-fade) var(--ease-out);
 }
 
 .row:hover .actions,
@@ -142,8 +142,8 @@
   font-size: var(--text-small);
   font-weight: 600;
   transition:
-    background-color 0.12s ease,
-    color 0.12s ease;
+    background-color var(--dur-press) var(--ease-press),
+    color var(--dur-press) var(--ease-press);
 }
 
 .armed {

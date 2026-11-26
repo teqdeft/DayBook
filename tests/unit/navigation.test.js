@@ -1,7 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { activeNavHref, homePathFor, NAV_ITEMS, navigationFor } from '@/config/navigation';
+
+vi.mock('next/navigation', () => ({ usePathname: () => '/my-tasks' }));
+vi.mock('@/components/UserMenu', () => ({ default: () => null }));
+
+const { default: Sidebar } = await import('@/components/Sidebar.jsx');
 
 const employee = { role: 'employee', status: 'active', tracksAttendance: true };
 const pm = { role: 'pm', status: 'active', tracksAttendance: false };
@@ -29,6 +36,7 @@ describe('navigation', () => {
     expect(items.map((item) => item.key)).toEqual([
       'projects',
       'team',
+      'myTasks',
       'screenTime',
       'attendance',
       'requests',
@@ -57,6 +65,7 @@ describe('navigation', () => {
     expect(keys(pm, { summaries: true })).toEqual([
       'projects',
       'team',
+      'myTasks',
       'screenTime',
       'attendance',
       'requests',
@@ -105,6 +114,7 @@ describe('navigation', () => {
         icon: 'UserCog',
         matches: [],
         badge: 0,
+        badgeLabel: 'waiting',
       });
     }
     // An employee sees Today, My log, Projects, My settings.
@@ -122,6 +132,67 @@ describe('navigation', () => {
 
   it('shows a deactivated person nothing, My settings included', () => {
     expect(navigationFor({ ...employee, status: 'deactivated' })).toEqual([]);
+  });
+
+  it('lists My tasks for PMs after Team and for Admins after Overview (CONTRACT 28)', () => {
+    const hr = { role: 'hr', status: 'active', tracksAttendance: true };
+    const keys = (user) => navigationFor(user).map((item) => item.key);
+    expect(keys(ceo)).toEqual([
+      'overview',
+      'myTasks',
+      'team',
+      'screenTime',
+      'projects',
+      'attendance',
+      'people',
+      'roles',
+      'settings',
+      'mySettings',
+    ]);
+    expect(keys({ ...ceo, tracksAttendance: true }).slice(0, 5)).toEqual([
+      'overview',
+      'myTasks',
+      'today',
+      'log',
+      'team',
+    ]);
+    expect(keys(employee)).not.toContain('myTasks');
+    expect(keys(hr)).not.toContain('myTasks');
+    expect(NAV_ITEMS.myTasks).toEqual({
+      label: 'My tasks',
+      href: '/my-tasks',
+      icon: 'ListChecks',
+      permission: 'project.manage',
+      badge: 'myTasks',
+      badgeRoles: ['pm', 'admin'],
+      badgeLabel: 'due now',
+    });
+    expect(activeNavHref(navigationFor(pm), '/my-tasks')).toBe('/my-tasks');
+  });
+
+  it('counts My tasks due now for PMs and Admins only; other badges keep "waiting"', () => {
+    const badges = { myTasks: 4, requests: 2, corrections: 3 };
+    const itemOf = (user, key) => navigationFor(user, badges).find((item) => item.key === key);
+    expect(itemOf(pm, 'myTasks')).toMatchObject({ badge: 4, badgeLabel: 'due now' });
+    expect(itemOf(ceo, 'myTasks')).toMatchObject({ badge: 4, badgeLabel: 'due now' });
+    expect(itemOf(pm, 'requests')).toMatchObject({ badge: 2, badgeLabel: 'waiting' });
+    expect(itemOf(ceo, 'attendance')).toMatchObject({ badge: 3, badgeLabel: 'waiting' });
+    expect(navigationFor(pm).find((item) => item.key === 'myTasks').badge).toBe(0);
+  });
+
+  it('writes the badge word for screen readers: " due now" on My tasks, 99+ past 99', () => {
+    const render = (badges) =>
+      renderToStaticMarkup(
+        createElement(Sidebar, { items: navigationFor(pm, badges), user: { name: 'Riya Kapoor' } }),
+      );
+    const html = render({ myTasks: 3, requests: 2 });
+    expect(html).toContain('My tasks</span><span class="');
+    expect(html).toMatch(/>3<span class="visually-hidden"> due now<\/span>/);
+    expect(html).toMatch(/>2<span class="visually-hidden"> waiting<\/span>/);
+    expect(html).toContain('aria-current="page" href="/my-tasks"');
+    expect(render({ myTasks: 120 })).toMatch(/>99\+<span class="visually-hidden"> due now/);
+    // Nothing at 0.
+    expect(render({ myTasks: 0 })).not.toContain('due now');
   });
 
   it('hides Today and My log from an Admin who is not tracked', () => {

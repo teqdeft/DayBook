@@ -33,7 +33,7 @@
   border-radius: 12px;
   background: var(--surface);
   box-shadow: 0 12px 32px color-mix(in srgb, var(--navy) 14%, transparent);
-  animation: menu-in 0.12s ease-out;
+  animation: menu-in var(--dur-fade) var(--ease-out);
 }
 
 .header {
@@ -84,6 +84,14 @@
   color: var(--red-text);
 }
 
+/* A line above an item (a card menu's Delete, CONTRACT 28). */
+.separator {
+  flex: none;
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--line);
+}
+
 .icon {
   display: inline-flex;
   flex: none;
@@ -94,9 +102,20 @@
   color: inherit;
 }
 
+/* A checkbox item's check, at the right (the board's Filter menu, CONTRACT 28). */
+.check {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  margin-left: auto;
+  padding-left: 12px;
+  box-sizing: content-box;
+  color: var(--primary);
+}
+
 @keyframes menu-in {
   from {
-    transform: translateY(-4px);
+    transform: translateY(var(--shift-menu));
     opacity: 0;
   }
 }

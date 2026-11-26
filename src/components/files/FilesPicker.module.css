@@ -1,0 +1,224 @@
+/* The "From project files" picker (CONTRACT 28), as the prototype's `pk-*`: a 720 px window whose
+   body is two panes under a line (the 200 px places, then the search and a list that scrolls
+   inside), a slimmer footer, the places as a "Show" select below a 720 px window, and a
+   full-screen sheet on a phone with a 44 px X. The list's rows: PickerRow.module.css. Tokens
+   only. */
+.panel {
+  max-height: min(90vh, calc(100vh - 48px));
+}
+
+/* the line under the title: 14 px, muted */
+.panel > :first-child p {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.panel > [data-modal-body] {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.panel > [data-modal-body] + * {
+  margin-top: 0;
+  padding: 14px 20px;
+}
+
+.panes {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: 200px minmax(0, 1fr);
+  min-height: 0;
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+/* ---------- places ---------- */
+.places {
+  padding: 14px 10px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+}
+
+.places ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.place {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 1px 10px 0;
+  border: 0;
+  border-radius: var(--radius-cell);
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 14px;
+  line-height: 19px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-press) var(--ease-press),
+    color var(--dur-press) var(--ease-press);
+}
+
+.place:hover {
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.place[aria-pressed='true'] {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.placeName {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.place :global(.num) {
+  font-size: 13px;
+}
+
+.zero {
+  color: var(--muted);
+}
+
+/* ---------- the search and the list ---------- */
+.right {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.top {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 20px 8px;
+}
+
+.search {
+  width: 100%;
+}
+
+.show {
+  display: none;
+}
+
+.showLabel {
+  display: block;
+  margin-bottom: 4px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
+.list {
+  flex: 1 1 auto;
+  min-height: 220px;
+  padding: 0 20px 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.skeletons {
+  display: flex;
+  flex-direction: column;
+}
+
+.skeleton {
+  display: block;
+  margin: 8px 0;
+}
+
+.empty,
+.update {
+  padding: 36px 8px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.update {
+  margin-top: 14px;
+  padding: 36px 24px;
+  border-top: 1px solid var(--line);
+}
+
+.openFiles {
+  margin-top: 6px;
+}
+
+.retry {
+  margin-top: 10px;
+}
+
+/* ---------- footer ---------- */
+.count {
+  margin-right: auto;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* Below a 720 px window (the panel's full width plus the overlay's 16 px sides) the places become
+   the "Show" select at the top of the list. */
+@media (max-width: 751px) {
+  .panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .places {
+    display: none;
+  }
+
+  .show {
+    display: block;
+  }
+}
+
+/* A phone: a full-screen sheet, 16 px sides, a 44 px X. */
+@media (max-width: 640px) {
+  [role='dialog'].panel {
+    position: fixed;
+    inset: 0;
+    width: auto;
+    height: auto;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .panel > :first-child > button[aria-label='Close'] {
+    width: 44px;
+    height: 44px;
+    margin: -4px -6px 0 auto;
+  }
+
+  .top,
+  .list,
+  .panel > [data-modal-body] + * {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .panel > [data-modal-body] + * > * {
+    flex: 0 1 auto;
+  }
+}

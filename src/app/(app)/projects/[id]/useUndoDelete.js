@@ -75,11 +75,12 @@ function useDeleteQueue({ show, hideToast }) {
 
 /**
  * @returns {{ isHidden: (key: string) => boolean,
- *   remove: (item: { key: string, url: string, label: string, failTitle?: string,
- *     keyboard?: boolean, returnFocus?: () => HTMLElement | null }) => void,
+ *   remove: (item: { key: string, url: string, label: string, body?: string | null,
+ *     failTitle?: string, keyboard?: boolean, returnFocus?: () => HTMLElement | null }) => void,
  *   toast: import('react').ReactElement, settle: (keys?: string[]) => Promise<void>,
  *   waiting: () => boolean }} key: unique on the page ('task:12'); url: what the DELETE
- *   is sent to; label: the toast ('Task deleted.'); failTitle: the error toast's title; keyboard:
+ *   is sent to; label: the toast ('Task deleted.'); body: its line under the title ('It was on 2
+ *   tasks.', CONTRACT 28); failTitle: the error toast's title; keyboard:
  *   the delete came from the keyboard, so the toast takes focus; returnFocus: where focus goes after
  *   Undo, Tab or Escape. Render `toast` once, anywhere in the component. settle: sends the waiting
  *   delete now when it is one of `keys` (any, when left out; its toast goes) and resolves once
@@ -87,7 +88,7 @@ function useDeleteQueue({ show, hideToast }) {
  */
 export function useUndoDelete() {
   const [hidden, setHidden] = useState(() => new Set());
-  const [shown, setShown] = useState(null); // the toast: { key, title, keyboard }
+  const [shown, setShown] = useState(null); // the toast: { key, title, body, keyboard }
   const show = useCallback((key) => setHidden((set) => changed(set, key, false)), []);
   const hideToast = useCallback(() => setShown(null), []);
   const queue = useDeleteQueue({ show, hideToast });
@@ -97,7 +98,8 @@ export function useUndoDelete() {
       const entry = queue.hold(item);
       if (!entry) return;
       setHidden((set) => changed(set, item.key, true));
-      setShown({ key: entry.toast, title: item.label, keyboard: Boolean(item.keyboard) });
+      const body = item.body ?? null;
+      setShown({ key: entry.toast, title: item.label, body, keyboard: Boolean(item.keyboard) });
     },
     [queue],
   );

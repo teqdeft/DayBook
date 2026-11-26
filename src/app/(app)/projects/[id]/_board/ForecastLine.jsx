@@ -3,7 +3,7 @@
 // days. At the current speed ..."). Server-safe.
 import { CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react';
 import { healthTone } from '@/modules/projectPlan/forecast';
-import styles from './ProgressBand.module.css';
+import styles from './ForecastLine.module.css';
 
 const ICONS = { red: TriangleAlert, marigold: TriangleAlert, green: CircleCheck };
 const TONES = { red: styles.red, marigold: styles.marigold, green: styles.green };

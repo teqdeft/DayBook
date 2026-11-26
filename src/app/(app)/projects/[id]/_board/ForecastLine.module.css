@@ -1,0 +1,42 @@
+/* The forecast under the band (CONTRACT 27, The band; PM view only, never for members, and not on a
+   Completed project, CONTRACT 28): the health icon in its colour, the bold title, then the body. */
+.forecast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+
+.forecast svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--muted);
+}
+
+.forecast strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.red svg {
+  color: var(--red-on-surface);
+}
+
+.red strong {
+  color: var(--red-text);
+}
+
+.marigold svg,
+.marigold strong {
+  color: var(--marigold-text);
+}
+
+.green svg,
+.green strong {
+  color: var(--green-text);
+}

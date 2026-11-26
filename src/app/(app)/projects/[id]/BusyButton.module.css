@@ -14,8 +14,15 @@ button.busy[aria-disabled='true'] {
   }
 }
 
+/* Reduced motion: no turning; a slow pulse still shows the work is going on. */
+@keyframes pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spinner {
-    animation-duration: 2400ms;
+    animation: pulse 2s ease-in-out infinite;
   }
 }

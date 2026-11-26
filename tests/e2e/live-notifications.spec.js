@@ -4,8 +4,8 @@
 // `window.__daybookLive.checkNow()` instead of every 30 s, and the sound is recorded by the test
 // hook instead of played:
 // - the first load is quiet; an important one shows one card, is announced and chimes once, and
-//   the bell's count follows; Mark as read, Dismiss, a normal one (no chime with Important only),
-//   three at once (one summary card), Open, the place under My log's top bar (no bell there), the
+//   the bell's count follows; Mark as read, Dismiss, a normal one (it chimes too: All is the
+//   default Sound since CONTRACT 28), three at once (one summary card), Open, the place under My log's top bar (no bell there), the
 //   pause under the pointer and the open bell list (no card, the row joins the list);
 // - two tabs both show the card and only one of them chimes;
 // - on a phone the card comes from the top, is 44 px to tap, and two at most show;
@@ -117,7 +117,7 @@ test('new notifications show a card, chime once and follow the bell', async ({ s
     await expect.poll(() => readAtOf(vishal, remindId)).not.toBeNull();
   });
 
-  await test.step('4. a normal one: a card and no chime; Dismiss leaves it unread', async () => {
+  await test.step('4. a normal one: a card and a chime (All); Dismiss leaves it unread', async () => {
     await waitChimeGap(vishal);
     const leave = {
       type: 'leave.marked',
@@ -132,7 +132,12 @@ test('new notifications show a card, chime once and follow the bell', async ({ s
     await card.getByRole('button', { name: 'Dismiss' }).click();
     await pointerAway(vishal);
     await expect(card).toHaveCount(0);
-    expect(await chimes(vishal), 'Important only').toHaveLength(1);
+    await expect
+      .poll(() => chimes(vishal), { message: 'All, the default, chimes for a normal one too' })
+      .toEqual([
+        { reason: 'batch', ids: [remindId], tone: 'chime' },
+        { reason: 'batch', ids: [id], tone: 'chime' },
+      ]);
     expect(await readAtOf(vishal, id)).toBeNull();
     unread += 1;
     await expect(bell(vishal)).toHaveAccessibleName(bellName(unread));
@@ -154,8 +159,8 @@ test('new notifications show a card, chime once and follow the bell', async ({ s
     await expect(summary).toContainText(newest);
     await expect(summary).toContainText('and 2 more');
     await expectAnnounced(vishal, `3 new notifications. The newest: ${newest}`);
-    await expect.poll(async () => (await chimes(vishal)).length).toBe(2);
-    const chime = (await chimes(vishal))[1];
+    await expect.poll(async () => (await chimes(vishal)).length).toBe(3);
+    const chime = (await chimes(vishal))[2];
     expect(chime).toMatchObject({ reason: 'batch', tone: 'chime' });
     expect([...chime.ids].sort((a, b) => a - b)).toEqual(ids);
     unread += 3;
@@ -365,7 +370,7 @@ test('My settings: the sound, the sound choice and the preview change what new o
 
   await test.step('10. the defaults, and Play sound plays the chosen one', async () => {
     await open(vishal, '/my-settings');
-    await pressed(sound, 'Important only');
+    await pressed(sound, 'All');
     await pressed(tone, 'Chime');
     await expect(showPreview).toBeChecked();
     await section.getByRole('button', { name: 'Play sound' }).click();
@@ -430,11 +435,11 @@ test('My settings: the sound, the sound choice and the preview change what new o
   });
 
   await test.step('the defaults go back', async () => {
-    await saveChange(() => sound.getByRole('button', { name: 'Important only' }).click());
+    // Sound is already All, the default (the step above): pressing it again would save nothing.
     await saveChange(() => showPreview.check());
     await saveChange(() => tone.getByRole('button', { name: 'Chime' }).click());
     await open(vishal, '/my-settings');
-    await pressed(sound, 'Important only');
+    await pressed(sound, 'All');
     await pressed(tone, 'Chime');
     await expect(showPreview).toBeChecked();
     await expect(ring).toBeChecked();

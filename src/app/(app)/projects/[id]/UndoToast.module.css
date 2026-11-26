@@ -24,7 +24,7 @@
   background: var(--surface);
   box-shadow: 0 12px 32px color-mix(in srgb, var(--navy) 14%, transparent);
   pointer-events: auto;
-  animation: undo-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: undo-in var(--dur-toast-in) var(--ease-out);
 }
 
 .icon {
@@ -40,6 +40,16 @@
   font-weight: 600;
   line-height: 22px;
   color: var(--ink);
+}
+
+/* the line under the title: who was told, or how many tasks a deleted file was on */
+.body {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--muted);
 }
 
 .undo {
@@ -79,9 +89,21 @@
   color: var(--ink);
 }
 
+/* Going (CONTRACT 28, Motion): a fade, then UndoToast removes it on this animationend. */
+.toast[data-leaving] {
+  pointer-events: none;
+  animation: undo-out var(--dur-toast-out) var(--ease-accelerate) forwards;
+}
+
+@keyframes undo-out {
+  to {
+    opacity: 0;
+  }
+}
+
 @keyframes undo-in {
   from {
-    transform: translateY(12px);
+    transform: translateY(var(--shift-toast));
     opacity: 0;
   }
 }

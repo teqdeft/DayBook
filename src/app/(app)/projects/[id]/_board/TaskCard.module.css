@@ -1,25 +1,34 @@
-/* A task card on the Board (CONTRACT 27), as the prototype: the round tick (or the status dot), the
-   title, the "⋯" shown on hover, focus and touch; the report line; the owner, due date, priority and
-   paperclip. A filter fades the other cards; a card just added, edited or moved is highlighted for
-   1.5 s; a lifted card has the menu shadow; files dragged over it show "Drop to attach". */
+/* A task card on the Board (CONTRACT 28, Cards and the card menu), as the 1.13 prototype's board
+   cards: 12 px padding and 10 px between its rows; the top line ("#34", the P tag, the status chip);
+   the tick or the status dot with the title; the actions group at the top right (Assign to me, the
+   grip, "⋯") on hover and focus, always on touch screens, where the top line keeps room for it;
+   "Adding 2 files…" and "Drop to attach". The files line and the footer are in
+   CardParts.module.css. A filter fades the other open cards (done cards never). The flash of a card
+   just added, edited, moved or assigned is the motion engine's (flash()), not a class. */
 .card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-tile);
   background: var(--surface);
   cursor: pointer;
   transition:
-    opacity 0.15s ease,
-    border-color 0.12s ease,
-    box-shadow 0.12s ease;
+    opacity var(--dur-fade) var(--ease-out),
+    border-color var(--dur-press) var(--ease-press);
 }
 
 .card:hover {
   border-color: var(--line-strong);
+}
+
+/* The PM's and Admins' cards: a press may start a drag, so no text selection or touch callout */
+.manage {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .dim {
@@ -31,29 +40,37 @@
   opacity: 1;
 }
 
-.highlight {
-  animation: highlight 1.5s ease-out;
+/* Ticked done, before it leaves the open list */
+.card[data-ticking] {
+  opacity: 0.6;
 }
 
-@keyframes highlight {
-  from {
-    background: var(--primary-soft);
-  }
-
-  to {
-    background: var(--surface);
-  }
+.done .title,
+.card[data-ticking] .title {
+  color: var(--muted);
 }
 
-.lift {
-  box-shadow: var(--shadow-menu);
-  opacity: 0.55;
-}
-
+/* ---------- top line ---------- */
 .top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 6px;
+  min-height: 22px;
+}
+
+.number {
+  font-family: var(--font-heading-stack);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* ---------- tick and title ---------- */
+.main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .title {
@@ -71,89 +88,78 @@
   font-weight: 500;
   line-height: 20px;
   text-align: left;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   cursor: pointer;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }
 
-.done .title {
-  color: var(--muted);
+/* ---------- actions: Assign to me, the grip, "⋯" ---------- */
+.actions {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 1;
+  display: flex;
+  gap: 2px;
+  padding-left: 4px;
+  border-radius: var(--radius-cell);
+  background: var(--surface);
+  box-shadow: -10px 0 8px -2px var(--surface);
+  opacity: 0;
+  transition: opacity var(--dur-fade) var(--ease-out);
 }
 
-/* The "⋯" */
-.more {
+.card:hover .actions,
+.card:focus-within .actions,
+.actions:has([aria-expanded='true']) {
+  opacity: 1;
+}
+
+/* The open "⋯" menu is drawn inside this group, so the group takes the menu's layer (Menu's 80)
+   while it is open: the next card's own group must never cover an item or take its click */
+.actions:has([aria-expanded='true']) {
+  z-index: 80;
+}
+
+.action {
+  position: relative;
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
-  margin: -4px -6px -4px 0;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-cell);
+  border-radius: 7px;
   background: transparent;
   color: var(--muted);
-  opacity: 0;
+  transition:
+    background-color var(--dur-press) var(--ease-press),
+    color var(--dur-press) var(--ease-press);
 }
 
-.more:hover,
-.more[aria-expanded='true'] {
+/* a 32 px target around the 28 px button */
+.action::before {
+  position: absolute;
+  inset: -2px;
+  content: '';
+}
+
+.action:hover,
+.action[aria-expanded='true'] {
   background: var(--track);
   color: var(--ink);
 }
 
-.card:hover .more,
-.card:focus-within .more,
-.more[aria-expanded='true'] {
-  opacity: 1;
+.grip {
+  cursor: grab;
+  touch-action: none;
 }
 
-@media (hover: none) {
-  .more {
-    opacity: 1;
-  }
-}
-
-.report {
-  margin: 0;
-  font-size: var(--text-small);
-  line-height: 18px;
-}
-
-.reportRed {
-  color: var(--red-text);
-}
-
-.reportPrimary {
-  color: var(--primary-text);
-}
-
-.meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.owner {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--text-small);
-  color: var(--ink-2);
-}
-
-.away {
-  opacity: 0.45;
-}
-
-.awayText {
-  font-size: var(--text-tag);
-  color: var(--muted);
-}
-
+/* The dashed "Anyone" circle (the face of a task for anyone on the project; the task window's
+   matches it) */
 .anyone {
   display: inline-flex;
   flex: none;
@@ -163,21 +169,11 @@
   height: 24px;
   border: 1.5px dashed var(--line-dashed);
   border-radius: 50%;
+  background: transparent;
   color: var(--muted);
 }
 
-.clip {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  margin-left: auto;
-  font-family: var(--font-heading-stack);
-  font-size: var(--text-small);
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-
-/* Files on their way to the card */
+/* ---------- files on their way to the card ---------- */
 .adding {
   display: flex;
   flex-direction: column;
@@ -199,16 +195,16 @@
 
 .barFill {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
+  inset: 0;
   background: var(--primary);
+  transform-origin: left center;
+  transition: transform var(--dur-fade) var(--ease-out);
 }
 
 .dropOverlay {
   position: absolute;
   inset: -1px;
-  z-index: 2;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -222,25 +218,57 @@
   pointer-events: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .card {
-    transition: none;
-  }
+/* ---------- touch screens and phones ---------- */
 
-  .highlight {
-    animation: none;
+/* The grip: mouse and pen only; touch moves a card with "Move to phase…" */
+@media (max-width: 640px), (pointer: coarse) {
+  .grip {
+    display: none;
   }
 }
 
-@media (max-width: 640px) {
-  .more {
-    width: 44px;
-    height: 44px;
-    margin: -12px -12px -12px 0;
+/* Without hover the actions always show, and the top line keeps room for them (Assign to me and
+   "⋯": the grip is hidden on touch screens) */
+@media (hover: none) {
+  .actions {
+    opacity: 1;
   }
 
-  .clip {
-    min-height: 44px;
-    margin-block: -10px;
+  .manage .top {
+    padding-right: 64px;
+  }
+}
+
+/* A phone: 44 px actions in the corner, the top line keeps 84 px for two of them */
+@media (max-width: 640px) {
+  .actions {
+    top: 0;
+    right: 0;
+    gap: 0;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+    opacity: 1;
+  }
+
+  .manage .top {
+    flex-wrap: wrap;
+    padding-right: 84px;
+  }
+
+  .action {
+    width: 44px;
+    height: 44px;
+  }
+
+  .title {
+    margin-block: -12px;
+    padding-block: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barFill {
+    transition: none;
   }
 }

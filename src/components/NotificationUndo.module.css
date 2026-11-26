@@ -25,7 +25,7 @@
   background: var(--surface);
   box-shadow: 0 12px 32px color-mix(in srgb, var(--navy) 14%, transparent);
   pointer-events: auto;
-  animation: undo-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: undo-in var(--dur-toast-in) var(--ease-out);
 }
 
 .icon {
@@ -60,7 +60,7 @@
 
 @keyframes undo-in {
   from {
-    transform: translateY(12px);
+    transform: translateY(var(--shift-toast));
     opacity: 0;
   }
 }

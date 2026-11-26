@@ -1,11 +1,13 @@
-// Every Knex query of the projectTasks module. People, projects, members and report lines are read
-// with joins; other modules' data is changed only through their services.
+// The Knex queries of the projectTasks module. People, projects and members are read with joins;
+// other modules' data is changed only through their services. CONTRACT 28 keeps this file at its
+// size: the report-line reads live in updates.js, My tasks' in mine.js and the bulk lock in bulk.js,
+// each reusing taskQuery, withPlanColumns and ORDER from here.
 import { db } from '@/lib/db';
 import { guardPlanRead } from '@/modules/projectPlan/migrationGuard';
 
 // Today, the daily report's picker, My projects and timers read these. They must keep working on a
 // deploy that runs before migration 015, so phase and due_date are not in this list (PLAN_COLUMNS).
-const TASK_COLUMNS = [
+export const TASK_COLUMNS = [
   'pt.id',
   'pt.projectId',
   'pt.title',
@@ -40,22 +42,26 @@ const PERSON_COLUMNS = [
   'u.tracksAttendance',
 ];
 
-// Whether the assignee is still on the project's team, as a member or as its PM (a removed member
-// keeps their tasks).
+// Whether the assignee is still on the project's team: a member, its PM, or an Admin (who may
+// take a task on any project without being a member, CONTRACT 28). A removed member keeps their
+// tasks and reads 0 ("Not on the project"); a deactivated Admin still reads 1 (the card says
+// "Deactivated" from the status).
 const ASSIGNEE_IS_MEMBER =
   'CASE WHEN pt.assignee_id IS NULL THEN 1 WHEN EXISTS (SELECT 1 FROM project_members m ' +
   'WHERE m.project_id = pt.project_id AND m.user_id = pt.assignee_id) THEN 1 ' +
   'WHEN EXISTS (SELECT 1 FROM projects pm WHERE pm.id = pt.project_id ' +
-  'AND pm.pm_id = pt.assignee_id) THEN 1 ELSE 0 END AS assignee_is_member';
+  'AND pm.pm_id = pt.assignee_id) THEN 1 ' +
+  "WHEN EXISTS (SELECT 1 FROM users au WHERE au.id = pt.assignee_id AND au.role = 'admin') " +
+  'THEN 1 ELSE 0 END AS assignee_is_member';
 
 // P1, P2, P3 (the enum's order), then oldest first.
-const ORDER = [
+export const ORDER = [
   { column: 'pt.priority', order: 'asc' },
   { column: 'pt.createdAt', order: 'asc' },
   { column: 'pt.id', order: 'asc' },
 ];
 
-function taskQuery(trx) {
+export function taskQuery(trx = db) {
   return trx('projectTasks as pt')
     .leftJoin('users as a', 'a.id', 'pt.assigneeId')
     .leftJoin('users as cb', 'cb.id', 'pt.createdBy')
@@ -65,26 +71,44 @@ function taskQuery(trx) {
 }
 
 /** The query's rows with their phase and due date; both null before migration 015. */
-function withPlanColumns(query) {
+export function withPlanColumns(query) {
   return guardPlanRead(
     () => query.clone().select(PLAN_COLUMNS),
     async () => (await query).map((row) => ({ ...row, phase: null, dueDate: null })),
   );
 }
 
-/** Open tasks on active projects the user is a member of, for them or for anyone. */
+/**
+ * Open tasks on active projects for Today (CONTRACT 28, Today): on a project the user is a member
+ * of, the ones for them or for anyone; and the ones they took on a project they manage without
+ * being a member (its PM, or an Admin; the role is read here, so an id is enough).
+ */
 function openForUser(trx, userId) {
+  const memberRow = trx('projectMembers as m')
+    .select(trx.raw('1'))
+    .whereRaw('m.project_id = pt.project_id')
+    .where('m.userId', userId);
+  const isAdmin = trx('users as me')
+    .select(trx.raw('1'))
+    .where('me.id', userId)
+    .where('me.role', 'admin');
   return trx('projectTasks as pt')
     .join('projects as p', 'p.id', 'pt.projectId')
     .where('pt.status', 'open')
     .where('p.status', 'active')
-    .whereExists(
-      trx('projectMembers as m')
-        .select(trx.raw('1'))
-        .whereRaw('m.project_id = pt.project_id')
-        .where('m.userId', userId),
-    )
-    .where((where) => where.whereNull('pt.assigneeId').orWhere('pt.assigneeId', userId));
+    .where((rule) =>
+      rule
+        .where((own) =>
+          own
+            .whereExists(memberRow)
+            .where((who) => who.whereNull('pt.assigneeId').orWhere('pt.assigneeId', userId)),
+        )
+        .orWhere((taken) =>
+          taken
+            .where('pt.assigneeId', userId)
+            .where((manages) => manages.where('p.pmId', userId).orWhereExists(isAdmin)),
+        ),
+    );
 }
 
 // ---------- tasks ----------
@@ -175,9 +199,12 @@ export function countsByPhase(projectId, trx = db) {
   );
 }
 
-/** Open tasks for the user across their active projects, with the project's name and colour. */
+/**
+ * Open tasks for the user across their active projects (the Today rule), with the project's name
+ * and colour, and the phase and due date (null before migration 015).
+ */
 export function listOpenForUser(userId, trx = db) {
-  return openForUser(trx, userId)
+  const query = openForUser(trx, userId)
     .leftJoin('users as a', 'a.id', 'pt.assigneeId')
     .leftJoin('users as cb', 'cb.id', 'pt.createdBy')
     .leftJoin('users as du', 'du.id', 'pt.doneBy')
@@ -185,6 +212,7 @@ export function listOpenForUser(userId, trx = db) {
     .select(trx.raw(ASSIGNEE_IS_MEMBER))
     .select('p.name as projectName', 'p.color as projectColor', 'p.isUrgent as projectIsUrgent')
     .orderBy(ORDER);
+  return withPlanColumns(query);
 }
 
 /** { projectId, total, p1 } per project for the user's open tasks. */
@@ -240,44 +268,6 @@ export function remove(id, trx) {
   return trx('projectTasks').where({ id }).del();
 }
 
-// ---------- report lines linked to tasks ----------
-
-/**
- * Submitted report lines linked to these tasks on each task's latest reported day only (a task
- * carried over for weeks has a line every day; only the last day matters), newest first (submit
- * time, then line). The service keeps the first line per task. Lines of a planned project (0
- * minutes, CONTRACT 24) aren't reports of work, so they never become the latest one.
- */
-export function listReportLines(taskIds, trx = db) {
-  if (taskIds.length === 0) return Promise.resolve([]);
-  const lastDays = trx('reportTasks as lt')
-    .join('reportEntries as le', 'le.id', 'lt.entryId')
-    .join('dailyReports as ld', 'ld.id', 'le.reportId')
-    .whereIn('lt.projectTaskId', taskIds)
-    .where('ld.status', 'submitted')
-    .where('le.minutes', '>', 0)
-    .groupBy('lt.projectTaskId')
-    .select('lt.projectTaskId')
-    .max({ lastDate: 'ld.workDate' })
-    .as('last');
-  return trx('reportTasks as rt')
-    .join('reportEntries as re', 're.id', 'rt.entryId')
-    .join('dailyReports as dr', 'dr.id', 're.reportId')
-    .join('users as u', 'u.id', 'dr.userId')
-    .join(lastDays, (join) =>
-      join.on('last.projectTaskId', 'rt.projectTaskId').andOn('last.lastDate', 'dr.workDate'),
-    )
-    .whereIn('rt.projectTaskId', taskIds)
-    .where('dr.status', 'submitted')
-    .where('re.minutes', '>', 0)
-    .select('rt.projectTaskId', 'rt.status', 'dr.userId', 'u.name as userName', 'dr.workDate')
-    .orderBy([
-      { column: 'dr.workDate', order: 'desc' },
-      { column: 'dr.submittedAt', order: 'desc' },
-      { column: 'rt.id', order: 'desc' },
-    ]);
-}
-
 // ---------- members ----------
 
 /** A project's members (active and deactivated people), by name. */
@@ -295,6 +285,12 @@ export function listProjectMembers(projectId, trx = db) {
 /** One person, with the same columns as listProjectMembers (a project's PM). */
 export function findPerson(id, trx = db) {
   return trx('users as u').where('u.id', id).first(PERSON_COLUMNS);
+}
+
+/** Several people with the same columns (teamOf's Admins who aren't on the project). */
+export function findPeople(ids, trx = db) {
+  if (ids.length === 0) return Promise.resolve([]);
+  return trx('users as u').whereIn('u.id', ids).select(PERSON_COLUMNS).orderBy('u.id');
 }
 
 /** True when the person has a member row on the project. */

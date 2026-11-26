@@ -62,6 +62,13 @@
   }
 }
 
+/* Reduced motion: the dot stays still (green still says the timer runs). */
+@media (prefers-reduced-motion: reduce) {
+  .live {
+    animation: none;
+  }
+}
+
 .project {
   flex: none;
   max-width: min(260px, 45%);
@@ -251,7 +258,7 @@
   color: var(--ink);
   text-align: left;
   cursor: pointer;
-  transition: border-color 120ms ease;
+  transition: border-color var(--dur-press) var(--ease-press);
 }
 
 .projectButton:hover:not(:disabled) {

@@ -1,0 +1,47 @@
+/* The share confirm (CONTRACT 28): Lock 18 and a 14 px --marigold-text sentence in a
+   --marigold-soft box, Back and the confirm button at its right (38 px; on a phone they share the
+   row under the sentence, 44 px). It fills its row; a window's footer passes its own margins. */
+.ask {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--marigold-soft);
+  color: var(--marigold-text);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.ask > svg {
+  flex: none;
+}
+
+.text {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.buttons {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.button {
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .buttons {
+    width: 100%;
+  }
+
+  .buttons > .button {
+    flex: 1 1 0;
+    height: 44px;
+  }
+}

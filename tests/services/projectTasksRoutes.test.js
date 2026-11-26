@@ -1,5 +1,7 @@
 // Priority task API: GET/POST /api/projects/:id/tasks, PATCH/DELETE /api/project-tasks/:id and
-// POST /api/project-tasks/:id/status — permissions, ids, validation and response shapes.
+// POST /api/project-tasks/:id/status — permissions, ids, validation and response shapes; CONTRACT
+// 28: told, toldName and toldEarlierName, "Nothing to change." for the confirm fields alone, and
+// Assign to me for an Admin who isn't a member.
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setNowForTests } from '@/lib/time';
 import { createUser, resetDatabase } from '../helpers/db.js';
@@ -169,5 +171,57 @@ describe('PATCH, DELETE and status', () => {
     expect((await destroy(id)).json.data).toEqual({ id, deleted: true });
     expect((await destroy(id)).status).toBe(404);
     expect((await patch('abc', { title: 'Hello' })).status).toBe(404);
+  });
+});
+
+describe('CONTRACT 28 fields', () => {
+  it('answers create and PATCH with told, toldName and toldEarlierName', async () => {
+    signInAs(pm);
+    const made = await create(project.id, { title: 'Told shape', assigneeId: member.id });
+    expect(made.json.data).toMatchObject({
+      told: 'person',
+      toldName: 'Mia Member',
+      toldEarlierName: null,
+    });
+    const taken = await patch(made.json.data.id, { assigneeId: pm.id });
+    expect(taken.status).toBe(200);
+    expect(taken.json.data).toMatchObject({
+      assigneeId: pm.id,
+      told: null,
+      toldName: null,
+      toldEarlierName: 'Mia Member',
+    });
+  });
+
+  it('says "Nothing to change." for the confirm fields alone', async () => {
+    signInAs(pm);
+    const made = await create(project.id, { title: 'Confirm only' });
+    for (const body of [
+      { shareConfirmed: true },
+      { shareWith: member.id },
+      { shareConfirmed: true, shareWith: '' },
+      { addLinkFileIds: [], removeLinkFileIds: [], shareConfirmed: false },
+    ]) {
+      const result = await patch(made.json.data.id, body);
+      expect(result.status).toBe(400);
+      expect(result.json.error.message).toBe('Nothing to change.');
+    }
+    const bad = await patch(made.json.data.id, { title: 'Still fine', shareConfirmed: 'yes' });
+    expect(bad.status).toBe(400);
+    expect(bad.json.error.fields.shareConfirmed).toBe('Send true or false.');
+  });
+
+  it('lets an Admin who is not a member take a task, refusing a PM giving it to them', async () => {
+    signInAs(pm);
+    const made = await create(project.id, { title: 'For the Admin' });
+    const refused = await patch(made.json.data.id, { assigneeId: admin.id });
+    expect(refused.status).toBe(400);
+    expect(refused.json.error.fields.assigneeId).toBe(
+      'Pick someone who is on this project, or anyone on the project.',
+    );
+    signInAs(admin);
+    const taken = await patch(made.json.data.id, { assigneeId: String(admin.id) });
+    expect(taken.status).toBe(200);
+    expect(taken.json.data.assignee).toMatchObject({ id: admin.id, isMember: true });
   });
 });

@@ -4,8 +4,10 @@
 // nothing about the files loaded) and before migration 019 (the update card); storage not set up
 // (the line, Upload aria-disabled); the Upload files window (its choices, always sent, and "Upload
 // 3 files"); the Uploads card's rows, "Cancel all" and the reading row; the note window's text; and
-// place links that change the place without asking the leave guard. Client parts render their
-// first state; clicks run in the browser (tests/e2e/project-files.spec.js).
+// place links that change the place without asking the leave guard. CONTRACT 28: " · On 2 tasks"
+// and its menu for managers, linked rows under their tasks in On tasks, a member's shared file only
+// in All files and On tasks, and Edit details' line. Client parts render their first state; clicks
+// run in the browser (tests/e2e/project-files.spec.js).
 import { createElement, isValidElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -556,5 +558,113 @@ describe('the note window', () => {
     expect(words).toContain('Text for the AI summary · 14 pages · Design · Only PM and Admins');
     expect(words).not.toContain('Delete');
     expect(words).toContain('Loading the text…');
+  });
+});
+
+// ---------- CONTRACT 28: files from the project on tasks ----------
+
+const { default: FileEditDialog } =
+  await import('@/app/(app)/projects/[id]/_files/FileEditDialog.jsx');
+
+const CHECKOUT = { id: 32, title: 'Checkout fix before client demo', phase: 'development' };
+const linkRow = (fileId, onTask) => ({
+  fileId,
+  taskId: onTask.id,
+  taskTitle: onTask.title,
+  taskPhase: onTask.phase,
+  taskAssigneeId: null,
+});
+
+describe('links on the Files tab (CONTRACT 28)', () => {
+  const linkedTasks = [
+    {
+      id: 31,
+      title: TASK.title,
+      assigneeId: 21,
+      assigneeName: 'Vishal Saini',
+      assigneeManages: false,
+    },
+    { id: 32, title: CHECKOUT.title, assigneeId: null, assigneeName: null, assigneeManages: false },
+  ];
+  const managers = () => ({
+    files: [{ ...FILES[0], linkCount: 2, linkedTasks, sharedByLink: false }, ...FILES.slice(1)],
+    links: [linkRow(1, TASK), linkRow(1, CHECKOUT)],
+    canSee: true,
+    canManage: true,
+  });
+
+  it('gives managers " · On 2 tasks", a menu of those tasks, and passes the links on', async () => {
+    loads.listForProject.mockResolvedValue(managers());
+    const { element, html } = await renderTab('manage');
+    expect(element.props.links).toEqual(managers().links);
+    expect(html).toContain('data-menu="Tasks with this file"');
+    const menu = html.slice(html.indexOf('data-menu="Tasks with this file"'));
+    expect(text(menu)).toMatch(/^[^<]*Fix the login page Checkout fix before client demo/);
+    expect(text(html)).toContain('All files 5'); // each file once
+  });
+
+  it('lists linked rows under their tasks in On tasks, with the Link icon and their menu', async () => {
+    loads.listForProject.mockResolvedValue(managers());
+    query.value = 'tab=files&place=tasks';
+    const { html } = await renderTab('manage', { place: 'tasks' });
+    const words = text(html);
+    expect(words).toContain('PDF · 340 KB · From Design');
+    expect(html).toContain('lucide-link');
+    expect(html).toContain('data-menu="More for brief.pdf on Fix the login page"');
+    expect(html).toContain('data-menu="More for brief.pdf on Checkout fix before client demo"');
+    expect(words).toContain('Remove from this task');
+    expect(words).toContain('On tasks 2'); // brand-check.pdf and brief.pdf, each once
+    const login = words.indexOf('Fix the login page Design');
+    expect(words.indexOf('brand-check.pdf', login)).toBeLessThan(words.indexOf('brief.pdf', login));
+  });
+
+  it("shows a member's shared file in All files and On tasks only, without the lock", async () => {
+    const contract = file(9, {
+      name: 'contract.pdf',
+      phase: null,
+      visibility: 'managers',
+      linkCount: 1,
+      linkedTasks: [{ id: 31, title: TASK.title }],
+      sharedByLink: true,
+      canManage: false,
+    });
+    loads.listForProject.mockResolvedValue({
+      files: [FILES[0], contract],
+      links: [linkRow(9, TASK)],
+      canSee: true,
+      canManage: false,
+    });
+    loads.listDocumentsFor.mockResolvedValue([]); // a member gets no managers' note
+    const all = text((await renderTab('member')).html);
+    expect(all).toContain('· Shared with you on Fix the login page');
+    expect(all).not.toContain('Only PM and Admins');
+    expect(all).not.toMatch(/On \d tasks?/);
+    query.value = 'tab=files&place=project';
+    const place = text((await renderTab('member', { place: 'project' })).html);
+    expect(place).not.toContain('contract.pdf');
+    query.value = 'tab=files&place=tasks';
+    const onTasks = text((await renderTab('member', { place: 'tasks' })).html);
+    expect(onTasks).toContain('contract.pdf');
+    expect(onTasks).toContain('PDF · 340 KB · From Files');
+  });
+
+  it("writes Edit details' line while Only PM and Admins is chosen, none for Everyone", () => {
+    const item = (visibility) =>
+      filesItems({
+        files: [{ ...FILES[0], visibility, linkCount: 2, linkedTasks: linkedTasks.slice(0, 1) }],
+      })[0];
+    const render = (visibility) =>
+      text(
+        renderToStaticMarkup(
+          createElement(FileEditDialog, {
+            item: item(visibility),
+            currentPhase: 'development',
+            pmName: 'Riya Kapoor',
+            onClose: () => {},
+          }),
+        ),
+      );
+    expect(render('managers')).toContain('Vishal Saini can still open it from Fix the login page.');
+    expect(render('everyone')).not.toContain('can still open it');
   });
 });

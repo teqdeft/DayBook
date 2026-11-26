@@ -12,7 +12,7 @@
   border-radius: var(--radius-control);
   color: var(--ink);
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: background-color var(--dur-press) var(--ease-press);
 }
 
 .iconButton svg {

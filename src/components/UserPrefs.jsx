@@ -26,14 +26,14 @@ export function useBellRing() {
 }
 
 /**
- * When the bell's sound plays (CONTRACT 26): 'all' or 'off' when the person chose one of those,
- * else 'important' (the default, also outside the app). Read here rather than through the
- * preferences schemas, which would bring zod into every page.
- * @returns {'important' | 'all' | 'off'}
+ * When the bell's sound plays (CONTRACT 26): 'important' or 'off' when the person chose one of
+ * those, else 'all' (the default since CONTRACT 28, also outside the app). Read here rather than
+ * through the preferences schemas, which would bring zod into every page.
+ * @returns {'all' | 'important' | 'off'}
  */
 export function useBellSound() {
   const value = useContext(UserPrefsContext)?.bellSound;
-  return value === 'all' || value === 'off' ? value : 'important';
+  return value === 'important' || value === 'off' ? value : 'all';
 }
 
 /**

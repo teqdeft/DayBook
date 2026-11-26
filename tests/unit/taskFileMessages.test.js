@@ -1,7 +1,8 @@
 // Task notifications with files (CONTRACT 27, Notifications): the files line (at most 3 names, then
 // "and 2 more"), placed right after the first sentence and before the note, kept when a long note
 // is cut to 500; files_added's title cut to 200 and its body with at most 5 names; every link opens
-// the task on the project page; told and toldName from the people reached.
+// the task on the project page; told and toldName from the people reached. CONTRACT 28: the files
+// line and files_added name uploads and project files linked in the same save together.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sent = [];
@@ -280,6 +281,65 @@ describe('project_task.files_added', () => {
       told: 'person',
       toldName: 'Paul Manager',
     });
+  });
+});
+
+describe('uploads and links together (CONTRACT 28)', () => {
+  const linked = (id, name) => ({ id, name, linked: true });
+
+  it('names the uploads and the linked project files in one files line', async () => {
+    await sendAdded(
+      {
+        task: task(),
+        project,
+        members,
+        manager: null,
+        actor,
+        files: [...files('brief.pdf', 'logo.png'), linked(9, 'contract.pdf')],
+      },
+      null,
+    );
+    expect(sent[0].body).toBe(
+      'Riya Kapoor assigned it to you. 3 files attached: brief.pdf, logo.png, contract.pdf.',
+    );
+  });
+
+  it('names both in one files_added for the batch', async () => {
+    await sendFilesAdded(
+      {
+        task: task(),
+        project,
+        members,
+        manager: null,
+        actor,
+        files: [...files('brief.pdf'), linked(9, 'acme-brand-guide.pdf')],
+      },
+      null,
+    );
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      type: 'project_task.files_added',
+      title: 'Riya Kapoor added 2 files to Fix the login page',
+      body: 'acme-store: brief.pdf, acme-brand-guide.pdf',
+    });
+  });
+
+  it('puts linked files in the changed files line', async () => {
+    await sendChanged(
+      {
+        before: task({ assigneeId: simran.id }),
+        task: task(),
+        project,
+        members,
+        manager: null,
+        actor,
+        files: [linked(9, 'acme-brand-guide.pdf')],
+      },
+      null,
+    );
+    expect(sent[0].body).toBe(
+      'Riya Kapoor assigned it to you. 1 file attached: acme-brand-guide.pdf.',
+    );
   });
 });
 

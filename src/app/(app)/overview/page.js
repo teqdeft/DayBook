@@ -1,5 +1,6 @@
 // Company overview (artboard 11, Admin): five numbers, hours by project, attendance this week,
-// "Needs attention", team by department and urgent projects.
+// "Needs attention", team by department and urgent projects. The Admin's My tasks card (CONTRACT
+// 28) sits right under the numbers; the page has no minute's refresh, so it updates on each load.
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import Badge from '@/components/Badge';
@@ -11,10 +12,13 @@ import Kpi from '@/components/Kpi';
 import Legend from '@/components/Legend';
 import TopBar from '@/components/TopBar';
 import WeekBars from '@/components/WeekBars';
+import { can } from '@/lib/permissions';
 import { requirePage } from '@/lib/session';
 import { plural } from '@/lib/text';
 import { dashboard } from '@/modules/dashboard';
 import { overviewQuerySchema } from '@/modules/dashboard/schemas';
+import MyTasksCard from '../my-tasks/MyTasksCard';
+import { loadMyTasksCard } from '../my-tasks/myTasksData';
 import HoursCard from '../team/HoursCard';
 import UrgentList from '../team/UrgentList';
 import NeedsAttention from './NeedsAttention';
@@ -51,7 +55,10 @@ export default async function OverviewPage({ searchParams }) {
   const user = await requirePage('overview.view');
   const query = await searchParams;
   const range = overviewQuerySchema.safeParse({ range: first(query.range) }).data?.range ?? 'week';
-  const overview = await dashboard.getOverview({ viewer: user, range });
+  const [overview, mine] = await Promise.all([
+    dashboard.getOverview({ viewer: user, range }),
+    can(user, 'project.manage') ? loadMyTasksCard({ user }) : null,
+  ]);
   const { hours, attendanceWeek, urgent } = overview;
 
   return (
@@ -78,6 +85,8 @@ export default async function OverviewPage({ searchParams }) {
           />
         ))}
       </section>
+
+      {mine ? <MyTasksCard mine={mine} /> : null}
 
       <section className={styles.rowCharts} aria-label="Hours and attendance">
         <HoursCard

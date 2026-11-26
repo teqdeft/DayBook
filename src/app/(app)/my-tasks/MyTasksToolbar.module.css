@@ -1,0 +1,110 @@
+/* The My tasks toolbar (CONTRACT 28, My tasks: sidebar, page and home cards), as the prototype
+   draws it: a white bar with "Group by" and When | Project, the project select (200 px, the
+   prototype's chevron) and the search (260 px). On a phone each control takes a 44 px row. */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 60px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.groupBy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.groupByLabel {
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.segmented button {
+  padding: 0 12px;
+}
+
+.projectPick {
+  position: relative;
+  width: 200px;
+  max-width: 100%;
+}
+
+/* The prototype's ChevronDown in place of the browser's arrow */
+.projectPick select {
+  padding-right: 36px;
+  appearance: none;
+}
+
+.projectPick > svg {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: var(--muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.search {
+  position: relative;
+  width: 260px;
+  max-width: 100%;
+}
+
+.search > svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  color: var(--muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.search input.searchInput {
+  padding-left: 36px;
+}
+
+.search input.searchInput::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+@media (max-width: 640px) {
+  .toolbar {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .projectPick,
+  .search {
+    flex: 1 1 100%;
+    width: auto;
+  }
+
+  .projectPick select,
+  .search input.searchInput {
+    height: 44px;
+  }
+
+  .groupBy .segmented {
+    height: 44px;
+  }
+
+  .segmented button {
+    position: relative;
+    height: 38px;
+  }
+
+  /* 44 px targets: each button's hit area reaches the track's edges */
+  .segmented button::before {
+    content: '';
+    position: absolute;
+    inset: -3px 0;
+  }
+}

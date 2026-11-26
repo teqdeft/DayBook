@@ -119,6 +119,93 @@
   --table-head-height: 40px;
   --table-row-height: 54px;
   --drawer-width: 460px;
+
+  /* motion (CONTRACT 28): the same numbers as src/lib/motion/tokens.js (motionTokens.test.js
+     keeps them equal). Every animation and transition in a CSS module uses these. Curves:
+     standard for the lift, making room, gliding and small moves (a chevron turning, a switch's
+     knob); decelerate for things arriving (windows, sheets, the band's fill); accelerate for
+     things leaving (windows, toasts); settle for a drop and a fly back; press for hover and press
+     colours; tint for the column under a dragged card; flash for just added, moved or assigned;
+     out (1.12's curve) for menus and toasts coming in. */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --ease-settle: cubic-bezier(0.2, 1, 0.1, 1);
+  --ease-press: cubic-bezier(0.4, 1, 0.6, 1);
+  --ease-tint: cubic-bezier(0.15, 1, 0.3, 1);
+  --ease-flash: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-press: 110ms;
+  --dur-fade: 120ms;
+  --dur-lift: 150ms;
+  --dur-room: 200ms;
+  --dur-tint: 200ms;
+  --dur-tag: 200ms;
+  --dur-tick: 250ms;
+  --dur-drop-min: 250ms;
+  --dur-drop-max: 400ms;
+  --dur-fold: 300ms;
+  --dur-glide: 350ms;
+  --dur-fill: 500ms;
+  --dur-flash: 700ms;
+  --dur-in: 220ms;
+  --dur-out: 160ms;
+  --dur-toast-in: 200ms;
+  --dur-toast-out: 150ms;
+  /* the card under the pointer while it is dragged, and its shadow (navy follows the theme) */
+  --lift-scale: 1.02;
+  --lift-tilt: 2deg;
+  --lift-rise: -2px;
+  --shadow-lift:
+    0 14px 32px color-mix(in srgb, var(--navy) 18%, transparent),
+    0 2px 6px color-mix(in srgb, var(--navy) 10%, transparent);
+  /* how far things travel; @keyframes move by these only, so with reduce they become fades */
+  --shift-pop: 8px;
+  --scale-pop: 0.98;
+  --shift-menu: -4px;
+  --shift-toast: 12px;
+  --shift-in: 8px;
+  --shift-bar: 12px;
+  --shift-sheet: 16px;
+  --shift-drawer: 32px;
+  --shift-live: -8px;
+  --scale-fold: 0.96;
+}
+
+/* Reduced motion (the computer's setting, CONTRACT 28 Motion): no movement, scale or tilt, so
+   every move is 0 ms and every distance 0; windows, sheets, menus, toasts and tags keep a short
+   fade; hover and press colours, the flash and the lift shadow stay. Infinite animations (spinners,
+   the bell, the live dots) have their own reduce block in their module. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lift-scale: 1;
+    --lift-tilt: 0deg;
+    --lift-rise: 0px;
+    --dur-lift: 0ms;
+    --dur-room: 0ms;
+    --dur-tint: 0ms;
+    --dur-tick: 0ms;
+    --dur-drop-min: 0ms;
+    --dur-drop-max: 0ms;
+    --dur-fold: 0ms;
+    --dur-glide: 0ms;
+    --dur-fill: 0ms;
+    --dur-tag: var(--dur-fade);
+    --dur-in: var(--dur-fade);
+    --dur-out: var(--dur-fade);
+    --dur-toast-in: var(--dur-fade);
+    --dur-toast-out: var(--dur-fade);
+    --shift-pop: 0px;
+    --scale-pop: 1;
+    --shift-menu: 0px;
+    --shift-toast: 0px;
+    --shift-in: 0px;
+    --shift-bar: 0px;
+    --shift-sheet: 0px;
+    --shift-drawer: 0px;
+    --shift-live: 0px;
+    --scale-fold: 1;
+  }
 }
 
 /* The theme (CONTRACT 21). Light by default; dark when the person chose dark (data-theme on <html>)
@@ -142,8 +229,9 @@
 /* Browsers without light-dark() (before Chrome and Edge 123, Firefox 120 and Safari 17.5, such as
    iPhones that stop at iOS 16) would lose every colour above. They get the light theme instead.
    tests/unit/themeFallback.test.js keeps this list equal to the light side of each colour. The
-   menu shadow is written without color-mix() too (older than light-dark(), still missing before
-   Safari 16.2): the light navy at 14%. The veil is the same in both themes and needs none. */
+   menu and lift shadows are written without color-mix() too (older than light-dark(), still
+   missing before Safari 16.2): the light navy at 14%, and at 18% and 10%. The veil is the same in
+   both themes and needs none. */
 @supports not (color: light-dark(#000, #fff)) {
   :root {
     --paper: #f5f6fa;
@@ -195,6 +283,7 @@
     --placeholder: #757575;
     --overlay: rgba(21, 24, 51, 0.36);
     --shadow-menu: 0 12px 32px rgba(21, 24, 51, 0.14);
+    --shadow-lift: 0 14px 32px rgba(21, 24, 51, 0.18), 0 2px 6px rgba(21, 24, 51, 0.1);
   }
 }
 
@@ -299,13 +388,4 @@ table {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
 }

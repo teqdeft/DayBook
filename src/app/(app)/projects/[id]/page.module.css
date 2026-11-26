@@ -37,3 +37,16 @@
     flex: 1 1 100%;
   }
 }
+
+/* The phase move confirm's muted "5 open tasks stay in Testing." (CONTRACT 28) */
+.stay {
+  margin: 0;
+  font-size: var(--text-small);
+  line-height: 18px;
+  color: var(--muted);
+}
+
+/* The header's "Completed" tag, kept whole while it fades away (Reopen project, CONTRACT 28) */
+.fading {
+  display: inline-flex;
+}

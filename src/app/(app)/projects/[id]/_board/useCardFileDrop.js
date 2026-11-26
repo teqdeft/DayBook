@@ -4,8 +4,10 @@
 // hands them to the attach store (TaskAttachProvider), which uploads them, attaches them to the
 // task and tells the person. Files dropped anywhere else on the project page, on every tab, are
 // swallowed by FileDropGuard (ProjectView), so the browser never opens a file in place of Daybook.
+// Cards are not draggable since 1.13 (the pointer drag moves them, CONTRACT 28), so this, the
+// browser's own file drag, never mixes with moving a card.
 import { useEffect, useState } from 'react';
-import { useDesktopPointer } from './useBoardDrag';
+import { useDesktopPointer } from './useDesktopPointer';
 
 const hasFiles = (event) => [...(event.dataTransfer?.types ?? [])].includes('Files');
 
